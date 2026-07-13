@@ -23,6 +23,13 @@ const roles = [
     iconName: 'car.fill' as const,
     color: '#0d1b3e',
   },
+  {
+    key: 'guide' as const,
+    title: 'Sign up as Guide',
+    subtitle: 'Explore the city with local experts',
+    iconName: 'map.fill' as const, // SF Symbols ya Material Icon ke hisaab se change kar sakte hain
+    color: '#10B981', // Guide ke liye ek clear Green/Emerald theme color
+  },
 ];
 
 type RoleKey = typeof roles[number]['key'];
@@ -61,18 +68,20 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<RoleKey | null>(null);
 
-  const handleContinue = () => {
-    if (selectedRole === 'rider') {
-      router.push('/onboarding/rider');
-    } else if (selectedRole === 'driver') {
-      router.push('/onboarding/driver');
-    }
-  };
+ const handleContinue = () => {
+  if (selectedRole === 'rider') {
+    router.push('/onboarding/rider');
+  } else if (selectedRole === 'driver') {
+    router.push('/onboarding/driver');
+  } else if (selectedRole === 'guide') {
+    router.push('/onboarding/guide');
+  }
+};
 
   return (
     <ThemedView style={styles.container}>
       <Video
-        source={require('@/assets/WhatsApp Video 2026-07-08 at 1.01.36 PM.mp4')}
+        source={require('../../assets/screen.mp4')}
         style={styles.video}
         resizeMode="cover"
         shouldPlay

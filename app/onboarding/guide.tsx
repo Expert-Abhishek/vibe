@@ -1,0 +1,363 @@
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    Alert,
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+
+type DocKey = 'photo' | 'aadhar';
+
+// ---- Design tokens --------------------------------------------------------
+// Shared with driver/rider screens: dark instrument-panel surfaces, amber
+// accent. A guide leads people along a route on foot, so the progress motif
+// here is a trail — waypoints connected by a dotted footpath, not a road.
+const colors = {
+  ink: '#101014',
+  surface: '#1A1A20',
+  surfaceAlt: '#212129',
+  line: '#2C2C34',
+  amber: '#F5C518',
+  success: '#33C481',
+  successBg: '#122A20',
+  danger: '#F0555F',
+  textPrimary: '#F5F4F0',
+  textMuted: '#8D8D97',
+  textFaint: '#5C5C66',
+};
+
+const STEP_LABELS = ['Details', 'Experience'];
+const DOC_LABELS: Record<DocKey, string> = {
+  photo: 'Profile photo',
+  aadhar: 'Aadhar card',
+};
+
+export default function GuideRegister() {
+  const router = useRouter();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState({ name: '', phone: '', altPhone: '', experience: '' });
+  const [docs, setDocs] = useState<Record<DocKey, string | null>>({ photo: null, aadhar: null });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const pickDocument = (docKey: DocKey) => {
+    Alert.alert(DOC_LABELS[docKey], 'Attach this document', [
+      { text: 'Take photo', onPress: () => captureFromCamera(docKey) },
+      { text: 'Choose from gallery', onPress: () => captureFromLibrary(docKey) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const captureFromCamera = async (docKey: DocKey) => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Camera access needed', 'Turn on camera permission from Settings to take a photo.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setDocs(prev => ({ ...prev, [docKey]: result.assets[0].uri }));
+    }
+  };
+
+  const captureFromLibrary = async (docKey: DocKey) => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Photo access needed', 'Turn on photo library permission from Settings to attach a file.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setDocs(prev => ({ ...prev, [docKey]: result.assets[0].uri }));
+    }
+  };
+
+  const removeDocument = (docKey: DocKey) => {
+    setDocs(prev => ({ ...prev, [docKey]: null }));
+  };
+
+  const handleNext = () => {
+    let stepErrors: Record<string, string> = {};
+    if (currentStep === 1) {
+      if (!formData.name) stepErrors.name = 'Enter your full name';
+      if (!formData.phone || formData.phone.length < 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!formData.altPhone) stepErrors.altPhone = 'Enter an alternate number';
+    } else if (currentStep === 2) {
+      if (!formData.experience) stepErrors.experience = 'Enter your years of experience';
+      if (!docs.photo || !docs.aadhar) stepErrors.docs = 'Upload both documents to continue';
+    }
+
+    setErrors(stepErrors);
+    if (Object.keys(stepErrors).length === 0) {
+      if (currentStep < 2) {
+        setCurrentStep(2);
+      } else {
+        console.log('Guide registered', formData);
+        router.replace('/(tabs)');
+      }
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.mainContainer}>
+      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
+
+        <Text style={styles.eyebrow}>GUIDE REGISTRATION</Text>
+        <Text style={styles.screenHeading}>Share your route</Text>
+        <Text style={styles.screenSubheading}>
+          Waypoint {currentStep} of 2 · {STEP_LABELS[currentStep - 1]}
+        </Text>
+
+        {/* TRAIL PROGRESS — waypoints connected by a dotted footpath */}
+        <View style={styles.trailWrapper}>
+          {STEP_LABELS.map((label, index) => {
+            const step = index + 1;
+            const isDone = currentStep > step;
+            const isActive = currentStep === step;
+            const isFilled = isDone || isActive;
+            return (
+              <React.Fragment key={label}>
+                <View style={styles.waypointCol}>
+                  <View style={[styles.waypoint, isFilled && styles.waypointFilled]}>
+                    <Text style={[styles.waypointText, isFilled && styles.waypointTextFilled]}>
+                      {isDone ? '✓' : step}
+                    </Text>
+                  </View>
+                  <Text style={[styles.waypointLabel, isActive && styles.waypointLabelActive]}>
+                    {label}
+                  </Text>
+                </View>
+                {step < STEP_LABELS.length && (
+                  <View style={styles.dashRow}>
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <View key={i} style={[styles.dash, currentStep > step && styles.dashActive]} />
+                    ))}
+                  </View>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </View>
+
+        {/* STEP 1 */}
+        {currentStep === 1 && (
+          <View style={styles.formSection}>
+            <Field
+              label="Full name" required
+              placeholder="As printed on your ID"
+              value={formData.name}
+              onChangeText={(t: string) => setFormData({ ...formData, name: t })}
+              error={errors.name}
+            />
+            <Field
+              label="Phone number" required
+              placeholder="9876543210"
+              keyboardType="phone-pad"
+              value={formData.phone}
+              onChangeText={(t: string) => setFormData({ ...formData, phone: t })}
+              error={errors.phone}
+            />
+            <Field
+              label="Alternate phone" required
+              placeholder="Backup number"
+              keyboardType="phone-pad"
+              value={formData.altPhone}
+              onChangeText={(t: string) => setFormData({ ...formData, altPhone: t })}
+              error={errors.altPhone}
+            />
+          </View>
+        )}
+
+        {/* STEP 2 */}
+        {currentStep === 2 && (
+          <View style={styles.formSection}>
+            <Field
+              label="Years of experience" required
+              placeholder="e.g. 3"
+              keyboardType="numeric"
+              value={formData.experience}
+              onChangeText={(t: string) => setFormData({ ...formData, experience: t })}
+              error={errors.experience}
+            />
+
+            <Text style={[styles.label, { marginTop: 18 }]}>Upload documents</Text>
+            <Text style={styles.helperText}>Tap each stub to attach the file</Text>
+            {errors.docs && <Text style={styles.errorText}>{errors.docs}</Text>}
+
+            {(Object.keys(docs) as DocKey[]).map((docKey) => {
+              const uri = docs[docKey];
+              return (
+                <View key={docKey} style={[styles.ticketStub, uri && styles.ticketStubDone]}>
+                  <TouchableOpacity
+                    style={styles.ticketTapArea}
+                    onPress={() => pickDocument(docKey)}
+                    activeOpacity={0.75}
+                  >
+                    {uri ? (
+                      <Image source={{ uri }} style={styles.ticketThumb} />
+                    ) : (
+                      <View style={styles.ticketBadge}>
+                        <Text style={styles.ticketBadgeText}>＋</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.ticketLabel}>{DOC_LABELS[docKey]}</Text>
+                      <Text style={styles.ticketStatus}>
+                        {uri ? 'Uploaded · tap to replace' : 'Not attached yet'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {uri && (
+                    <TouchableOpacity style={styles.ticketRemoveBtn} onPress={() => removeDocument(docKey)}>
+                      <Text style={styles.ticketRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <View style={styles.buttonRow}>
+          {currentStep > 1 && (
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setCurrentStep(1)}>
+              <Text style={styles.secondaryButtonText}>Back</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
+            <Text style={styles.primaryButtonText}>
+              {currentStep === 2 ? 'Finish setup' : 'Continue'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// ---- Small reusable field component ---------------------------------------
+
+function Field({
+  label, required, hint, error, ...inputProps
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  [key: string]: any;
+}) {
+  return (
+    <View style={{ marginBottom: 4 }}>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {required && <View style={styles.requiredDot} />}
+        {hint && <Text style={styles.hintText}>{hint}</Text>}
+      </View>
+      <TextInput
+        style={[styles.input, error && styles.inputError]}
+        placeholderTextColor={colors.textFaint}
+        {...inputProps}
+      />
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  mainContainer: { flex: 1, backgroundColor: colors.ink },
+
+  eyebrow: {
+    color: colors.amber,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginTop: 8,
+  },
+  screenHeading: { fontSize: 26, fontWeight: '800', color: colors.textPrimary, marginTop: 6 },
+  screenSubheading: { fontSize: 13, color: colors.textMuted, marginTop: 4, marginBottom: 28 },
+
+  // Trail / waypoint progress
+  trailWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 32 },
+  waypointCol: { alignItems: 'center', width: 90 },
+  waypoint: {
+    width: 36, height: 36, borderRadius: 18,
+    borderWidth: 2, borderColor: colors.line,
+    backgroundColor: colors.surface,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  waypointFilled: { backgroundColor: colors.amber, borderColor: colors.amber },
+  waypointText: { color: colors.textMuted, fontWeight: '700', fontSize: 13 },
+  waypointTextFilled: { color: colors.ink },
+  waypointLabel: { color: colors.textFaint, fontSize: 10, marginTop: 6, fontWeight: '600' },
+  waypointLabelActive: { color: colors.amber },
+  dashRow: {
+    flexDirection: 'row', alignItems: 'center',
+    flex: 1, marginTop: 17, marginHorizontal: 2,
+    justifyContent: 'space-between',
+  },
+  dash: { width: 6, height: 3, borderRadius: 2, backgroundColor: colors.line },
+  dashActive: { backgroundColor: colors.amber },
+
+  formSection: { marginTop: 4, minHeight: 260 },
+
+  labelRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  requiredDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.amber, marginLeft: 6 },
+  hintText: { fontSize: 11, color: colors.textFaint, marginLeft: 8 },
+  helperText: { fontSize: 12, color: colors.textMuted, marginBottom: 14 },
+
+  input: {
+    backgroundColor: colors.surfaceAlt,
+    padding: 15, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.line,
+    fontSize: 15, color: colors.textPrimary,
+  },
+  inputError: { borderColor: colors.danger },
+  errorText: { color: colors.danger, fontSize: 12, marginTop: 6 },
+
+  // Document ticket stubs
+  ticketStub: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1, borderColor: colors.line,
+    borderLeftWidth: 3, borderLeftColor: colors.line, borderStyle: 'dashed',
+    borderRadius: 10, padding: 14, marginBottom: 10,
+  },
+  ticketStubDone: { borderLeftColor: colors.success, backgroundColor: colors.successBg },
+  ticketTapArea: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  ticketBadge: {
+    width: 44, height: 44, borderRadius: 10,
+    borderWidth: 1.5, borderColor: colors.line,
+    justifyContent: 'center', alignItems: 'center', marginRight: 12,
+  },
+  ticketThumb: {
+    width: 44, height: 44, borderRadius: 10, marginRight: 12,
+    borderWidth: 1.5, borderColor: colors.success,
+  },
+  ticketBadgeText: { color: colors.textMuted, fontWeight: '700', fontSize: 16 },
+  ticketLabel: { color: colors.textPrimary, fontWeight: '600', fontSize: 14 },
+  ticketStatus: { color: colors.textFaint, fontSize: 11, marginTop: 2 },
+  ticketRemoveBtn: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: colors.ink, borderWidth: 1, borderColor: colors.line,
+    justifyContent: 'center', alignItems: 'center', marginLeft: 10,
+  },
+  ticketRemoveText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+
+  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 26, gap: 12 },
+  primaryButton: { flex: 1, backgroundColor: colors.amber, padding: 16, borderRadius: 12, alignItems: 'center' },
+  primaryButtonText: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  secondaryButton: {
+    flex: 1, backgroundColor: 'transparent', padding: 16, borderRadius: 12,
+    alignItems: 'center', borderWidth: 1.5, borderColor: colors.line,
+  },
+  secondaryButtonText: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
+});

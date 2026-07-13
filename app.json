@@ -51,6 +51,12 @@
         "projectId": "2a8823ee-df40-49f4-95b6-452edc6a3025"
       }
     },
-    "owner": "abhittac"
+    "owner": "abhittac",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2a8823ee-df40-49f4-95b6-452edc6a3025"
+    }
   }
 }
