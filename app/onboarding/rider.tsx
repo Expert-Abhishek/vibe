@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -9,6 +8,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
 // ---- Design tokens --------------------------------------------------------
 // Shared with the driver screen: dark instrument-panel surfaces, signal-amber
@@ -45,7 +46,7 @@ export default function RiderRegister() {
 
   return (
     <SafeAreaView style={styles.mainContainer}>
-      <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1, justifyContent: 'center' }}>
+      <ScrollView contentContainerStyle={{ padding: scale(24), flexGrow: 1, justifyContent: 'center' }}>
 
         <Text style={styles.eyebrow}>RIDER PROFILE</Text>
         <Text style={styles.title}>Welcome aboard</Text>
@@ -117,66 +118,66 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: colors.amber,
-    fontSize: 11,
+    fontSize: moderateFontScale(11),
     fontWeight: '700',
     letterSpacing: 2,
   },
-  title: { fontSize: 28, fontWeight: '800', color: colors.textPrimary, marginTop: 6, marginBottom: 4 },
-  subtitle: { fontSize: 14, color: colors.textMuted, marginBottom: 28 },
+  title: { fontSize: moderateFontScale(28), fontWeight: '800', color: colors.textPrimary, marginTop: verticalScale(6), marginBottom: verticalScale(4) },
+  subtitle: { fontSize: moderateFontScale(14), color: colors.textMuted, marginBottom: verticalScale(28) },
 
   // Pickup → destination route strip
-  routeStrip: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
-  routeCol: { alignItems: 'center', width: 76 },
+  routeStrip: { flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(24) },
+  routeCol: { alignItems: 'center', width: scale(76) },
   routeDotFilled: {
-    width: 12, height: 12, borderRadius: 6,
+    width: scale(12), height: scale(12), borderRadius: scale(6),
     backgroundColor: colors.amber,
   },
   routePin: {
-    width: 12, height: 12, borderRadius: 6,
+    width: scale(12), height: scale(12), borderRadius: scale(6),
     borderWidth: 2, borderColor: colors.amber, backgroundColor: colors.ink,
   },
-  routeLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '600', marginTop: 6 },
+  routeLabel: { color: colors.textFaint, fontSize: moderateFontScale(10), fontWeight: '600', marginTop: verticalScale(6) },
   routeDashRow: {
     flexDirection: 'row', alignItems: 'center',
-    flex: 1, justifyContent: 'space-between', marginHorizontal: 2,
+    flex: 1, justifyContent: 'space-between', marginHorizontal: scale(2),
   },
-  routeDash: { width: 5, height: 2, borderRadius: 1, backgroundColor: colors.line },
+  routeDash: { width: scale(5), height: scale(2), borderRadius: scale(1), backgroundColor: colors.line },
 
   // Boarding-pass card
   passCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: scale(16),
     borderWidth: 1,
     borderColor: colors.line,
-    padding: 20,
-    marginBottom: 24,
+    padding: scale(20),
+    marginBottom: verticalScale(24),
   },
   passNotchLeft: {
-    position: 'absolute', left: -10, top: '50%', marginTop: -10,
-    width: 20, height: 20, borderRadius: 10, backgroundColor: colors.ink,
+    position: 'absolute', left: scale(-10), top: '50%', marginTop: scale(-10),
+    width: scale(20), height: scale(20), borderRadius: scale(10), backgroundColor: colors.ink,
   },
   passNotchRight: {
-    position: 'absolute', right: -10, top: '50%', marginTop: -10,
-    width: 20, height: 20, borderRadius: 10, backgroundColor: colors.ink,
+    position: 'absolute', right: scale(-10), top: '50%', marginTop: scale(-10),
+    width: scale(20), height: scale(20), borderRadius: scale(10), backgroundColor: colors.ink,
   },
   passDivider: {
     borderTopWidth: 1, borderStyle: 'dashed', borderColor: colors.line,
-    marginVertical: 16,
+    marginVertical: verticalScale(16),
   },
 
-  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  label: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  requiredDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.amber, marginLeft: 6 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(8) },
+  label: { fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary },
+  requiredDot: { width: scale(4), height: scale(4), borderRadius: scale(2), backgroundColor: colors.amber, marginLeft: scale(6) },
 
   input: {
     backgroundColor: colors.surfaceAlt,
-    padding: 15, borderRadius: 10,
+    padding: scale(15), borderRadius: scale(10),
     borderWidth: 1, borderColor: colors.line,
-    fontSize: 15, color: colors.textPrimary,
+    fontSize: moderateFontScale(15), color: colors.textPrimary,
   },
   inputError: { borderColor: colors.danger },
-  errorText: { color: colors.danger, fontSize: 12, marginTop: 6 },
+  errorText: { color: colors.danger, fontSize: moderateFontScale(12), marginTop: verticalScale(6) },
 
-  primaryButton: { backgroundColor: colors.amber, padding: 16, borderRadius: 12, alignItems: 'center' },
-  primaryButtonText: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  primaryButton: { backgroundColor: colors.amber, padding: scale(16), borderRadius: scale(12), alignItems: 'center' },
+  primaryButtonText: { color: colors.ink, fontSize: moderateFontScale(15), fontWeight: '800' },
 });

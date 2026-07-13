@@ -5,7 +5,6 @@ import {
     Alert,
     Image,
     Platform,
-    SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,6 +12,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
 type KYCStatus = 'form' | 'pending' | 'approved';
 type DocKey = 'photo' | 'rc' | 'dl' | 'insurance' | 'aadhar';
@@ -236,7 +237,7 @@ export default function DriverRegister() {
               label="Full name" required
               placeholder="As printed on your Aadhar"
               value={formData.name}
-              onChangeText={(t) => setFormData({ ...formData, name: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, name: t })}
               error={errors.name}
             />
             <Field
@@ -244,7 +245,7 @@ export default function DriverRegister() {
               placeholder="9876543210"
               keyboardType="phone-pad"
               value={formData.phone}
-              onChangeText={(t) => setFormData({ ...formData, phone: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, phone: t })}
               error={errors.phone}
             />
             <Field
@@ -252,7 +253,7 @@ export default function DriverRegister() {
               placeholder="Backup number"
               keyboardType="phone-pad"
               value={formData.altPhone}
-              onChangeText={(t) => setFormData({ ...formData, altPhone: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, altPhone: t })}
             />
           </View>
         )}
@@ -265,7 +266,7 @@ export default function DriverRegister() {
               placeholder="DL 01 CA 1234"
               autoCapitalize="characters"
               value={formData.rcNo}
-              onChangeText={(t) => setFormData({ ...formData, rcNo: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, rcNo: t })}
               error={errors.rcNo}
             />
             <Field
@@ -273,7 +274,7 @@ export default function DriverRegister() {
               placeholder="DL-XXXXXXXXXXXXX"
               autoCapitalize="characters"
               value={formData.dlNo}
-              onChangeText={(t) => setFormData({ ...formData, dlNo: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, dlNo: t })}
               error={errors.dlNo}
             />
           </View>
@@ -372,61 +373,61 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: colors.amber,
-    fontSize: 11,
+    fontSize: moderateFontScale(11),
     fontWeight: '700',
     letterSpacing: 2,
-    marginTop: 8,
+    marginTop: verticalScale(8),
   },
   appIdMono: {
     color: colors.textFaint,
-    fontSize: 12,
+    fontSize: moderateFontScale(12),
     fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }),
     letterSpacing: 1,
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(20),
   },
 
-  screenHeading: { fontSize: 26, fontWeight: '800', color: colors.textPrimary },
-  screenSubheading: { fontSize: 13, color: colors.textMuted, marginTop: 4, marginBottom: 28 },
+  screenHeading: { fontSize: moderateFontScale(26), fontWeight: '800', color: colors.textPrimary },
+  screenSubheading: { fontSize: moderateFontScale(13), color: colors.textMuted, marginTop: verticalScale(4), marginBottom: verticalScale(28) },
 
   // Route / checkpoint progress
-  routeWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 32 },
-  checkpointCol: { alignItems: 'center', width: 64 },
+  routeWrapper: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: verticalScale(32) },
+  checkpointCol: { alignItems: 'center', width: scale(64) },
   checkpoint: {
-    width: 36, height: 36, borderRadius: 18,
+    width: scale(36), height: scale(36), borderRadius: scale(18),
     borderWidth: 2, borderColor: colors.line,
     backgroundColor: colors.surface,
     justifyContent: 'center', alignItems: 'center',
   },
   checkpointFilled: { backgroundColor: colors.amber, borderColor: colors.amber },
-  checkpointText: { color: colors.textMuted, fontWeight: '700', fontSize: 13 },
+  checkpointText: { color: colors.textMuted, fontWeight: '700', fontSize: moderateFontScale(13) },
   checkpointTextFilled: { color: colors.ink },
-  checkpointLabel: { color: colors.textFaint, fontSize: 10, marginTop: 6, fontWeight: '600' },
+  checkpointLabel: { color: colors.textFaint, fontSize: moderateFontScale(10), marginTop: verticalScale(6), fontWeight: '600' },
   checkpointLabelActive: { color: colors.amber },
   dashRow: {
     flexDirection: 'row', alignItems: 'center',
-    flex: 1, marginTop: 17, marginHorizontal: 2,
+    flex: 1, marginTop: verticalScale(17), marginHorizontal: scale(2),
     justifyContent: 'space-between',
   },
-  dash: { width: 6, height: 3, borderRadius: 2, backgroundColor: colors.line },
+  dash: { width: scale(6), height: scale(3), borderRadius: scale(2), backgroundColor: colors.line },
   dashActive: { backgroundColor: colors.amber },
 
-  formSection: { marginTop: 4, minHeight: 260 },
+  formSection: { marginTop: verticalScale(4), minHeight: verticalScale(260) },
 
-  labelRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 8 },
-  label: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  requiredDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.amber, marginLeft: 6 },
-  hintText: { fontSize: 11, color: colors.textFaint, marginLeft: 8 },
-  helperText: { fontSize: 12, color: colors.textMuted, marginBottom: 14 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', marginTop: verticalScale(14), marginBottom: verticalScale(8) },
+  label: { fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary },
+  requiredDot: { width: scale(4), height: scale(4), borderRadius: scale(2), backgroundColor: colors.amber, marginLeft: scale(6) },
+  hintText: { fontSize: moderateFontScale(11), color: colors.textFaint, marginLeft: scale(8) },
+  helperText: { fontSize: moderateFontScale(12), color: colors.textMuted, marginBottom: verticalScale(14) },
 
   input: {
     backgroundColor: colors.surfaceAlt,
-    padding: 15, borderRadius: 10,
+    padding: scale(15), borderRadius: scale(10),
     borderWidth: 1, borderColor: colors.line,
-    fontSize: 15, color: colors.textPrimary,
+    fontSize: moderateFontScale(15), color: colors.textPrimary,
   },
   inputError: { borderColor: colors.danger },
-  errorText: { color: colors.danger, fontSize: 12, marginTop: 6 },
+  errorText: { color: colors.danger, fontSize: moderateFontScale(12), marginTop: verticalScale(6) },
 
   // Document ticket stubs
   ticketStub: {
@@ -434,60 +435,60 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1, borderColor: colors.line,
     borderLeftWidth: 3, borderLeftColor: colors.line, borderStyle: 'dashed',
-    borderRadius: 10, padding: 14, marginBottom: 10,
+    borderRadius: scale(10), padding: scale(14), marginBottom: verticalScale(10),
   },
   ticketStubDone: { borderLeftColor: colors.success, backgroundColor: colors.successBg },
   ticketTapArea: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   ticketBadge: {
-    width: 44, height: 44, borderRadius: 10,
+    width: scale(44), height: scale(44), borderRadius: scale(10),
     borderWidth: 1.5, borderColor: colors.line,
-    justifyContent: 'center', alignItems: 'center', marginRight: 12,
+    justifyContent: 'center', alignItems: 'center', marginRight: scale(12),
   },
   ticketThumb: {
-    width: 44, height: 44, borderRadius: 10, marginRight: 12,
+    width: scale(44), height: scale(44), borderRadius: scale(10), marginRight: scale(12),
     borderWidth: 1.5, borderColor: colors.success,
   },
-  ticketBadgeText: { color: colors.textMuted, fontWeight: '700', fontSize: 16 },
-  ticketLabel: { color: colors.textPrimary, fontWeight: '600', fontSize: 14 },
-  ticketStatus: { color: colors.textFaint, fontSize: 11, marginTop: 2 },
+  ticketBadgeText: { color: colors.textMuted, fontWeight: '700', fontSize: moderateFontScale(16) },
+  ticketLabel: { color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) },
+  ticketStatus: { color: colors.textFaint, fontSize: moderateFontScale(11), marginTop: verticalScale(2) },
   ticketRemoveBtn: {
-    width: 26, height: 26, borderRadius: 13,
+    width: scale(26), height: scale(26), borderRadius: scale(13),
     backgroundColor: colors.ink, borderWidth: 1, borderColor: colors.line,
-    justifyContent: 'center', alignItems: 'center', marginLeft: 10,
+    justifyContent: 'center', alignItems: 'center', marginLeft: scale(10),
   },
-  ticketRemoveText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  ticketRemoveText: { color: colors.textMuted, fontSize: moderateFontScale(12), fontWeight: '700' },
 
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 26, gap: 12 },
-  primaryButton: { flex: 1, backgroundColor: colors.amber, padding: 16, borderRadius: 12, alignItems: 'center' },
-  primaryButtonText: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(26), gap: scale(12) },
+  primaryButton: { flex: 1, backgroundColor: colors.amber, padding: scale(16), borderRadius: scale(12), alignItems: 'center' },
+  primaryButtonText: { color: colors.ink, fontSize: moderateFontScale(15), fontWeight: '800' },
   secondaryButton: {
-    flex: 1, backgroundColor: 'transparent', padding: 16, borderRadius: 12,
+    flex: 1, backgroundColor: 'transparent', padding: scale(16), borderRadius: scale(12),
     alignItems: 'center', borderWidth: 1.5, borderColor: colors.line,
   },
-  secondaryButtonText: { color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
+  secondaryButtonText: { color: colors.textPrimary, fontSize: moderateFontScale(15), fontWeight: '700' },
 
   // KYC result stamp screens
-  stampScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  stampScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: scale(32) },
   stampOuter: {
-    width: 140, height: 140, borderRadius: 70,
+    width: scale(140), height: scale(140), borderRadius: scale(70),
     borderWidth: 3, borderStyle: 'dashed',
     justifyContent: 'center', alignItems: 'center',
-    marginTop: 8, marginBottom: 28,
+    marginTop: verticalScale(8), marginBottom: verticalScale(28),
   },
   stampInner: {
-    width: 112, height: 112, borderRadius: 56,
+    width: scale(112), height: scale(112), borderRadius: scale(56),
     borderWidth: 1.5,
     justifyContent: 'center', alignItems: 'center',
   },
-  stampMark: { fontSize: 32, marginBottom: 4 },
-  stampWord: { fontSize: 12, fontWeight: '800', letterSpacing: 2 },
-  kycTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, marginBottom: 10, textAlign: 'center' },
-  kycSubtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 21, marginBottom: 20, maxWidth: 300 },
+  stampMark: { fontSize: moderateFontScale(32), marginBottom: verticalScale(4) },
+  stampWord: { fontSize: moderateFontScale(12), fontWeight: '800', letterSpacing: 2 },
+  kycTitle: { fontSize: moderateFontScale(22), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(10), textAlign: 'center' },
+  kycSubtitle: { fontSize: moderateFontScale(14), color: colors.textMuted, textAlign: 'center', lineHeight: verticalScale(21), marginBottom: verticalScale(20), maxWidth: scale(300) },
   etaPill: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, marginBottom: 28,
+    paddingVertical: verticalScale(8), paddingHorizontal: scale(14), borderRadius: scale(20), marginBottom: verticalScale(28),
   },
-  etaDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.amber, marginRight: 8 },
-  etaText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  etaDot: { width: scale(6), height: scale(6), borderRadius: scale(3), backgroundColor: colors.amber, marginRight: scale(8) },
+  etaText: { color: colors.textMuted, fontSize: moderateFontScale(12), fontWeight: '600' },
 });
