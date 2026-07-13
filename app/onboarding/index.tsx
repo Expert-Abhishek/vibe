@@ -1,5 +1,5 @@
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { Link, useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,28 +8,28 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { MaterialIcons } from '@expo/vector-icons';
 const roles = [
   {
     key: 'rider' as const,
     title: 'Sign up as Rider',
     subtitle: 'Book rides and arrive in style',
-    iconName: 'person.fill' as const,
+    iconName: 'person' as const, // Material name
     color: '#F5C518',
   },
   {
     key: 'driver' as const,
     title: 'Sign up as Driver',
     subtitle: 'Earn on your schedule, drive when you want',
-    iconName: 'car.fill' as const,
+    iconName: 'directions-car' as const, // Material name
     color: '#0d1b3e',
   },
   {
     key: 'guide' as const,
     title: 'Sign up as Guide',
     subtitle: 'Explore the city with local experts',
-    iconName: 'map.fill' as const,
+    iconName: 'map' as const, // Material name
     color: '#10B981',
   },
 ];
@@ -46,14 +46,19 @@ function RoleCard({ role, selected, onPress }: { role: (typeof roles)[number]; s
         selected ? styles.roleCardSelected : styles.roleCardDefault,
       ]}
     >
-      <View style={[styles.roleIcon, { backgroundColor: '#f5c518'}]}> 
-        <IconSymbol name={role.iconName} size={scale(22)} color={selected ? '#101010' : '#ffffff'} />
+      <View style={[styles.roleIcon, { backgroundColor: '#f5c518' }]}>
+       // IconSymbol की जगह MaterialIcons का इस्तेमाल करें
+        <MaterialIcons
+          name={role.iconName}
+          size={scale(22)}
+          color={selected ? '#101010' : '#ffffff'}
+        />
       </View>
       <View style={styles.roleTextContainer}>
-        <ThemedText type="title" style={[styles.roleTitle, selected && { color: '#ffffff' }]}> 
+        <ThemedText type="title" style={[styles.roleTitle, selected && { color: '#ffffff' }]}>
           {role.title}
         </ThemedText>
-        <ThemedText style={[styles.roleSubtitle, selected && { color: 'rgba(255,255,255,0.9)' }]}> 
+        <ThemedText style={[styles.roleSubtitle, selected && { color: 'rgba(255,255,255,0.9)' }]}>
           {role.subtitle}
         </ThemedText>
       </View>
@@ -192,7 +197,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     marginTop: verticalScale(24),
-    alignItems: 'center', 
+    alignItems: 'center',
   },
   title: {
     color: '#ffffff',
@@ -207,16 +212,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     fontSize: moderateFontScale(16),
     lineHeight: moderateFontScale(24),
-    textAlign: 'center',   
+    textAlign: 'center',
   },
   card: {
     marginTop: verticalScale(24),
     gap: verticalScale(12),
-    alignItems: 'center', 
+    alignItems: 'center',
   },
   roleCard: {
     width: '92%',
-    alignSelf: 'center', 
+    alignSelf: 'center',
     borderRadius: scale(20),
     padding: scale(16),
     flexDirection: 'row',
