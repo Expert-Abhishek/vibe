@@ -47,7 +47,7 @@ function RoleCard({ role, selected, onPress }: { role: (typeof roles)[number]; s
       ]}
     >
       <View style={[styles.roleIcon, { backgroundColor: '#f5c518' }]}>
-       // IconSymbol की जगह MaterialIcons का इस्तेमाल करें
+        {/* IconSymbol की जगह MaterialIcons का इस्तेमाल करें */}
         <MaterialIcons
           name={role.iconName}
           size={scale(22)}

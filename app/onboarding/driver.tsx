@@ -194,7 +194,7 @@ export default function DriverRegister() {
         <Text style={styles.eyebrow}>DRIVER PERMIT APPLICATION</Text>
         <Text style={styles.appIdMono}>{appId}</Text>
 
-        <Text style={styles.screenHeading}>Let's get you on the road</Text>
+        <Text style={styles.screenHeading}>{"Let's get you on the road"}</Text>
         <Text style={styles.screenSubheading}>
           Checkpoint {currentStep} of 3 · {STEP_LABELS[currentStep - 1]}
         </Text>

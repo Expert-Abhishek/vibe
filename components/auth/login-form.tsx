@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, View, Text } from 'react-native';
+import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
@@ -9,6 +10,7 @@ interface LoginFormProps {
 }
 
 export function LoginForm({ onLogin }: LoginFormProps) {
+  const router = useRouter();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
@@ -59,7 +61,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       <View style={styles.fieldContainer}>
         <View style={styles.labelRow}>
           <ThemedText style={styles.label}>Password</ThemedText>
-          <TouchableOpacity onPress={() => console.log('Forgot Password pressed')}>
+          <TouchableOpacity onPress={() => router.push('/forgot-password')}>
             <ThemedText style={styles.forgotText}>Forgot Password?</ThemedText>
           </TouchableOpacity>
         </View>

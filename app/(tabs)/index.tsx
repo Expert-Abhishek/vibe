@@ -104,7 +104,7 @@ export default function HomeScreen() {
           >
             <View style={styles.overlayStrong} />
             <View style={styles.karnatakaContent}>
-              <Text style={styles.karnatakaText}>Let's explore the beauty or thrill in Karnataka</Text>
+              <Text style={styles.karnatakaText}>{"Let's explore the beauty or thrill in Karnataka"}</Text>
               <View style={styles.planRouteBtn}>
                 <Text style={styles.planRouteBtnText}>Plan Route</Text>
               </View>
