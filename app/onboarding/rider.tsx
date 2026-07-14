@@ -40,7 +40,7 @@ export default function RiderRegister() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length === 0) {
       console.log('Rider account created');
-      router.replace('/(tabs)');
+      router.replace('/(auth)/sign-in');
     }
   };
 
@@ -104,9 +104,14 @@ export default function RiderRegister() {
           {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit}>
-          <Text style={styles.primaryButtonText}>Get started</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()}>
+            <Text style={styles.secondaryButtonText}>Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleSubmit}>
+            <Text style={styles.primaryButtonText}>Get started</Text>
+          </TouchableOpacity>
+        </View>
 
       </ScrollView>
     </SafeAreaView>
@@ -178,6 +183,12 @@ const styles = StyleSheet.create({
   inputError: { borderColor: colors.danger },
   errorText: { color: colors.danger, fontSize: moderateFontScale(12), marginTop: verticalScale(6) },
 
-  primaryButton: { backgroundColor: colors.amber, padding: scale(16), borderRadius: scale(12), alignItems: 'center' },
+  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(26), gap: scale(12) },
+  primaryButton: { flex: 1, backgroundColor: colors.amber, padding: scale(16), borderRadius: scale(12), alignItems: 'center' },
   primaryButtonText: { color: colors.ink, fontSize: moderateFontScale(15), fontWeight: '800' },
+  secondaryButton: {
+    flex: 1, backgroundColor: 'transparent', padding: scale(16), borderRadius: scale(12),
+    alignItems: 'center', borderWidth: 1.5, borderColor: colors.line,
+  },
+  secondaryButtonText: { color: colors.textPrimary, fontSize: moderateFontScale(15), fontWeight: '700' },
 });

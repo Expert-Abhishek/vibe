@@ -13,34 +13,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
+import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const rides = [
+  { key: 'sedan', name: 'Sedan', desc: 'Comfort & Style', image: require('@/assets/images/sedan.png') },
+  { key: 'hatchback', name: 'Hatchback', desc: 'Compact & Swift', image: require('@/assets/images/hatch.png') },
+  { key: 'thar', name: '4×4 Thar', desc: 'Rugged Offroad', image: require('@/assets/images/thar.png') },
+  { key: 'auto', name: 'Auto', desc: 'Local Explorer', image: require('@/assets/images/auto.png') },
+];
+
 export default function HomeScreen() {
-  const [selectedRide, setSelectedRide] = useState<'sedan' | 'offroad'>('offroad');
+  const [selectedRide, setSelectedRide] = useState<string>('thar');
   const [isAc, setIsAc] = useState<boolean>(true);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const colors = {
+    background: isDark ? '#101014' : '#F5F5F7',
+    surface: isDark ? '#1E1E24' : '#FFFFFF',
+    surfaceCard: isDark ? '#16161B' : '#FFFFFF',
+    textPrimary: isDark ? '#ffffff' : '#1C1C1E',
+    textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
+    border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* HEADER ROW */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialIcons name="menu" size={scale(24)} color="#ffffff" />
-        </TouchableOpacity>
-        <Text style={styles.brandText}>Vibzz</Text>
-        <TouchableOpacity style={styles.iconBtn}>
-          <MaterialIcons name="notifications-none" size={scale(24)} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* SEARCH BAR */}
-        <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={scale(20)} color="rgba(255,255,255,0.4)" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Where to, explorer?"
-            placeholderTextColor="rgba(255,255,255,0.4)"
-          />
-        </View>
-
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(110) }]} showsVerticalScrollIndicator={false}>
         {/* PREMIUM SERVICES */}
         <Text style={styles.sectionTitle}>Premium Services</Text>
         
@@ -81,9 +80,9 @@ export default function HomeScreen() {
 
           {/* Right column: Make Trip & All Services */}
           <View style={styles.rightServicesCol}>
-            <TouchableOpacity activeOpacity={0.9} style={styles.makeTripCard}>
+            <TouchableOpacity activeOpacity={0.9} style={[styles.makeTripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <MaterialIcons name="map" size={scale(20)} color="#F5C518" style={{ marginBottom: verticalScale(4) }} />
-              <Text style={styles.makeTripTitle}>Make Your Own Trip</Text>
+              <Text style={[styles.makeTripTitle, { color: colors.textPrimary }]}>Make Your Own Trip</Text>
             </TouchableOpacity>
 
             <TouchableOpacity activeOpacity={0.9} style={styles.allServicesCard}>
@@ -121,47 +120,44 @@ export default function HomeScreen() {
         {/* CHOOSE YOUR RIDE */}
         <View style={styles.chooseRideHeader}>
           <Text style={styles.sectionTitleNoMargin}>Choose Your Ride</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAllText}>View All</Text>
-          </TouchableOpacity>
         </View>
 
-        <View style={styles.rideCardsRow}>
-          {/* Sedan card */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[styles.rideCard, selectedRide === 'sedan' && styles.rideCardSelected]}
-            onPress={() => setSelectedRide('sedan')}
-          >
-            <View style={styles.carImageWrapper}>
-              <Image
-                source={require('@/assets/images/sedan_cutout.png')}
-                style={styles.carCutoutImage}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={styles.rideCardName}>Sedan</Text>
-            <Text style={styles.rideCardDesc}>Comfort & Style</Text>
-          </TouchableOpacity>
-
-          {/* 4x4 Offroad card */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[styles.rideCard, selectedRide === 'offroad' && styles.rideCardSelected]}
-            onPress={() => setSelectedRide('offroad')}
-          >
-            {selectedRide === 'offroad' && <View style={styles.selectedDot} />}
-            <View style={styles.carImageWrapper}>
-              <Image
-                source={require('@/assets/images/offroad_cutout.png')}
-                style={styles.carCutoutImage}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={[styles.rideCardName, selectedRide === 'offroad' && { color: '#F5C518' }]}>4×4 Offroad</Text>
-            <Text style={[styles.rideCardDesc, selectedRide === 'offroad' && { color: 'rgba(245,197,24,0.7)' }]}>Selected</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.rideSlider}
+          contentContainerStyle={styles.rideSliderContent}
+        >
+          {rides.map((ride) => {
+            const isSelected = selectedRide === ride.key;
+            return (
+              <TouchableOpacity
+                key={ride.key}
+                activeOpacity={0.9}
+                style={[
+                  styles.rideCard,
+                  { backgroundColor: colors.surfaceCard, borderColor: isSelected ? '#F5C518' : colors.border },
+                ]}
+                onPress={() => setSelectedRide(ride.key)}
+              >
+                {isSelected && <View style={styles.selectedDot} />}
+                <View style={styles.carImageWrapper}>
+                  <Image
+                    source={ride.image}
+                    style={styles.carCutoutImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={[styles.rideCardName, isSelected ? { color: '#F5C518' } : { color: colors.textPrimary }]}>
+                  {ride.name}
+                </Text>
+                <Text style={[styles.rideCardDesc, isSelected ? { color: 'rgba(245,197,24,0.7)' } : { color: colors.textMuted }]}>
+                  {isSelected ? 'Selected' : ride.desc}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         {/* AC / NON-AC FILTERS */}
         <View style={styles.filterPillsRow}>
@@ -169,14 +165,14 @@ export default function HomeScreen() {
             style={[styles.filterPill, isAc && styles.filterPillSelected]}
             onPress={() => setIsAc(true)}
           >
-            <Text style={[styles.filterPillText, isAc && styles.filterPillTextSelected]}>AC Rides</Text>
+            <Text style={[styles.filterPillText, { color: isAc ? '#101010' : colors.textPrimary }]}>AC Rides</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.filterPill, !isAc && styles.filterPillSelected]}
             onPress={() => setIsAc(false)}
           >
-            <Text style={[styles.filterPillText, !isAc && styles.filterPillTextSelected]}>Non-AC</Text>
+            <Text style={[styles.filterPillText, { color: !isAc ? '#101010' : colors.textPrimary }]}>Non-AC</Text>
           </TouchableOpacity>
         </View>
 
@@ -426,23 +422,21 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(13),
     fontWeight: '600',
   },
-  rideCardsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+  rideSlider: {
     marginBottom: verticalScale(14),
   },
+  rideSliderContent: {
+    paddingRight: scale(20),
+  },
   rideCard: {
-    width: '48.5%',
+    width: scale(140),
+    marginRight: scale(12),
     backgroundColor: '#16161B',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: scale(22),
     padding: scale(14),
     alignItems: 'center',
-  },
-  rideCardSelected: {
-    borderColor: '#F5C518',
   },
   selectedDot: {
     position: 'absolute',

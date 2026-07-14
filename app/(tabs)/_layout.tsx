@@ -8,22 +8,33 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const tintColor = '#F5C518'; // Luxe yellow for active tab
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: tintColor,
-        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.45)',
+        tabBarInactiveTintColor: isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(16, 16, 20, 0.5)',
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          backgroundColor: '#101014',
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(255, 255, 255, 0.08)',
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          right: 20,
+          backgroundColor: isDark ? 'rgba(26, 26, 32, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+          borderRadius: 28,
+          height: 66,
+          paddingBottom: 10,
+          paddingTop: 10,
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: isDark ? 0.35 : 0.12,
+          shadowRadius: 12,
+          elevation: 8,
         },
       }}>
       <Tabs.Screen

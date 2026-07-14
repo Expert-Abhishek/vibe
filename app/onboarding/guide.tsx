@@ -100,7 +100,7 @@ export default function GuideRegister() {
         setCurrentStep(2);
       } else {
         console.log('Guide registered', formData);
-        router.replace('/(tabs)');
+        router.replace('/(auth)/sign-in');
       }
     }
   };
@@ -227,11 +227,18 @@ export default function GuideRegister() {
         )}
 
         <View style={styles.buttonRow}>
-          {currentStep > 1 && (
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => setCurrentStep(1)}>
-              <Text style={styles.secondaryButtonText}>Back</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => {
+              if (currentStep > 1) {
+                setCurrentStep(1);
+              } else {
+                router.back();
+              }
+            }}
+          >
+            <Text style={styles.secondaryButtonText}>Back</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
             <Text style={styles.primaryButtonText}>
               {currentStep === 2 ? 'Finish setup' : 'Continue'}

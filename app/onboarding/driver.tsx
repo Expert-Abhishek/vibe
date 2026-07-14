@@ -1,22 +1,22 @@
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Image,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
 type KYCStatus = 'form' | 'pending' | 'approved';
-type DocKey = 'photo' | 'rc' | 'dl' | 'insurance' | 'aadhar';
+type DocKey = 'photo' | 'rc' | 'dl' | 'insurance' | 'aadhar' | 'carFront' | 'carLeft' | 'carRight' | 'carBack';
 
 // ---- Design tokens -------------------------------------------------------
 // A "driver permit" identity: dark instrument-panel surfaces, signal-amber
@@ -37,12 +37,16 @@ const colors = {
 };
 
 const STEP_LABELS = ['Details', 'Vehicle', 'Documents'];
-const DOC_LABELS: Record<string, string> = {
+const DOC_LABELS: Record<DocKey, string> = {
   photo: 'Profile photo',
   rc: 'Registration certificate',
   dl: 'Driving licence',
   insurance: 'Insurance policy',
   aadhar: 'Aadhar card',
+  carFront: 'Car front view',
+  carLeft: 'Car left view',
+  carRight: 'Car right view',
+  carBack: 'Car back view',
 };
 
 export default function DriverRegister() {
@@ -55,13 +59,15 @@ export default function DriverRegister() {
 
   const [formData, setFormData] = useState({
     name: '', phone: '', altPhone: '',
-    rcNo: '', dlNo: '',
+    rcNo: '', dlNo: '', aadharNo: '',
+    capacity: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [docs, setDocs] = useState<Record<DocKey, string | null>>({
     photo: null, rc: null, dl: null, insurance: null, aadhar: null,
+    carFront: null, carLeft: null, carRight: null, carBack: null,
   });
 
   const pickDocument = (docKey: DocKey) => {
@@ -109,12 +115,24 @@ export default function DriverRegister() {
     if (currentStep === 1) {
       if (!formData.name) stepErrors.name = 'Enter the name as it appears on your Aadhar';
       if (!formData.phone || formData.phone.length < 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!formData.aadharNo || formData.aadharNo.length !== 12) stepErrors.aadharNo = 'Enter a valid 12-digit Aadhar number';
     } else if (currentStep === 2) {
       if (!formData.rcNo) stepErrors.rcNo = 'Enter your vehicle RC number';
       if (!formData.dlNo) stepErrors.dlNo = 'Enter your driving licence number';
+      if (!formData.capacity) {
+        stepErrors.capacity = 'Enter passenger capacity';
+      } else {
+        const capacityNum = parseInt(formData.capacity, 10);
+        if (isNaN(capacityNum) || capacityNum <= 0) {
+          stepErrors.capacity = 'Enter a valid passenger capacity greater than 0';
+        }
+      }
     } else if (currentStep === 3) {
-      if (!docs.photo || !docs.rc || !docs.dl || !docs.insurance || !docs.aadhar) {
-        stepErrors.docs = 'Upload all five documents to continue';
+      if (
+        !docs.photo || !docs.rc || !docs.dl || !docs.insurance || !docs.aadhar ||
+        !docs.carFront || !docs.carLeft || !docs.carRight || !docs.carBack
+      ) {
+        stepErrors.docs = 'Upload all nine documents to continue';
       }
     }
     setErrors(stepErrors);
@@ -161,8 +179,8 @@ export default function DriverRegister() {
           </Text>
           <Text style={styles.kycSubtitle}>
             {isApproved
-              ? 'Aapka account active ho gaya hai. Ab aap rides accept karne ke liye taiyar hain.'
-              : 'Hum aapke documents check kar rahe hain. Is process me lagbhag 4 ghante ka samay lag sakta hai.'}
+              ? 'Your account is now active. You are ready to accept rides!'
+              : 'We are checking your documents. This process may take about 4 hours.'}
           </Text>
 
           {!isApproved && (
@@ -174,10 +192,10 @@ export default function DriverRegister() {
 
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => (isApproved ? router.replace('/(tabs)') : setKycStatus('approved'))}
+            onPress={() => (isApproved ? router.replace('/(auth)/sign-in') : setKycStatus('approved'))}
           >
             <Text style={styles.primaryButtonText}>
-              {isApproved ? 'Go to dashboard' : 'Simulate approval (demo)'}
+              {isApproved ? 'Go to login' : 'Simulate approval (demo)'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -255,6 +273,15 @@ export default function DriverRegister() {
               value={formData.altPhone}
               onChangeText={(t: string) => setFormData({ ...formData, altPhone: t })}
             />
+            <Field
+              label="Aadhar number" required
+              placeholder="12-digit Aadhar number"
+              keyboardType="numeric"
+              maxLength={12}
+              value={formData.aadharNo}
+              onChangeText={(t: string) => setFormData({ ...formData, aadharNo: t.replace(/[^0-9]/g, '') })}
+              error={errors.aadharNo}
+            />
           </View>
         )}
 
@@ -276,6 +303,14 @@ export default function DriverRegister() {
               value={formData.dlNo}
               onChangeText={(t: string) => setFormData({ ...formData, dlNo: t })}
               error={errors.dlNo}
+            />
+            <Field
+              label="Passenger capacity" required
+              placeholder="e.g. 4"
+              keyboardType="numeric"
+              value={formData.capacity}
+              onChangeText={(t: string) => setFormData({ ...formData, capacity: t.replace(/[^0-9]/g, '') })}
+              error={errors.capacity}
             />
           </View>
         )}
@@ -323,11 +358,18 @@ export default function DriverRegister() {
         )}
 
         <View style={styles.buttonRow}>
-          {currentStep > 1 && (
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => setCurrentStep(prev => prev - 1)}>
-              <Text style={styles.secondaryButtonText}>Back</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => {
+              if (currentStep > 1) {
+                setCurrentStep(prev => prev - 1);
+              } else {
+                router.back();
+              }
+            }}
+          >
+            <Text style={styles.secondaryButtonText}>Back</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
             <Text style={styles.primaryButtonText}>
               {currentStep === 3 ? 'Submit for verification' : 'Continue'}

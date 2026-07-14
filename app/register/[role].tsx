@@ -18,6 +18,7 @@ export default function RegisterScreen() {
   const handleRegister = () => {
     // Yahan aapka registration logic aayega (API call)
     console.log(`Registering as ${role}`);
+    router.replace('/(auth)/sign-in');
   };
 
   return (
