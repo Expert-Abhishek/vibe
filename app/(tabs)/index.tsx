@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ImageBackground,
   Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -27,6 +28,28 @@ export default function HomeScreen() {
   const [isAc, setIsAc] = useState<boolean>(true);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+
+  const handleLocationPress = () => {
+    Alert.alert(
+      'Location Tracker',
+      'Vibzz wants to access your device GPS to fetch your coordinates. Do you want to proceed?',
+      [
+        {
+          text: 'Simulate My Location',
+          onPress: () => {
+            Alert.alert(
+              'Location Synced',
+              'Location set to: Bengaluru Palace, Karnataka, India'
+            );
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -110,7 +133,7 @@ export default function HomeScreen() {
             </View>
             {/* Cutout SUV graphic placed overlapping on bottom right */}
             <Image
-              source={require('@/assets/images/offroad_cutout.png')}
+              source={require('@/assets/images/thar.png')}
               style={styles.karnatakaSUVGraphic}
               resizeMode="contain"
             />
@@ -187,7 +210,7 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* FLOATING LOCATION BUTTON */}
-      <TouchableOpacity activeOpacity={0.9} style={styles.floatingLocationBtn}>
+      <TouchableOpacity activeOpacity={0.9} style={styles.floatingLocationBtn} onPress={handleLocationPress}>
         <MaterialIcons name="my-location" size={scale(22)} color="#101010" />
       </TouchableOpacity>
     </SafeAreaView>
@@ -537,7 +560,7 @@ const styles = StyleSheet.create({
   },
   floatingLocationBtn: {
     position: 'absolute',
-    bottom: verticalScale(18),
+    bottom: verticalScale(102),
     right: scale(18),
     width: scale(46),
     height: scale(46),
