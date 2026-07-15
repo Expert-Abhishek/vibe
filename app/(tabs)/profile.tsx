@@ -23,6 +23,7 @@ export default function ProfileScreen() {
   const [name, setName] = useState('Abhishek');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -35,37 +36,97 @@ export default function ProfileScreen() {
     danger: '#F0555F',
   };
 
+  // Kannada Translations Mapping
+  const trans = {
+    en: {
+      profileRole: 'Vibzz Premium Member',
+      accountInfo: 'Account Information',
+      fullName: 'Full Name',
+      updateBtn: 'Update',
+      changePass: 'Change Password',
+      currentPass: 'Current Password',
+      newPass: 'New Password',
+      changePassBtn: 'Change Password',
+      pref: 'Preferences',
+      darkTheme: 'Dark Theme',
+      darkActive: 'Dark mode active',
+      darkInactive: 'Light mode active',
+      langTitle: 'Kannada Language',
+      langActive: 'ಕನ್ನಡ ಸಕ್ರಿಯವಾಗಿದೆ',
+      langInactive: 'English is active',
+      switchDriver: 'Switch to Driver Portal',
+      switchGuide: 'Switch to Guide Portal',
+      logout: 'Logout',
+    },
+    kn: {
+      profileRole: 'ವಿಬ್ಜ್ ಪ್ರೀಮಿಯಂ ಸದಸ್ಯರು',
+      accountInfo: 'ಖಾತೆಯ ಮಾಹಿತಿ',
+      fullName: 'ಪೂರ್ಣ ಹೆಸರು',
+      updateBtn: 'ನವೀಕರಿಸಿ',
+      changePass: 'ಪಾಸ್‌ವರ್ಡ್ ಬದಲಾಯಿಸಿ',
+      currentPass: 'ಪ್ರಸ್ತುತ ಪಾಸ್‌ವರ್ಡ್',
+      newPass: 'ಹೊಸ ಪಾಸ್‌ವರ್ಡ್',
+      changePassBtn: 'ಪಾಸ್‌ವರ್ಡ್ ಬದಲಾಯಿಸಿ',
+      pref: 'ಆದ್ಯತೆಗಳು',
+      darkTheme: 'ಡಾರ್ಕ್ ಥೀಮ್',
+      darkActive: 'ಡಾರ್ಕ್ ಮೋಡ್ ಸಕ್ರಿಯವಾಗಿದೆ',
+      darkInactive: 'ಲೈಟ್ ಮೋಡ್ ಸಕ್ರಿಯವಾಗಿದೆ',
+      langTitle: 'ಕನ್ನಡ ಭಾಷೆ',
+      langActive: 'ಕನ್ನಡ ಸಕ್ರಿಯವಾಗಿದೆ',
+      langInactive: 'ಇಂಗ್ಲಿಷ್ ಸಕ್ರಿಯವಾಗಿದೆ',
+      switchDriver: 'ಡ್ರೈವರ್ ಪೋರ್ಟಲ್‌ಗೆ ಬದಲಾಯಿಸಿ',
+      switchGuide: 'ಗೈಡ್ ಪೋರ್ಟಲ್‌ಗೆ ಬದಲಾಯಿಸಿ',
+      logout: 'ಲಾಗ್ ಔಟ್',
+    }
+  }[appLang];
+
   const handleUpdateName = () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name cannot be empty');
+      Alert.alert(appLang === 'kn' ? 'ದೋಷ' : 'Error', appLang === 'kn' ? 'ಹೆಸರು ಖಾಲಿ ಇರಬಾರದು' : 'Name cannot be empty');
       return;
     }
-    Alert.alert('Profile Updated', `Your name has been updated to "${name}".`);
+    Alert.alert(
+      appLang === 'kn' ? 'ಪ್ರೊಫೈಲ್ ನವೀಕರಿಸಲಾಗಿದೆ' : 'Profile Updated', 
+      appLang === 'kn' ? `ನಿಮ್ಮ ಹೆಸರನ್ನು "${name}" ಗೆ ನವೀಕರಿಸಲಾಗಿದೆ.` : `Your name has been updated to "${name}".`
+    );
   };
 
   const handleChangePassword = () => {
     if (!currentPassword || !newPassword) {
-      Alert.alert('Error', 'Please fill in both current and new password fields');
+      Alert.alert(
+        appLang === 'kn' ? 'ದೋಷ' : 'Error', 
+        appLang === 'kn' ? 'ಪ್ರಸ್ತುತ ಮತ್ತು ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಎರಡನ್ನೂ ನಮೂದಿಸಿ' : 'Please fill in both current and new password fields'
+      );
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert('Error', 'New password must be at least 6 characters');
+      Alert.alert(
+        appLang === 'kn' ? 'ದೋಷ' : 'Error', 
+        appLang === 'kn' ? 'ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಕನಿಷ್ಠ 6 ಅಕ್ಷರಗಳಿರಬೇಕು' : 'New password must be at least 6 characters'
+      );
       return;
     }
-    Alert.alert('Success', 'Your password has been changed successfully.');
+    Alert.alert(
+      appLang === 'kn' ? 'ಯಶಸ್ವಿಯಾಗಿದೆ' : 'Success', 
+      appLang === 'kn' ? 'ನಿಮ್ಮ ಪಾಸ್‌ವರ್ಡ್ ಯಶಸ್ವಿಯಾಗಿ ಬದಲಾಗಿದೆ.' : 'Your password has been changed successfully.'
+    );
     setCurrentPassword('');
     setNewPassword('');
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to log out of Vibzz?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: () => router.replace('/(auth)/sign-in'),
-      },
-    ]);
+    Alert.alert(
+      appLang === 'kn' ? 'ಲಾಗ್ ಔಟ್' : 'Logout', 
+      appLang === 'kn' ? 'ವಿಬ್ಜ್‌ನಿಂದ ಲಾಗ್ ಔಟ್ ಮಾಡಲು ನೀವು ಖಚಿತವಾಗಿ ಬಯಸುವಿರಾ?' : 'Are you sure you want to log out of Vibzz?', 
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: appLang === 'kn' ? 'ಲಾಗ್ ಔಟ್' : 'Logout',
+          style: 'destructive',
+          onPress: () => router.replace('/(auth)/sign-in'),
+        },
+      ]
+    );
   };
 
   return (
@@ -78,15 +139,15 @@ export default function ProfileScreen() {
             <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
           </View>
           <Text style={[styles.profileName, { color: colors.textPrimary }]}>{name}</Text>
-          <Text style={[styles.profileRole, { color: colors.textMuted }]}>Vibzz Premium Member</Text>
+          <Text style={[styles.profileRole, { color: colors.textMuted }]}>{trans.profileRole}</Text>
         </View>
 
         {/* ACCOUNT INFORMATION SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.cardTitle, { color: colors.amber }]}>Account Information</Text>
+          <Text style={[styles.cardTitle, { color: colors.amber }]}>{trans.accountInfo}</Text>
 
           {/* Full Name */}
-          <Text style={[styles.label, { color: colors.textPrimary }]}>Full Name</Text>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>{trans.fullName}</Text>
           <View style={styles.inlineRow}>
             <TextInput
               style={[
@@ -105,16 +166,16 @@ export default function ProfileScreen() {
               placeholderTextColor={colors.textMuted}
             />
             <TouchableOpacity style={[styles.smallBtn, { backgroundColor: colors.amber }]} onPress={handleUpdateName}>
-              <Text style={styles.smallBtnText}>Update</Text>
+              <Text style={styles.smallBtnText}>{trans.updateBtn}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.divider, { backgroundColor: colors.line }]} />
 
           {/* Password Change */}
-          <Text style={[styles.cardSubTitle, { color: colors.textPrimary }]}>Change Password</Text>
+          <Text style={[styles.cardSubTitle, { color: colors.textPrimary }]}>{trans.changePass}</Text>
           
-          <Text style={[styles.label, { color: colors.textPrimary }]}>Current Password</Text>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>{trans.currentPass}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
             secureTextEntry
@@ -124,7 +185,7 @@ export default function ProfileScreen() {
             placeholderTextColor={colors.textMuted}
           />
 
-          <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>New Password</Text>
+          <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>{trans.newPass}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
             secureTextEntry
@@ -135,19 +196,20 @@ export default function ProfileScreen() {
           />
 
           <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(16) }]} onPress={handleChangePassword}>
-            <Text style={styles.primaryButtonText}>Change Password</Text>
+            <Text style={styles.primaryButtonText}>{trans.changePassBtn}</Text>
           </TouchableOpacity>
         </View>
 
         {/* PREFERENCES SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.cardTitle, { color: colors.amber }]}>Preferences</Text>
+          <Text style={[styles.cardTitle, { color: colors.amber }]}>{trans.pref}</Text>
           
+          {/* Dark Theme toggle */}
           <View style={styles.toggleRow}>
             <View>
-              <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Dark Theme</Text>
+              <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>{trans.darkTheme}</Text>
               <Text style={[styles.toggleSubLabel, { color: colors.textMuted }]}>
-                {isDark ? 'Dark mode active' : 'Light mode active'}
+                {isDark ? trans.darkActive : trans.darkInactive}
               </Text>
             </View>
             <Switch
@@ -155,6 +217,30 @@ export default function ProfileScreen() {
               onValueChange={toggleAppTheme}
               trackColor={{ false: '#767577', true: colors.amber }}
               thumbColor={isDark ? '#FFFFFF' : '#f4f3f4'}
+            />
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.line, marginVertical: verticalScale(10) }]} />
+
+          {/* Kannada Language toggle switch */}
+          <View style={styles.toggleRow}>
+            <View>
+              <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>{trans.langTitle}</Text>
+              <Text style={[styles.toggleSubLabel, { color: colors.textMuted }]}>
+                {appLang === 'kn' ? trans.langActive : trans.langInactive}
+              </Text>
+            </View>
+            <Switch
+              value={appLang === 'kn'}
+              onValueChange={(val) => {
+                setAppLang(val ? 'kn' : 'en');
+                Alert.alert(
+                  val ? 'ಭಾಷೆ ಬದಲಾಗಿದೆ' : 'Language Changed',
+                  val ? 'ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.' : 'Language has been changed to English.'
+                );
+              }}
+              trackColor={{ false: '#767577', true: colors.amber }}
+              thumbColor={appLang === 'kn' ? '#FFFFFF' : '#f4f3f4'}
             />
           </View>
         </View>
@@ -165,7 +251,7 @@ export default function ProfileScreen() {
           onPress={() => router.push('/driver-dashboard')}
         >
           <MaterialIcons name="directions-car" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
-          <Text style={[styles.switchPortalText, { color: colors.amber }]}>Switch to Driver Portal</Text>
+          <Text style={[styles.switchPortalText, { color: colors.amber }]}>{trans.switchDriver}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -173,13 +259,13 @@ export default function ProfileScreen() {
           onPress={() => router.push('/guide-dashboard')}
         >
           <MaterialIcons name="explore" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
-          <Text style={[styles.switchPortalText, { color: colors.amber }]}>Switch to Guide Portal</Text>
+          <Text style={[styles.switchPortalText, { color: colors.amber }]}>{trans.switchGuide}</Text>
         </TouchableOpacity>
 
         {/* LOGOUT BUTTON */}
         <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger }]} onPress={handleLogout}>
           <MaterialIcons name="exit-to-app" size={scale(20)} color={colors.danger} style={{ marginRight: scale(8) }} />
-          <Text style={[styles.logoutText, { color: colors.danger }]}>Logout</Text>
+          <Text style={[styles.logoutText, { color: colors.danger }]}>{trans.logout}</Text>
         </TouchableOpacity>
 
       </ScrollView>

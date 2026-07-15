@@ -61,7 +61,7 @@ export default function GuideDashboardScreen() {
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_tour' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(false);
-  const [appLang, setAppLang] = useState<'en' | 'hi'>('en');
+  const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   // Daily statistics
   const [hoursOnline] = useState(5.4);
@@ -130,20 +130,20 @@ export default function GuideDashboardScreen() {
       ringtone: 'Trip Alert Ringtone',
       vol: 'Alert ringtone volume',
     },
-    hi: {
-      duty: 'ड्यूटी स्टेटस',
-      activeTour: 'सक्रिय गाइड टूर',
-      profile: 'खाता और सेटिंग्स',
-      todayStats: 'आज के आँकड़े',
-      wallet: 'गाइड वॉलेट और बैंक ट्रांसफर',
-      payout: 'बैंक में ट्रांसफर करें',
-      workSettings: 'गाइड कार्य सेटिंग्स',
-      toolkit: 'टूलकिट और प्रवेश टिकट',
-      tickets: 'डिजिटल प्रवेश टिकट / पास',
-      emergency: 'आपातकालीन पुलिस/अस्पताल हेल्पलाइन',
-      pref: 'रिंगटोन और वॉल्यूम प्राथमिकताएं',
-      ringtone: 'अलर्ट टोन का चयन',
-      vol: 'अलर्ट टोन वॉल्यूम',
+    kn: {
+      duty: 'ಡ್ಯೂಟಿ ಸ್ಥಿತಿ',
+      activeTour: 'ಸಕ್ರಿಯ ಪ್ರವಾಸ',
+      profile: 'ಖಾತೆ ಮತ್ತು ಸೆಟ್ಟಿಂಗ್ಸ್',
+      todayStats: 'ಇಂದಿನ ಅಂಕಿಅಂಶಗಳು',
+      wallet: 'ಗೈಡ್ ವಾಲೆಟ್ ಮತ್ತು ಬ್ಯಾಂಕ್ ವರ್ಗಾವಣೆ',
+      payout: 'ತಕ್ಷಣದ ಬ್ಯಾಂಕ್ ವರ್ಗಾವಣೆ',
+      workSettings: 'ಗೈಡ್ ಕೆಲಸದ ಸೆಟ್ಟಿಂಗ್ಸ್',
+      toolkit: 'ಟೂಲ್ಕಿಟ್ ಮತ್ತು ಪ್ರವೇಶ ಟಿಕೆಟ್',
+      tickets: 'ಡಿಜಿಟಲ್ ಪ್ರವೇಶ ಟಿಕೆಟ್ / ಪಾಸ್',
+      emergency: 'ತುರ್ತು ಸಹಾಯವಾಣಿ ಸಂಪರ್ಕ',
+      pref: 'ರಿಂಗ್ಟೋನ್ ಮತ್ತು ವಾಲ್ಯೂಮ್ ಆದ್ಯತೆಗಳು',
+      ringtone: 'ಅಲರ್ಟ್ ಟೋನ್ ಆಯ್ಕೆ',
+      vol: 'ಅಲರ್ಟ್ ಟೋನ್ ವಾಲ್ಯೂಮ್',
     }
   }[appLang];
 
@@ -639,7 +639,7 @@ export default function GuideDashboardScreen() {
             <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
 
             {/* Language Switcher */}
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / भाषा चुने</Text>
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ</Text>
             <View style={styles.vehiclePillsRow}>
               <TouchableOpacity
                 style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
@@ -649,10 +649,10 @@ export default function GuideDashboardScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.langPill, appLang === 'hi' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppLang('hi')}
+                style={[styles.langPill, appLang === 'kn' && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppLang('kn')}
               >
-                <Text style={[styles.langPillText, { color: appLang === 'hi' ? '#101010' : colors.textPrimary }]}>हिंदी (Hindi)</Text>
+                <Text style={[styles.langPillText, { color: appLang === 'kn' ? '#101010' : colors.textPrimary }]}>ಕನ್ನಡ (Kannada)</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -682,7 +682,7 @@ export default function GuideDashboardScreen() {
             <MaterialIcons name="wifi" size={scale(22)} color={activeTab === 'duty' ? '#101010' : colors.textMuted} />
           </View>
           <Text style={[styles.tabBarLabel, { color: activeTab === 'duty' ? colors.amber : colors.textMuted }]}>
-            {appLang === 'hi' ? 'ड्यूटी स्टेटस' : 'Duty Status'}
+            {appLang === 'kn' ? 'ಡ್ಯೂಟಿ ಸ್ಥಿತಿ' : 'Duty Status'}
           </Text>
         </TouchableOpacity>
 
@@ -691,7 +691,7 @@ export default function GuideDashboardScreen() {
             <MaterialIcons name="navigation" size={scale(22)} color={activeTab === 'active_tour' ? '#101010' : colors.textMuted} />
           </View>
           <Text style={[styles.tabBarLabel, { color: activeTab === 'active_tour' ? colors.amber : colors.textMuted }]}>
-            {appLang === 'hi' ? 'सक्रिय टूर' : 'Active Tour'}
+            {appLang === 'kn' ? 'ಸಕ್ರಿಯ ಪ್ರವಾಸ' : 'Active Tour'}
           </Text>
         </TouchableOpacity>
 
@@ -700,7 +700,7 @@ export default function GuideDashboardScreen() {
             <MaterialIcons name="person" size={scale(22)} color={activeTab === 'profile' ? '#101010' : colors.textMuted} />
           </View>
           <Text style={[styles.tabBarLabel, { color: activeTab === 'profile' ? colors.amber : colors.textMuted }]}>
-            {appLang === 'hi' ? 'खाता & सेटिंग्स' : 'Account & Settings'}
+            {appLang === 'kn' ? 'ಖಾತೆ & ಸೆಟ್ಟಿಂಗ್ಸ್' : 'Account & Settings'}
           </Text>
         </TouchableOpacity>
       </View>

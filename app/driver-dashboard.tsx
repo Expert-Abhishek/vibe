@@ -54,7 +54,7 @@ export default function DriverDashboardScreen() {
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(false);
-  const [appLang, setAppLang] = useState<'en' | 'hi'>('en');
+  const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   // Daily statistics
   const [kmDriven, setKmDriven] = useState(142.5);
@@ -120,22 +120,22 @@ export default function DriverDashboardScreen() {
       call: 'Call Admin Support',
       lang: 'Language & App Settings',
     },
-    hi: {
-      dashboard: 'ड्राइवर डैशबोर्ड',
-      duty: 'ड्यूटी स्टेटस',
-      activeTrip: 'सक्रिय ट्रिप',
-      profile: 'प्रोफ़ाइल और खाता',
-      todayStats: 'आज के आँकड़े',
-      fuel: 'ईंधन की स्थिति',
-      maint: 'वाहन की स्थिति संकेतक',
-      wallet: 'ड्राइवर वॉलेट बैलेंस',
-      payout: 'तुरंत बैंक ट्रांसफर',
-      vehicle: 'ड्यूटी सेटिंग्स और वाहन बदलें',
-      nav: 'मैप नेविगेशन प्राथमिकता',
-      help: 'सहायता और आपातकालीन सहायता',
-      report: 'विवाद / समस्या रिपोर्ट करें',
-      call: 'हेल्पलाइन पर कॉल करें',
-      lang: 'भाषा और ऐप सेटिंग्स',
+    kn: {
+      dashboard: 'ಚಾಲಕ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್',
+      duty: 'ಡ್ಯೂಟಿ ಸ್ಥಿತಿ',
+      activeTrip: 'ಸಕ್ರಿಯ ಟ್ರಿಪ್',
+      profile: 'ಪ್ರೊಫೈಲ್ ಮತ್ತು ಖಾತೆ',
+      todayStats: 'ಇಂದಿನ ಅಂಕಿಅಂಶಗಳು',
+      fuel: 'ಇಂಧನ ಸ್ಥಿತಿ',
+      maint: 'ವಾಹನ ಸ್ಥಿತಿ ಸೂಚಕ',
+      wallet: 'ಚಾಲಕ ವಾಲೆಟ್ ಬ್ಯಾಲೆನ್ಸ್',
+      payout: 'ತಕ್ಷಣದ ಬ್ಯಾಂಕ್ ವರ್ಗಾವಣೆ',
+      vehicle: 'ಡ್ಯೂಟಿ ಸೆಟ್ಟಿಂಗ್ಸ್ ಮತ್ತು ವಾಹನ ಬದಲಾವಣೆ',
+      nav: 'ನಕ್ಷೆಯ ಆದ್ಯತೆ',
+      help: 'ಸಹಾಯ ಮತ್ತು ಬೆಂಬಲ (ತುರ್ತು)',
+      report: 'ವಿವಾದ / ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ',
+      call: 'ಅಡ್ಮಿನ್ ಸಹಾಯವಾಣಿಗೆ ಕರೆ ಮಾಡಿ',
+      lang: 'ಭಾಷೆ ಮತ್ತು ಆಪ್ ಸೆಟ್ಟಿಂಗ್ಸ್',
     }
   }[appLang];
 
@@ -191,9 +191,18 @@ export default function DriverDashboardScreen() {
     setIncomingRequest(null);
     setActiveTab('active_trip');
     Alert.alert(
-      appLang === 'hi' ? 'यात्रा स्वीकार की गई!' : 'Ride Accepted!',
-      appLang === 'hi' ? 'जीपीएस नेविगेशन शुरू हो गया है।' : 'GPS navigation routing started. Proceed to pickup.',
+      appLang === 'kn' ? 'ಪ್ರವಾಸ ಒಪ್ಪಿಕೊಳ್ಳಲಾಗಿದೆ!' : 'Ride Accepted!',
+      appLang === 'kn' ? 'ಜಿಪಿಎಸ್ ಮಾರ್ಗಸೂಚಿ ಆರಂಭವಾಗಿದೆ. ಪಿಕಪ್ ಸ್ಥಳಕ್ಕೆ ತೆರಳಿ.' : 'GPS navigation routing started. Proceed to pickup.',
       [{ text: 'OK' }]
+    );
+  };
+
+  const handleRejectRequest = () => {
+    setRequestVisible(false);
+    setIncomingRequest(null);
+    Alert.alert(
+      appLang === 'kn' ? 'ಪ್ರವಾಸ ನಿರಾಕರಿಸಲಾಗಿದೆ' : 'Ride Rejected',
+      appLang === 'kn' ? 'ಶೀಘ್ರದಲ್ಲೇ ನಿಮಗೆ ಮತ್ತೊಂದು ಟ್ರಿಪ್ ವಿನಂತಿ ಸಿಗಲಿದೆ.' : 'You will receive another booking shortly.'
     );
   };
 
@@ -593,7 +602,7 @@ export default function DriverDashboardScreen() {
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.lang}</Text>
 
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / भाषा चुने</Text>
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ</Text>
             <View style={styles.vehiclePillsRow}>
               <TouchableOpacity
                 style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
@@ -603,10 +612,10 @@ export default function DriverDashboardScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.langPill, appLang === 'hi' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppLang('hi')}
+                style={[styles.langPill, appLang === 'kn' && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppLang('kn')}
               >
-                <Text style={[styles.langPillText, { color: appLang === 'hi' ? '#101010' : colors.textPrimary }]}>हिंदी (Hindi)</Text>
+                <Text style={[styles.langPillText, { color: appLang === 'kn' ? '#101010' : colors.textPrimary }]}>ಕನ್ನಡ (Kannada)</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -636,7 +645,7 @@ export default function DriverDashboardScreen() {
             <MaterialIcons name="wifi" size={scale(22)} color={activeTab === 'duty' ? '#101010' : colors.textMuted} />
           </View>
           <Text style={[styles.tabBarLabel, { color: activeTab === 'duty' ? colors.amber : colors.textMuted }]}>
-            {appLang === 'hi' ? 'ड्यूटी स्टेटस' : 'Duty Status'}
+            {appLang === 'kn' ? 'ಡ್ಯೂಟಿ ಸ್ಥಿತಿ' : 'Duty Status'}
           </Text>
         </TouchableOpacity>
 
@@ -645,7 +654,7 @@ export default function DriverDashboardScreen() {
             <MaterialIcons name="navigation" size={scale(22)} color={activeTab === 'active_trip' ? '#101010' : colors.textMuted} />
           </View>
           <Text style={[styles.tabBarLabel, { color: activeTab === 'active_trip' ? colors.amber : colors.textMuted }]}>
-            {appLang === 'hi' ? 'सक्रिय ट्रिप' : 'Active Trip'}
+            {appLang === 'kn' ? 'ಸಕ್ರಿಯ ಟ್ರಿಪ್' : 'Active Trip'}
           </Text>
         </TouchableOpacity>
 
@@ -654,7 +663,7 @@ export default function DriverDashboardScreen() {
             <MaterialIcons name="person" size={scale(22)} color={activeTab === 'profile' ? '#101010' : colors.textMuted} />
           </View>
           <Text style={[styles.tabBarLabel, { color: activeTab === 'profile' ? colors.amber : colors.textMuted }]}>
-            {appLang === 'hi' ? 'खाता & सेटिंग्स' : 'Account & Settings'}
+            {appLang === 'kn' ? 'ಖಾತೆ & ಸೆಟ್ಟಿಂಗ್ಸ್' : 'Account & Settings'}
           </Text>
         </TouchableOpacity>
       </View>
