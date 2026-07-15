@@ -17,15 +17,15 @@ import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const rides = [
-  { key: 'sedan', name: 'Sedan', desc: 'Comfort & Style', image: require('@/assets/images/sedan.png') },
-  { key: 'hatchback', name: 'Hatchback', desc: 'Compact & Swift', image: require('@/assets/images/hatch.png') },
-  { key: 'thar', name: '4×4 Thar', desc: 'Rugged Offroad', image: require('@/assets/images/thar.png') },
+  { key: '5seater', name: '5 Seater', desc: 'Comfort & Style', image: require('@/assets/images/sedan.png') },
+  { key: '7seater', name: '7 Seater', desc: 'Compact & Swift', image: require('@/assets/images/hatch.png') },
+  { key: '4x4jeep', name: '4*4 Jeep', desc: 'Rugged Offroad', image: require('@/assets/images/thar.png') },
   { key: 'auto', name: 'Auto', desc: 'Local Explorer', image: require('@/assets/images/auto.png') },
 ];
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [selectedRide, setSelectedRide] = useState<string>('thar');
+  const [selectedRide] = useState<string>('4x4jeep');
   const [isAc, setIsAc] = useState<boolean>(true);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -64,6 +64,18 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(110) }]} showsVerticalScrollIndicator={false}>
+        {/* TOP LOCATION SEARCH BAR */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={[styles.searchBar, { borderColor: colors.border }]}
+          onPress={() => router.push('/book-cab')}
+        >
+          <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
+          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), marginLeft: scale(6) }}>
+            Where to? Search location to book a cab...
+          </Text>
+        </TouchableOpacity>
+
         {/* PREMIUM SERVICES */}
         <Text style={styles.sectionTitle}>Premium Services</Text>
         
@@ -89,7 +101,7 @@ export default function HomeScreen() {
           </ImageBackground>
         </TouchableOpacity>
 
-        {/* Row 2: Jungle Safari & Column components */}
+        {/* Row 2: Jungle Safari & Make Your Own Trip side-by-side */}
         <View style={styles.servicesGridRow}>
           {/* Left card: Jungle Safari */}
           <TouchableOpacity
@@ -110,28 +122,32 @@ export default function HomeScreen() {
             </ImageBackground>
           </TouchableOpacity>
 
-          {/* Right column: Make Trip & All Services */}
-          <View style={styles.rightServicesCol}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[styles.makeTripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => router.push('/make-trip')}
+          {/* Right card: Make Your Own Trip (Symmetrical grid column) */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.leftSafariCard}
+            onPress={() => router.push('/make-trip')}
+          >
+            <ImageBackground
+              source={require('@/assets/images/karnataka_bg.png')}
+              style={styles.safariCardBg}
+              imageStyle={{ borderRadius: scale(20) }}
             >
-              <MaterialIcons name="map" size={scale(20)} color="#F5C518" style={{ marginBottom: verticalScale(4) }} />
-              <Text style={[styles.makeTripTitle, { color: colors.textPrimary }]}>Make Your Own Trip</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity activeOpacity={0.9} style={styles.allServicesCard}>
-              <View style={styles.allServicesRow}>
-                <Text style={styles.allServicesText}>All Services</Text>
-                <MaterialIcons name="arrow-forward" size={scale(18)} color="#101010" />
+              <View style={styles.overlay} />
+              <View style={styles.safariCardTextCol}>
+                <Text style={styles.safariCardTitle}>Make Your Own Trip</Text>
+                <Text style={styles.safariCardSubtitle}>Plan Itinerary</Text>
               </View>
-            </TouchableOpacity>
-          </View>
+            </ImageBackground>
+          </TouchableOpacity>
         </View>
 
         {/* EXPLORE KARNATAKA BANNER */}
-        <TouchableOpacity activeOpacity={0.9} style={styles.karnatakaBanner}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={styles.karnatakaBanner}
+          onPress={() => router.push('/plan-route')}
+        >
           <ImageBackground
             source={require('@/assets/images/karnataka_bg.png')}
             style={styles.karnatakaBannerBg}
@@ -174,7 +190,7 @@ export default function HomeScreen() {
                   styles.rideCard,
                   { backgroundColor: colors.surfaceCard, borderColor: isSelected ? '#F5C518' : colors.border },
                 ]}
-                onPress={() => setSelectedRide(ride.key)}
+                onPress={() => router.push({ pathname: '/cars', params: { selectedRide: ride.key } })}
               >
                 {isSelected && <View style={styles.selectedDot} />}
                 <View style={styles.carImageWrapper}>
@@ -195,28 +211,30 @@ export default function HomeScreen() {
           })}
         </ScrollView>
 
-        {/* AC / NON-AC FILTERS */}
-        <View style={styles.filterPillsRow}>
-          <TouchableOpacity
-            style={[styles.filterPill, isAc && styles.filterPillSelected]}
-            onPress={() => setIsAc(true)}
-          >
-            <Text style={[styles.filterPillText, { color: isAc ? '#101010' : colors.textPrimary }]}>AC Rides</Text>
-          </TouchableOpacity>
+        {/* AC / NON-AC FILTERS (Hidden if Auto is selected) */}
+        {selectedRide !== 'auto' && (
+          <View style={styles.filterPillsRow}>
+            <TouchableOpacity
+              style={[styles.filterPill, isAc && styles.filterPillSelected]}
+              onPress={() => setIsAc(true)}
+            >
+              <Text style={[styles.filterPillText, { color: isAc ? '#101010' : colors.textPrimary }]}>AC Rides</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, !isAc && styles.filterPillSelected]}
-            onPress={() => setIsAc(false)}
-          >
-            <Text style={[styles.filterPillText, { color: !isAc ? '#101010' : colors.textPrimary }]}>Non-AC</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.filterPill, !isAc && styles.filterPillSelected]}
+              onPress={() => setIsAc(false)}
+            >
+              <Text style={[styles.filterPillText, { color: !isAc ? '#101010' : colors.textPrimary }]}>Non-AC</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* VIBE WITH US FOOTER CARD */}
         <View style={styles.footerVibeCard}>
           {/* Waves background using styled border/graphics */}
           <View style={styles.waveOverlay} />
-          <Text style={styles.vibeCardTitle}>#VIBE with us</Text>
+          <Text style={styles.vibeCardTitle}>#MAKE YOUR OWN VIBE with us</Text>
           <Text style={styles.vibeCardSub}>Made in India</Text>
           <Text style={styles.vibeCardCrafted}>Crafted in Karnataka</Text>
         </View>

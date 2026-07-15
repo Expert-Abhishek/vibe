@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -57,6 +57,16 @@ const presetDestinations: Checkpoint[] = [
 
 export default function MakeTripScreen() {
   const router = useRouter();
+  const searchParams = useLocalSearchParams();
+  const selectedRide = searchParams.selectedRide as string || '';
+
+  const getRideLabel = (key: string) => {
+    if (key === '5seater') return '5 Seater Premium';
+    if (key === '7seater') return '7 Seater Spacious';
+    if (key === '4x4jeep') return '4*4 Jeep Offroader';
+    if (key === 'auto') return 'Eco Auto';
+    return '';
+  };
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -308,9 +318,10 @@ export default function MakeTripScreen() {
   }, [checkpoints]);
 
   const handleConfirmTrip = () => {
+    const rideLabel = selectedRide ? getRideLabel(selectedRide) : 'driver';
     Alert.alert(
       'Itinerary Locked!',
-      `Trip plan confirmed. Total distance: ${distance}. We are preparing ride choices for your ${checkpoints.length}-stop itinerary!`,
+      `Trip plan confirmed. Total distance: ${distance}.\n\nWe are preparing ride choices and searching for ${rideLabel} drivers to cover your custom route!`,
       [{ text: 'Find Drivers', onPress: () => router.replace('/(tabs)/trips') }]
     );
   };
@@ -329,7 +340,16 @@ export default function MakeTripScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        
+        {/* Selected Vehicle Indicator */}
+        {selectedRide !== '' && (
+          <View style={[styles.selectedRideBadge, { backgroundColor: 'rgba(245,197,24,0.08)', borderColor: colors.border }]}>
+            <MaterialIcons name="local-taxi" size={scale(16)} color={colors.amber} style={{ marginRight: scale(6) }} />
+            <Text style={[styles.selectedRideText, { color: colors.textPrimary }]}>
+              Selected Vehicle: <Text style={{ color: colors.amber, fontWeight: '800' }}>{getRideLabel(selectedRide)}</Text>
+            </Text>
+          </View>
+        )}
+
         {/* Map Container */}
         <View style={[styles.mapContainer, { borderColor: colors.border }]}>
           {Platform.OS === 'web' || !MapView ? (
@@ -486,10 +506,13 @@ export default function MakeTripScreen() {
                 style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
                 onPress={() => handleSelectSuggestion(item.place_id, item.description)}
               >
-                <MaterialIcons name="location-on" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
-                <Text style={[styles.suggestionText, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {item.description}
-                </Text>
+                <View style={styles.suggestionLeft}>
+                  <MaterialIcons name="location-on" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
+                  <Text style={[styles.suggestionText, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {item.description}
+                  </Text>
+                </View>
+                <MaterialIcons name="add" size={scale(20)} color={colors.amber} />
               </TouchableOpacity>
             ))}
           </View>
@@ -820,8 +843,15 @@ const styles = StyleSheet.create({
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: scale(12),
     borderBottomWidth: 1,
+  },
+  suggestionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: scale(10),
   },
   suggestionText: {
     fontSize: moderateFontScale(13),
@@ -958,5 +988,19 @@ const styles = StyleSheet.create({
     color: '#101010',
     fontSize: moderateFontScale(14),
     fontWeight: '800',
+  },
+  selectedRideBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: scale(12),
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(14),
+    marginTop: verticalScale(10),
+    marginBottom: verticalScale(6),
+  },
+  selectedRideText: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '600',
   },
 });

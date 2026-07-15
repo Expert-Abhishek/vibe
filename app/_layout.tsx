@@ -26,6 +26,9 @@ export default function RootLayout() {
           <Stack.Screen name="guides" />
           <Stack.Screen name="jungle-safari" />
           <Stack.Screen name="make-trip" />
+          <Stack.Screen name="plan-route" />
+          <Stack.Screen name="book-cab" />
+          <Stack.Screen name="cars" />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style="auto" />

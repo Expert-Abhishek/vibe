@@ -8,6 +8,8 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -103,12 +105,149 @@ const mockSafaris: SafariTrip[] = [
   },
 ];
 
+const checkpointDetailsData: Record<string, { address: string; images: string[] }> = {
+  // Bandipur
+  'Forest Gate': {
+    address: 'Bandipur Entrance Checkpost, NH-67',
+    images: [
+      'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400',
+      'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=400'
+    ]
+  },
+  'Moyar Bed': {
+    address: 'Moyar Gorge Valley Viewpoint',
+    images: [
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400',
+      'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400'
+    ]
+  },
+  'Tiger Path': {
+    address: 'Core Tiger Habitat Sanctuary Area',
+    images: [
+      'https://images.unsplash.com/photo-1581852013749-bf938c92a95c?w=400',
+      'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?w=400'
+    ]
+  },
+  'Langur Trees': {
+    address: 'Bamboo Canopy Walk Zone',
+    images: [
+      'https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=400',
+      'https://images.unsplash.com/photo-1533851593648-9366f7f02361?w=400'
+    ]
+  },
+  'Main Exit': {
+    address: 'Bandipur Forest Exit Outpost',
+    images: [
+      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
+      'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400'
+    ]
+  },
+  // Kabini
+  'Cabin Gate': {
+    address: 'Kabini Forest Lodge Entrance',
+    images: [
+      'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400',
+      'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=400'
+    ]
+  },
+  'Backwaters': {
+    address: 'Kabini River Reservoir Shoreline',
+    images: [
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400',
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400'
+    ]
+  },
+  'Elephant Cross': {
+    address: 'Watering Hole & Elephant Trail Path',
+    images: [
+      'https://images.unsplash.com/photo-1581852013749-bf938c92a95c?w=400',
+      'https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?w=400'
+    ]
+  },
+  'Leopard Rock': {
+    address: 'Rocky Outcrop Lookout Point',
+    images: [
+      'https://images.unsplash.com/photo-1575550959106-5a7defe28b56?w=400',
+      'https://images.unsplash.com/photo-1456926631375-92c8ce872def?w=400'
+    ]
+  },
+  'Exit Gate': {
+    address: 'Wildlife Department Forest Exit Outpost',
+    images: [
+      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
+      'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400'
+    ]
+  },
+  // Nagarhole
+  'Taraka Gate': {
+    address: 'Taraka Dam Entrance Forest gate',
+    images: [
+      'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400',
+      'https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=400'
+    ]
+  },
+  'Bison Plains': {
+    address: 'Open Grassland Bison Crossing',
+    images: [
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400',
+      'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=400'
+    ]
+  },
+  'River Bank': {
+    address: 'Nagarhole Riverbank Lookout Point',
+    images: [
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400',
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400'
+    ]
+  },
+  'Tiger Canopy': {
+    address: 'Core Nagarhole Predator Habitat',
+    images: [
+      'https://images.unsplash.com/photo-1581852013749-bf938c92a95c?w=400',
+      'https://images.unsplash.com/photo-1564349683136-77e08dba1ef7?w=400'
+    ]
+  },
+  'Exit Post': {
+    address: 'Kabini-Nagarhole Forest Border Post',
+    images: [
+      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400',
+      'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400'
+    ]
+  },
+  // Default fallback
+  'default': {
+    address: 'Scenic Sanctuary Landmark Location',
+    images: [
+      'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400',
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400'
+    ]
+  }
+};
+
 export default function JungleSafariScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState<{
+    name: string;
+    code: string;
+    address: string;
+    images: string[];
+    description: string;
+  } | null>(null);
+
+  const getCheckpointInfo = (name: string, indexChar: string) => {
+    const details = checkpointDetailsData[name] || checkpointDetailsData['default'];
+    return {
+      name: name,
+      code: `Checkpoint ${indexChar}`,
+      address: details.address,
+      images: details.images,
+      description: `This is the beautiful ${name} checkpoint on our jungle safari. Travelers frequently spot various wild species, exotic birds, and unique flora here. Keep your cameras ready and stay inside the vehicle!`
+    };
+  };
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -223,7 +362,7 @@ export default function JungleSafariScreen() {
 
               {/* Route Stepper A-B-C-D-E */}
               <View style={styles.routeContainer}>
-                <Text style={[styles.routeHeading, { color: colors.textMuted }]}>Expedition Route Path</Text>
+                <Text style={[styles.routeHeading, { color: colors.textMuted }]}>Expedition Route Path (Tap node for details)</Text>
                 <View style={styles.stepperWrapper}>
                   {safari.route.map((stop, index) => {
                     const isLast = index === safari.route.length - 1;
@@ -231,11 +370,15 @@ export default function JungleSafariScreen() {
                       <View key={index} style={styles.stepNodeContainer}>
                         {/* Node layout */}
                         <View style={styles.nodeIconRow}>
-                          <View style={[styles.nodeCircle, { backgroundColor: index === 0 ? colors.amber : '#2C2C34' }]}>
+                          <TouchableOpacity
+                            style={[styles.nodeCircle, { backgroundColor: index === 0 ? colors.amber : '#2C2C34' }]}
+                            onPress={() => setSelectedCheckpoint(getCheckpointInfo(stop, String.fromCharCode(65 + index)))}
+                            activeOpacity={0.7}
+                          >
                             <Text style={[styles.nodeIndexText, { color: index === 0 ? '#101010' : '#ffffff' }]}>
                               {String.fromCharCode(65 + index)}
                             </Text>
-                          </View>
+                          </TouchableOpacity>
                           {!isLast && (
                             <View style={[styles.nodeLine, { backgroundColor: colors.border }]} />
                           )}
@@ -274,6 +417,70 @@ export default function JungleSafariScreen() {
         {/* Extra spacing */}
         <View style={{ height: verticalScale(30) }} />
       </ScrollView>
+
+      {/* Checkpoint Detail Modal Drawer */}
+      <Modal
+        visible={selectedCheckpoint !== null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedCheckpoint(null)}
+      >
+        {selectedCheckpoint && (
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+              <View style={styles.dragHandle} />
+
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={[styles.modalHeaderTitle, { color: colors.textPrimary }]}>{selectedCheckpoint.name}</Text>
+                  <Text style={[styles.modalHeaderSub, { color: colors.textMuted }]}>{selectedCheckpoint.code}</Text>
+                </View>
+                <TouchableOpacity style={styles.closeButton} onPress={() => setSelectedCheckpoint(null)}>
+                  <MaterialIcons name="close" size={scale(22)} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
+                {/* Location Address */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Forest Landmark Address</Text>
+                  <View style={styles.locationContainer}>
+                    <MaterialIcons name="pin-drop" size={scale(16)} color={colors.amber} style={{ marginRight: scale(6) }} />
+                    <Text style={[styles.locationText, { color: colors.textPrimary }]}>{selectedCheckpoint.address}</Text>
+                  </View>
+                </View>
+
+                {/* Description */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Wild Activity Description</Text>
+                  <Text style={[styles.modalDesc, { color: colors.textMuted }]}>
+                    {selectedCheckpoint.description}
+                  </Text>
+                </View>
+
+                {/* Checkpoint Images */}
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Checkpoint Images</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageScrollContainer}>
+                    {selectedCheckpoint.images.map((img, idx) => (
+                      <Image key={idx} source={{ uri: img }} style={styles.checkpointCardImage} />
+                    ))}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+
+              <View style={[styles.modalActions, { borderTopColor: colors.border }]}>
+                <TouchableOpacity
+                  style={styles.drawerCloseBtn}
+                  onPress={() => setSelectedCheckpoint(null)}
+                >
+                  <Text style={styles.drawerCloseText}>Close Details</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -481,5 +688,102 @@ const styles = StyleSheet.create({
   noResultsSub: {
     fontSize: moderateFontScale(12),
     marginTop: verticalScale(4),
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: scale(28),
+    borderTopRightRadius: scale(28),
+    maxHeight: '75%',
+    paddingBottom: verticalScale(20),
+  },
+  dragHandle: {
+    width: scale(40),
+    height: verticalScale(4),
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: scale(2),
+    alignSelf: 'center',
+    marginTop: verticalScale(10),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: scale(20),
+    paddingTop: verticalScale(14),
+    paddingBottom: verticalScale(10),
+  },
+  modalHeaderTitle: {
+    fontSize: moderateFontScale(17),
+    fontWeight: '800',
+  },
+  modalHeaderSub: {
+    fontSize: moderateFontScale(11),
+    marginTop: verticalScale(2),
+  },
+  closeButton: {
+    padding: scale(4),
+  },
+  modalScroll: {
+    paddingHorizontal: scale(20),
+    paddingBottom: verticalScale(20),
+  },
+  modalSection: {
+    marginTop: verticalScale(16),
+  },
+  modalSectionTitle: {
+    color: '#F5C518',
+    fontSize: moderateFontScale(12),
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: verticalScale(6),
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: scale(12),
+    padding: scale(10),
+  },
+  locationText: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '600',
+  },
+  modalDesc: {
+    fontSize: moderateFontScale(13),
+    lineHeight: moderateFontScale(19),
+  },
+  imageScrollContainer: {
+    gap: scale(10),
+    paddingVertical: verticalScale(4),
+  },
+  checkpointCardImage: {
+    width: scale(200),
+    height: scale(130),
+    borderRadius: scale(16),
+    resizeMode: 'cover',
+  },
+  modalActions: {
+    paddingHorizontal: scale(20),
+    paddingTop: verticalScale(14),
+    borderTopWidth: 1.2,
+  },
+  drawerCloseBtn: {
+    backgroundColor: '#2C2C34',
+    borderRadius: scale(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: scale(44),
+  },
+  drawerCloseText: {
+    color: '#ffffff',
+    fontSize: moderateFontScale(13),
+    fontWeight: '700',
   },
 });
