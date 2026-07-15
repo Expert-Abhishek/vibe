@@ -128,6 +128,28 @@ export default function MakeTripScreen() {
     }
   };
 
+  const triggerSearchAndAddFirst = async (query: string) => {
+    setLoadingSearch(true);
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+        query
+      )}&key=${GOOGLE_MAPS_KEY}&location=12.9716,77.5946&radius=300000`;
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.predictions && data.predictions.length > 0) {
+        const first = data.predictions[0];
+        handleSelectSuggestion(first.place_id, first.description);
+      } else {
+        Alert.alert('No Results', `Could not find any location matching "${query}".`);
+      }
+    } catch (e) {
+      console.error('Error in search and add first:', e);
+    } finally {
+      setLoadingSearch(false);
+    }
+  };
+
   // Select place from Google Suggestions & fetch Lat/Lng
   const handleSelectSuggestion = async (placeId: string, description: string) => {
     setSearchText('');
@@ -476,6 +498,14 @@ export default function MakeTripScreen() {
               value={searchText}
               onChangeText={setSearchText}
               autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                if (suggestions.length > 0) {
+                  handleSelectSuggestion(suggestions[0].place_id, suggestions[0].description);
+                } else if (searchText.trim().length > 0) {
+                  triggerSearchAndAddFirst(searchText);
+                }
+              }}
             />
             {loadingSearch && <ActivityIndicator size="small" color={colors.amber} style={{ marginRight: scale(8) }} />}
             {searchText !== '' && (
