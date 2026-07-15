@@ -96,7 +96,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
           <IconSymbol name="chevron.right" size={scale(18)} color="#101010" />
         </View>
       </TouchableOpacity>
-      <Text style={styles.tipText}>Tip: Enter password {"\""}guide{"\""} to sign in to the Guide Partner dashboard.</Text>
+      <Text style={styles.tipText}>Tip: Enter password {"\""}guide{"\""} or {"\""}driver{"\""} to sign in to their respective partner dashboards.</Text>
     </View>
   );
 }

@@ -192,10 +192,10 @@ export default function DriverRegister() {
 
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => (isApproved ? router.replace('/(auth)/sign-in') : setKycStatus('approved'))}
+            onPress={() => (isApproved ? router.replace('/driver-dashboard') : setKycStatus('approved'))}
           >
             <Text style={styles.primaryButtonText}>
-              {isApproved ? 'Go to login' : 'Simulate approval (demo)'}
+              {isApproved ? 'Go to dashboard' : 'Simulate approval (demo)'}
             </Text>
           </TouchableOpacity>
         </View>

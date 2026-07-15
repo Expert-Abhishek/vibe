@@ -22,8 +22,12 @@ export default function SignInScreen() {
 
   const handleLogin = (phone: string, pass: string) => {
     console.log('Logging in with:', phone, pass);
-    if (phone.toLowerCase().includes('guide') || pass.toLowerCase().includes('guide') || pass === '8240') {
+    const lowerPhone = phone.toLowerCase();
+    const lowerPass = pass.toLowerCase();
+    if (lowerPhone.includes('guide') || lowerPass.includes('guide') || pass === '8240') {
       router.replace('/guide-dashboard');
+    } else if (lowerPhone.includes('driver') || lowerPass.includes('driver')) {
+      router.replace('/driver-dashboard');
     } else {
       router.replace('/(tabs)');
     }

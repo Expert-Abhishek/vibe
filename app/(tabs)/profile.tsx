@@ -159,9 +159,17 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* SWITCH PORTAL BUTTON */}
+        {/* SWITCH PORTAL BUTTONS */}
         <TouchableOpacity 
-          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5 }]} 
+          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginBottom: verticalScale(8) }]} 
+          onPress={() => router.push('/driver-dashboard')}
+        >
+          <MaterialIcons name="directions-car" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
+          <Text style={[styles.switchPortalText, { color: colors.amber }]}>Switch to Driver Portal</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginTop: 0 }]} 
           onPress={() => router.push('/guide-dashboard')}
         >
           <MaterialIcons name="explore" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
