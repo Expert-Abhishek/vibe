@@ -180,6 +180,29 @@ export default function BookCabScreen() {
   useEffect(() => {
     if (!pickup || !drop) return;
 
+    const calculateStraightLineFallback = () => {
+      setRouteCoords([
+        { latitude: pickup.latitude, longitude: pickup.longitude },
+        { latitude: drop.latitude, longitude: drop.longitude },
+      ]);
+
+      const R = 6371; // Earth radius in km
+      const dLat = ((drop.latitude - pickup.latitude) * Math.PI) / 180;
+      const dLon = ((drop.longitude - pickup.longitude) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((pickup.latitude * Math.PI) / 180) *
+          Math.cos((drop.latitude * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const straightDist = R * c;
+
+      const estDistance = straightDist * 1.25; // Winding factor
+      setDistanceKm(estDistance);
+      setDurationMins(Math.ceil((estDistance / 45) * 60)); // Avg 45km/h speed
+    };
+
     const fetchRoute = async () => {
       setLoadingRoute(true);
       try {
@@ -247,30 +270,6 @@ export default function BookCabScreen() {
       points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
     }
     return points;
-  };
-
-  const calculateStraightLineFallback = () => {
-    if (!pickup || !drop) return;
-    setRouteCoords([
-      { latitude: pickup.latitude, longitude: pickup.longitude },
-      { latitude: drop.latitude, longitude: drop.longitude },
-    ]);
-
-    const R = 6371; // Earth radius in km
-    const dLat = ((drop.latitude - pickup.latitude) * Math.PI) / 180;
-    const dLon = ((drop.longitude - pickup.longitude) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((pickup.latitude * Math.PI) / 180) *
-        Math.cos((drop.latitude * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const straightDist = R * c;
-
-    const estDistance = straightDist * 1.25; // Winding factor
-    setDistanceKm(estDistance);
-    setDurationMins(Math.ceil((estDistance / 45) * 60)); // Avg 45km/h speed
   };
 
   const getPrice = (ratePerKm: number) => {
