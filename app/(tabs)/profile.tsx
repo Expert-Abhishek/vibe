@@ -159,6 +159,15 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* SWITCH PORTAL BUTTON */}
+        <TouchableOpacity 
+          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5 }]} 
+          onPress={() => router.push('/guide-dashboard')}
+        >
+          <MaterialIcons name="explore" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
+          <Text style={[styles.switchPortalText, { color: colors.amber }]}>Switch to Guide Portal</Text>
+        </TouchableOpacity>
+
         {/* LOGOUT BUTTON */}
         <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger }]} onPress={handleLogout}>
           <MaterialIcons name="exit-to-app" size={scale(20)} color={colors.danger} style={{ marginRight: scale(8) }} />
@@ -299,6 +308,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   logoutText: {
+    fontSize: moderateFontScale(15),
+    fontWeight: '700',
+  },
+  switchPortalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: scale(12),
+    paddingVertical: verticalScale(14),
+    marginTop: verticalScale(14),
+    marginBottom: verticalScale(6),
+  },
+  switchPortalText: {
     fontSize: moderateFontScale(15),
     fontWeight: '700',
   },

@@ -100,7 +100,7 @@ export default function GuideRegister() {
         setCurrentStep(2);
       } else {
         console.log('Guide registered', formData);
-        router.replace('/(auth)/sign-in');
+        router.replace('/guide-dashboard');
       }
     }
   };

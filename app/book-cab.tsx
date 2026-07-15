@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -42,7 +42,7 @@ interface LocationNode {
   address?: string;
 }
 
-const presetDropLocations = [
+const presetDestinations = [
   { name: 'Kempegowda International Airport (BLR)', latitude: 13.1986, longitude: 77.7066, address: 'KIAL Road, Devanahalli, Bengaluru' },
   { name: 'Majestic Railway Station', latitude: 12.9784, longitude: 77.5694, address: 'Subhash Nagar, Bengaluru' },
   { name: 'Indiranagar 100 Feet Road', latitude: 12.9629, longitude: 77.6377, address: 'Indiranagar, Bengaluru' },
@@ -52,6 +52,7 @@ const presetDropLocations = [
 
 export default function BookCabScreen() {
   const router = useRouter();
+  const searchParams = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -62,27 +63,30 @@ export default function BookCabScreen() {
     address: 'Vasanth Nagar, Bengaluru, Karnataka',
   });
 
-  const [drop, setDrop] = useState<LocationNode | null>({
-    name: 'Kempegowda Airport (Drop)',
-    latitude: 13.1986,
-    longitude: 77.7066,
-    address: 'KIAL Road, Devanahalli, Bengaluru, Karnataka',
-  });
+  const [drop, setDrop] = useState<LocationNode | null>(null);
+  const [stops, setStops] = useState<LocationNode[]>([]);
 
-  const [searchField, setSearchField] = useState<'pickup' | 'drop' | null>(null);
+  // Search autocomplete overlay states
+  const [searchField, setSearchField] = useState<'pickup' | 'drop' | number | null>(null);
   const [searchText, setSearchText] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const [selectedRide, setSelectedRide] = useState<string>('5seater');
   const [isAc, setIsAc] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'voucher'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('cash');
   const [bookingLoading, setBookingLoading] = useState(false);
+
+  // Voucher discount states
+  const [voucherText, setVoucherText] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState('');
+  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountFlat, setDiscountFlat] = useState(0);
 
   // Route telemetry details
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
-  const [distanceKm, setDistanceKm] = useState<number>(32.5); // Default simulated
-  const [durationMins, setDurationMins] = useState<number>(45); // Default simulated
+  const [distanceKm, setDistanceKm] = useState<number>(15.0); // Default simulated
+  const [durationMins, setDurationMins] = useState<number>(30); // Default simulated
   const [loadingRoute, setLoadingRoute] = useState(false);
 
   const colors = {
@@ -98,9 +102,21 @@ export default function BookCabScreen() {
   const rides = [
     { key: '5seater', name: '5 Seater', ratePerKm: 15, minsAway: 2, icon: 'car', desc: 'Sleek & spacious sedan' },
     { key: '7seater', name: '7 Seater', ratePerKm: 20, minsAway: 4, icon: 'users', desc: 'Perfect family ride' },
-    { key: 'auto', name: 'Auto', ratePerKm: 8, minsAway: 1, icon: 'motorcycle', desc: 'Quick local commuter' },
+    { key: 'auto', name: 'Auto', ratePerKm: 8, minsAway: 1, icon: 'electric-rickshaw', desc: 'Quick local commuter' },
     { key: '4x4jeep', name: '4*4 Jeep', ratePerKm: 25, minsAway: 5, icon: 'truck-monster', desc: 'Offroad explorer' },
   ];
+
+  // Preload Destination from router params
+  useEffect(() => {
+    if (searchParams.dropName) {
+      setDrop({
+        name: searchParams.dropName as string,
+        latitude: parseFloat(searchParams.dropLat as string),
+        longitude: parseFloat(searchParams.dropLng as string),
+        address: searchParams.dropAddress as string || '',
+      });
+    }
+  }, [searchParams]);
 
   // Set AC to false if Auto is selected
   useEffect(() => {
@@ -165,6 +181,13 @@ export default function BookCabScreen() {
           setPickup(selectedNode);
         } else if (searchField === 'drop') {
           setDrop(selectedNode);
+        } else if (typeof searchField === 'number') {
+          // Modify specific stop
+          const updatedStops = [...stops];
+          updatedStops[searchField] = selectedNode;
+          setStops(updatedStops);
+        } else if (searchField === 'newstop') {
+          setStops([...stops, selectedNode]);
         }
         setSearchField(null);
       }
@@ -176,39 +199,23 @@ export default function BookCabScreen() {
     }
   };
 
-  // Google Directions API to fetch exact road route
+  // Google Directions API to fetch exact road route with waypoints support
   useEffect(() => {
     if (!pickup || !drop) return;
-
-    const calculateStraightLineFallback = () => {
-      setRouteCoords([
-        { latitude: pickup.latitude, longitude: pickup.longitude },
-        { latitude: drop.latitude, longitude: drop.longitude },
-      ]);
-
-      const R = 6371; // Earth radius in km
-      const dLat = ((drop.latitude - pickup.latitude) * Math.PI) / 180;
-      const dLon = ((drop.longitude - pickup.longitude) * Math.PI) / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos((pickup.latitude * Math.PI) / 180) *
-          Math.cos((drop.latitude * Math.PI) / 180) *
-          Math.sin(dLon / 2) *
-          Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const straightDist = R * c;
-
-      const estDistance = straightDist * 1.25; // Winding factor
-      setDistanceKm(estDistance);
-      setDurationMins(Math.ceil((estDistance / 45) * 60)); // Avg 45km/h speed
-    };
 
     const fetchRoute = async () => {
       setLoadingRoute(true);
       try {
         const origin = `${pickup.latitude},${pickup.longitude}`;
         const destination = `${drop.latitude},${drop.longitude}`;
-        const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${GOOGLE_MAPS_KEY}`;
+
+        let waypointsQuery = '';
+        if (stops.length > 0) {
+          const coords = stops.map(s => `${s.latitude},${s.longitude}`).join('|');
+          waypointsQuery = `&waypoints=${coords}`;
+        }
+
+        const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsQuery}&key=${GOOGLE_MAPS_KEY}`;
         
         const response = await fetch(url);
         const data = await response.json();
@@ -231,7 +238,6 @@ export default function BookCabScreen() {
           setDistanceKm(metersSum / 1000);
           setDurationMins(Math.ceil(secondsSum / 60));
         } else {
-          // Haversine straight line fallback
           calculateStraightLineFallback();
         }
       } catch (e) {
@@ -242,8 +248,35 @@ export default function BookCabScreen() {
       }
     };
 
+    const calculateStraightLineFallback = () => {
+      const fullPath = [pickup, ...stops, drop];
+      const coords = fullPath.map(node => ({ latitude: node.latitude, longitude: node.longitude }));
+      setRouteCoords(coords);
+
+      // Symmetrical rough calculation
+      let totalDistance = 0;
+      for (let i = 0; i < fullPath.length - 1; i++) {
+        const nodeA = fullPath[i];
+        const nodeB = fullPath[i+1];
+        const R = 6371;
+        const dLat = ((nodeB.latitude - nodeA.latitude) * Math.PI) / 180;
+        const dLon = ((nodeB.longitude - nodeA.longitude) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((nodeA.latitude * Math.PI) / 180) *
+            Math.cos((nodeB.latitude * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        totalDistance += R * c;
+      }
+      const estDistance = totalDistance * 1.25;
+      setDistanceKm(estDistance);
+      setDurationMins(Math.ceil((estDistance / 45) * 60));
+    };
+
     fetchRoute();
-  }, [pickup, drop]);
+  }, [pickup, drop, stops]);
 
   const decodePolyline = (encoded: string) => {
     const points = [];
@@ -272,12 +305,23 @@ export default function BookCabScreen() {
     return points;
   };
 
-  const getPrice = (ratePerKm: number) => {
+  const getBasePrice = (ratePerKm: number) => {
     let fare = distanceKm * ratePerKm;
     if (isAc && selectedRide !== 'auto') {
       fare += distanceKm * 2; // AC surcharge ₹2/km
     }
     return Math.round(fare);
+  };
+
+  const getDiscountedPrice = (basePrice: number) => {
+    let final = basePrice;
+    if (discountFlat > 0) {
+      final = Math.max(0, final - discountFlat);
+    }
+    if (discountPercent > 0) {
+      final = Math.round(final * (1 - discountPercent / 100));
+    }
+    return final;
   };
 
   const getDropOffTime = () => {
@@ -286,9 +330,30 @@ export default function BookCabScreen() {
     let hours = date.getHours();
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
-    hours = hours ? hours : 12; // 0 hour should be 12
+    hours = hours ? hours : 12;
     const mins = date.getMinutes().toString().padStart(2, '0');
     return `${hours}:${mins} ${ampm}`;
+  };
+
+  const handleApplyVoucher = () => {
+    const code = voucherText.trim().toUpperCase();
+    if (!code) {
+      Alert.alert('Empty Voucher', 'Please enter a voucher code first.');
+      return;
+    }
+    if (code === 'VIBE15') {
+      setAppliedVoucher('VIBE15');
+      setDiscountPercent(15);
+      setDiscountFlat(0);
+      Alert.alert('Coupon Applied!', '15% discount has been applied to your fare.');
+    } else if (code === 'SAVE100') {
+      setAppliedVoucher('SAVE100');
+      setDiscountPercent(0);
+      setDiscountFlat(100);
+      Alert.alert('Coupon Applied!', 'Flat ₹100 discount has been applied.');
+    } else {
+      Alert.alert('Invalid Coupon', 'Code not found. Try VIBE15 or SAVE100.');
+    }
   };
 
   const handleBookCab = () => {
@@ -300,14 +365,40 @@ export default function BookCabScreen() {
     setTimeout(() => {
       setBookingLoading(false);
       const chosenRide = rides.find(r => r.key === selectedRide);
-      const fare = getPrice(chosenRide ? chosenRide.ratePerKm : 15);
+      const base = getBasePrice(chosenRide ? chosenRide.ratePerKm : 15);
+      const final = getDiscountedPrice(base);
       
       Alert.alert(
         'Cab Booked Successfully!',
-        `Your driver is arriving in ${chosenRide?.minsAway} mins!\n\nDetails:\nVehicle: ${chosenRide?.name}\nPayment: ${paymentMethod.toUpperCase()}\nAC: ${isAc ? 'ON' : 'OFF'}\nEstimated Price: ₹${fare.toLocaleString('en-IN')}`,
+        `Your driver is arriving in ${chosenRide?.minsAway} mins!\n\nDetails:\nVehicle: ${chosenRide?.name}\nPayment: ${paymentMethod.toUpperCase()}\nAC: ${isAc ? 'ON' : 'OFF'}\nIntermediate Stops: ${stops.length}\nFinal Amount: ₹${final.toLocaleString('en-IN')}`,
         [{ text: 'View Trip Status', onPress: () => router.replace('/(tabs)/trips') }]
       );
     }, 2000);
+  };
+
+  // Reordering/removing stops
+  const handleRemoveStop = (index: number) => {
+    const updated = [...stops];
+    updated.splice(index, 1);
+    setStops(updated);
+  };
+
+  const handleMoveStopUp = (index: number) => {
+    if (index === 0) return;
+    const updated = [...stops];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    setStops(updated);
+  };
+
+  const handleMoveStopDown = (index: number) => {
+    if (index === stops.length - 1) return;
+    const updated = [...stops];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+    setStops(updated);
   };
 
   return (
@@ -321,48 +412,90 @@ export default function BookCabScreen() {
             <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Cab Despatch Center</Text>
-          <View style={{ width: scale(30) }} />
+          <View style={{ width: scale(40) }} />
         </View>
 
-        {/* Input Rows */}
-        <View style={styles.inputsColumn}>
-          {/* Pickup Input */}
-          <TouchableOpacity 
-            style={[styles.addressNodeTap, { borderColor: searchField === 'pickup' ? colors.amber : colors.border }]}
-            onPress={() => {
-              setSearchField('pickup');
-              setSearchText('');
-            }}
-          >
-            <View style={styles.bulletRow}>
-              <View style={[styles.pointDot, { backgroundColor: colors.amber }]} />
-              <Text style={[styles.addressTextVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                {pickup.name}
-              </Text>
+        {/* Inputs Column */}
+        <ScrollView style={{ maxHeight: verticalScale(160) }} showsVerticalScrollIndicator={true}>
+          <View style={styles.inputsColumn}>
+            {/* Pickup Node */}
+            <View style={styles.nodeItemRow}>
+              <TouchableOpacity 
+                style={[styles.addressNodeTap, { flex: 1 }]}
+                onPress={() => {
+                  setSearchField('pickup');
+                  setSearchText('');
+                }}
+              >
+                <View style={styles.bulletRow}>
+                  <View style={[styles.pointDot, { backgroundColor: colors.amber }]} />
+                  <Text style={[styles.addressTextVal, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {pickup.name}
+                  </Text>
+                </View>
+                <MaterialIcons name="edit" size={scale(15)} color={colors.textMuted} />
+              </TouchableOpacity>
             </View>
-            <MaterialIcons name="edit" size={scale(16)} color={colors.textMuted} />
-          </TouchableOpacity>
 
-          {/* Line separator connector */}
-          <View style={[styles.nodeLinkLine, { backgroundColor: colors.border }]} />
+            {/* Stops list with Reorder and Delete controls */}
+            {stops.map((stop, index) => (
+              <View key={index}>
+                <View style={[styles.nodeLinkLine, { backgroundColor: colors.border }]} />
+                <View style={styles.nodeItemRow}>
+                  <TouchableOpacity 
+                    style={[styles.addressNodeTap, { flex: 1, borderColor: colors.amber }]}
+                    onPress={() => {
+                      setSearchField(index);
+                      setSearchText('');
+                    }}
+                  >
+                    <View style={styles.bulletRow}>
+                      <View style={[styles.pointDot, { backgroundColor: '#F5C518' }]} />
+                      <Text style={[styles.addressTextVal, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {stop.name}
+                      </Text>
+                    </View>
+                    <MaterialIcons name="edit" size={scale(15)} color={colors.textMuted} />
+                  </TouchableOpacity>
+                  
+                  {/* Reorder and Delete controls */}
+                  <View style={styles.stopActionControls}>
+                    <TouchableOpacity onPress={() => handleMoveStopUp(index)} disabled={index === 0} style={styles.reorderBtn}>
+                      <MaterialIcons name="keyboard-arrow-up" size={scale(18)} color={index === 0 ? colors.border : colors.textPrimary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleMoveStopDown(index)} disabled={index === stops.length - 1} style={styles.reorderBtn}>
+                      <MaterialIcons name="keyboard-arrow-down" size={scale(18)} color={index === stops.length - 1 ? colors.border : colors.textPrimary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleRemoveStop(index)} style={styles.deleteStopBtn}>
+                      <MaterialIcons name="delete" size={scale(16)} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ))}
 
-          {/* Drop Input */}
-          <TouchableOpacity 
-            style={[styles.addressNodeTap, { borderColor: searchField === 'drop' ? colors.amber : colors.border }]}
-            onPress={() => {
-              setSearchField('drop');
-              setSearchText('');
-            }}
-          >
-            <View style={styles.bulletRow}>
-              <View style={[styles.pointDot, { backgroundColor: '#ef4444' }]} />
-              <Text style={[styles.addressTextVal, drop ? { color: colors.textPrimary } : { color: colors.textMuted }]} numberOfLines={1}>
-                {drop ? drop.name : 'Enter destination (drop location)...'}
-              </Text>
+            <View style={[styles.nodeLinkLine, { backgroundColor: colors.border }]} />
+
+            {/* Drop Node */}
+            <View style={styles.nodeItemRow}>
+              <TouchableOpacity 
+                style={[styles.addressNodeTap, { flex: 1 }]}
+                onPress={() => {
+                  setSearchField('drop');
+                  setSearchText('');
+                }}
+              >
+                <View style={styles.bulletRow}>
+                  <View style={[styles.pointDot, { backgroundColor: '#ef4444' }]} />
+                  <Text style={[styles.addressTextVal, drop ? { color: colors.textPrimary } : { color: colors.textMuted }]} numberOfLines={1}>
+                    {drop ? drop.name : 'Enter destination (drop location)...'}
+                  </Text>
+                </View>
+                <MaterialIcons name="search" size={scale(15)} color={colors.textMuted} />
+              </TouchableOpacity>
             </View>
-            <MaterialIcons name="search" size={scale(16)} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
+          </View>
+        </ScrollView>
       </View>
 
       {/* Conditional Active Search Overlay suggestions */}
@@ -372,7 +505,7 @@ export default function BookCabScreen() {
             <MaterialIcons name="edit-location" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
             <TextInput
               autoFocus
-              placeholder={`Search ${searchField} address...`}
+              placeholder="Search stop/address location..."
               placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
               style={[styles.textInputStyle, { color: colors.textPrimary }]}
               value={searchText}
@@ -409,15 +542,21 @@ export default function BookCabScreen() {
             {suggestions.length === 0 && (
               <View style={styles.presetsListContainer}>
                 <Text style={[styles.presetsTitle, { color: colors.amber }]}>Famous destinations near Bengaluru:</Text>
-                {presetDropLocations.map((preset, idx) => (
+                {presetDestinations.map((preset, idx) => (
                   <TouchableOpacity
                     key={idx}
                     style={[styles.presetRowItem, { borderBottomColor: colors.border }]}
                     onPress={() => {
                       if (searchField === 'pickup') {
                         setPickup(preset);
-                      } else {
+                      } else if (searchField === 'drop') {
                         setDrop(preset);
+                      } else if (typeof searchField === 'number') {
+                        const updated = [...stops];
+                        updated[searchField] = preset;
+                        setStops(updated);
+                      } else if (searchField === 'newstop') {
+                        setStops([...stops, preset]);
                       }
                       setSearchField(null);
                     }}
@@ -442,20 +581,32 @@ export default function BookCabScreen() {
           <View style={styles.webMapTelemetry}>
             <View style={styles.gridsDesign} />
             <View style={styles.hudOverlayBox}>
-              <Text style={styles.hudTextTitle}>GPS ROUTE LINK ACTIVE</Text>
+              <Text style={styles.hudTextTitle}>GPS MULTI-STOP LINK ACTIVE</Text>
               <Text style={styles.hudAddressLine}>Start: {pickup.name}</Text>
+              {stops.map((st, sidx) => (
+                <Text key={sidx} style={styles.hudAddressLine}>Stop {sidx + 1}: {st.name}</Text>
+              ))}
               {drop && <Text style={styles.hudAddressLine}>End: {drop.name}</Text>}
-              <Text style={styles.hudRouteMeta}>Route Distance: {distanceKm.toFixed(1)} km | Travel Time: {durationMins} mins</Text>
+              <Text style={styles.hudRouteMeta}>Distance: {distanceKm.toFixed(1)} km | Waypoints: {stops.length} | Travel: {durationMins} mins</Text>
             </View>
             {/* Visual connected pins */}
             <View style={styles.nodesVisualRow}>
               <View style={[styles.mapNodeVisual, { backgroundColor: colors.amber }]}>
-                <Text style={styles.nodeTextChar}>A</Text>
+                <Text style={styles.nodeTextChar}>P</Text>
                 <Text style={styles.nodeSubLabel}>Pickup</Text>
               </View>
+              {stops.map((_, sidx) => (
+                <React.Fragment key={sidx}>
+                  <View style={[styles.lineConnectRoad, { backgroundColor: colors.amber }]} />
+                  <View style={[styles.mapNodeVisual, { backgroundColor: '#F5C518' }]}>
+                    <Text style={styles.nodeTextChar}>{sidx + 1}</Text>
+                    <Text style={styles.nodeSubLabel}>Stop {sidx + 1}</Text>
+                  </View>
+                </React.Fragment>
+              ))}
               <View style={[styles.lineConnectRoad, { backgroundColor: colors.amber }]} />
               <View style={[styles.mapNodeVisual, { backgroundColor: '#ef4444' }]}>
-                <Text style={styles.nodeTextChar}>B</Text>
+                <Text style={styles.nodeTextChar}>D</Text>
                 <Text style={styles.nodeSubLabel}>Drop</Text>
               </View>
             </View>
@@ -479,6 +630,16 @@ export default function BookCabScreen() {
               description={pickup.address}
               pinColor={colors.amber}
             />
+            {/* Stops Markers */}
+            {stops.map((stop, idx) => (
+              <Marker
+                key={idx}
+                coordinate={{ latitude: stop.latitude, longitude: stop.longitude }}
+                title={`Stop ${idx + 1}: ${stop.name}`}
+                description={stop.address}
+                pinColor="#F5C518"
+              />
+            ))}
             {/* Drop Marker */}
             {drop && (
               <Marker
@@ -498,6 +659,20 @@ export default function BookCabScreen() {
             )}
           </MapView>
         )}
+
+        {/* Floating Add Stop Button (Bottom Right of map) */}
+        <TouchableOpacity
+          style={styles.floatingAddStopBtn}
+          activeOpacity={0.85}
+          onPress={() => {
+            setSearchField('newstop');
+            setSearchText('');
+          }}
+        >
+          <MaterialIcons name="add-location" size={scale(18)} color="#101010" />
+          <Text style={styles.floatingAddStopText}>Add Stop</Text>
+        </TouchableOpacity>
+
         {loadingRoute && (
           <View style={styles.mapLoadingOverlay}>
             <ActivityIndicator size="large" color={colors.amber} />
@@ -522,7 +697,10 @@ export default function BookCabScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rideListContent}>
             {rides.map((ride) => {
               const isSelected = selectedRide === ride.key;
-              const farePrice = getPrice(ride.ratePerKm);
+              const base = getBasePrice(ride.ratePerKm);
+              const discounted = getDiscountedPrice(base);
+              const showDiscount = discounted !== base;
+              
               return (
                 <TouchableOpacity
                   key={ride.key}
@@ -537,10 +715,21 @@ export default function BookCabScreen() {
                   activeOpacity={0.9}
                 >
                   <View style={[styles.optionIconBox, { backgroundColor: isSelected ? 'rgba(245,197,24,0.1)' : 'rgba(255,255,255,0.04)' }]}>
-                    <FontAwesome5 name={ride.icon} size={scale(16)} color={isSelected ? colors.amber : colors.textPrimary} />
+                    {ride.icon === 'electric-rickshaw' ? (
+                      <MaterialIcons name="electric-rickshaw" size={scale(18)} color={isSelected ? colors.amber : colors.textPrimary} />
+                    ) : (
+                      <FontAwesome5 name={ride.icon} size={scale(16)} color={isSelected ? colors.amber : colors.textPrimary} />
+                    )}
                   </View>
                   <Text style={[styles.optionName, { color: colors.textPrimary }]}>{ride.name}</Text>
-                  <Text style={[styles.optionFare, { color: colors.amber }]}>₹{farePrice}</Text>
+                  
+                  {/* Highlight Slashed price if coupon active */}
+                  <View style={styles.priceColumn}>
+                    {showDiscount && (
+                      <Text style={styles.slashedPrice}>₹{base}</Text>
+                    )}
+                    <Text style={[styles.optionFare, { color: colors.amber }]}>₹{discounted}</Text>
+                  </View>
                   <Text style={[styles.optionTime, { color: colors.textMuted }]}>{ride.minsAway} min away</Text>
                 </TouchableOpacity>
               );
@@ -548,8 +737,35 @@ export default function BookCabScreen() {
           </ScrollView>
         </View>
 
+        {/* Voucher Discount Code complete Row */}
+        <View style={[styles.voucherInputRow, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+          <MaterialIcons name="card-giftcard" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+          <TextInput
+            placeholder="Enter promo coupon (e.g. VIBE15, SAVE100)"
+            placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
+            style={[styles.voucherTextInput, { color: colors.textPrimary }]}
+            value={voucherText}
+            onChangeText={setVoucherText}
+            autoCapitalize="characters"
+          />
+          <TouchableOpacity 
+            style={[styles.voucherApplyBtn, { backgroundColor: colors.amber }]} 
+            onPress={handleApplyVoucher}
+          >
+            <Text style={styles.voucherApplyBtnText}>Apply</Text>
+          </TouchableOpacity>
+        </View>
+
+        {appliedVoucher !== '' && (
+          <View style={{ paddingHorizontal: scale(18), paddingTop: verticalScale(6) }}>
+            <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>
+              ✓ Coupon code {appliedVoucher} applied successfully!
+            </Text>
+          </View>
+        )}
+
         {/* AC and Payment Settings Row */}
-        <View style={[styles.optionsSettingGrid, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+        <View style={[styles.optionsSettingGrid, { borderBottomColor: colors.border }]}>
           {/* AC Toggle - HIDDEN FOR AUTO */}
           {selectedRide !== 'auto' ? (
             <View style={styles.settingCell}>
@@ -578,7 +794,7 @@ export default function BookCabScreen() {
 
           <View style={[styles.gridSeparatorLine, { backgroundColor: colors.border }]} />
 
-          {/* Payment Method Option */}
+          {/* Payment Method Option - CASH & UPI */}
           <View style={styles.settingCell}>
             <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Payment Mode</Text>
             <View style={styles.paymentSelectorRow}>
@@ -591,11 +807,11 @@ export default function BookCabScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.payMethodBtn, paymentMethod === 'voucher' && styles.payMethodBtnActive]}
-                onPress={() => setPaymentMethod('voucher')}
+                style={[styles.payMethodBtn, paymentMethod === 'upi' && styles.payMethodBtnActive]}
+                onPress={() => setPaymentMethod('upi')}
               >
-                <MaterialIcons name="card-membership" size={scale(14)} color={paymentMethod === 'voucher' ? '#101010' : colors.textPrimary} />
-                <Text style={[styles.payMethodText, { color: paymentMethod === 'voucher' ? '#101010' : colors.textPrimary }]}>Voucher</Text>
+                <FontAwesome5 name="qrcode" size={scale(11)} color={paymentMethod === 'upi' ? '#101010' : colors.textPrimary} />
+                <Text style={[styles.payMethodText, { color: paymentMethod === 'upi' ? '#101010' : colors.textPrimary }]}>UPI</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -631,7 +847,7 @@ const styles = StyleSheet.create({
   addressPanel: {
     paddingHorizontal: scale(18),
     paddingTop: verticalScale(8),
-    paddingBottom: verticalScale(16),
+    paddingBottom: verticalScale(14),
     borderBottomWidth: 1.2,
     zIndex: 10,
   },
@@ -645,21 +861,50 @@ const styles = StyleSheet.create({
     padding: scale(4),
   },
   panelTitle: {
-    fontSize: moderateFontScale(16),
+    fontSize: moderateFontScale(15),
     fontWeight: '800',
+  },
+  floatingAddStopBtn: {
+    position: 'absolute',
+    bottom: scale(16),
+    right: scale(16),
+    backgroundColor: '#F5C518',
+    borderRadius: scale(20),
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: scale(8),
+    paddingHorizontal: scale(14),
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 5,
+  },
+  floatingAddStopText: {
+    color: '#101010',
+    fontWeight: '800',
+    fontSize: moderateFontScale(11),
+    marginLeft: scale(4),
   },
   inputsColumn: {
     position: 'relative',
+  },
+  nodeItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
   },
   addressNodeTap: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: scale(14),
-    paddingHorizontal: scale(14),
-    height: verticalScale(40),
+    borderRadius: scale(12),
+    paddingHorizontal: scale(12),
+    height: verticalScale(36),
     backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   bulletRow: {
     flexDirection: 'row',
@@ -674,15 +919,28 @@ const styles = StyleSheet.create({
     marginRight: scale(10),
   },
   addressTextVal: {
-    fontSize: moderateFontScale(13),
+    fontSize: moderateFontScale(12),
     fontWeight: '600',
     flex: 1,
   },
+  stopActionControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: scale(8),
+    gap: scale(3),
+  },
+  reorderBtn: {
+    padding: scale(3),
+  },
+  deleteStopBtn: {
+    padding: scale(4),
+    marginLeft: scale(2),
+  },
   nodeLinkLine: {
     width: scale(2),
-    height: verticalScale(12),
-    marginLeft: scale(17),
-    marginVertical: verticalScale(2),
+    height: verticalScale(10),
+    marginLeft: scale(15),
+    marginVertical: verticalScale(1),
   },
   mapCanvasBlock: {
     flex: 1,
@@ -735,7 +993,7 @@ const styles = StyleSheet.create({
   },
   hudAddressLine: {
     color: '#ffffff',
-    fontSize: moderateFontScale(11),
+    fontSize: moderateFontScale(10),
     fontWeight: '600',
     marginTop: verticalScale(2),
   },
@@ -749,35 +1007,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: verticalScale(60),
-    width: '75%',
+    marginTop: verticalScale(80),
+    width: '90%',
   },
   mapNodeVisual: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(18),
+    width: scale(30),
+    height: scale(30),
+    borderRadius: scale(15),
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   nodeTextChar: {
     color: '#101010',
-    fontSize: moderateFontScale(14),
+    fontSize: moderateFontScale(12),
     fontWeight: '900',
   },
   nodeSubLabel: {
     color: '#8D8D97',
-    fontSize: moderateFontScale(9),
+    fontSize: moderateFontScale(8),
     fontWeight: '600',
     position: 'absolute',
-    top: scale(40),
-    width: scale(70),
+    top: scale(34),
+    width: scale(60),
     textAlign: 'center',
   },
   lineConnectRoad: {
     height: verticalScale(3),
     flex: 1,
-    marginHorizontal: scale(4),
+    marginHorizontal: scale(2),
   },
   bookingDrawer: {
     borderTopLeftRadius: scale(28),
@@ -800,14 +1058,14 @@ const styles = StyleSheet.create({
   },
   routeStatsSummary: {
     alignItems: 'center',
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(10),
   },
   statsSummaryText: {
     fontSize: moderateFontScale(13),
     fontWeight: '700',
   },
   rideSliderWrapper: {
-    marginBottom: verticalScale(14),
+    marginBottom: verticalScale(12),
   },
   rideListContent: {
     paddingHorizontal: scale(18),
@@ -832,29 +1090,64 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(12),
     fontWeight: '700',
   },
+  priceColumn: {
+    alignItems: 'center',
+    marginVertical: verticalScale(2),
+  },
+  slashedPrice: {
+    fontSize: moderateFontScale(10),
+    textDecorationLine: 'line-through',
+    color: 'rgba(255,255,255,0.3)',
+  },
   optionFare: {
     fontSize: moderateFontScale(14),
     fontWeight: '800',
-    marginVertical: verticalScale(2),
   },
   optionTime: {
     fontSize: moderateFontScale(9),
     fontWeight: '600',
   },
-  optionsSettingGrid: {
+  voucherInputRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(18),
     borderTopWidth: 1.2,
     borderBottomWidth: 1.2,
-    paddingVertical: verticalScale(14),
+    justifyContent: 'space-between',
+  },
+  voucherTextInput: {
+    flex: 1,
+    fontSize: moderateFontScale(12),
+    padding: 0,
+    height: verticalScale(30),
+    marginHorizontal: scale(6),
+  },
+  voucherApplyBtn: {
+    borderRadius: scale(8),
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: scale(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voucherApplyBtnText: {
+    color: '#101010',
+    fontSize: moderateFontScale(11),
+    fontWeight: '800',
+  },
+  optionsSettingGrid: {
+    flexDirection: 'row',
+    paddingVertical: verticalScale(12),
     paddingHorizontal: scale(18),
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderBottomWidth: 1.2,
   },
   settingCell: {
     flex: 0.47,
   },
   settingLabel: {
-    fontSize: moderateFontScale(11),
+    fontSize: moderateFontScale(10),
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -899,7 +1192,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: scale(2),
+    gap: scale(3),
     borderWidth: 1.2,
     borderColor: 'rgba(255,255,255,0.12)',
     borderRadius: scale(10),
@@ -915,12 +1208,12 @@ const styles = StyleSheet.create({
   },
   confirmActionArea: {
     paddingHorizontal: scale(18),
-    marginTop: verticalScale(14),
+    marginTop: verticalScale(12),
   },
   bookCabButton: {
     backgroundColor: '#F5C518',
     borderRadius: scale(14),
-    height: scale(48),
+    height: scale(46),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

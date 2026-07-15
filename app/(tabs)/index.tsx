@@ -68,7 +68,7 @@ export default function HomeScreen() {
         <TouchableOpacity
           activeOpacity={0.8}
           style={[styles.searchBar, { borderColor: colors.border }]}
-          onPress={() => router.push('/book-cab')}
+          onPress={() => router.push('/search-location')}
         >
           <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
           <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), marginLeft: scale(6) }}>
