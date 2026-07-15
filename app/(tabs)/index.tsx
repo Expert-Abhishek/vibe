@@ -4,7 +4,6 @@ import {
   View,
   Text,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   ImageBackground,
   Image,
@@ -14,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
+import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const rides = [
@@ -24,6 +24,7 @@ const rides = [
 ];
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [selectedRide, setSelectedRide] = useState<string>('thar');
   const [isAc, setIsAc] = useState<boolean>(true);
   const colorScheme = useColorScheme();
@@ -67,7 +68,11 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>Premium Services</Text>
         
         {/* Row 1: Need a Guide */}
-        <TouchableOpacity activeOpacity={0.9} style={styles.largeCardWrapper}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={styles.largeCardWrapper}
+          onPress={() => router.push('/guides')}
+        >
           <ImageBackground
             source={require('@/assets/images/guide_bg.png')}
             style={styles.largeCardBg}
@@ -87,7 +92,11 @@ export default function HomeScreen() {
         {/* Row 2: Jungle Safari & Column components */}
         <View style={styles.servicesGridRow}>
           {/* Left card: Jungle Safari */}
-          <TouchableOpacity activeOpacity={0.9} style={styles.leftSafariCard}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.leftSafariCard}
+            onPress={() => router.push('/jungle-safari')}
+          >
             <ImageBackground
               source={require('@/assets/images/safari_bg.png')}
               style={styles.safariCardBg}
@@ -103,7 +112,11 @@ export default function HomeScreen() {
 
           {/* Right column: Make Trip & All Services */}
           <View style={styles.rightServicesCol}>
-            <TouchableOpacity activeOpacity={0.9} style={[styles.makeTripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.makeTripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => router.push('/make-trip')}
+            >
               <MaterialIcons name="map" size={scale(20)} color="#F5C518" style={{ marginBottom: verticalScale(4) }} />
               <Text style={[styles.makeTripTitle, { color: colors.textPrimary }]}>Make Your Own Trip</Text>
             </TouchableOpacity>

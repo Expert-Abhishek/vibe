@@ -23,6 +23,9 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)/forgot-password" />
           <Stack.Screen name="(auth)/verify-otp" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="guides" />
+          <Stack.Screen name="jungle-safari" />
+          <Stack.Screen name="make-trip" />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style="auto" />
