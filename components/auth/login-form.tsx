@@ -96,6 +96,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
           <IconSymbol name="chevron.right" size={scale(18)} color="#101010" />
         </View>
       </TouchableOpacity>
+      <Text style={styles.tipText}>Tip: Enter password {"\""}guide{"\""} to sign in to the Guide Partner dashboard.</Text>
     </View>
   );
 }
@@ -190,5 +191,12 @@ const styles = StyleSheet.create({
     color: '#101010',
     fontSize: moderateFontScale(16),
     fontWeight: '700',
+  },
+  tipText: {
+    color: 'rgba(255, 255, 255, 0.45)',
+    fontSize: moderateFontScale(11),
+    textAlign: 'center',
+    marginTop: verticalScale(14),
+    fontStyle: 'italic',
   },
 });

@@ -22,8 +22,11 @@ export default function SignInScreen() {
 
   const handleLogin = (phone: string, pass: string) => {
     console.log('Logging in with:', phone, pass);
-    // Simulated successful login - navigate to main tabs
-    router.replace('/(tabs)');
+    if (phone.toLowerCase().includes('guide') || pass.toLowerCase().includes('guide') || pass === '8240') {
+      router.replace('/guide-dashboard');
+    } else {
+      router.replace('/(tabs)');
+    }
   };
 
   const handleGoogleLogin = () => {
