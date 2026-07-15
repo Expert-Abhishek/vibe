@@ -14,7 +14,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -59,14 +59,27 @@ export default function GuideDashboardScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [activeTab, setActiveTab] = useState<'duty' | 'active_tour' | 'earnings'>('duty');
+  const [activeTab, setActiveTab] = useState<'duty' | 'active_tour' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(false);
+  const [appLang, setAppLang] = useState<'en' | 'hi'>('en');
 
   // Daily statistics
-  const [hoursOnline, setHoursOnline] = useState(0);
-  const [tripsCount, setTripsCount] = useState(0);
-  const [earningsToday, setEarningsToday] = useState(0);
-  const [earningsBalance, setEarningsBalance] = useState(0);
+  const [hoursOnline] = useState(5.4);
+  const [tripsCount, setTripsCount] = useState(3);
+  const [earningsToday, setEarningsToday] = useState(3250);
+  const [earningsBalance, setEarningsBalance] = useState(1750);
+
+  // Profile configurations
+  const [upiId, setUpiId] = useState('ramesh.guide@okaxis');
+  
+  // Guide-specific work settings
+  const [spokenLangs, setSpokenLangs] = useState({ en: true, hi: true, kn: true, te: false });
+  const [expertise, setExpertise] = useState({ history: true, food: false, shopping: true, adventure: false });
+
+  // Toolkit QR / Alert settings
+  const [qrVisible, setQrVisible] = useState(false);
+  const [alertVolume, setAlertVolume] = useState(80); // %
+  const [selectedRingtone, setSelectedRingtone] = useState<'classic' | 'loud' | 'pulse'>('loud');
 
   // Incoming Request Simulation
   const [incomingRequest, setIncomingRequest] = useState<ActiveRequest | null>(null);
@@ -91,32 +104,54 @@ export default function GuideDashboardScreen() {
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
-    surface: isDark ? '#1E1E24' : '#FFFFFF',
-    surfaceCard: isDark ? '#16161B' : '#FFFFFF',
+    surface: isDark ? 'rgba(26, 26, 32, 0.9)' : 'rgba(255, 255, 255, 0.92)',
+    surfaceCard: isDark ? '#1E1E24' : '#FFFFFF',
     textPrimary: isDark ? '#ffffff' : '#1C1C1E',
     textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
-    border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
+    border: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
     danger: '#ef4444',
   };
 
-  // Online Hour increment simulator
-  useEffect(() => {
-    let interval: any;
-    if (isOnline) {
-      interval = setInterval(() => {
-        setHoursOnline(prev => parseFloat((prev + 0.1).toFixed(1)));
-      }, 60000); // Increments 0.1 hours every minute of simulation
+  // Translations
+  const trans = {
+    en: {
+      duty: 'Duty Status',
+      activeTour: 'Active Tour',
+      profile: 'Account & Settings',
+      todayStats: 'Today Stats',
+      wallet: 'Guide Wallet & Bank Settlement',
+      payout: 'Instant Settlement payout',
+      workSettings: 'Guide Work Suitability Settings',
+      toolkit: 'Audio Guide & Toolkit Controls',
+      tickets: 'Digital Entry Tickets & Passes',
+      emergency: 'Emergency Contact Sync',
+      pref: 'Notification & Tone Preferences',
+      ringtone: 'Trip Alert Ringtone',
+      vol: 'Alert ringtone volume',
+    },
+    hi: {
+      duty: 'ड्यूटी स्टेटस',
+      activeTour: 'सक्रिय गाइड टूर',
+      profile: 'खाता और सेटिंग्स',
+      todayStats: 'आज के आँकड़े',
+      wallet: 'गाइड वॉलेट और बैंक ट्रांसफर',
+      payout: 'बैंक में ट्रांसफर करें',
+      workSettings: 'गाइड कार्य सेटिंग्स',
+      toolkit: 'टूलकिट और प्रवेश टिकट',
+      tickets: 'डिजिटल प्रवेश टिकट / पास',
+      emergency: 'आपातकालीन पुलिस/अस्पताल हेल्पलाइन',
+      pref: 'रिंगटोन और वॉल्यूम प्राथमिकताएं',
+      ringtone: 'अलर्ट टोन का चयन',
+      vol: 'अलर्ट टोन वॉल्यूम',
     }
-    return () => clearInterval(interval);
-  }, [isOnline]);
+  }[appLang];
 
-  // Incoming booking simulator: pops up a request 5 seconds after going online
+  // Online simulator
   useEffect(() => {
     let timeout: any;
     if (isOnline && !activeTour && !incomingRequest) {
       timeout = setTimeout(() => {
-        // Trigger simulated request
         const mockRequest: ActiveRequest = {
           touristName: 'Abhishek (Tourist)',
           pickup: 'Bengaluru Palace Entrance Gate',
@@ -141,7 +176,7 @@ export default function GuideDashboardScreen() {
     return () => clearTimeout(timeout);
   }, [isOnline, activeTour, incomingRequest]);
 
-  // Incoming Request timer countdown
+  // Request countdown timer
   useEffect(() => {
     let timer: any;
     if (requestVisible && timerSeconds > 0) {
@@ -167,21 +202,7 @@ export default function GuideDashboardScreen() {
     setCurrentSpotIndex(0);
     setIncomingRequest(null);
     setActiveTab('active_tour');
-    Alert.alert(
-      'Request Accepted!',
-      'GPS navigation routing started. Proceed to pickup location.',
-      [{ text: 'Navigate Now' }]
-    );
-  };
-
-  const handleRejectRequest = () => {
-    setRequestVisible(false);
-    setIncomingRequest(null);
-    Alert.alert('Request Rejected', 'You will receive another booking shortly.');
-  };
-
-  const handleArrived = () => {
-    setOtpVisible(true);
+    Alert.alert('Request Accepted!', 'GPS routing started. Navigate to tourist.');
   };
 
   const handleVerifyOtp = () => {
@@ -191,10 +212,7 @@ export default function GuideDashboardScreen() {
       setEnteredOtp('');
       setTourPhase('tour');
       setCurrentSpotIndex(0);
-      Alert.alert(
-        'Verification Success!',
-        `OTP code matched. The tour has started. Proceed to Spot 1: ${activeTour.spots[0].name}.`
-      );
+      Alert.alert('Verification Success!', 'OTP code matched. Sightseeing tour started.');
     } else {
       Alert.alert('Invalid OTP', 'The code did not match. Please verify with tourist (Try 8240).');
     }
@@ -215,7 +233,7 @@ export default function GuideDashboardScreen() {
     if (!activeTour) return;
     Alert.alert(
       'Complete Tour',
-      'Are you sure you want to end this tour and collect payment?',
+      'Are you sure you want to end this tour?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -228,7 +246,7 @@ export default function GuideDashboardScreen() {
             setDailyTours([
               {
                 id: `tour_${Date.now()}`,
-                title: activeTour.title || 'Custom Tour',
+                title: activeTour.pickup.split(' ')[0] + ' Heritage Tour',
                 time: 'Just Now',
                 fare: fareEarned,
                 payout: 'Paid to Wallet',
@@ -238,8 +256,8 @@ export default function GuideDashboardScreen() {
             ]);
             setActiveTour(null);
             setTourPhase('pickup');
-            setActiveTab('earnings');
-            Alert.alert('Tour Complete!', `₹${fareEarned} has been added to your daily wallet earnings!`);
+            setActiveTab('profile');
+            Alert.alert('Tour Complete!', `₹${fareEarned} added to your balance.`);
           }
         }
       ]
@@ -258,40 +276,36 @@ export default function GuideDashboardScreen() {
       setEarningsBalance(0);
       Alert.alert(
         'Payout Transferred!',
-        `₹${paidAmt} has been dispatched directly to your registered bank account via IMPS!`
+        `₹${paidAmt} successfully settled to UPI ID: ${upiId}!`
       );
     }, 2000);
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#101014' : '#F5F5F7' }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header bar / Role switcher */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View>
           <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ PARTNER</Text>
-          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>Ramesh G. (Guide Dashboard)</Text>
+          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>Ramesh Gowda</Text>
         </View>
         
-        {/* Switch back button */}
-        <TouchableOpacity
-          style={styles.switchRoleBtn}
-          onPress={() => router.replace('/(tabs)')}
-        >
+        <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
           <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
           <Text style={styles.switchRoleText}>Tourist App</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Main Tabs view content switcher */}
+      {/* Tab Switchboard Body */}
       {activeTab === 'duty' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
           {/* Go Online Duty status control */}
-          <View style={[styles.dutyStatusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.dutyStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.statusRow}>
               <View>
-                <Text style={[styles.statusMainLabel, { color: colors.textPrimary }]}>Duty Status</Text>
+                <Text style={[styles.statusMainLabel, { color: colors.textPrimary }]}>{trans.duty}</Text>
                 <Text style={[styles.statusSubText, { color: colors.textMuted }]}>
                   {isOnline ? 'ONLINE - Accepting Requests' : 'OFFLINE - Toggle online to receive trips'}
                 </Text>
@@ -310,7 +324,6 @@ export default function GuideDashboardScreen() {
               />
             </View>
 
-            {/* Quick summary stats */}
             <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
             <View style={styles.dutyStatsGrid}>
               <View style={styles.dutyStatCell}>
@@ -330,23 +343,21 @@ export default function GuideDashboardScreen() {
             </View>
           </View>
 
-          {/* Live demand map list */}
+          {/* Live Heatmap Area */}
           <View style={styles.mapSectionBlock}>
             <Text style={[styles.sectionTitle, { color: colors.amber }]}>Live Tourist Demand Heatmap</Text>
             <View style={[styles.mapContainerBox, { borderColor: colors.border }]}>
               {Platform.OS === 'web' || !MapView ? (
-                // Web HUD Telemetry simulator
                 <View style={styles.webMapVisual}>
                   <View style={styles.gridCanvasOverlay} />
                   <View style={styles.demandLabelBox}>
-                    <Text style={styles.demandTitle}>HIGH DEMAND DETECTED</Text>
+                    <Text style={styles.demandTitle}>HIGH DEMAND AREA</Text>
                     <Text style={styles.demandDetail}>1. Bengaluru Palace (4 requests/hr)</Text>
                     <Text style={styles.demandDetail}>2. Majestic Metro (6 requests/hr)</Text>
                   </View>
                   <View style={[styles.heatmapCircleVisual, { backgroundColor: 'rgba(245,197,24,0.3)', width: scale(80), height: scale(80), borderRadius: scale(40) }]} />
                 </View>
               ) : (
-                // Native Map View
                 <MapView
                   provider="google"
                   style={StyleSheet.absoluteFillObject}
@@ -357,29 +368,15 @@ export default function GuideDashboardScreen() {
                     longitudeDelta: 0.0421,
                   }}
                 >
-                  {/* Bengaluru Palace demand radius marker */}
                   <Circle
                     center={{ latitude: 12.9982, longitude: 77.5920 }}
                     radius={300}
                     strokeColor="rgba(245,197,24,0.5)"
                     fillColor="rgba(245,197,24,0.25)"
                   />
-                  {/* Majestic Metro demand radius marker */}
-                  <Circle
-                    center={{ latitude: 12.9784, longitude: 77.5694 }}
-                    radius={400}
-                    strokeColor="rgba(245,197,24,0.5)"
-                    fillColor="rgba(245,197,24,0.25)"
-                  />
                   <Marker
                     coordinate={{ latitude: 12.9982, longitude: 77.5920 }}
                     title="Bengaluru Palace Area"
-                    description="High tourist booking demand"
-                  />
-                  <Marker
-                    coordinate={{ latitude: 12.9784, longitude: 77.5694 }}
-                    title="Majestic Station Hub"
-                    description="Very High tourist arrivals"
                   />
                 </MapView>
               )}
@@ -392,24 +389,21 @@ export default function GuideDashboardScreen() {
         <View style={styles.activeTourTabPanel}>
           {activeTour ? (
             <View style={{ flex: 1 }}>
-              {/* Map Routing */}
               <View style={[styles.activeTourMapFrame, { borderBottomColor: colors.border }]}>
                 {Platform.OS === 'web' || !MapView ? (
-                  // Symmetrical Web HUD navigation path
                   <View style={styles.webMapVisual}>
                     <View style={styles.gridCanvasOverlay} />
                     <View style={styles.hudNavBox}>
-                      <Text style={styles.hudNavTitle}>GPS NAVIGATION ACTIVE</Text>
+                      <Text style={styles.hudNavTitle}>GUIDE NAVIGATION ACTIVE</Text>
                       <Text style={styles.hudNavText}>Phase: {tourPhase.toUpperCase()}</Text>
                       {tourPhase === 'pickup' ? (
-                        <Text style={styles.hudNavText}>Heading to Pickup: {activeTour.pickup}</Text>
+                        <Text style={styles.hudNavText}>Pickup Target: {activeTour.pickup}</Text>
                       ) : (
-                        <Text style={styles.hudNavText}>Target Spot {currentSpotIndex + 1}: {activeTour.spots[currentSpotIndex].name}</Text>
+                        <Text style={styles.hudNavText}>Spot {currentSpotIndex + 1}: {activeTour.spots[currentSpotIndex].name}</Text>
                       )}
                     </View>
                   </View>
                 ) : (
-                  // Native Map View
                   <MapView
                     provider="google"
                     style={StyleSheet.absoluteFillObject}
@@ -420,28 +414,16 @@ export default function GuideDashboardScreen() {
                       longitudeDelta: 0.05,
                     }}
                   >
-                    {tourPhase === 'pickup' ? (
-                      <Marker
-                        coordinate={{ latitude: activeTour.pickupLat, longitude: activeTour.pickupLng }}
-                        title="Tourist Pickup Location"
-                        pinColor={colors.amber}
-                      />
-                    ) : (
-                      activeTour.spots.map((spot, sidx) => (
-                        <Marker
-                          key={sidx}
-                          coordinate={{ latitude: spot.lat, longitude: spot.lng }}
-                          title={`Spot ${sidx + 1}: ${spot.name}`}
-                          pinColor={sidx === currentSpotIndex ? '#ef4444' : '#888'}
-                        />
-                      ))
-                    )}
+                    <Marker
+                      coordinate={{ latitude: activeTour.pickupLat, longitude: activeTour.pickupLng }}
+                      title="Tourist Pickup Location"
+                      pinColor={colors.amber}
+                    />
                   </MapView>
                 )}
               </View>
 
-              {/* Navigation drawer controls */}
-              <View style={[styles.navDrawerBlock, { backgroundColor: colors.surface }]}>
+              <View style={[styles.navDrawerBlock, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
                 <View style={styles.touristProfileRow}>
                   <View style={styles.touristAvatarBox}>
                     <MaterialIcons name="person" size={scale(20)} color={colors.amber} />
@@ -455,7 +437,6 @@ export default function GuideDashboardScreen() {
                 </View>
 
                 {tourPhase === 'pickup' ? (
-                  /* PHASE 1: PICKUP CONTROLS */
                   <View style={styles.phasePanelBlock}>
                     <Text style={[styles.phaseTitleText, { color: colors.textPrimary }]}>Phase 1: Pickup Tourist</Text>
                     <View style={styles.phaseAddressCard}>
@@ -464,8 +445,8 @@ export default function GuideDashboardScreen() {
                     </View>
 
                     <View style={styles.actionBtnGrid}>
-                      <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]} onPress={handleArrived}>
-                        <Text style={styles.navActionTextCancel}>Arrived at Location</Text>
+                      <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]} onPress={() => Alert.alert('Arrived', 'Tourist has been notified.')}>
+                        <Text style={styles.navActionTextCancel}>Arrived</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: colors.amber }]} onPress={() => setOtpVisible(true)}>
                         <Text style={styles.navActionTextConfirm}>Start Tour (OTP)</Text>
@@ -473,7 +454,6 @@ export default function GuideDashboardScreen() {
                     </View>
                   </View>
                 ) : (
-                  /* PHASE 2: TOUR CONTROLS */
                   <View style={styles.phasePanelBlock}>
                     <Text style={[styles.phaseTitleText, { color: colors.textPrimary }]}>
                       Phase 2: Tour in Progress (Spot {currentSpotIndex + 1}/{activeTour.spots.length})
@@ -488,7 +468,7 @@ export default function GuideDashboardScreen() {
                     <View style={styles.actionBtnGrid}>
                       {currentSpotIndex < activeTour.spots.length - 1 ? (
                         <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]} onPress={handleNextSpot}>
-                          <Text style={styles.navActionTextCancel}>Reached / Next Spot</Text>
+                          <Text style={styles.navActionTextCancel}>Next Spot</Text>
                         </TouchableOpacity>
                       ) : (
                         <View style={{ flex: 1 }} />
@@ -513,37 +493,174 @@ export default function GuideDashboardScreen() {
         </View>
       )}
 
-      {activeTab === 'earnings' && (
+      {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
-          {/* Earnings wallet bank account card */}
-          <View style={[styles.walletCardFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={styles.walletTitleLabel}>Unsettled Wallet Balance</Text>
-            <Text style={styles.walletBalText}>₹{earningsBalance}</Text>
-            <Text style={[styles.walletSubText, { color: colors.textMuted }]}>
-              Immediate cashout directly to your registered IMPS bank account.
-            </Text>
+          
+          {/* 1. Bank Account & Wallet (Paisa Section) */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
+            
+            <View style={styles.payoutBalanceRow}>
+              <View>
+                <Text style={[styles.payoutAmtVal, { color: colors.textPrimary }]}>₹{earningsBalance}</Text>
+                <Text style={[styles.payoutAmtSub, { color: colors.textMuted }]}>Available balance to settle</Text>
+              </View>
+              <TouchableOpacity 
+                style={[styles.smallPayoutBtn, { backgroundColor: colors.amber }]} 
+                onPress={handleInstantPayout}
+                disabled={payoutLoading}
+              >
+                {payoutLoading ? <ActivityIndicator size="small" color="#101010" /> : <Text style={styles.smallPayoutBtnText}>Settle Now</Text>}
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              style={styles.payoutButton}
-              activeOpacity={0.8}
-              onPress={handleInstantPayout}
-              disabled={payoutLoading}
+            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Settlement UPI ID</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border }]}>
+              <MaterialIcons name="payment" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                value={upiId}
+                onChangeText={setUpiId}
+                placeholder="ramesh@upi"
+                placeholderTextColor="rgba(255,255,255,0.2)"
+              />
+            </View>
+          </View>
+
+          {/* 2. Guide-Specific Work Settings */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.workSettings}</Text>
+
+            {/* Language checklist */}
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select Languages Spoken</Text>
+            <View style={styles.checkboxWrapperRow}>
+              <TouchableOpacity style={styles.checkboxRow} onPress={() => setSpokenLangs(prev => ({ ...prev, en: !prev.en }))}>
+                <MaterialIcons name={spokenLangs.en ? 'check-box' : 'check-box-outline-blank'} size={scale(18)} color={spokenLangs.en ? colors.amber : colors.textMuted} />
+                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>English</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.checkboxRow} onPress={() => setSpokenLangs(prev => ({ ...prev, hi: !prev.hi }))}>
+                <MaterialIcons name={spokenLangs.hi ? 'check-box' : 'check-box-outline-blank'} size={scale(18)} color={spokenLangs.hi ? colors.amber : colors.textMuted} />
+                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Hindi</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.checkboxRow} onPress={() => setSpokenLangs(prev => ({ ...prev, kn: !prev.kn }))}>
+                <MaterialIcons name={spokenLangs.kn ? 'check-box' : 'check-box-outline-blank'} size={scale(18)} color={spokenLangs.kn ? colors.amber : colors.textMuted} />
+                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Kannada</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+
+            {/* Expertise / Category Selection */}
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select Tour Specialties</Text>
+            <View style={styles.checkboxWrapperRow}>
+              <TouchableOpacity style={styles.checkboxRow} onPress={() => setExpertise(prev => ({ ...prev, history: !prev.history }))}>
+                <MaterialIcons name={expertise.history ? 'radio-button-checked' : 'radio-button-unchecked'} size={scale(18)} color={expertise.history ? colors.amber : colors.textMuted} />
+                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>History</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.checkboxRow} onPress={() => setExpertise(prev => ({ ...prev, food: !prev.food }))}>
+                <MaterialIcons name={expertise.food ? 'radio-button-checked' : 'radio-button-unchecked'} size={scale(18)} color={expertise.food ? colors.amber : colors.textMuted} />
+                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Food Walk</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.checkboxRow} onPress={() => setExpertise(prev => ({ ...prev, shopping: !prev.shopping }))}>
+                <MaterialIcons name={expertise.shopping ? 'radio-button-checked' : 'radio-button-unchecked'} size={scale(18)} color={expertise.shopping ? colors.amber : colors.textMuted} />
+                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Shopping</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* 3. Audio Guide & Toolkit Controls */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.toolkit}</Text>
+            
+            <TouchableOpacity 
+              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(245,197,24,0.06)', borderColor: colors.amber }]}
+              onPress={() => setQrVisible(true)}
             >
-              {payoutLoading ? (
-                <ActivityIndicator color="#101010" />
-              ) : (
-                <>
-                  <Text style={styles.payoutBtnText}>Instant Settlement Payout</Text>
-                  <MaterialIcons name="account-balance" size={scale(16)} color="#101010" />
-                </>
-              )}
+              <MaterialIcons name="qr-code-2" size={scale(18)} color={colors.amber} />
+              <Text style={[styles.supportActionBtnTextAmber, { color: colors.textPrimary }]}>{trans.tickets}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: '#ef4444', marginTop: verticalScale(10) }]}
+              onPress={() => Alert.alert('Helpline Sync Dial', 'Emergency lines: Local Police (100) or Admin support (+91 99000 82400) called.')}
+            >
+              <MaterialIcons name="local-police" size={scale(18)} color="#ef4444" />
+              <Text style={styles.supportActionBtnTextDanger}>{trans.emergency}</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Today ride logs history */}
-          <Text style={[styles.sectionTitle, { color: colors.amber }]}>Today Completed Trips Activity</Text>
+          {/* 4. Notification & App Preferences */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.pref}</Text>
+
+            <View style={styles.toggleSettingItem}>
+              <View>
+                <Text style={[styles.toggleSettingLabel, { color: colors.textPrimary }]}>{trans.ringtone}</Text>
+                <Text style={[styles.toggleSettingSub, { color: colors.textMuted }]}>
+                  Current Tone: {selectedRingtone.toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.ringtonePillsRow}>
+                <TouchableOpacity style={[styles.ringTonePill, selectedRingtone === 'loud' && styles.ringTonePillActive]} onPress={() => setSelectedRingtone('loud')}>
+                  <Text style={[styles.ringPillText, selectedRingtone === 'loud' && { color: '#101010' }]}>Loud</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.ringTonePill, selectedRingtone === 'pulse' && styles.ringTonePillActive]} onPress={() => setSelectedRingtone('pulse')}>
+                  <Text style={[styles.ringPillText, selectedRingtone === 'pulse' && { color: '#101010' }]}>Pulse</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+
+            <View style={styles.statusProgressBlock}>
+              <View style={styles.progressLabelRow}>
+                <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>{trans.vol}</Text>
+                <Text style={[styles.progressValueText, { color: colors.amber }]}>{alertVolume}%</Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarFill, { width: `${alertVolume}%`, backgroundColor: colors.amber }]} />
+              </View>
+              <View style={styles.volumeAdjustBtns}>
+                <TouchableOpacity style={styles.volStepBtn} onPress={() => setAlertVolume(v => Math.max(0, v - 20))}>
+                  <Text style={styles.volStepText}>-</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.volStepBtn} onPress={() => setAlertVolume(v => Math.min(100, v + 20))}>
+                  <Text style={styles.volStepText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+
+            {/* Language Switcher */}
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / भाषा चुने</Text>
+            <View style={styles.vehiclePillsRow}>
+              <TouchableOpacity
+                style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppLang('en')}
+              >
+                <Text style={[styles.langPillText, { color: appLang === 'en' ? '#101010' : colors.textPrimary }]}>English</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.langPill, appLang === 'hi' && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppLang('hi')}
+              >
+                <Text style={[styles.langPillText, { color: appLang === 'hi' ? '#101010' : colors.textPrimary }]}>हिंदी (Hindi)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Completed Tours Logs */}
+          <Text style={[styles.sectionTitle, { color: colors.amber, marginTop: scale(4) }]}>Today Completed Trips Activity</Text>
           {dailyTours.map((item) => (
-            <View key={item.id} style={[styles.dailyTripLogItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View key={item.id} style={[styles.dailyTripLogItem, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
               <View style={styles.logHeaderRow}>
                 <View>
                   <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{item.title}</Text>
@@ -551,62 +668,53 @@ export default function GuideDashboardScreen() {
                 </View>
                 <Text style={styles.logFare}>+₹{item.fare}</Text>
               </View>
-              {item.rating && (
-                <View style={styles.logRatingRow}>
-                  <Text style={[styles.logRatingText, { color: colors.textMuted }]}>Rating: </Text>
-                  <MaterialIcons name="star" size={scale(12)} color={colors.amber} style={{ marginRight: scale(2) }} />
-                  <Text style={[styles.logRatingVal, { color: colors.textPrimary }]}>{item.rating}</Text>
-                </View>
-              )}
             </View>
           ))}
+
+          <View style={{ height: verticalScale(100) }} />
         </ScrollView>
       )}
 
-      {/* Bottom Portal Tab Navigator bar */}
-      <View style={[styles.bottomTabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.tabBarItem, activeTab === 'duty' && styles.tabBarItemActive]}
-          onPress={() => setActiveTab('duty')}
-        >
-          <MaterialIcons name="wifi" size={scale(20)} color={activeTab === 'duty' ? colors.amber : colors.textMuted} />
-          <Text style={[styles.tabBarLabel, { color: activeTab === 'duty' ? colors.amber : colors.textMuted }]}>Duty Status</Text>
+      {/* Floating Bottom Tab Bar matching Tourist client look */}
+      <View style={[styles.bottomTabBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('duty')}>
+          <View style={[styles.tabIconWrapper, activeTab === 'duty' && styles.tabIconWrapperActive]}>
+            <MaterialIcons name="wifi" size={scale(22)} color={activeTab === 'duty' ? '#101010' : colors.textMuted} />
+          </View>
+          <Text style={[styles.tabBarLabel, { color: activeTab === 'duty' ? colors.amber : colors.textMuted }]}>
+            {appLang === 'hi' ? 'ड्यूटी स्टेटस' : 'Duty Status'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBarItem, activeTab === 'active_tour' && styles.tabBarItemActive]}
-          onPress={() => setActiveTab('active_tour')}
-        >
-          <MaterialIcons name="navigation" size={scale(20)} color={activeTab === 'active_tour' ? colors.amber : colors.textMuted} />
-          <Text style={[styles.tabBarLabel, { color: activeTab === 'active_tour' ? colors.amber : colors.textMuted }]}>Active Tour</Text>
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('active_tour')}>
+          <View style={[styles.tabIconWrapper, activeTab === 'active_tour' && styles.tabIconWrapperActive]}>
+            <MaterialIcons name="navigation" size={scale(22)} color={activeTab === 'active_tour' ? '#101010' : colors.textMuted} />
+          </View>
+          <Text style={[styles.tabBarLabel, { color: activeTab === 'active_tour' ? colors.amber : colors.textMuted }]}>
+            {appLang === 'hi' ? 'सक्रिय टूर' : 'Active Tour'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBarItem, activeTab === 'earnings' && styles.tabBarItemActive]}
-          onPress={() => setActiveTab('earnings')}
-        >
-          <MaterialIcons name="monetization-on" size={scale(20)} color={activeTab === 'earnings' ? colors.amber : colors.textMuted} />
-          <Text style={[styles.tabBarLabel, { color: activeTab === 'earnings' ? colors.amber : colors.textMuted }]}>Earnings Log</Text>
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('profile')}>
+          <View style={[styles.tabIconWrapper, activeTab === 'profile' && styles.tabIconWrapperActive]}>
+            <MaterialIcons name="person" size={scale(22)} color={activeTab === 'profile' ? '#101010' : colors.textMuted} />
+          </View>
+          <Text style={[styles.tabBarLabel, { color: activeTab === 'profile' ? colors.amber : colors.textMuted }]}>
+            {appLang === 'hi' ? 'खाता & सेटिंग्स' : 'Account & Settings'}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Simulated Incoming Request Modal Pop-up */}
-      <Modal
-        visible={requestVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setRequestVisible(false)}
-      >
+      <Modal visible={requestVisible} transparent={true} animationType="slide">
         {incomingRequest && (
           <View style={styles.popupOverlay}>
-            <View style={[styles.popupContentCard, { backgroundColor: colors.surface }]}>
-              {/* Countdown Progress circle bar */}
+            <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <View style={styles.popupTimerHeader}>
                 <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
                 <Text style={styles.popupTimerText}>INCOMING INSTANT BOOKING ({timerSeconds}s)</Text>
               </View>
 
-              {/* Tourist & Tour details */}
               <View style={styles.popupMainDetails}>
                 <View style={styles.touristNameBadge}>
                   <MaterialIcons name="person-pin" size={scale(22)} color={colors.amber} style={{ marginRight: scale(8) }} />
@@ -616,13 +724,11 @@ export default function GuideDashboardScreen() {
                   </View>
                 </View>
 
-                {/* Pickup details */}
                 <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Tourist Pickup</Text>
                   <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>{incomingRequest.pickup}</Text>
                 </View>
 
-                {/* Target Spots */}
                 <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Spots to Tour</Text>
                   <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -630,7 +736,6 @@ export default function GuideDashboardScreen() {
                   </Text>
                 </View>
 
-                {/* Duration & Payout */}
                 <View style={styles.popupFareStats}>
                   <View style={styles.fareCell}>
                     <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Duration</Text>
@@ -644,7 +749,6 @@ export default function GuideDashboardScreen() {
                 </View>
               </View>
 
-              {/* Accept / Reject buttons */}
               <View style={styles.popupActionsGrid}>
                 <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34' }]} onPress={handleRejectRequest}>
                   <Text style={styles.popupBtnCancelText}>Decline</Text>
@@ -659,15 +763,10 @@ export default function GuideDashboardScreen() {
       </Modal>
 
       {/* Start Trip OTP Entry Modal Pop-up */}
-      <Modal
-        visible={otpVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setOtpVisible(false)}
-      >
+      <Modal visible={otpVisible} transparent={true} animationType="fade">
         {activeTour && (
           <View style={styles.popupOverlay}>
-            <View style={[styles.otpContentCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <Text style={[styles.otpTitle, { color: colors.textPrimary }]}>Enter Verification OTP</Text>
               <Text style={[styles.otpSub, { color: colors.textMuted }]}>Please check with {activeTour.touristName} for the 4-digit code (e.g. 8240)</Text>
 
@@ -693,6 +792,30 @@ export default function GuideDashboardScreen() {
             </View>
           </View>
         )}
+      </Modal>
+
+      {/* Digital Tickets QR Code Modal Popup */}
+      <Modal visible={qrVisible} transparent={true} animationType="fade">
+        <View style={styles.popupOverlay}>
+          <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', width: '90%' }]}>
+            <Text style={[styles.otpTitle, { color: colors.textPrimary, marginBottom: scale(6) }]}>Monument Entry Passes</Text>
+            <Text style={[styles.otpSub, { color: colors.textMuted, marginBottom: scale(14) }]}>QR Codes synced from customer bookings</Text>
+            
+            <View style={styles.qrCodeDrawBox}>
+              {/* Symmetrical QR representation */}
+              <FontAwesome5 name="qrcode" size={scale(180)} color={colors.textPrimary} style={{ marginVertical: verticalScale(14) }} />
+            </View>
+
+            <View style={styles.passDetailsInfo}>
+              <Text style={[styles.passInfoTitle, { color: colors.textPrimary }]}>Mysuru Palace Entrance Pass</Text>
+              <Text style={[styles.passInfoMeta, { color: colors.textMuted }]}>Pass Count: 3 Adults | Valid: Today Only</Text>
+            </View>
+
+            <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34', width: '100%', marginTop: scale(10) }]} onPress={() => setQrVisible(false)}>
+              <Text style={styles.popupBtnCancelText}>Close Pass Drawer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -975,107 +1098,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: verticalScale(6),
   },
-  walletCardFrame: {
-    borderRadius: scale(22),
-    padding: scale(18),
-    borderWidth: 1.2,
-    marginBottom: verticalScale(20),
-  },
-  walletTitleLabel: {
-    color: '#8D8D97',
-    fontSize: moderateFontScale(11),
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  walletBalText: {
-    color: '#F5C518',
-    fontSize: moderateFontScale(28),
-    fontWeight: '800',
-    marginVertical: verticalScale(4),
-  },
-  walletSubText: {
-    fontSize: moderateFontScale(11.5),
-    lineHeight: moderateFontScale(16),
-    marginBottom: verticalScale(14),
-  },
-  payoutButton: {
-    backgroundColor: '#F5C518',
-    borderRadius: scale(12),
-    height: scale(40),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: scale(6),
-  },
-  payoutBtnText: {
-    color: '#101010',
-    fontSize: moderateFontScale(12.5),
-    fontWeight: '800',
-  },
-  dailyTripLogItem: {
-    borderRadius: scale(16),
-    padding: scale(14),
-    marginBottom: verticalScale(12),
-    borderWidth: 1.2,
-  },
-  logHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logTitle: {
-    fontSize: moderateFontScale(12.5),
-    fontWeight: '800',
-  },
-  logTime: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '600',
-    marginTop: verticalScale(2),
-  },
-  logFare: {
-    color: '#10B981',
-    fontSize: moderateFontScale(15),
-    fontWeight: '800',
-  },
-  logRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: verticalScale(8),
-  },
-  logRatingText: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '600',
-  },
-  logRatingVal: {
-    fontSize: moderateFontScale(10.5),
-    fontWeight: '700',
-  },
   bottomTabBar: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: verticalScale(74),
+    bottom: scale(20),
+    left: scale(20),
+    right: scale(20),
+    borderWidth: 1,
+    borderRadius: scale(28),
+    height: verticalScale(66),
     flexDirection: 'row',
-    borderTopWidth: 1.2,
-    paddingBottom: verticalScale(14),
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
     elevation: 8,
+    zIndex: 10,
   },
   tabBarItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: verticalScale(6),
+    height: '100%',
   },
-  tabBarItemActive: {
-    borderTopWidth: 1.5,
-    borderTopColor: '#F5C518',
+  tabIconWrapper: {
+    width: scale(40),
+    height: scale(32),
+    borderRadius: scale(16),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIconWrapperActive: {
+    backgroundColor: '#F5C518',
   },
   tabBarLabel: {
-    fontSize: moderateFontScale(9),
+    fontSize: moderateFontScale(10),
     fontWeight: '700',
-    marginTop: verticalScale(4),
+    marginTop: verticalScale(2),
   },
   popupOverlay: {
     flex: 1,
@@ -1204,5 +1263,214 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: scale(6),
     marginBottom: verticalScale(20),
+  },
+  profileSectionCard: {
+    borderRadius: scale(22),
+    padding: scale(16),
+    borderWidth: 1.2,
+    marginBottom: verticalScale(18),
+  },
+  profileSectionTitle: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: verticalScale(10),
+  },
+  payoutBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  payoutAmtVal: {
+    fontSize: moderateFontScale(26),
+    fontWeight: '800',
+  },
+  payoutAmtSub: {
+    fontSize: moderateFontScale(11.5),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  smallPayoutBtn: {
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: scale(12),
+  },
+  smallPayoutBtnText: {
+    color: '#101010',
+    fontWeight: '800',
+    fontSize: moderateFontScale(11.5),
+  },
+  inputLabel: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
+  },
+  inputFieldBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.2,
+    borderRadius: scale(10),
+    paddingHorizontal: scale(10),
+    height: verticalScale(38),
+    marginTop: verticalScale(6),
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  textInputStyle: {
+    flex: 1,
+    fontSize: moderateFontScale(13.5),
+    padding: 0,
+    height: '100%',
+  },
+  checkboxWrapperRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: scale(14),
+    marginTop: verticalScale(6),
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+  },
+  checkboxLabel: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '700',
+  },
+  supportActionRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(8),
+    borderWidth: 1.2,
+    borderRadius: scale(12),
+    paddingVertical: verticalScale(10),
+  },
+  supportActionBtnTextDanger: {
+    color: '#ef4444',
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+  },
+  supportActionBtnTextAmber: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+  },
+  toggleSettingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  toggleSettingLabel: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '700',
+  },
+  toggleSettingSub: {
+    fontSize: moderateFontScale(10.5),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  ringtonePillsRow: {
+    flexDirection: 'row',
+    gap: scale(6),
+  },
+  ringTonePill: {
+    borderWidth: 1.2,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: scale(8),
+    paddingVertical: verticalScale(4),
+    paddingHorizontal: scale(8),
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  ringTonePillActive: {
+    backgroundColor: '#F5C518',
+    borderColor: '#F5C518',
+  },
+  ringPillText: {
+    fontSize: moderateFontScale(10.5),
+    fontWeight: '800',
+  },
+  volumeAdjustBtns: {
+    flexDirection: 'row',
+    gap: scale(10),
+    marginTop: verticalScale(8),
+  },
+  volStepBtn: {
+    width: scale(32),
+    height: scale(28),
+    borderRadius: scale(8),
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volStepText: {
+    color: '#ffffff',
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  langPill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(6),
+  },
+  langPillActive: {
+    backgroundColor: '#F5C518',
+    borderColor: '#F5C518',
+  },
+  langPillText: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '800',
+  },
+  vehiclePillsRow: {
+    flexDirection: 'row',
+    gap: scale(10),
+    marginTop: verticalScale(4),
+  },
+  qrCodeDrawBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: scale(16),
+    padding: scale(10),
+    marginBottom: verticalScale(14),
+  },
+  passDetailsInfo: {
+    alignItems: 'center',
+    marginBottom: verticalScale(14),
+  },
+  passInfoTitle: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  passInfoMeta: {
+    fontSize: moderateFontScale(11.5),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  dailyTripLogItem: {
+    borderRadius: scale(16),
+    padding: scale(14),
+    marginBottom: verticalScale(12),
+    borderWidth: 1.2,
+  },
+  logHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  logTitle: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+  },
+  logTime: {
+    fontSize: moderateFontScale(10),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  logFare: {
+    color: '#10B981',
+    fontSize: moderateFontScale(15),
+    fontWeight: '800',
   },
 });

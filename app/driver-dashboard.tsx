@@ -52,14 +52,23 @@ export default function DriverDashboardScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'earnings'>('duty');
+  const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(false);
+  const [appLang, setAppLang] = useState<'en' | 'hi'>('en');
 
   // Daily statistics
-  const [kmDriven, setKmDriven] = useState(0);
-  const [tripsCount, setTripsCount] = useState(0);
-  const [earningsToday, setEarningsToday] = useState(0);
-  const [earningsBalance, setEarningsBalance] = useState(0);
+  const [kmDriven, setKmDriven] = useState(142.5);
+  const [tripsCount, setTripsCount] = useState(5);
+  const [earningsToday, setEarningsToday] = useState(2800);
+  const [earningsBalance, setEarningsBalance] = useState(1200);
+
+  // Settings states
+  const [upiId, setUpiId] = useState('ka03md8240@okaxis');
+  const [selectedVehicle, setSelectedVehicle] = useState<'innova' | 'swift'>('innova');
+  const [navPreference, setNavPreference] = useState<'inapp' | 'google'>('inapp');
+
+  // Modal support state
+  const [disputeVisible, setDisputeVisible] = useState(false);
 
   // Incoming Request Simulation
   const [incomingRequest, setIncomingRequest] = useState<ActiveRequest | null>(null);
@@ -72,7 +81,7 @@ export default function DriverDashboardScreen() {
   const [otpVisible, setOtpVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
 
-  // Daily Activity Logs
+  // Completed rides log
   const [dailyRides, setDailyRides] = useState<any[]>([
     { id: '1', title: 'Majestic Metro ➔ Indiranagar 100ft Rd', time: '11:00 AM', fare: 340, payout: 'Settled to Wallet' },
     { id: '2', title: 'Hebbal Flyover ➔ Kempegowda Airport', time: '02:15 PM', fare: 850, payout: 'Settled to Wallet' },
@@ -83,21 +92,58 @@ export default function DriverDashboardScreen() {
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
-    surface: isDark ? '#1E1E24' : '#FFFFFF',
-    surfaceCard: isDark ? '#16161B' : '#FFFFFF',
+    surface: isDark ? 'rgba(26, 26, 32, 0.9)' : 'rgba(255, 255, 255, 0.92)',
+    surfaceCard: isDark ? '#1E1E24' : '#FFFFFF',
     textPrimary: isDark ? '#ffffff' : '#1C1C1E',
     textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
-    border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
+    border: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
     danger: '#ef4444',
   };
 
-  // Online simulator logic
+  // Translations
+  const trans = {
+    en: {
+      dashboard: 'Driver Dashboard',
+      duty: 'Duty Status',
+      activeTrip: 'Active Trip',
+      profile: 'Profile & Account',
+      todayStats: 'Today Stats',
+      fuel: 'Fuel Status',
+      maint: 'Vehicle Status Indicator',
+      wallet: 'Driver Wallet Balance',
+      payout: 'Instant Settlement Cashout',
+      vehicle: 'Duty Settings & Vehicle Toggle',
+      nav: 'Navigation Preference',
+      help: 'Help & Support (Emergency)',
+      report: 'Report Dispute / Issue',
+      call: 'Call Admin Support',
+      lang: 'Language & App Settings',
+    },
+    hi: {
+      dashboard: 'ड्राइवर डैशबोर्ड',
+      duty: 'ड्यूटी स्टेटस',
+      activeTrip: 'सक्रिय ट्रिप',
+      profile: 'प्रोफ़ाइल और खाता',
+      todayStats: 'आज के आँकड़े',
+      fuel: 'ईंधन की स्थिति',
+      maint: 'वाहन की स्थिति संकेतक',
+      wallet: 'ड्राइवर वॉलेट बैलेंस',
+      payout: 'तुरंत बैंक ट्रांसफर',
+      vehicle: 'ड्यूटी सेटिंग्स और वाहन बदलें',
+      nav: 'मैप नेविगेशन प्राथमिकता',
+      help: 'सहायता और आपातकालीन सहायता',
+      report: 'विवाद / समस्या रिपोर्ट करें',
+      call: 'हेल्पलाइन पर कॉल करें',
+      lang: 'भाषा और ऐप सेटिंग्स',
+    }
+  }[appLang];
+
+  // Online simulator trigger
   useEffect(() => {
     let timeout: any;
     if (isOnline && !activeTrip && !incomingRequest) {
       timeout = setTimeout(() => {
-        // Trigger simulated request
         const mockRequest: ActiveRequest = {
           touristName: 'Abhishek (Tourist)',
           pickup: 'Bengaluru Palace Entrance Gate',
@@ -119,7 +165,7 @@ export default function DriverDashboardScreen() {
     return () => clearTimeout(timeout);
   }, [isOnline, activeTrip, incomingRequest]);
 
-  // Request timer countdown
+  // Request timer
   useEffect(() => {
     let timer: any;
     if (requestVisible && timerSeconds > 0) {
@@ -145,20 +191,10 @@ export default function DriverDashboardScreen() {
     setIncomingRequest(null);
     setActiveTab('active_trip');
     Alert.alert(
-      'Ride Accepted!',
-      'GPS navigation routing started. Proceed to pickup location.',
-      [{ text: 'Navigate Now' }]
+      appLang === 'hi' ? 'यात्रा स्वीकार की गई!' : 'Ride Accepted!',
+      appLang === 'hi' ? 'जीपीएस नेविगेशन शुरू हो गया है।' : 'GPS navigation routing started. Proceed to pickup.',
+      [{ text: 'OK' }]
     );
-  };
-
-  const handleRejectRequest = () => {
-    setRequestVisible(false);
-    setIncomingRequest(null);
-    Alert.alert('Ride Rejected', 'You will receive another booking shortly.');
-  };
-
-  const handleArrived = () => {
-    setOtpVisible(true);
   };
 
   const handleVerifyOtp = () => {
@@ -168,8 +204,8 @@ export default function DriverDashboardScreen() {
       setEnteredOtp('');
       setTripPhase('trip');
       Alert.alert(
-        'Verification Success!',
-        `OTP code matched. The trip has started. Proceed to: ${activeTrip.drop}.`
+        appLang === 'hi' ? 'सत्यापन सफल!' : 'Verification Success!',
+        appLang === 'hi' ? `यात्रा शुरू हो चुकी है। गंतव्य: ${activeTrip.drop}` : `The trip has started. Proceed to: ${activeTrip.drop}.`
       );
     } else {
       Alert.alert('Invalid OTP', 'The code did not match. Please verify with rider (Try 8240).');
@@ -179,8 +215,8 @@ export default function DriverDashboardScreen() {
   const handleEndTrip = () => {
     if (!activeTrip) return;
     Alert.alert(
-      'Complete Trip',
-      'Are you sure you want to end this trip and collect payment?',
+      appLang === 'hi' ? 'यात्रा समाप्त करें' : 'Complete Trip',
+      appLang === 'hi' ? 'क्या आप इस यात्रा को समाप्त करना चाहते हैं?' : 'Are you sure you want to end this trip and collect payment?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -204,8 +240,8 @@ export default function DriverDashboardScreen() {
             ]);
             setActiveTrip(null);
             setTripPhase('pickup');
-            setActiveTab('earnings');
-            Alert.alert('Trip Complete!', `₹${fareEarned} has been added to your daily wallet earnings!`);
+            setActiveTab('profile');
+            Alert.alert('Trip Complete!', `₹${fareEarned} added to your cashout balance.`);
           }
         }
       ]
@@ -224,41 +260,45 @@ export default function DriverDashboardScreen() {
       setEarningsBalance(0);
       Alert.alert(
         'Payout Transferred!',
-        `₹${paidAmt} has been dispatched directly to your registered bank account via IMPS/UPI!`
+        `₹${paidAmt} successfully dispatched to UPI: ${upiId}!`
       );
     }, 2000);
   };
 
+  const handleReportDispute = (issue: string) => {
+    setDisputeVisible(false);
+    Alert.alert(
+      'Report Submitted',
+      `Issue regarding "${issue}" has been reported to Admin. Verification is underway.`,
+      [{ text: 'Done' }]
+    );
+  };
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#101014' : '#F5F5F7' }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header bar / Role switcher */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View>
           <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ DRIVER</Text>
-          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>Anil Gowda (Driver Dashboard)</Text>
+          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>Anil Gowda</Text>
         </View>
         
-        {/* Switch back button */}
-        <TouchableOpacity
-          style={styles.switchRoleBtn}
-          onPress={() => router.replace('/(tabs)')}
-        >
+        <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
           <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
           <Text style={styles.switchRoleText}>Tourist App</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Main Tabs view content switcher */}
+      {/* Tab Switchboard Body */}
       {activeTab === 'duty' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
-          
           {/* Go Online Duty status control */}
-          <View style={[styles.dutyStatusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.dutyStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.statusRow}>
               <View>
-                <Text style={[styles.statusMainLabel, { color: colors.textPrimary }]}>Duty Status</Text>
+                <Text style={[styles.statusMainLabel, { color: colors.textPrimary }]}>{trans.duty}</Text>
                 <Text style={[styles.statusSubText, { color: colors.textMuted }]}>
                   {isOnline ? 'ONLINE - Ready to accept trips' : 'OFFLINE - Go online to start earning'}
                 </Text>
@@ -277,8 +317,8 @@ export default function DriverDashboardScreen() {
               />
             </View>
 
-            {/* Quick summary stats */}
             <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+            
             <View style={styles.dutyStatsGrid}>
               <View style={styles.dutyStatCell}>
                 <Text style={styles.statLabel}>Today KM</Text>
@@ -298,23 +338,26 @@ export default function DriverDashboardScreen() {
           </View>
 
           {/* Vehicle status indicator */}
-          <View style={[styles.vehicleStatusCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.amber, marginBottom: verticalScale(12) }]}>Vehicle Status Indicator</Text>
+          <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>{trans.maint}</Text>
             
             <View style={styles.vehicleModelRow}>
               <FontAwesome5 name="car" size={scale(20)} color={colors.amber} />
               <View style={{ marginLeft: scale(12) }}>
-                <Text style={[styles.vehicleModelName, { color: colors.textPrimary }]}>Toyota Innova Crysta</Text>
-                <Text style={[styles.vehicleMetaSub, { color: colors.textMuted }]}>7 Seater · KA-03-MD-8240</Text>
+                <Text style={[styles.vehicleModelName, { color: colors.textPrimary }]}>
+                  {selectedVehicle === 'innova' ? 'Toyota Innova Crysta' : 'Maruti Suzuki Swift'}
+                </Text>
+                <Text style={[styles.vehicleMetaSub, { color: colors.textMuted }]}>
+                  {selectedVehicle === 'innova' ? '7 Seater · KA-03-MD-8240' : '5 Seater · KA-04-AB-1234'}
+                </Text>
               </View>
             </View>
 
             <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
 
-            {/* Fuel Status Bar */}
             <View style={styles.statusProgressBlock}>
               <View style={styles.progressLabelRow}>
-                <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>Fuel Status</Text>
+                <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>{trans.fuel}</Text>
                 <Text style={[styles.progressValueText, { color: colors.amber }]}>78% Remaining</Text>
               </View>
               <View style={styles.progressBarBg}>
@@ -322,7 +365,6 @@ export default function DriverDashboardScreen() {
               </View>
             </View>
 
-            {/* Maintenance alerts */}
             <View style={styles.maintenanceStatsRow}>
               <View style={styles.maintenanceCell}>
                 <MaterialIcons name="check-circle" size={scale(16)} color="#10B981" />
@@ -334,7 +376,7 @@ export default function DriverDashboardScreen() {
               </View>
               <View style={styles.maintenanceCell}>
                 <MaterialIcons name="error-outline" size={scale(16)} color={colors.amber} />
-                <Text style={[styles.maintValText, { color: colors.textPrimary }]}>Service in 420km</Text>
+                <Text style={[styles.maintValText, { color: colors.textPrimary }]}>Service soon</Text>
               </View>
             </View>
           </View>
@@ -345,10 +387,8 @@ export default function DriverDashboardScreen() {
         <View style={styles.activeTourTabPanel}>
           {activeTrip ? (
             <View style={{ flex: 1 }}>
-              {/* Map Navigation */}
               <View style={[styles.activeTourMapFrame, { borderBottomColor: colors.border }]}>
                 {Platform.OS === 'web' || !MapView ? (
-                  // Symmetrical Web HUD Navigation
                   <View style={styles.webMapVisual}>
                     <View style={styles.gridCanvasOverlay} />
                     <View style={styles.hudNavBox}>
@@ -362,7 +402,6 @@ export default function DriverDashboardScreen() {
                     </View>
                   </View>
                 ) : (
-                  // Native Map View
                   <MapView
                     provider="google"
                     style={StyleSheet.absoluteFillObject}
@@ -390,8 +429,7 @@ export default function DriverDashboardScreen() {
                 )}
               </View>
 
-              {/* Navigation drawer controls */}
-              <View style={[styles.navDrawerBlock, { backgroundColor: colors.surface }]}>
+              <View style={[styles.navDrawerBlock, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
                 <View style={styles.touristProfileRow}>
                   <View style={styles.touristAvatarBox}>
                     <MaterialIcons name="person" size={scale(20)} color={colors.amber} />
@@ -405,7 +443,6 @@ export default function DriverDashboardScreen() {
                 </View>
 
                 {tripPhase === 'pickup' ? (
-                  /* PHASE 1: PICKUP CONTROLS */
                   <View style={styles.phasePanelBlock}>
                     <Text style={[styles.phaseTitleText, { color: colors.textPrimary }]}>Phase 1: Navigate to Pickup</Text>
                     <View style={styles.phaseAddressCard}>
@@ -414,8 +451,8 @@ export default function DriverDashboardScreen() {
                     </View>
 
                     <View style={styles.actionBtnGrid}>
-                      <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]} onPress={handleArrived}>
-                        <Text style={styles.navActionTextCancel}>Arrived at Pickup</Text>
+                      <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]} onPress={() => Alert.alert('Status updated', 'Rider notified.')}>
+                        <Text style={styles.navActionTextCancel}>Arrived</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: colors.amber }]} onPress={() => setOtpVisible(true)}>
                         <Text style={styles.navActionTextConfirm}>Start Trip (OTP)</Text>
@@ -423,7 +460,6 @@ export default function DriverDashboardScreen() {
                     </View>
                   </View>
                 ) : (
-                  /* PHASE 2: TRIP CONTROLS */
                   <View style={styles.phasePanelBlock}>
                     <Text style={[styles.phaseTitleText, { color: colors.textPrimary }]}>Phase 2: Driving to Dropoff</Text>
                     <View style={styles.phaseAddressCard}>
@@ -455,38 +491,130 @@ export default function DriverDashboardScreen() {
         </View>
       )}
 
-      {activeTab === 'earnings' && (
+      {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
           
-          {/* Wallet balance cash-out card */}
-          <View style={[styles.walletCardFrame, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={styles.walletTitleLabel}>Unsettled Wallet Balance</Text>
-            <Text style={styles.walletBalText}>₹{earningsBalance}</Text>
-            <Text style={[styles.walletSubText, { color: colors.textMuted }]}>
-              Immediate cashout directly to your registered bank account or UPI ID.
-            </Text>
+          {/* 1. Bank Account & Payout Details */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
+            
+            <View style={styles.payoutBalanceRow}>
+              <View>
+                <Text style={[styles.payoutAmtVal, { color: colors.textPrimary }]}>₹{earningsBalance}</Text>
+                <Text style={[styles.payoutAmtSub, { color: colors.textMuted }]}>Current Balance ready to transfer</Text>
+              </View>
+              <TouchableOpacity 
+                style={[styles.smallPayoutBtn, { backgroundColor: colors.amber }]} 
+                onPress={handleInstantPayout}
+                disabled={payoutLoading}
+              >
+                {payoutLoading ? <ActivityIndicator size="small" color="#101010" /> : <Text style={styles.smallPayoutBtnText}>Cashout</Text>}
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              style={styles.payoutButton}
-              activeOpacity={0.8}
-              onPress={handleInstantPayout}
-              disabled={payoutLoading}
+            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Settlement UPI ID</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border }]}>
+              <MaterialIcons name="payment" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                value={upiId}
+                onChangeText={setUpiId}
+                placeholder="enter UPI ID"
+                placeholderTextColor="rgba(255,255,255,0.2)"
+              />
+            </View>
+          </View>
+
+          {/* 2. Duty Settings & Vehicle Toggle */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.vehicle}</Text>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Choose Active Vehicle</Text>
+            <View style={styles.vehiclePillsRow}>
+              <TouchableOpacity
+                style={[styles.vehiclePill, selectedVehicle === 'innova' && styles.vehiclePillActive, { borderColor: colors.border }]}
+                onPress={() => setSelectedVehicle('innova')}
+              >
+                <FontAwesome5 name="car" size={scale(12)} color={selectedVehicle === 'innova' ? '#101010' : colors.textPrimary} />
+                <Text style={[styles.vehiclePillText, { color: selectedVehicle === 'innova' ? '#101010' : colors.textPrimary }]}>Innova (KA-03-MD-8240)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.vehiclePill, selectedVehicle === 'swift' && styles.vehiclePillActive, { borderColor: colors.border }]}
+                onPress={() => setSelectedVehicle('swift')}
+              >
+                <FontAwesome5 name="car" size={scale(12)} color={selectedVehicle === 'swift' ? '#101010' : colors.textPrimary} />
+                <Text style={[styles.vehiclePillText, { color: selectedVehicle === 'swift' ? '#101010' : colors.textPrimary }]}>Swift (KA-04-AB-1234)</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
+
+            <View style={styles.toggleSettingItem}>
+              <View>
+                <Text style={[styles.toggleSettingLabel, { color: colors.textPrimary }]}>{trans.nav}</Text>
+                <Text style={[styles.toggleSettingSub, { color: colors.textMuted }]}>
+                  {navPreference === 'inapp' ? 'In-App GPS Screen' : 'Redirect to Google Maps App'}
+                </Text>
+              </View>
+              <Switch
+                value={navPreference === 'inapp'}
+                onValueChange={(val) => setNavPreference(val ? 'inapp' : 'google')}
+                trackColor={{ false: '#2C2C34', true: colors.amber }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+          </View>
+
+          {/* 3. Help & Support */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.help}</Text>
+            
+            <TouchableOpacity 
+              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: '#ef4444' }]}
+              onPress={() => setDisputeVisible(true)}
             >
-              {payoutLoading ? (
-                <ActivityIndicator color="#101010" />
-              ) : (
-                <>
-                  <Text style={styles.payoutBtnText}>Instant Settlement Cash-out</Text>
-                  <MaterialIcons name="account-balance" size={scale(16)} color="#101010" />
-                </>
-              )}
+              <MaterialIcons name="report-problem" size={scale(18)} color="#ef4444" />
+              <Text style={styles.supportActionBtnTextDanger}>{trans.report}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(245,197,24,0.08)', borderColor: colors.amber, marginTop: verticalScale(10) }]}
+              onPress={() => Alert.alert('Dialing Admin Support', 'Calling हेल्पलाइन number +91 99000 82400...')}
+            >
+              <MaterialIcons name="call" size={scale(18)} color={colors.amber} />
+              <Text style={[styles.supportActionBtnTextAmber, { color: colors.textPrimary }]}>{trans.call}</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Today ride logs history */}
-          <Text style={[styles.sectionTitle, { color: colors.amber }]}>Today Completed Rides Log</Text>
+          {/* 4. Language & App Settings */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.lang}</Text>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / भाषा चुने</Text>
+            <View style={styles.vehiclePillsRow}>
+              <TouchableOpacity
+                style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppLang('en')}
+              >
+                <Text style={[styles.langPillText, { color: appLang === 'en' ? '#101010' : colors.textPrimary }]}>English</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.langPill, appLang === 'hi' && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppLang('hi')}
+              >
+                <Text style={[styles.langPillText, { color: appLang === 'hi' ? '#101010' : colors.textPrimary }]}>हिंदी (Hindi)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Completed trips list */}
+          <Text style={[styles.sectionTitle, { color: colors.amber, marginTop: scale(4) }]}>Today Completed Rides Log</Text>
           {dailyRides.map((item) => (
-            <View key={item.id} style={[styles.dailyTripLogItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View key={item.id} style={[styles.dailyTripLogItem, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
               <View style={styles.logHeaderRow}>
                 <View>
                   <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{item.title}</Text>
@@ -496,54 +624,51 @@ export default function DriverDashboardScreen() {
               </View>
             </View>
           ))}
+
+          <View style={{ height: verticalScale(100) }} />
         </ScrollView>
       )}
 
-      {/* Bottom Portal Tab Navigator bar */}
-      <View style={[styles.bottomTabBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.tabBarItem, activeTab === 'duty' && styles.tabBarItemActive]}
-          onPress={() => setActiveTab('duty')}
-        >
-          <MaterialIcons name="wifi" size={scale(20)} color={activeTab === 'duty' ? colors.amber : colors.textMuted} />
-          <Text style={[styles.tabBarLabel, { color: activeTab === 'duty' ? colors.amber : colors.textMuted }]}>Duty Status</Text>
+      {/* Floating Bottom Tab Bar matching Tourist client look */}
+      <View style={[styles.bottomTabBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('duty')}>
+          <View style={[styles.tabIconWrapper, activeTab === 'duty' && styles.tabIconWrapperActive]}>
+            <MaterialIcons name="wifi" size={scale(22)} color={activeTab === 'duty' ? '#101010' : colors.textMuted} />
+          </View>
+          <Text style={[styles.tabBarLabel, { color: activeTab === 'duty' ? colors.amber : colors.textMuted }]}>
+            {appLang === 'hi' ? 'ड्यूटी स्टेटस' : 'Duty Status'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBarItem, activeTab === 'active_trip' && styles.tabBarItemActive]}
-          onPress={() => setActiveTab('active_trip')}
-        >
-          <MaterialIcons name="navigation" size={scale(20)} color={activeTab === 'active_trip' ? colors.amber : colors.textMuted} />
-          <Text style={[styles.tabBarLabel, { color: activeTab === 'active_trip' ? colors.amber : colors.textMuted }]}>Active Trip</Text>
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('active_trip')}>
+          <View style={[styles.tabIconWrapper, activeTab === 'active_trip' && styles.tabIconWrapperActive]}>
+            <MaterialIcons name="navigation" size={scale(22)} color={activeTab === 'active_trip' ? '#101010' : colors.textMuted} />
+          </View>
+          <Text style={[styles.tabBarLabel, { color: activeTab === 'active_trip' ? colors.amber : colors.textMuted }]}>
+            {appLang === 'hi' ? 'सक्रिय ट्रिप' : 'Active Trip'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBarItem, activeTab === 'earnings' && styles.tabBarItemActive]}
-          onPress={() => setActiveTab('earnings')}
-        >
-          <MaterialIcons name="monetization-on" size={scale(20)} color={activeTab === 'earnings' ? colors.amber : colors.textMuted} />
-          <Text style={[styles.tabBarLabel, { color: activeTab === 'earnings' ? colors.amber : colors.textMuted }]}>Earnings Log</Text>
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('profile')}>
+          <View style={[styles.tabIconWrapper, activeTab === 'profile' && styles.tabIconWrapperActive]}>
+            <MaterialIcons name="person" size={scale(22)} color={activeTab === 'profile' ? '#101010' : colors.textMuted} />
+          </View>
+          <Text style={[styles.tabBarLabel, { color: activeTab === 'profile' ? colors.amber : colors.textMuted }]}>
+            {appLang === 'hi' ? 'खाता & सेटिंग्स' : 'Account & Settings'}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Simulated Incoming Request Modal Pop-up */}
-      <Modal
-        visible={requestVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setRequestVisible(false)}
-      >
+      <Modal visible={requestVisible} transparent={true} animationType="slide">
         {incomingRequest && (
           <View style={styles.popupOverlay}>
-            <View style={[styles.popupContentCard, { backgroundColor: colors.surface }]}>
-              
-              {/* Countdown Progress bar */}
+            <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <View style={styles.popupTimerHeader}>
                 <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
                 <Text style={styles.popupTimerText}>INCOMING INSTANT CAB PING ({timerSeconds}s)</Text>
               </View>
 
-              {/* Tourist & Tour details */}
               <View style={styles.popupMainDetails}>
                 <View style={styles.touristNameBadge}>
                   <MaterialIcons name="person-pin" size={scale(22)} color={colors.amber} style={{ marginRight: scale(8) }} />
@@ -553,19 +678,16 @@ export default function DriverDashboardScreen() {
                   </View>
                 </View>
 
-                {/* Pickup details */}
                 <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Pickup Location</Text>
                   <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>{incomingRequest.pickup}</Text>
                 </View>
 
-                {/* Drop Location */}
                 <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Dropoff Location</Text>
                   <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>{incomingRequest.drop}</Text>
                 </View>
 
-                {/* Duration & Payout */}
                 <View style={styles.popupFareStats}>
                   <View style={styles.fareCell}>
                     <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Distance / Time</Text>
@@ -579,7 +701,6 @@ export default function DriverDashboardScreen() {
                 </View>
               </View>
 
-              {/* Accept / Decline buttons */}
               <View style={styles.popupActionsGrid}>
                 <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34' }]} onPress={handleRejectRequest}>
                   <Text style={styles.popupBtnCancelText}>Decline</Text>
@@ -594,15 +715,10 @@ export default function DriverDashboardScreen() {
       </Modal>
 
       {/* Start Trip OTP Entry Modal Pop-up */}
-      <Modal
-        visible={otpVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setOtpVisible(false)}
-      >
+      <Modal visible={otpVisible} transparent={true} animationType="fade">
         {activeTrip && (
           <View style={styles.popupOverlay}>
-            <View style={[styles.otpContentCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <Text style={[styles.otpTitle, { color: colors.textPrimary }]}>Enter Verification OTP</Text>
               <Text style={[styles.otpSub, { color: colors.textMuted }]}>Please check with {activeTrip.touristName} for the 4-digit code (e.g. 8240)</Text>
 
@@ -628,6 +744,31 @@ export default function DriverDashboardScreen() {
             </View>
           </View>
         )}
+      </Modal>
+
+      {/* Dispute Reporter Modal popup */}
+      <Modal visible={disputeVisible} transparent={true} animationType="fade">
+        <View style={styles.popupOverlay}>
+          <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', width: '90%' }]}>
+            <Text style={[styles.otpTitle, { color: colors.textPrimary, marginBottom: verticalScale(14) }]}>Report Dispute Event</Text>
+            
+            <TouchableOpacity style={styles.disputeSelectBtn} onPress={() => handleReportDispute('Rider Refused Payment')}>
+              <Text style={[styles.disputeSelectText, { color: colors.textPrimary }]}>Rider refused cash payment</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.disputeSelectBtn} onPress={() => handleReportDispute('Accident Assistance')}>
+              <Text style={[styles.disputeSelectText, { color: colors.textPrimary }]}>Accident or Breakdown assistance</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.disputeSelectBtn} onPress={() => handleReportDispute('App Glitch')}>
+              <Text style={[styles.disputeSelectText, { color: colors.textPrimary }]}>App GPS or telemetry glitch</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34', width: '100%', marginTop: scale(10) }]} onPress={() => setDisputeVisible(false)}>
+              <Text style={styles.popupBtnCancelText}>Dismiss Dialog</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -926,94 +1067,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: verticalScale(6),
   },
-  walletCardFrame: {
-    borderRadius: scale(22),
-    padding: scale(18),
-    borderWidth: 1.2,
-    marginBottom: verticalScale(20),
-  },
-  walletTitleLabel: {
-    color: '#8D8D97',
-    fontSize: moderateFontScale(11),
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  walletBalText: {
-    color: '#F5C518',
-    fontSize: moderateFontScale(28),
-    fontWeight: '800',
-    marginVertical: verticalScale(4),
-  },
-  walletSubText: {
-    fontSize: moderateFontScale(11.5),
-    lineHeight: moderateFontScale(16),
-    marginBottom: verticalScale(14),
-  },
-  payoutButton: {
-    backgroundColor: '#F5C518',
-    borderRadius: scale(12),
-    height: scale(40),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: scale(6),
-  },
-  payoutBtnText: {
-    color: '#101010',
-    fontSize: moderateFontScale(12.5),
-    fontWeight: '800',
-  },
-  dailyTripLogItem: {
-    borderRadius: scale(16),
-    padding: scale(14),
-    marginBottom: verticalScale(12),
-    borderWidth: 1.2,
-  },
-  logHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logTitle: {
-    fontSize: moderateFontScale(12.5),
-    fontWeight: '800',
-  },
-  logTime: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '600',
-    marginTop: verticalScale(2),
-  },
-  logFare: {
-    color: '#10B981',
-    fontSize: moderateFontScale(15),
-    fontWeight: '800',
-  },
   bottomTabBar: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: verticalScale(74),
+    bottom: scale(20),
+    left: scale(20),
+    right: scale(20),
+    borderWidth: 1,
+    borderRadius: scale(28),
+    height: verticalScale(66),
     flexDirection: 'row',
-    borderTopWidth: 1.2,
-    paddingBottom: verticalScale(14),
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
     elevation: 8,
+    zIndex: 10,
   },
   tabBarItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: verticalScale(6),
+    height: '100%',
   },
-  tabBarItemActive: {
-    borderTopWidth: 1.5,
-    borderTopColor: '#F5C518',
+  tabIconWrapper: {
+    width: scale(40),
+    height: scale(32),
+    borderRadius: scale(16),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIconWrapperActive: {
+    backgroundColor: '#F5C518',
   },
   tabBarLabel: {
-    fontSize: moderateFontScale(9),
+    fontSize: moderateFontScale(10),
     fontWeight: '700',
-    marginTop: verticalScale(4),
+    marginTop: verticalScale(2),
   },
   popupOverlay: {
     flex: 1,
@@ -1142,5 +1232,176 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: scale(6),
     marginBottom: verticalScale(20),
+  },
+  profileSectionCard: {
+    borderRadius: scale(22),
+    padding: scale(16),
+    borderWidth: 1.2,
+    marginBottom: verticalScale(18),
+  },
+  profileSectionTitle: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: verticalScale(10),
+  },
+  payoutBalanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  payoutAmtVal: {
+    fontSize: moderateFontScale(26),
+    fontWeight: '800',
+  },
+  payoutAmtSub: {
+    fontSize: moderateFontScale(11.5),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  smallPayoutBtn: {
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: scale(12),
+  },
+  smallPayoutBtnText: {
+    color: '#101010',
+    fontWeight: '800',
+    fontSize: moderateFontScale(11.5),
+  },
+  inputLabel: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
+  },
+  inputFieldBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.2,
+    borderRadius: scale(10),
+    paddingHorizontal: scale(10),
+    height: verticalScale(38),
+    marginTop: verticalScale(6),
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  textInputStyle: {
+    flex: 1,
+    fontSize: moderateFontScale(13.5),
+    padding: 0,
+    height: '100%',
+  },
+  sectionTitle: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: verticalScale(10),
+  },
+  vehiclePillsRow: {
+    flexDirection: 'row',
+    gap: scale(10),
+    marginTop: verticalScale(4),
+  },
+  vehiclePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(6),
+    borderWidth: 1.2,
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(6),
+  },
+  vehiclePillActive: {
+    backgroundColor: '#F5C518',
+    borderColor: '#F5C518',
+  },
+  vehiclePillText: {
+    fontSize: moderateFontScale(9.5),
+    fontWeight: '800',
+  },
+  toggleSettingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  toggleSettingLabel: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '700',
+  },
+  toggleSettingSub: {
+    fontSize: moderateFontScale(10.5),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  supportActionRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(8),
+    borderWidth: 1.2,
+    borderRadius: scale(12),
+    paddingVertical: verticalScale(10),
+  },
+  supportActionBtnTextDanger: {
+    color: '#ef4444',
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+  },
+  supportActionBtnTextAmber: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+  },
+  langPill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(6),
+  },
+  langPillActive: {
+    backgroundColor: '#F5C518',
+    borderColor: '#F5C518',
+  },
+  langPillText: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '800',
+  },
+  disputeSelectBtn: {
+    width: '100%',
+    paddingVertical: verticalScale(12),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  disputeSelectText: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  dailyTripLogItem: {
+    borderRadius: scale(16),
+    padding: scale(14),
+    marginBottom: verticalScale(12),
+    borderWidth: 1.2,
+  },
+  logHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  logTitle: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+  },
+  logTime: {
+    fontSize: moderateFontScale(10),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  logFare: {
+    color: '#10B981',
+    fontSize: moderateFontScale(15),
+    fontWeight: '800',
   },
 });
