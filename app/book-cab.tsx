@@ -361,19 +361,27 @@ export default function BookCabScreen() {
       Alert.alert('Error', 'Please search and select a drop location first.');
       return;
     }
-    setBookingLoading(true);
-    setTimeout(() => {
-      setBookingLoading(false);
-      const chosenRide = rides.find(r => r.key === selectedRide);
-      const base = getBasePrice(chosenRide ? chosenRide.ratePerKm : 15);
-      const final = getDiscountedPrice(base);
-      
-      Alert.alert(
-        'Cab Booked Successfully!',
-        `Your driver is arriving in ${chosenRide?.minsAway} mins!\n\nDetails:\nVehicle: ${chosenRide?.name}\nPayment: ${paymentMethod.toUpperCase()}\nAC: ${isAc ? 'ON' : 'OFF'}\nIntermediate Stops: ${stops.length}\nFinal Amount: ₹${final.toLocaleString('en-IN')}`,
-        [{ text: 'View Trip Status', onPress: () => router.replace('/(tabs)/trips') }]
-      );
-    }, 2000);
+    const chosenRide = rides.find(r => r.key === selectedRide);
+    const base = getBasePrice(chosenRide ? chosenRide.ratePerKm : 15);
+    const final = getDiscountedPrice(base);
+
+    // Redirect to the live simulator matching page
+    router.replace({
+      pathname: '/ride-matching' as any,
+      params: {
+        pickupName: pickup.name,
+        pickupLat: pickup.latitude.toString(),
+        pickupLng: pickup.longitude.toString(),
+        dropName: drop.name,
+        dropLat: drop.latitude.toString(),
+        dropLng: drop.longitude.toString(),
+        stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
+        price: final.toString(),
+        type: 'cab',
+        vehicle: selectedRide,
+        paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
+      }
+    });
   };
 
   // Reordering/removing stops

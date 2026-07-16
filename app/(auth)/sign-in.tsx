@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, ScrollView } from 'react-native';
+import { StyleSheet, View, ScrollView, Alert } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import { LoginForm } from '@/components/auth/login-form';
 import { SocialLogin } from '@/components/auth/social-login';
 import { FooterLink } from '@/components/auth/footer-link';
 import { scale, verticalScale } from '@/constants/responsive';
+import { adminState } from '../admin-state';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -24,6 +25,51 @@ export default function SignInScreen() {
     console.log('Logging in with:', phone, pass);
     const lowerPhone = phone.toLowerCase();
     const lowerPass = pass.toLowerCase();
+
+    if (lowerPhone === 'admin' && pass === 'admin123') {
+      router.replace('/admin-dashboard');
+      return;
+    }
+
+    // Check registered driver list
+    const driver = adminState.drivers.find(d => d.username === lowerPhone || d.phone === phone);
+    if (driver) {
+      if (driver.status === 'Pending KYC') {
+        Alert.alert('KYC Pending', 'Your driver registration is currently pending admin KYC approval. Please wait for admin verification.');
+        return;
+      }
+      if (driver.status === 'Inactive') {
+        Alert.alert('Account Deactivated', 'Your driver account has been deactivated by the admin.');
+        return;
+      }
+      if (driver.status === 'KYC Declined') {
+        Alert.alert('KYC Declined', 'Your driver registration KYC was declined by the admin.');
+        return;
+      }
+      router.replace('/driver-dashboard');
+      return;
+    }
+
+    // Check registered guide list
+    const guide = adminState.guides.find(g => g.username === lowerPhone || g.phone === phone);
+    if (guide) {
+      if (guide.status === 'Pending KYC') {
+        Alert.alert('KYC Pending', 'Your guide registration is currently pending admin KYC approval. Please wait for admin verification.');
+        return;
+      }
+      if (guide.status === 'Inactive') {
+        Alert.alert('Account Deactivated', 'Your guide account has been deactivated by the admin.');
+        return;
+      }
+      if (guide.status === 'KYC Declined') {
+        Alert.alert('KYC Declined', 'Your guide registration KYC was declined by the admin.');
+        return;
+      }
+      router.replace('/guide-dashboard');
+      return;
+    }
+
+    // Fallback dynamic login
     if (lowerPhone.includes('guide') || lowerPass.includes('guide') || pass === '8240') {
       router.replace('/guide-dashboard');
     } else if (lowerPhone.includes('driver') || lowerPass.includes('driver')) {

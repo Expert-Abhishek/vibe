@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { adminState } from '../admin-state';
 
 interface TripRecord {
   id: string;
@@ -125,7 +126,9 @@ export default function TripsHistoryScreen() {
     amber: '#F5C518',
   };
 
-  const filteredTrips = initialTripHistory.filter((trip) => {
+  const allTrips = [...adminState.userTrips, ...initialTripHistory];
+
+  const filteredTrips = allTrips.filter((trip) => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'cab') return trip.type === 'cab' || trip.type === 'custom_trip';
     if (activeFilter === 'guide') return trip.type === 'guide';
@@ -133,9 +136,9 @@ export default function TripsHistoryScreen() {
   });
 
   // Dynamic Spend statistics calculator
-  const totalSpend = initialTripHistory.reduce((sum, item) => sum + item.price, 0);
-  const cabCount = initialTripHistory.filter((t) => t.type === 'cab' || t.type === 'custom_trip').length;
-  const guideCount = initialTripHistory.filter((t) => t.type === 'guide').length;
+  const totalSpend = allTrips.reduce((sum, item) => sum + item.price, 0);
+  const cabCount = allTrips.filter((t) => t.type === 'cab' || t.type === 'custom_trip').length;
+  const guideCount = allTrips.filter((t) => t.type === 'guide').length;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>

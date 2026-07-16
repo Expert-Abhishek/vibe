@@ -15,7 +15,7 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-function TabIconButton({ routeName, isFocused, activeColor, inactiveColor }) {
+function TabIconButton({ routeName, isFocused, activeColor, inactiveColor }: any) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
 
@@ -40,6 +40,8 @@ function TabIconButton({ routeName, isFocused, activeColor, inactiveColor }) {
     if (name === 'index') return 'home';
     if (name === 'trips') return 'navigation';
     if (name === 'wallet') return 'account-balance-wallet';
+    if (name === 'driver-wallet') return 'drive-eta';
+    if (name === 'guide-wallet') return 'explore';
     if (name === 'profile') return 'person';
     return 'home';
   };
@@ -55,7 +57,7 @@ function TabIconButton({ routeName, isFocused, activeColor, inactiveColor }) {
   );
 }
 
-function CustomTabBar({ state, descriptors, navigation }) {
+function CustomTabBar({ state, descriptors, navigation }: any) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = {
@@ -65,7 +67,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
     active: '#F5C518',
   };
 
-  const visibleRoutes = state.routes.filter(route => {
+  const visibleRoutes = state.routes.filter((route: any) => {
     const { options } = descriptors[route.key];
     return options.href !== null;
   });
@@ -73,7 +75,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
   const tabWidth = (SCREEN_WIDTH - scale(40)) / visibleRoutes.length;
 
   const activeRoute = state.routes[state.index];
-  const visibleActiveIndex = visibleRoutes.findIndex(r => r.key === activeRoute.key);
+  const visibleActiveIndex = visibleRoutes.findIndex((r: any) => r.key === activeRoute.key);
 
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -106,7 +108,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
         }
       ]} />
 
-      {visibleRoutes.map((route, index) => {
+      {visibleRoutes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         const isFocused = visibleActiveIndex === index;
 
@@ -177,6 +179,18 @@ export default function TabLayout() {
         name="wallet"
         options={{
           title: 'Wallet',
+        }}
+      />
+      <Tabs.Screen
+        name="driver-wallet"
+        options={{
+          title: 'Dr. Wallet',
+        }}
+      />
+      <Tabs.Screen
+        name="guide-wallet"
+        options={{
+          title: 'Gu. Wallet',
         }}
       />
       <Tabs.Screen

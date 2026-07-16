@@ -1,20 +1,20 @@
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { MaterialIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ImageBackground,
-  Image,
   Alert,
+  Image,
+  ImageBackground,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
-import { useRouter } from 'expo-router';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useRouter } from 'expo-router';
 
 const rides = [
   { key: '5seater', name: '5 Seater', desc: 'Comfort & Style', image: require('@/assets/images/sedan.png') },
@@ -78,7 +78,7 @@ export default function HomeScreen() {
 
         {/* PREMIUM SERVICES */}
         <Text style={styles.sectionTitle}>Premium Services</Text>
-        
+
         {/* Row 1: Need a Guide */}
         <TouchableOpacity
           activeOpacity={0.9}
@@ -234,7 +234,7 @@ export default function HomeScreen() {
         <View style={styles.footerVibeCard}>
           {/* Waves background using styled border/graphics */}
           <View style={styles.waveOverlay} />
-          <Text style={styles.vibeCardTitle}>#MAKE YOUR OWN VIBE with us</Text>
+          <Text style={styles.vibeCardTitle}>#MAKE YOUR OWN VIBE WITH US</Text>
           <Text style={styles.vibeCardSub}>Made in India</Text>
           <Text style={styles.vibeCardCrafted}>Crafted in Karnataka</Text>
         </View>

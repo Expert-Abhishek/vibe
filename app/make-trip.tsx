@@ -111,6 +111,16 @@ export default function MakeTripScreen() {
   const searchGooglePlaces = async (query: string) => {
     setLoadingSearch(true);
     try {
+      const queryLower = query.toLowerCase();
+      const localMatches = presetDestinations
+        .filter(p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower))
+        .map(p => ({
+          place_id: `local_${p.id}`,
+          description: `${p.name}, ${p.address || ''}`,
+          isLocal: true,
+          presetData: p,
+        }));
+
       // Focus location biased on Karnataka (Bangalore coordinates)
       const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
         query
@@ -118,11 +128,24 @@ export default function MakeTripScreen() {
       
       const response = await fetch(url);
       const data = await response.json();
+      
+      let googleSuggestions = [];
       if (data.predictions) {
-        setSuggestions(data.predictions);
+        googleSuggestions = data.predictions;
       }
+      setSuggestions([...localMatches, ...googleSuggestions]);
     } catch (e) {
-      console.error('Error fetching autocomplete suggestions:', e);
+      console.warn('Error fetching autocomplete suggestions, using local backup:', e);
+      const queryLower = query.toLowerCase();
+      const localMatches = presetDestinations
+        .filter(p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower))
+        .map(p => ({
+          place_id: `local_${p.id}`,
+          description: `${p.name}, ${p.address || ''}`,
+          isLocal: true,
+          presetData: p,
+        }));
+      setSuggestions(localMatches);
     } finally {
       setLoadingSearch(false);
     }
@@ -131,6 +154,17 @@ export default function MakeTripScreen() {
   const triggerSearchAndAddFirst = async (query: string) => {
     setLoadingSearch(true);
     try {
+      const queryLower = query.toLowerCase();
+      const localMatch = presetDestinations.find(
+        p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower)
+      );
+
+      if (localMatch) {
+        handleSelectPreset(localMatch);
+        setLoadingSearch(false);
+        return;
+      }
+
       const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
         query
       )}&key=${GOOGLE_MAPS_KEY}&location=12.9716,77.5946&radius=300000`;
@@ -145,6 +179,16 @@ export default function MakeTripScreen() {
       }
     } catch (e) {
       console.error('Error in search and add first:', e);
+      const queryLower = query.toLowerCase();
+      const localMatch = presetDestinations.find(
+        p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower)
+      );
+
+      if (localMatch) {
+        handleSelectPreset(localMatch);
+      } else {
+        Alert.alert('No Results', `Could not find any location matching "${query}".`);
+      }
     } finally {
       setLoadingSearch(false);
     }
@@ -181,7 +225,6 @@ export default function MakeTripScreen() {
   };
 
   const handleSelectPreset = (preset: Checkpoint) => {
-    setShowPresets(false);
     // Prevent duplicate entries of the same preset
     if (checkpoints.find(c => c.name === preset.name)) {
       Alert.alert('Checkpoint Exists', `${preset.name} is already in your itinerary.`);
@@ -340,12 +383,35 @@ export default function MakeTripScreen() {
   }, [checkpoints]);
 
   const handleConfirmTrip = () => {
-    const rideLabel = selectedRide ? getRideLabel(selectedRide) : 'driver';
-    Alert.alert(
-      'Itinerary Locked!',
-      `Trip plan confirmed. Total distance: ${distance}.\n\nWe are preparing ride choices and searching for ${rideLabel} drivers to cover your custom route!`,
-      [{ text: 'Find Drivers', onPress: () => router.replace('/(tabs)/trips') }]
-    );
+    if (checkpoints.length < 2) {
+      Alert.alert('Error', 'Please add at least 2 checkpoints to plan a trip.');
+      return;
+    }
+    const pickup = checkpoints[0];
+    const drop = checkpoints[checkpoints.length - 1];
+    const stops = checkpoints.slice(1, -1);
+
+    // Calculate a simulated price based on estimated distance
+    const distNum = parseFloat(distance.split(' ')[0]) || 45.0;
+    const rate = selectedRide === 'auto' ? 10 : (selectedRide === '7seater' ? 22 : (selectedRide === '4x4jeep' ? 35 : 15));
+    const calculatedPrice = Math.round(distNum * rate + 120);
+
+    router.replace({
+      pathname: '/ride-matching' as any,
+      params: {
+        pickupName: pickup.name,
+        pickupLat: pickup.latitude.toString(),
+        pickupLng: pickup.longitude.toString(),
+        dropName: drop.name,
+        dropLat: drop.latitude.toString(),
+        dropLng: drop.longitude.toString(),
+        stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
+        price: calculatedPrice.toString(),
+        type: 'custom_trip',
+        vehicle: selectedRide || '5seater',
+        paymentMode: 'UPI',
+      }
+    });
   };
 
   return (
@@ -487,9 +553,9 @@ export default function MakeTripScreen() {
           </View>
         </View>
 
-        {/* Search Bar / Input for Adding Checkpoint */}
-        <View style={styles.searchSection}>
-          <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border }]}>
+        {/* Search Bar / Input for Adding Checkpoint - Full Width */}
+        <View style={{ marginBottom: verticalScale(14) }}>
+          <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border, width: '100%', flex: undefined }]}>
             <MaterialIcons name="add-location" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
             <TextInput
               placeholder="Search & Add checkpoint..."
@@ -501,7 +567,11 @@ export default function MakeTripScreen() {
               returnKeyType="search"
               onSubmitEditing={() => {
                 if (suggestions.length > 0) {
-                  handleSelectSuggestion(suggestions[0].place_id, suggestions[0].description);
+                  if (suggestions[0].isLocal) {
+                    handleSelectPreset(suggestions[0].presetData);
+                  } else {
+                    handleSelectSuggestion(suggestions[0].place_id, suggestions[0].description);
+                  }
                 } else if (searchText.trim().length > 0) {
                   triggerSearchAndAddFirst(searchText);
                 }
@@ -514,17 +584,6 @@ export default function MakeTripScreen() {
               </TouchableOpacity>
             )}
           </View>
-
-          {/* Quick Preset Toggle Button */}
-          <TouchableOpacity 
-            style={[styles.presetsToggle, { borderColor: colors.border, backgroundColor: showPresets ? 'rgba(245,197,24,0.1)' : 'transparent' }]}
-            onPress={() => setShowPresets(!showPresets)}
-          >
-            <MaterialIcons name="star" size={scale(16)} color={colors.amber} style={{ marginRight: scale(4) }} />
-            <Text style={[styles.presetsToggleText, { color: colors.textPrimary }]}>
-              {showPresets ? 'Hide Top Checkpoints' : 'View Top Checkpoints'}
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Google Places Autocomplete Suggestions */}
@@ -534,7 +593,13 @@ export default function MakeTripScreen() {
               <TouchableOpacity
                 key={item.place_id}
                 style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
-                onPress={() => handleSelectSuggestion(item.place_id, item.description)}
+                onPress={() => {
+                  if (item.isLocal) {
+                    handleSelectPreset(item.presetData);
+                  } else {
+                    handleSelectSuggestion(item.place_id, item.description);
+                  }
+                }}
               >
                 <View style={styles.suggestionLeft}>
                   <MaterialIcons name="location-on" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
@@ -548,93 +613,120 @@ export default function MakeTripScreen() {
           </View>
         )}
 
-        {/* Top Checkpoints Presets */}
-        {showPresets && (
-          <View style={[styles.presetContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.presetTitle, { color: colors.amber }]}>Select popular stops in Karnataka:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetScroll}>
-              {presetDestinations.map(p => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.presetCard, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F5F5F7' }]}
-                  onPress={() => handleSelectPreset(p)}
-                >
-                  <Text style={[styles.presetCardName, { color: colors.textPrimary }]}>{p.name}</Text>
-                  <Text style={[styles.presetCardDesc, { color: colors.textMuted }]}>{p.address.split(',')[0]}</Text>
-                </TouchableOpacity>
-              ))}
+        {/* Side-by-Side Content Container */}
+        <View style={styles.sideBySideRow}>
+          {/* Left Column: Route Checklist */}
+          <View style={styles.leftColumn}>
+            <View style={styles.columnHeader}>
+              <MaterialIcons name="playlist-add-check" size={scale(18)} color={colors.amber} style={{ marginRight: scale(4) }} />
+              <Text style={[styles.columnTitle, { color: colors.amber }]} numberOfLines={1}>Route Checklist</Text>
+            </View>
+            <Text style={[styles.columnSub, { color: colors.textMuted }]} numberOfLines={1}>Drag/reorder stops</Text>
+
+            <View style={styles.itineraryWrapper}>
+              {checkpoints.map((checkpoint, index) => {
+                const isFirst = index === 0;
+                const isLast = index === checkpoints.length - 1;
+                
+                let bulletColor = '#3b82f6';
+                if (isFirst) bulletColor = colors.amber;
+                if (isLast) bulletColor = '#ef4444';
+
+                return (
+                  <View key={checkpoint.id} style={styles.timelineItem}>
+                    {/* Timeline connector visual line */}
+                    <View style={styles.timelineLeft}>
+                      <View style={[styles.timelineNode, { backgroundColor: bulletColor }]}>
+                        <Text style={styles.nodeChar}>{String.fromCharCode(65 + index)}</Text>
+                      </View>
+                      {!isLast && <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />}
+                    </View>
+
+                    {/* Stop Card */}
+                    <View style={[styles.stopCardCompact, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <View style={styles.stopInfo}>
+                        <Text style={[styles.stopName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {checkpoint.name}
+                        </Text>
+                        <Text style={[styles.stopRoleText, { color: isFirst ? colors.amber : isLast ? '#ef4444' : colors.textMuted }]}>
+                          {isFirst ? 'Start' : isLast ? 'End' : `Stop ${index}`}
+                        </Text>
+                      </View>
+
+                      {/* Reorder and Delete controls stacked vertically */}
+                      <View style={styles.controlsCol}>
+                        <View style={styles.arrowRow}>
+                          <TouchableOpacity
+                            style={[styles.controlBtnCompact, isFirst && styles.controlBtnDisabled, { borderColor: colors.border }]}
+                            onPress={() => handleMoveUp(index)}
+                            disabled={isFirst}
+                          >
+                            <MaterialIcons name="arrow-upward" size={scale(12)} color={isFirst ? colors.border : colors.textPrimary} />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.controlBtnCompact, isLast && styles.controlBtnDisabled, { borderColor: colors.border }]}
+                            onPress={() => handleMoveDown(index)}
+                            disabled={isLast}
+                          >
+                            <MaterialIcons name="arrow-downward" size={scale(12)} color={isLast ? colors.border : colors.textPrimary} />
+                          </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[styles.deleteBtnCompact, checkpoints.length <= 2 && styles.controlBtnDisabled]}
+                          onPress={() => handleDelete(checkpoint.id)}
+                          disabled={checkpoints.length <= 2}
+                        >
+                          <MaterialIcons name="delete" size={scale(14)} color={checkpoints.length <= 2 ? colors.border : '#ef4444'} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Right Column: Top Places presets */}
+          <View style={styles.rightColumn}>
+            <View style={styles.columnHeader}>
+              <MaterialIcons name="star" size={scale(18)} color={colors.amber} style={{ marginRight: scale(4) }} />
+              <Text style={[styles.columnTitle, { color: colors.amber }]} numberOfLines={1}>Top Places</Text>
+            </View>
+            <Text style={[styles.columnSub, { color: colors.textMuted }]} numberOfLines={1}>Tap stops to add</Text>
+
+            <ScrollView 
+              style={styles.presetsVerticalScroll} 
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled={true}
+            >
+              {presetDestinations.map(p => {
+                const isAdded = checkpoints.some(c => c.name === p.name);
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.presetCardVertical, 
+                      { 
+                        borderColor: isAdded ? colors.amber : colors.border, 
+                        backgroundColor: isDark ? '#16161B' : '#F5F5F7',
+                        opacity: isAdded ? 0.6 : 1
+                      }
+                    ]}
+                    onPress={() => handleSelectPreset(p)}
+                    disabled={isAdded}
+                  >
+                    <View style={styles.presetCardHeaderRow}>
+                      <Text style={[styles.presetCardName, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>{p.name}</Text>
+                      {isAdded && <MaterialIcons name="check-circle" size={scale(12)} color={colors.amber} />}
+                    </View>
+                    <Text style={[styles.presetCardDesc, { color: colors.textMuted }]} numberOfLines={1}>{(p.address || '').split(',')[0]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
-        )}
-
-        {/* Checkpoint list builder (Timeline view) */}
-        <View style={styles.itineraryHeader}>
-          <Text style={styles.sectionTitle}>Your Planned Route Checklist</Text>
-          <Text style={[styles.itineraryHelp, { color: colors.textMuted }]}>Move or delete stops to customize your journey</Text>
-        </View>
-
-        <View style={styles.itineraryWrapper}>
-          {checkpoints.map((checkpoint, index) => {
-            const isFirst = index === 0;
-            const isLast = index === checkpoints.length - 1;
-            
-            let bulletColor = '#3b82f6';
-            if (isFirst) bulletColor = colors.amber;
-            if (isLast) bulletColor = '#ef4444';
-
-            return (
-              <View key={checkpoint.id} style={styles.timelineItem}>
-                {/* Timeline connector visual line */}
-                <View style={styles.timelineLeft}>
-                  <View style={[styles.timelineNode, { backgroundColor: bulletColor }]}>
-                    <Text style={styles.nodeChar}>{String.fromCharCode(65 + index)}</Text>
-                  </View>
-                  {!isLast && <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />}
-                </View>
-
-                {/* Stop Card */}
-                <View style={[styles.stopCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  <View style={styles.stopInfo}>
-                    <Text style={[styles.stopName, { color: colors.textPrimary }]}>
-                      {checkpoint.name} {isFirst ? '(Start)' : isLast ? '(End)' : ''}
-                    </Text>
-                    {checkpoint.address && (
-                      <Text style={[styles.stopAddress, { color: colors.textMuted }]} numberOfLines={1}>
-                        {checkpoint.address}
-                      </Text>
-                    )}
-                  </View>
-
-                  {/* Reorder and Delete controls */}
-                  <View style={styles.controlsRow}>
-                    <TouchableOpacity
-                      style={[styles.controlBtn, isFirst && styles.controlBtnDisabled, { borderColor: colors.border }]}
-                      onPress={() => handleMoveUp(index)}
-                      disabled={isFirst}
-                    >
-                      <MaterialIcons name="arrow-upward" size={scale(16)} color={isFirst ? colors.border : colors.textPrimary} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.controlBtn, isLast && styles.controlBtnDisabled, { borderColor: colors.border }]}
-                      onPress={() => handleMoveDown(index)}
-                      disabled={isLast}
-                    >
-                      <MaterialIcons name="arrow-downward" size={scale(16)} color={isLast ? colors.border : colors.textPrimary} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.deleteBtn, checkpoints.length <= 2 && styles.controlBtnDisabled]}
-                      onPress={() => handleDelete(checkpoint.id)}
-                      disabled={checkpoints.length <= 2}
-                    >
-                      <MaterialIcons name="delete" size={scale(18)} color={checkpoints.length <= 2 ? colors.border : '#ef4444'} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
         </View>
 
         {/* Action Button */}
@@ -915,92 +1007,122 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(10),
     marginTop: verticalScale(2),
   },
-  itineraryHeader: {
-    marginBottom: verticalScale(12),
+  sideBySideRow: {
+    flexDirection: 'row',
+    gap: scale(12),
     marginTop: verticalScale(6),
   },
-  sectionTitle: {
-    color: '#F5C518',
-    fontSize: moderateFontScale(15),
-    fontWeight: '700',
+  leftColumn: {
+    flex: 1.1,
   },
-  itineraryHelp: {
-    fontSize: moderateFontScale(11),
-    marginTop: verticalScale(2),
+  rightColumn: {
+    flex: 0.9,
+  },
+  columnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: verticalScale(2),
+  },
+  columnTitle: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+  },
+  columnSub: {
+    fontSize: moderateFontScale(10),
+    marginBottom: verticalScale(10),
+  },
+  presetsVerticalScroll: {
+    maxHeight: verticalScale(380),
+  },
+  presetCardVertical: {
+    padding: scale(8),
+    borderWidth: 1,
+    borderRadius: scale(10),
+    marginBottom: verticalScale(8),
+  },
+  presetCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   itineraryWrapper: {
-    paddingLeft: scale(6),
+    paddingLeft: scale(2),
   },
   timelineItem: {
     flexDirection: 'row',
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(10),
   },
   timelineLeft: {
     alignItems: 'center',
-    width: scale(36),
-    marginRight: scale(10),
+    width: scale(22),
+    marginRight: scale(6),
   },
   timelineNode: {
-    width: scale(26),
-    height: scale(26),
-    borderRadius: scale(13),
+    width: scale(20),
+    height: scale(20),
+    borderRadius: scale(10),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
   },
   nodeChar: {
     color: '#101010',
-    fontSize: moderateFontScale(11),
+    fontSize: moderateFontScale(9),
     fontWeight: '800',
   },
   timelineLine: {
-    width: scale(2),
+    width: scale(1.5),
     flex: 1,
     position: 'absolute',
-    top: scale(26),
-    bottom: scale(-14),
+    top: scale(20),
+    bottom: scale(-12),
     zIndex: 1,
   },
-  stopCard: {
+  stopCardCompact: {
     flex: 1,
-    borderRadius: scale(16),
-    borderWidth: 1.2,
-    padding: scale(12),
+    borderRadius: scale(12),
+    borderWidth: 1.1,
+    padding: scale(8),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   stopInfo: {
     flex: 1,
-    marginRight: scale(10),
+    marginRight: scale(6),
   },
   stopName: {
-    fontSize: moderateFontScale(13),
+    fontSize: moderateFontScale(12),
     fontWeight: '700',
   },
-  stopAddress: {
-    fontSize: moderateFontScale(10),
-    marginTop: verticalScale(2),
+  stopRoleText: {
+    fontSize: moderateFontScale(9),
+    fontWeight: '700',
+    marginTop: verticalScale(1),
   },
-  controlsRow: {
-    flexDirection: 'row',
+  controlsCol: {
     alignItems: 'center',
-    gap: scale(6),
+    justifyContent: 'center',
+    gap: scale(4),
   },
-  controlBtn: {
-    width: scale(28),
-    height: scale(28),
-    borderRadius: scale(8),
-    borderWidth: 1.2,
+  arrowRow: {
+    flexDirection: 'row',
+    gap: scale(4),
+  },
+  controlBtnCompact: {
+    width: scale(22),
+    height: scale(22),
+    borderRadius: scale(6),
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   controlBtnDisabled: {
     opacity: 0.3,
   },
-  deleteBtn: {
-    width: scale(28),
-    height: scale(28),
+  deleteBtnCompact: {
+    width: scale(22),
+    height: scale(22),
     alignItems: 'center',
     justifyContent: 'center',
   },

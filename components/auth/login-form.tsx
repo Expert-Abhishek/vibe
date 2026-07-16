@@ -19,8 +19,8 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   const handleLoginSubmit = () => {
     const nextErrors: { phone?: string; password?: string } = {};
     if (!phone) {
-      nextErrors.phone = 'Phone number is required';
-    } else if (phone.length < 10) {
+      nextErrors.phone = 'Phone number or Username is required';
+    } else if (phone.toLowerCase() !== 'admin' && phone.length < 10) {
       nextErrors.phone = 'Enter a valid phone number';
     }
     if (!password) {
@@ -39,14 +39,14 @@ export function LoginForm({ onLogin }: LoginFormProps) {
 
       {/* Phone Field */}
       <View style={styles.fieldContainer}>
-        <ThemedText style={styles.label}>Phone Number</ThemedText>
+        <ThemedText style={styles.label}>Phone / Username</ThemedText>
         <View style={[styles.inputWrapper, errors.phone && styles.inputWrapperError]}>
           <IconSymbol name="phone.fill" size={scale(18)} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="+1 (555) 000-0000"
+            placeholder="Phone number or 'admin'"
             placeholderTextColor="rgba(255,255,255,0.3)"
-            keyboardType="phone-pad"
+            keyboardType="default"
             value={phone}
             onChangeText={(t) => {
               setPhone(t);
