@@ -75,6 +75,9 @@ export default function AdminDashboardScreen() {
     'auto': 10,
   });
 
+  const [quoteInputs, setQuoteInputs] = useState<Record<string, string>>({});
+  const [adminUpdateTrigger, setAdminUpdateTrigger] = useState(0);
+
   // Drivers state
   const [drivers, setDrivers] = useState<Driver[]>(adminState.drivers);
 
@@ -212,6 +215,25 @@ export default function AdminDashboardScreen() {
       ...prev,
       [key]: val,
     }));
+  };
+
+  const handleSendQuote = (requestId: string) => {
+    const priceStr = quoteInputs[requestId];
+    const priceVal = parseFloat(priceStr);
+    if (!priceVal || isNaN(priceVal)) {
+      Alert.alert('Invalid Price', 'Please enter a valid numeric price to quote.');
+      return;
+    }
+
+    adminState.customTripRequests.forEach(req => {
+      if (req.id === requestId) {
+        req.status = 'Quoted';
+        req.quotedPrice = priceVal;
+      }
+    });
+
+    Alert.alert('Quote Sent!', `Custom route quote of ₹${priceVal} has been sent successfully.`);
+    setAdminUpdateTrigger(prev => prev + 1);
   };
 
   // Driver KYC & Toggle Actions
@@ -493,6 +515,67 @@ export default function AdminDashboardScreen() {
                   </TouchableOpacity>
                 </View>
               ))}
+            </View>
+
+            {/* Custom Route Quoting Requests */}
+            <Text style={[styles.tabHeading, { color: colors.amber, marginTop: verticalScale(20) }]}>
+              Custom Route Manual Quotes
+            </Text>
+
+            <View style={styles.checkpointsListContainer}>
+              <Text style={[styles.listHeader, { color: colors.textMuted }]}>
+                PENDING CUSTOM TRIP REQUESTS
+              </Text>
+              
+              {adminState.customTripRequests.filter(r => r.status === 'Pending').length === 0 ? (
+                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line, padding: scale(16), alignItems: 'center' }]}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                    No pending custom route quote requests.
+                  </Text>
+                </View>
+              ) : (
+                adminState.customTripRequests
+                  .filter(r => r.status === 'Pending')
+                  .map(req => (
+                    <View key={req.id} style={[styles.listItemRow, { backgroundColor: colors.surface, borderColor: colors.line, flexDirection: 'column', alignItems: 'stretch' }]}>
+                      <View style={{ marginBottom: verticalScale(8) }}>
+                        <Text style={[styles.cpName, { color: colors.textPrimary }]}>
+                          Client: {req.touristName}
+                        </Text>
+                        <Text style={[styles.cpAddr, { color: colors.textMuted, marginTop: verticalScale(2) }]}>
+                          Vehicle Selected: {req.vehicle === '5seater' ? '5 Seater Premium' : (req.vehicle === '7seater' ? '7 Seater Spacious' : (req.vehicle === '4x4jeep' ? '4*4 Jeep Offroader' : 'Eco Auto'))}
+                        </Text>
+                        <Text style={[styles.cpCoords, { color: colors.amber, marginTop: verticalScale(4), fontWeight: '700' }]}>
+                          Route Waypoints:
+                        </Text>
+                        {req.checkpoints.map((pt, idx) => (
+                          <Text key={idx} style={{ fontSize: moderateFontScale(11), color: colors.textPrimary, marginLeft: scale(8), marginTop: verticalScale(2) }}>
+                            ➔ {pt.name}
+                          </Text>
+                        ))}
+                      </View>
+
+                      <View style={{ height: 1, backgroundColor: colors.line, marginVertical: verticalScale(6) }} />
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                        <TextInput
+                          style={[styles.inputField, { flex: 1, height: verticalScale(34), color: colors.textPrimary, borderColor: colors.line, marginBottom: 0 }]}
+                          placeholder="Quote Price (₹)"
+                          placeholderTextColor={colors.textMuted}
+                          keyboardType="numeric"
+                          value={quoteInputs[req.id] || ''}
+                          onChangeText={(text) => setQuoteInputs(prev => ({ ...prev, [req.id]: text }))}
+                        />
+                        <TouchableOpacity
+                          style={[styles.primaryBtn, { backgroundColor: colors.amber, paddingVertical: 0, paddingHorizontal: scale(14), marginTop: 0, height: verticalScale(34), justifyContent: 'center' }]}
+                          onPress={() => handleSendQuote(req.id)}
+                        >
+                          <Text style={[styles.primaryBtnText, { fontSize: moderateFontScale(11) }]}>Send Quote</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+              )}
             </View>
           </View>
         )}

@@ -16,6 +16,7 @@ import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { adminState } from './admin-state';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -76,6 +77,9 @@ export default function BookCabScreen() {
   const [isAc, setIsAc] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('cash');
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingMode, setBookingMode] = useState<'now' | 'advance'>('now');
+  const [advanceDate, setAdvanceDate] = useState('2026-07-20');
+  const [advanceTime, setAdvanceTime] = useState('10:00 AM');
 
   // Voucher discount states
   const [voucherText, setVoucherText] = useState('');
@@ -364,6 +368,28 @@ export default function BookCabScreen() {
     const chosenRide = rides.find(r => r.key === selectedRide);
     const base = getBasePrice(chosenRide ? chosenRide.ratePerKm : 15);
     const final = getDiscountedPrice(base);
+
+    if (bookingMode === 'advance') {
+      const newAdv = {
+        id: `adv_${Date.now()}`,
+        type: 'cab' as const,
+        title: `${pickup.name} ➔ ${drop.name}`,
+        route: [pickup.name, ...stops.map(s => s.name), drop.name],
+        date: advanceDate,
+        time: advanceTime,
+        price: final,
+        touristName: 'Abhishek (Tourist)',
+        bookingDate: new Date().toISOString().split('T')[0], // e.g. '2026-07-16'
+        status: 'Pending' as const,
+      };
+      adminState.advanceBookings.push(newAdv);
+      Alert.alert(
+        'Advance Booking Scheduled!',
+        `Your ride has been successfully booked for ${advanceDate} at ${advanceTime}.\n\nRefund Rules:\n- Same day of booking: 0% fee (100% refund)\n- 1 day before trip: 30% fee deducted\n- More than 1 day before: 15% fee deducted\n- Day of trip: 100% fee deducted`,
+        [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
+      );
+      return;
+    }
 
     // Redirect to the live simulator matching page
     router.replace({
@@ -823,6 +849,55 @@ export default function BookCabScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+
+        {/* Advance Booking Selector */}
+        <View style={[styles.bookingModeContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.settingLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>
+            Booking Schedule
+          </Text>
+          <View style={styles.bookingModeSelector}>
+            <TouchableOpacity
+              style={[styles.modeBtn, bookingMode === 'now' && styles.modeBtnActive, { borderColor: colors.border }]}
+              onPress={() => setBookingMode('now')}
+            >
+              <MaterialIcons name="bolt" size={scale(14)} color={bookingMode === 'now' ? '#101010' : colors.textPrimary} />
+              <Text style={[styles.modeBtnText, { color: bookingMode === 'now' ? '#101010' : colors.textPrimary }]}>Book Now</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modeBtn, bookingMode === 'advance' && styles.modeBtnActive, { borderColor: colors.border }]}
+              onPress={() => setBookingMode('advance')}
+            >
+              <MaterialIcons name="schedule" size={scale(14)} color={bookingMode === 'advance' ? '#101010' : colors.textPrimary} />
+              <Text style={[styles.modeBtnText, { color: bookingMode === 'advance' ? '#101010' : colors.textPrimary }]}>Book in Advance</Text>
+            </TouchableOpacity>
+          </View>
+
+          {bookingMode === 'advance' && (
+            <View style={styles.datePickerInputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputMicroLabel, { color: colors.textMuted }]}>TRAVEL DATE (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={[styles.dateInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                  value={advanceDate}
+                  onChangeText={setAdvanceDate}
+                  placeholder="e.g. 2026-07-20"
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputMicroLabel, { color: colors.textMuted }]}>TRAVEL TIME</Text>
+                <TextInput
+                  style={[styles.dateInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                  value={advanceTime}
+                  onChangeText={setAdvanceTime}
+                  placeholder="e.g. 10:00 AM"
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                />
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Book Button */}
@@ -1287,5 +1362,52 @@ const styles = StyleSheet.create({
   presetRowAddress: {
     fontSize: moderateFontScale(10),
     marginTop: verticalScale(2),
+  },
+  bookingModeContainer: {
+    paddingHorizontal: scale(18),
+    paddingBottom: verticalScale(12),
+    borderBottomWidth: 1.2,
+    marginTop: verticalScale(6),
+  },
+  bookingModeSelector: {
+    flexDirection: 'row',
+    gap: scale(10),
+  },
+  modeBtn: {
+    flex: 1,
+    height: verticalScale(32),
+    borderWidth: 1.2,
+    borderRadius: scale(8),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(4),
+  },
+  modeBtnActive: {
+    backgroundColor: '#F5C518',
+    borderColor: '#F5C518',
+  },
+  modeBtnText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '800',
+  },
+  datePickerInputRow: {
+    flexDirection: 'row',
+    gap: scale(10),
+    marginTop: verticalScale(10),
+  },
+  inputMicroLabel: {
+    fontSize: moderateFontScale(8),
+    fontWeight: '700',
+    marginBottom: verticalScale(3),
+  },
+  dateInput: {
+    height: verticalScale(30),
+    borderWidth: 1.2,
+    borderRadius: scale(6),
+    paddingHorizontal: scale(8),
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
+    backgroundColor: 'rgba(255,255,255,0.01)',
   },
 });

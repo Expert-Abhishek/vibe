@@ -184,13 +184,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="driver-wallet"
         options={{
-          title: 'Dr. Wallet',
+          href: null,
         }}
       />
       <Tabs.Screen
         name="guide-wallet"
         options={{
-          title: 'Gu. Wallet',
+          href: null,
         }}
       />
       <Tabs.Screen

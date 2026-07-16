@@ -33,6 +33,30 @@ export interface TripRecord {
   rating?: number;
 }
 
+export interface CustomTripRequest {
+  id: string;
+  checkpoints: { name: string; latitude: number; longitude: number }[];
+  status: 'Pending' | 'Quoted' | 'Booked';
+  vehicle: string;
+  quotedPrice?: number;
+  touristName: string;
+}
+
+export interface AdvanceBooking {
+  id: string;
+  type: 'cab' | 'guide';
+  title: string;
+  route: string[];
+  date: string;
+  time: string;
+  price: number;
+  driverOrGuideName?: string;
+  assignedToId?: string;
+  touristName: string;
+  bookingDate: string;
+  status: 'Pending' | 'Accepted' | 'Cancelled';
+}
+
 export const adminState = {
   drivers: [
     { id: 'd1', name: 'Suresh Kumar', username: 'suresh', phone: '9876543210', vehicle: '5 Seater Premium', status: 'Active' as const, kycDone: true },
@@ -46,4 +70,31 @@ export const adminState = {
     { id: 'g3', name: 'Anjali Hegde', username: 'anjali', phone: '8999900001', expertise: 'Food & Local Culture Tours', status: 'Pending KYC' as const, kycDone: false },
   ],
   userTrips: [] as TripRecord[],
+  customTripRequests: [] as CustomTripRequest[],
+  advanceBookings: [
+    {
+      id: 'adv1',
+      type: 'cab',
+      title: 'Majestic ➔ Bengaluru Palace',
+      route: ['Majestic Station', 'Bengaluru Palace'],
+      date: '2026-07-25',
+      time: '10:00 AM',
+      price: 450,
+      touristName: 'Nikitha (Tourist)',
+      bookingDate: '2026-07-16',
+      status: 'Pending',
+    },
+    {
+      id: 'adv2',
+      type: 'guide',
+      title: 'Hampi Virupaksha Heritage Guided Tour',
+      route: ['Hampi Virupaksha Temple'],
+      date: '2026-07-28',
+      time: '09:00 AM',
+      price: 2500,
+      touristName: 'John Doe',
+      bookingDate: '2026-07-15',
+      status: 'Pending',
+    }
+  ] as AdvanceBooking[],
 };

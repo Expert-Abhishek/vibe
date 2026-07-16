@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useRouter } from 'expo-router';
 
 interface EarningItem {
   id: string;
@@ -25,6 +26,7 @@ interface EarningItem {
 }
 
 export default function DriverWalletScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -105,6 +107,9 @@ export default function DriverWalletScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
+          <TouchableOpacity style={{ marginRight: scale(8) }} onPress={() => router.replace('/driver-dashboard' as any)}>
+            <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
+          </TouchableOpacity>
           <MaterialIcons name="directions-car" size={scale(24)} color={colors.amber} style={{ marginRight: scale(8) }} />
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Driver Wallet</Text>
         </View>

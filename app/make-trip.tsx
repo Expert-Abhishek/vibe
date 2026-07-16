@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { adminState } from './admin-state';
 
 // Dynamically require react-native-maps to prevent compilation or runtime crashes on Web
 let MapView: any = null;
@@ -83,6 +84,17 @@ export default function MakeTripScreen() {
   const [duration, setDuration] = useState<string>('0 mins');
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
+
+  const [quoteStatus, setQuoteStatus] = useState<'none' | 'pending' | 'quoted'>('none');
+  const [quotedPrice, setQuotedPrice] = useState<number>(0);
+  const [tripRequestId, setTripRequestId] = useState<string>('');
+  const [secondsLeft, setSecondsLeft] = useState(1800);
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -382,19 +394,78 @@ export default function MakeTripScreen() {
     fetchRoute();
   }, [checkpoints]);
 
+  // Quote polling effect
+  useEffect(() => {
+    let interval: any;
+    if (quoteStatus === 'pending' && tripRequestId) {
+      interval = setInterval(() => {
+        const req = adminState.customTripRequests.find(r => r.id === tripRequestId);
+        if (req && req.status === 'Quoted' && req.quotedPrice) {
+          setQuotedPrice(req.quotedPrice);
+          setQuoteStatus('quoted');
+          Alert.alert('Quote Received!', `Admin has manually quoted ₹${req.quotedPrice} for this custom route.`);
+        }
+      }, 2000);
+    }
+    return () => clearInterval(interval);
+  }, [quoteStatus, tripRequestId]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    let timer: any;
+    if (quoteStatus === 'pending' && secondsLeft > 0) {
+      timer = setInterval(() => {
+        setSecondsLeft(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [quoteStatus, secondsLeft]);
+
+  const handleSimulateQuote = () => {
+    adminState.customTripRequests.forEach(r => {
+      if (r.id === tripRequestId) {
+        r.status = 'Quoted';
+        r.quotedPrice = 2750;
+      }
+    });
+    setQuotedPrice(2750);
+    setQuoteStatus('quoted');
+    Alert.alert('Simulation Success', 'Manual price quote of ₹2,750 applied successfully.');
+  };
+
   const handleConfirmTrip = () => {
     if (checkpoints.length < 2) {
       Alert.alert('Error', 'Please add at least 2 checkpoints to plan a trip.');
       return;
     }
+
+    const requestId = `req_${Date.now()}`;
+    const newReq = {
+      id: requestId,
+      checkpoints: checkpoints.map(c => ({ name: c.name, latitude: c.latitude, longitude: c.longitude })),
+      status: 'Pending' as const,
+      vehicle: selectedRide || '5seater',
+      touristName: 'Abhishek (Tourist)',
+    };
+
+    adminState.customTripRequests.push(newReq);
+    setTripRequestId(requestId);
+    setQuoteStatus('pending');
+    Alert.alert(
+      'Route Request Sent!',
+      'Your custom route has been submitted to the Admin. Please wait up to 30 minutes for a manual price quotation.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleBookCustomRide = () => {
     const pickup = checkpoints[0];
     const drop = checkpoints[checkpoints.length - 1];
     const stops = checkpoints.slice(1, -1);
 
-    // Calculate a simulated price based on estimated distance
-    const distNum = parseFloat(distance.split(' ')[0]) || 45.0;
-    const rate = selectedRide === 'auto' ? 10 : (selectedRide === '7seater' ? 22 : (selectedRide === '4x4jeep' ? 35 : 15));
-    const calculatedPrice = Math.round(distNum * rate + 120);
+    adminState.customTripRequests.forEach(r => {
+      if (r.id === tripRequestId) r.status = 'Booked';
+    });
 
     router.replace({
       pathname: '/ride-matching' as any,
@@ -406,7 +477,7 @@ export default function MakeTripScreen() {
         dropLat: drop.latitude.toString(),
         dropLng: drop.longitude.toString(),
         stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
-        price: calculatedPrice.toString(),
+        price: quotedPrice.toString(),
         type: 'custom_trip',
         vehicle: selectedRide || '5seater',
         paymentMode: 'UPI',
@@ -729,15 +800,61 @@ export default function MakeTripScreen() {
           </View>
         </View>
 
-        {/* Action Button */}
-        <TouchableOpacity
-          style={styles.confirmButton}
-          activeOpacity={0.8}
-          onPress={handleConfirmTrip}
-        >
-          <Text style={styles.confirmBtnText}>Lock Route & Request Ride</Text>
-          <MaterialIcons name="check" size={scale(18)} color="#101010" />
-        </TouchableOpacity>
+        {/* Action Button States */}
+        {quoteStatus === 'none' && (
+          <TouchableOpacity
+            style={styles.confirmButton}
+            activeOpacity={0.8}
+            onPress={handleConfirmTrip}
+          >
+            <Text style={styles.confirmBtnText}>Lock Route & Request Ride</Text>
+            <MaterialIcons name="check" size={scale(18)} color="#101010" />
+          </TouchableOpacity>
+        )}
+
+        {quoteStatus === 'pending' && (
+          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <View style={styles.pendingHeaderRow}>
+              <ActivityIndicator color={colors.amber} size="small" style={{ marginRight: scale(8) }} />
+              <Text style={[styles.pendingTitle, { color: colors.textPrimary }]}>Awaiting Admin Price Quote</Text>
+            </View>
+            <Text style={[styles.pendingSub, { color: colors.textMuted }]}>
+              Admin is manually calculating the price for this route. Est. Wait: {formatTimer(secondsLeft)} mins
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.simulateQuoteBtn, { borderColor: colors.amber }]}
+              onPress={handleSimulateQuote}
+            >
+              <Text style={[styles.simulateQuoteBtnText, { color: colors.amber }]}>
+                Simulate Admin Response (₹2750)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {quoteStatus === 'quoted' && (
+          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <View style={styles.priceQuotedRow}>
+              <View>
+                <Text style={[styles.approvedQuoteLabel, { color: colors.textMuted }]}>APPROVED MANUAL FARE</Text>
+                <Text style={[styles.approvedPriceVal, { color: colors.amber }]}>₹{quotedPrice}</Text>
+              </View>
+              <View style={[styles.statusBadgeCompact, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Admin Approved</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.confirmButton, { marginTop: verticalScale(12) }]}
+              activeOpacity={0.8}
+              onPress={handleBookCustomRide}
+            >
+              <Text style={styles.confirmBtnText}>Confirm & Book Custom Ride</Text>
+              <MaterialIcons name="credit-card" size={scale(18)} color="#101010" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Extra spacing */}
         <View style={{ height: verticalScale(30) }} />
@@ -1154,5 +1271,55 @@ const styles = StyleSheet.create({
   selectedRideText: {
     fontSize: moderateFontScale(13),
     fontWeight: '600',
+  },
+  pendingQuoteCard: {
+    borderWidth: 1.2,
+    borderRadius: scale(14),
+    padding: scale(14),
+    marginTop: verticalScale(16),
+  },
+  pendingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pendingTitle: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+  },
+  pendingSub: {
+    fontSize: moderateFontScale(11),
+    lineHeight: moderateFontScale(15),
+    marginTop: verticalScale(6),
+  },
+  simulateQuoteBtn: {
+    borderWidth: 1.2,
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: verticalScale(12),
+  },
+  simulateQuoteBtnText: {
+    fontSize: moderateFontScale(11.5),
+    fontWeight: '800',
+  },
+  priceQuotedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  approvedQuoteLabel: {
+    fontSize: moderateFontScale(9),
+    fontWeight: '700',
+  },
+  approvedPriceVal: {
+    fontSize: moderateFontScale(24),
+    fontWeight: '800',
+    marginTop: verticalScale(2),
+  },
+  statusBadgeCompact: {
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(4),
+    borderRadius: scale(6),
   },
 });

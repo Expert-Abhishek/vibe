@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -115,6 +116,7 @@ export default function TripsHistoryScreen() {
   const isDark = colorScheme === 'dark';
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'cab' | 'guide'>('all');
+  const [cancelTrigger, setCancelTrigger] = useState(0);
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -126,7 +128,25 @@ export default function TripsHistoryScreen() {
     amber: '#F5C518',
   };
 
-  const allTrips = [...adminState.userTrips, ...initialTripHistory];
+  // Convert advanceBookings to list items
+  const mappedAdvance = adminState.advanceBookings
+    .filter(b => b.status !== 'Cancelled')
+    .map(b => ({
+      id: b.id,
+      type: b.type === 'guide' ? 'guide' as const : 'cab' as const,
+      vehicleType: undefined as string | undefined,
+      title: b.title,
+      route: b.route,
+      driverOrGuideName: b.driverOrGuideName || 'Searching for Captain...',
+      date: `Upcoming - ${b.date}`,
+      time: b.time,
+      price: b.price,
+      paymentMode: 'UPI' as const,
+      status: 'Upcoming' as const,
+      rawBooking: b,
+    }));
+
+  const allTrips = [...mappedAdvance, ...adminState.userTrips, ...initialTripHistory];
 
   const filteredTrips = allTrips.filter((trip) => {
     if (activeFilter === 'all') return true;
@@ -139,6 +159,64 @@ export default function TripsHistoryScreen() {
   const totalSpend = allTrips.reduce((sum, item) => sum + item.price, 0);
   const cabCount = allTrips.filter((t) => t.type === 'cab' || t.type === 'custom_trip').length;
   const guideCount = allTrips.filter((t) => t.type === 'guide').length;
+
+  const handleCancelPress = (trip: any) => {
+    const bookingDateStr = trip.rawBooking?.bookingDate || '2026-07-10';
+    const tripDateStr = trip.rawBooking?.date || '2026-07-18';
+    const price = trip.price;
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    const tDate = new Date(tripDateStr);
+    const bDate = new Date(bookingDateStr);
+    const currDate = new Date(todayStr);
+
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const diffToTripDays = Math.round((tDate.getTime() - currDate.getTime()) / msPerDay);
+    const diffToBookingDays = Math.round((currDate.getTime() - bDate.getTime()) / msPerDay);
+
+    let feePercent = 15;
+    let explanation = '';
+
+    if (diffToTripDays === 0) {
+      feePercent = 100;
+      explanation = 'Cancellation on the same day as trip start date results in a 100% fee deduction.';
+    } else if (diffToBookingDays === 0) {
+      feePercent = 0;
+      explanation = 'Cancellation on the same day as booking creation results in a 0% fee deduction (Full Refund).';
+    } else if (diffToTripDays === 1) {
+      feePercent = 30;
+      explanation = 'Cancellation 1 day before the trip start date results in a 30% fee deduction.';
+    } else {
+      feePercent = 15;
+      explanation = 'Cancellation more than 1 day before the trip start date results in a 15% fee deduction.';
+    }
+
+    const feeAmount = Math.round((price * feePercent) / 100);
+    const refundAmount = price - feeAmount;
+
+    Alert.alert(
+      'Confirm Cancellation',
+      `Trip: ${trip.title}\nTotal Price: ₹${price}\n\nCancellation Fee: ${feePercent}% (₹${feeAmount})\nRefund Amount: ₹${refundAmount}\n\nExplanation:\n${explanation}`,
+      [
+        { text: 'Keep Booking', style: 'cancel' },
+        { 
+          text: 'Confirm Cancel', 
+          style: 'destructive',
+          onPress: () => {
+            adminState.advanceBookings.forEach(b => {
+              if (b.id === trip.id) {
+                b.status = 'Cancelled';
+              }
+            });
+            Alert.alert('Booking Cancelled', `Your trip has been cancelled. Refund of ₹${refundAmount} will be credited shortly.`);
+            setCancelTrigger(prev => prev + 1);
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -308,6 +386,19 @@ export default function TripsHistoryScreen() {
                   </View>
                   <TouchableOpacity style={styles.rebookBtn}>
                     <Text style={styles.rebookBtnText}>Book Again</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Cancellation button for upcoming schedules */}
+              {!isCompleted && (
+                <View style={[styles.ratingSection, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>SCHEDULED STATUS</Text>
+                  <TouchableOpacity 
+                    style={[styles.rebookBtn, { backgroundColor: '#ef4444' }]}
+                    onPress={() => handleCancelPress(trip)}
+                  >
+                    <Text style={styles.rebookBtnText}>Cancel Booking</Text>
                   </TouchableOpacity>
                 </View>
               )}

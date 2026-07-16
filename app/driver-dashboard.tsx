@@ -18,6 +18,7 @@ import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { adminState } from './admin-state';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -53,6 +54,7 @@ export default function DriverDashboardScreen() {
   const isDark = colorScheme === 'dark';
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'profile'>('duty');
+  const [updateTrigger, setUpdateTrigger] = useState(0);
   const [isOnline, setIsOnline] = useState(false);
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
@@ -389,7 +391,55 @@ export default function DriverDashboardScreen() {
               </View>
             </View>
           </View>
-        </ScrollView>
+
+          {/* Upcoming Advance Bookings card */}
+            <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
+              <Text style={[styles.sectionTitle, { color: colors.amber }]}>Upcoming Advance Booking Schedules</Text>
+              {adminState.advanceBookings
+                .filter(b => b.type === 'cab' && b.status !== 'Cancelled')
+                .map(booking => {
+                  const isAcceptedByMe = booking.assignedToId === 'd1';
+                  return (
+                    <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
+                      <View style={styles.logHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
+                          <Text style={[styles.logTime, { color: colors.textMuted }]}>
+                            Scheduled: {booking.date} · {booking.time}
+                          </Text>
+                          <Text style={[styles.logTime, { color: colors.textMuted }]}>
+                            Client: {booking.touristName}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.logFare}>₹{booking.price}</Text>
+                          <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
+                            <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' ? '#10B981' : colors.amber }}>
+                              {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Available'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {booking.status === 'Pending' && (
+                        <TouchableOpacity
+                          style={[styles.smallPayoutBtn, { backgroundColor: colors.amber, marginTop: verticalScale(10), alignItems: 'center' }]}
+                          onPress={() => {
+                            booking.status = 'Accepted';
+                            booking.assignedToId = 'd1';
+                            booking.driverOrGuideName = 'Anil Gowda';
+                            Alert.alert('Booking Claimed!', `You have accepted the advance booking: ${booking.title} on ${booking.date}.`);
+                            setUpdateTrigger(prev => prev + 1);
+                          }}
+                        >
+                          <Text style={styles.smallPayoutBtnText}>Accept Advance Schedule</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
+            </View>
+          </ScrollView>
       )}
 
       {activeTab === 'active_trip' && (
@@ -534,6 +584,13 @@ export default function DriverDashboardScreen() {
                 placeholderTextColor="rgba(255,255,255,0.2)"
               />
             </View>
+
+            <TouchableOpacity 
+              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]} 
+              onPress={() => router.push('/(tabs)/driver-wallet' as any)}
+            >
+              <Text style={[styles.detailedWalletBtnText, { color: colors.amber }]}>View Detailed Wallet & Pay History</Text>
+            </TouchableOpacity>
           </View>
 
           {/* 2. Duty Settings & Vehicle Toggle */}
@@ -1412,5 +1469,22 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontSize: moderateFontScale(15),
     fontWeight: '800',
+  },
+  detailedWalletBtn: {
+    borderWidth: 1.2,
+    borderRadius: scale(10),
+    paddingVertical: verticalScale(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  detailedWalletBtnText: {
+    fontSize: moderateFontScale(11.5),
+    fontWeight: '800',
+  },
+  statusBadgeCompact: {
+    paddingHorizontal: scale(6),
+    paddingVertical: verticalScale(2),
+    borderRadius: scale(4),
   },
 });
