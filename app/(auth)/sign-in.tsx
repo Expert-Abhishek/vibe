@@ -26,11 +26,6 @@ export default function SignInScreen() {
     const lowerPhone = phone.toLowerCase();
     const lowerPass = pass.toLowerCase();
 
-    if (lowerPhone === 'admin' && pass === 'admin123') {
-      router.replace('/admin-dashboard');
-      return;
-    }
-
     // Check registered driver list
     const driver = adminState.drivers.find(d => d.username === lowerPhone || d.phone === phone);
     if (driver) {

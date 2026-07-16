@@ -69,7 +69,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
   const visibleRoutes = state.routes.filter((route: any) => {
     const { options } = descriptors[route.key];
-    return options.href !== null;
+    if (options.href === null) return false;
+    return route.name !== 'driver-wallet' && route.name !== 'guide-wallet' && route.name !== 'explore';
   });
 
   const tabWidth = (SCREEN_WIDTH - scale(40)) / visibleRoutes.length;

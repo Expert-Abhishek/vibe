@@ -18,11 +18,14 @@ export function LoginForm({ onLogin }: LoginFormProps) {
 
   const handleLoginSubmit = () => {
     const nextErrors: { phone?: string; password?: string } = {};
+    const isNumeric = /^\d+$/.test(phone);
+
     if (!phone) {
       nextErrors.phone = 'Phone number or Username is required';
-    } else if (phone.toLowerCase() !== 'admin' && phone.length < 10) {
-      nextErrors.phone = 'Enter a valid phone number';
+    } else if (isNumeric && phone.length < 10) {
+      nextErrors.phone = 'Enter a valid 10-digit phone number';
     }
+
     if (!password) {
       nextErrors.password = 'Password is required';
     }
@@ -44,7 +47,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
           <IconSymbol name="phone.fill" size={scale(18)} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Phone number or 'admin'"
+            placeholder="Phone number or Username"
             placeholderTextColor="rgba(255,255,255,0.3)"
             keyboardType="default"
             value={phone}
