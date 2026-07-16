@@ -1,21 +1,21 @@
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  StatusBar,
-  Alert,
-  Modal,
-  Image,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface SafariTrip {
   id: string;
@@ -262,10 +262,10 @@ export default function JungleSafariScreen() {
   const filteredSafaris = searchQuery.trim() === ''
     ? mockSafaris
     : mockSafaris.filter(safari =>
-        safari.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        safari.reserve.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        safari.vehicleName.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      safari.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      safari.reserve.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      safari.vehicleName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   const handleBookSafari = (safari: SafariTrip) => {
     Alert.alert(
@@ -284,7 +284,7 @@ export default function JungleSafariScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Jungle Safari 4×4</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>4×4 Off Roading</Text>
         <View style={{ width: scale(40) }} />
       </View>
 
