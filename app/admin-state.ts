@@ -101,6 +101,7 @@ export const adminState = {
       status: 'Pending',
     }
   ] as AdvanceBooking[],
+  instantBookingEnabled: false,
   vehicleRatesPerHour: {
     '5seater': 150,
     '7seater': 220,

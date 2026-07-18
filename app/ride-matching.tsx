@@ -70,6 +70,7 @@ export default function RideMatchingScreen() {
   const tripType = (params.type as 'cab' | 'guide' | 'custom_trip') || 'cab';
   const vehicle = (params.vehicle as string) || '5seater';
   const paymentMode = (params.paymentMode as 'UPI' | 'Cash') || 'UPI';
+  const passengerCount = parseInt((params.passengerCount as string) || '1');
 
   // Demo driver information
   const demoDriver = {
@@ -192,6 +193,7 @@ export default function RideMatchingScreen() {
       paymentMode: paymentMode,
       status: 'Completed',
       rating: 5.0,
+      passengerCount: passengerCount,
     };
 
     // Append to global state

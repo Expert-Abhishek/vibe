@@ -10,112 +10,49 @@ import {
   Modal,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { adminState } from './admin-state';
 
-interface FamousPlace {
+interface TourPackage {
   id: string;
   name: string;
-  district: string;
+  checkpoints: string[];
+  travelHours: number;
   distanceKm: number;
-  description: string;
   image: string;
-  rating: number;
-  tags: string[];
 }
 
-const famousPlaces: FamousPlace[] = [
+const packagePlans: TourPackage[] = [
   {
-    id: '1',
-    name: 'Hampi Ruins',
-    district: 'Vijayanagara (Ballari)',
+    id: 'p1',
+    name: 'Mysuru Royal Heritage Tour',
+    checkpoints: ['Bengaluru Palace', 'Srirangapatna Fort', 'Mysuru Palace', 'Chamundi Hills'],
+    travelHours: 6.5,
+    distanceKm: 290,
+    image: 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&q=80&w=600',
+  },
+  {
+    id: 'p2',
+    name: 'Hampi Ruins Explorer',
+    checkpoints: ['Hampi Virupaksha Temple', 'Vitthala Stone Chariot', 'Lotus Mahal', 'Anjanadri Hill'],
+    travelHours: 8,
     distanceKm: 340,
-    rating: 4.9,
-    description: 'The ancient capital of the Vijayanagara Empire. Explore majestic stone temples, monolithic structures, and the iconic stone chariot amidst a unique boulder-strewn landscape.',
-    image: 'https://images.unsplash.com/photo-1600100397608-f010e423b971?w=400',
-    tags: ['UNESCO', 'History', 'Architecture'],
+    image: 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
   },
   {
-    id: '2',
-    name: 'Mysuru Palace',
-    district: 'Mysuru',
-    distanceKm: 145,
-    rating: 4.8,
-    description: 'An architectural marvel combining Hindu, Islamic, Gothic, and Rajput styles. Famous for its dazzling lighting during Dasara and rich royal heritage.',
-    image: 'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=400',
-    tags: ['Palace', 'Culture', 'Heritage'],
-  },
-  {
-    id: '3',
-    name: 'Misty Coorg Hills',
-    district: 'Kodagu',
+    id: 'p3',
+    name: 'Coorg Coffee & Mist Escape',
+    checkpoints: ['Abbey Falls Coorg', 'Mandalpatti Peak View', 'Golden Temple Bylakuppe'],
+    travelHours: 5.5,
     distanceKm: 250,
-    rating: 4.9,
-    description: 'Often called the Scotland of India. Rich coffee plantations, mist-covered valleys, Abbey Falls, and trek routes up Mandalpatti or Tadiandamol.',
-    image: 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=400',
-    tags: ['Nature', 'Hills', 'Coffee'],
+    image: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&q=80&w=600',
   },
-  {
-    id: '4',
-    name: 'Gokarna Om Beach',
-    district: 'Uttara Kannada',
-    distanceKm: 480,
-    rating: 4.7,
-    description: 'A serene beach town shaped like the auspicious Om symbol. Popular for cliff-trekking, beach camping, and spiritual visits to the Mahabaleshwar Temple.',
-    image: 'https://images.unsplash.com/photo-1542856391-010fb87dcfed?w=400',
-    tags: ['Beach', 'Trekking', 'Temples'],
-  },
-  {
-    id: '5',
-    name: 'Jog Falls',
-    district: 'Shivamogga',
-    distanceKm: 410,
-    rating: 4.6,
-    description: 'One of the highest plunge waterfalls in India. Watch the Sharavathi River drop 253 meters in four distinct cascades: Raja, Rani, Roarer, and Rocket.',
-    image: 'https://images.unsplash.com/photo-1598188306155-25e400eb5078?w=400',
-    tags: ['Waterfall', 'Nature', 'Monsoon'],
-  },
-  {
-    id: '6',
-    name: 'Chikmagalur Peaks',
-    district: 'Chikmagalur',
-    distanceKm: 245,
-    rating: 4.8,
-    description: 'The birthplace of coffee in India. Hike to Mullayanagiri, the highest peak in Karnataka, or Bababudangiri, and explore lush rainforests.',
-    image: 'https://images.unsplash.com/photo-1583212292454-1fe6229603b7?w=400',
-    tags: ['Mountains', 'Trekking', 'Coffee'],
-  },
-  {
-    id: '7',
-    name: 'Bandipur Wildlife Reserve',
-    district: 'Chamarajanagar',
-    distanceKm: 220,
-    rating: 4.9,
-    description: 'Part of the Nilgiri Biosphere. Safaris through dry deciduous forest shelter leopards, Asian elephants, gaurs, and a significant Bengal tiger population.',
-    image: 'https://images.unsplash.com/photo-1581852013749-bf938c92a95c?w=400',
-    tags: ['Wildlife', 'Safari', 'Forest'],
-  },
-  {
-    id: '8',
-    name: 'Murudeshwar Temple & Beach',
-    district: 'Uttara Kannada',
-    distanceKm: 490,
-    rating: 4.7,
-    description: 'Home to the world’s second tallest Shiva statue (123 feet) on the Arabian Sea coast, featuring a towering 20-storied Gopura with panoramic sea views.',
-    image: 'https://images.unsplash.com/photo-1601662528567-526cd06f6582?w=400',
-    tags: ['Sea Statue', 'Temple', 'Scuba'],
-  },
-];
-
-const rideTypes = [
-  { key: 'hatchback', name: 'Compact Hatchback', ratePerKm: 12, icon: 'car-side', timeEst: 'Quick match' },
-  { key: 'sedan', name: 'Premium Sedan', ratePerKm: 15, icon: 'car', timeEst: 'Highly comfortable' },
-  { key: 'thar', name: '4×4 Thar Adventure', ratePerKm: 22, icon: 'truck-monster', timeEst: 'Best for offroad/hills' },
-  { key: 'auto', name: 'Local Auto Explorer', ratePerKm: 8, icon: 'motorcycle', timeEst: 'Eco budget' },
 ];
 
 export default function PlanRouteScreen() {
@@ -124,8 +61,49 @@ export default function PlanRouteScreen() {
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPlace, setSelectedPlace] = useState<FamousPlace | null>(null);
-  const [selectedRide, setSelectedRide] = useState<string>('sedan');
+  
+  // Booking modal state
+  const [selectedPlan, setSelectedPlan] = useState<TourPackage | null>(null);
+  const [bookingPax, setBookingPax] = useState(1);
+  const [bookingVehicle, setBookingVehicle] = useState<'5seater' | '7seater' | '4x4jeep'>('5seater');
+  const getInitialTimeParts = () => {
+    const d = new Date();
+    let h = d.getHours();
+    const m = d.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    const roundedM = Math.round(m / 5) * 5;
+    return {
+      hour: h,
+      minute: roundedM >= 60 ? 55 : roundedM,
+      ampm: ampm as 'AM' | 'PM'
+    };
+  };
+
+  const initialTimeParts = getInitialTimeParts();
+  const [bookingHour, setBookingHour] = useState<number>(initialTimeParts.hour);
+  const [bookingMinute, setBookingMinute] = useState<number>(initialTimeParts.minute);
+  const [bookingAmPm, setBookingAmPm] = useState<'AM' | 'PM'>(initialTimeParts.ampm);
+
+  const [bookingDate, setBookingDate] = useState('');
+  const bookingTime = `${bookingHour}:${bookingMinute < 10 ? '0' + bookingMinute : bookingMinute} ${bookingAmPm}`;
+  const [bookingStep, setBookingStep] = useState<'form' | 'connecting' | 'success'>('form');
+
+  const dateOptions = Array.from({ length: 15 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return {
+      dateStr: d.toISOString().split('T')[0],
+      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      dayNum: d.getDate(),
+      monthName: d.toLocaleDateString('en-US', { month: 'short' }),
+    };
+  });
+
+  const timeOptions = [
+    '08:00 AM', '10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM', '06:00 PM', '08:00 PM'
+  ];
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -135,31 +113,87 @@ export default function PlanRouteScreen() {
     textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
     border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
+    success: '#10B981',
   };
 
-  const filteredPlaces = searchQuery.trim() === ''
-    ? famousPlaces
-    : famousPlaces.filter(place =>
-        place.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.district.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
+  const filteredPackages = packagePlans.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.checkpoints.some((cp) => cp.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
-  const calculateFare = (distanceKm: number, rideKey: string) => {
-    const ride = rideTypes.find(r => r.key === rideKey);
-    const rate = ride ? ride.ratePerKm : 15;
-    return distanceKm * rate;
+  const openBookingPopup = (plan: TourPackage) => {
+    setSelectedPlan(plan);
+    setBookingPax(1);
+    setBookingVehicle('5seater');
+    setBookingStep('form');
+
+    // Default pre-booking date to tomorrow (YYYY-MM-DD)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setBookingDate(tomorrow.toISOString().split('T')[0]);
   };
 
-  const handleConfirmBooking = (place: FamousPlace) => {
-    const fare = calculateFare(place.distanceKm, selectedRide);
-    const rideName = rideTypes.find(r => r.key === selectedRide)?.name || 'Ride';
-    setSelectedPlace(null);
-    Alert.alert(
-      'Booking Request Sent!',
-      `Searching for a ${rideName} driver to take you from Bengaluru to ${place.name} (${place.distanceKm} km). Estimated Fare: ₹${fare.toLocaleString('en-IN')}.\n\nWe will alert you when a driver accepts.`,
-      [{ text: 'Got it', onPress: () => router.replace('/(tabs)/trips') }]
-    );
+  const handleConfirmBooking = () => {
+    if (!selectedPlan) return;
+
+    // Validate prebooking date limit (max 15 days in advance)
+    if (!adminState.instantBookingEnabled) {
+      if (!bookingDate) {
+        Alert.alert('Error', 'Please enter a booking date.');
+        return;
+      }
+      const selectedTime = new Date(bookingDate).getTime();
+      const nowTime = new Date().getTime();
+      const maxTime = nowTime + 15 * 24 * 60 * 60 * 1000;
+      if (selectedTime < nowTime - 24 * 60 * 60 * 1000) {
+        Alert.alert('Error', 'Cannot book a date in the past.');
+        return;
+      }
+      if (selectedTime > maxTime) {
+        Alert.alert('Booking Restricted', 'Pre-bookings can only be made up to 15 days in advance.');
+        return;
+      }
+    }
+
+    setBookingStep('connecting');
+
+    // Simulate match connection delay
+    setTimeout(() => {
+      setBookingStep('success');
+    }, 2000);
+  };
+
+  const addTripAndClose = () => {
+    if (!selectedPlan) return;
+
+    const totalHours = selectedPlan.travelHours + selectedPlan.checkpoints.length;
+    const rate = adminState.vehicleRatesPerHour[bookingVehicle] || 150;
+    const price = Math.round(totalHours * rate);
+
+    const finalDate = adminState.instantBookingEnabled ? 'Today' : bookingDate;
+    const finalTime = adminState.instantBookingEnabled
+      ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : bookingTime;
+
+    // Add to userTrips Array
+    adminState.userTrips.push({
+      id: `plan_book_${Date.now()}`,
+      type: 'plan',
+      title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+      route: selectedPlan.checkpoints,
+      driverOrGuideName: 'Suresh Kumar',
+      date: finalDate,
+      time: finalTime,
+      price: price,
+      paymentMode: 'UPI',
+      status: 'Upcoming',
+      passengerCount: bookingPax,
+    });
+
+    setSelectedPlan(null);
+    setBookingStep('form');
+    router.replace('/(tabs)/trips');
   };
 
   return (
@@ -171,16 +205,16 @@ export default function PlanRouteScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Plan Karnataka Route</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Karnataka Tour Packages</Text>
         <View style={{ width: scale(40) }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Banner Details */}
+        {/* Welcome Text */}
         <View style={styles.welcomeBanner}>
-          <Text style={styles.welcomeTitle}>Discover Golden Karnataka</Text>
+          <Text style={styles.welcomeTitle}>Discover Heritage & Nature</Text>
           <Text style={[styles.welcomeSub, { color: colors.textMuted }]}>
-            Select a heritage site, beach, or hill station in Karnataka, and book a verified driver directly from Bengaluru.
+            Choose a premium tour package below. Checkpoint stopovers and traveling duration calculations are fully integrated.
           </Text>
         </View>
 
@@ -188,7 +222,7 @@ export default function PlanRouteScreen() {
         <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border }]}>
           <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
           <TextInput
-            placeholder="Search destination, district, or tag (e.g. Hampi, temple, beach)"
+            placeholder="Search tours or checkpoints..."
             placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
             style={[styles.searchInput, { color: colors.textPrimary }]}
             value={searchQuery}
@@ -202,164 +236,318 @@ export default function PlanRouteScreen() {
           )}
         </View>
 
-        {/* List Grid Title */}
-        <View style={styles.gridHeaderRow}>
-          <Text style={styles.sectionTitle}>Famous Destinations</Text>
-          <Text style={[styles.resultCount, { color: colors.textMuted }]}>
-            {filteredPlaces.length} locations
-          </Text>
+        {/* Unified Package List */}
+        <View style={{ gap: scale(12), marginTop: verticalScale(10) }}>
+          {filteredPackages.length === 0 ? (
+            <View style={styles.noResults}>
+              <Text style={{ color: colors.textMuted }}>No package tours match your search query.</Text>
+            </View>
+          ) : (
+            filteredPackages.map((plan) => {
+              const checkpointsCount = plan.checkpoints.length;
+              const totalHours = plan.travelHours + checkpointsCount;
+
+              return (
+                <TouchableOpacity
+                  key={plan.id}
+                  style={[styles.packageListRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  activeOpacity={0.9}
+                  onPress={() => openBookingPopup(plan)}
+                >
+                  <Image source={{ uri: plan.image }} style={styles.packageRowImage} />
+                  
+                  <View style={styles.packageRowBody}>
+                    <Text style={[styles.packageNameText, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {plan.name}
+                    </Text>
+                    
+                    <View style={styles.metaInfoRow}>
+                      <Text style={[styles.metaText, { color: colors.textMuted }]}>
+                        📍 {checkpointsCount} Stops  •  🛣️ {plan.distanceKm} km
+                      </Text>
+                    </View>
+
+                    <View style={styles.durationsRow}>
+                      <Text style={[styles.durationValText, { color: colors.amber }]}>
+                        🕒 Total: {totalHours.toFixed(1)} hrs (Travel: {plan.travelHours}h + stops)
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.rowActionCol}>
+                    <TouchableOpacity
+                      style={styles.rowBookBtn}
+                      activeOpacity={0.8}
+                      onPress={() => openBookingPopup(plan)}
+                    >
+                      <Text style={styles.rowBookBtnText}>Book</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
 
-        {/* Places List */}
-        {filteredPlaces.length > 0 ? (
-          filteredPlaces.map((place) => (
-            <View
-              key={place.id}
-              style={[styles.placeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              {/* Place Image */}
-              <Image source={{ uri: place.image }} style={styles.placeImage} />
-
-              <View style={styles.placeBody}>
-                {/* Header row */}
-                <View style={styles.placeTitleRow}>
-                  <View>
-                    <Text style={[styles.placeName, { color: colors.textPrimary }]}>{place.name}</Text>
-                    <Text style={[styles.placeDistrict, { color: colors.textMuted }]}>
-                      <MaterialIcons name="location-on" size={scale(11)} color={colors.amber} /> {place.district}
-                    </Text>
-                  </View>
-                  <View style={styles.ratingBadge}>
-                    <MaterialIcons name="star" size={scale(12)} color="#101010" />
-                    <Text style={styles.ratingVal}>{place.rating}</Text>
-                  </View>
-                </View>
-
-                {/* Description */}
-                <Text style={[styles.placeDesc, { color: colors.textMuted }]} numberOfLines={3}>
-                  {place.description}
-                </Text>
-
-                {/* Distance and Tags */}
-                <View style={styles.footerInfoRow}>
-                  <View style={styles.distanceBadge}>
-                    <FontAwesome5 name="road" size={scale(10)} color={colors.amber} />
-                    <Text style={[styles.distanceText, { color: colors.textPrimary }]}>
-                      {place.distanceKm} km from Bengaluru
-                    </Text>
-                  </View>
-                  <View style={styles.tagsContainer}>
-                    {place.tags.map((tag, idx) => (
-                      <View key={idx} style={[styles.tagItem, { borderColor: colors.border }]}>
-                        <Text style={[styles.tagText, { color: colors.textMuted }]}>{tag}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Booking Action Button */}
-                <TouchableOpacity
-                  style={styles.bookBtn}
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedPlace(place)}
-                >
-                  <Text style={styles.bookBtnText}>Book Driver to {place.name.split(' ')[0]}</Text>
-                  <MaterialIcons name="chevron-right" size={scale(16)} color="#101010" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        ) : (
-          <View style={styles.noResults}>
-            <MaterialIcons name="map" size={scale(48)} color={colors.textMuted} style={{ marginBottom: verticalScale(10) }} />
-            <Text style={[styles.noResultsTitle, { color: colors.textPrimary }]}>Destination not found</Text>
-            <Text style={[styles.noResultsSub, { color: colors.textMuted }]}>
-              {"Try searching for popular hotspots like \"Hampi\", \"Coorg\" or \"Palace\"."}
-            </Text>
-            <TouchableOpacity style={styles.resetBtn} onPress={() => setSearchQuery('')}>
-              <Text style={styles.resetBtnText}>Show All Places</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Spacing */}
         <View style={{ height: verticalScale(30) }} />
       </ScrollView>
 
-      {/* Ride Selector Bottom Sheet Modal */}
+      {/* Booking Popup Modal */}
       <Modal
-        visible={selectedPlace !== null}
-        animationType="slide"
+        visible={selectedPlan !== null}
+        animationType="fade"
         transparent={true}
-        onRequestClose={() => setSelectedPlace(null)}
+        onRequestClose={() => setSelectedPlan(null)}
       >
-        {selectedPlace && (
+        {selectedPlan && (
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-              <View style={styles.dragHandle} />
+              
+              {/* Form Step */}
+              {bookingStep === 'form' && (
+                <ScrollView contentContainerStyle={{ paddingBottom: verticalScale(10) }} showsVerticalScrollIndicator={false}>
+                  <View style={styles.modalHeader}>
+                    <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Plan Checkout</Text>
+                    <TouchableOpacity onPress={() => setSelectedPlan(null)}>
+                      <MaterialIcons name="close" size={scale(22)} color={colors.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
 
-              <View style={styles.modalHeader}>
-                <View>
-                  <Text style={[styles.modalHeaderTitle, { color: colors.textPrimary }]}>Choose Ride Vehicle</Text>
-                  <Text style={[styles.modalHeaderSub, { color: colors.textMuted }]}>
-                    Destination: {selectedPlace.name} ({selectedPlace.distanceKm} km)
+                  <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
+
+                  {/* Pricing Display */}
+                  <View style={[styles.priceBox, { backgroundColor: isDark ? '#16161B' : '#F5F5F7' }]}>
+                    <Text style={styles.priceLabel}>ESTIMATED PACKAGE PRICE</Text>
+                    <Text style={[styles.priceValue, { color: colors.amber }]}>
+                      ₹{Math.round((selectedPlan.travelHours + selectedPlan.checkpoints.length) * (adminState.vehicleRatesPerHour[bookingVehicle] || 150))}
+                    </Text>
+                    <Text style={styles.priceSubText}>Based on hourly billing: {selectedPlan.travelHours + selectedPlan.checkpoints.length} hrs total duration</Text>
+                  </View>
+
+                  {/* Sightseeing Spot checkpoints & preview photos */}
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(10), padding: scale(10), marginBottom: verticalScale(12) }}>
+                    <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '800', marginBottom: verticalScale(4) }}>CHECKPOINTS PATH</Text>
+                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), lineHeight: moderateFontScale(16) }}>
+                      {selectedPlan.checkpoints.join(' ➔ ')}
+                    </Text>
+                    
+                    <View style={{ flexDirection: 'row', gap: scale(6), marginTop: verticalScale(8), justifyContent: 'space-between' }}>
+                      {['https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=150', 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=150', 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=150'].map((imgUrl, i) => (
+                        <Image key={i} source={{ uri: imgUrl }} style={{ flex: 1, height: verticalScale(46), borderRadius: scale(6) }} />
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Passenger count selector */}
+                  <View style={styles.counterRow}>
+                    <Text style={[styles.selectorLabel, { color: colors.textPrimary }]}>Number of Passengers</Text>
+                    <View style={styles.counterControls}>
+                      <TouchableOpacity
+                        style={styles.counterBtn}
+                        onPress={() => setBookingPax(Math.max(1, bookingPax - 1))}
+                      >
+                        <Text style={styles.counterBtnText}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={[styles.counterVal, { color: colors.textPrimary }]}>{bookingPax}</Text>
+                      <TouchableOpacity
+                        style={styles.counterBtn}
+                        onPress={() => setBookingPax(Math.min(10, bookingPax + 1))}
+                      >
+                        <Text style={styles.counterBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Vehicle selector */}
+                  <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginTop: verticalScale(14) }]}>Choose Vehicle Fleet</Text>
+                  <View style={styles.vehicleRow}>
+                    {(['5seater', '7seater', '4x4jeep'] as const).map((vKey) => {
+                      const isSelected = bookingVehicle === vKey;
+                      const name = vKey === '5seater' ? '5 Seater Cab' : vKey === '7seater' ? '7 Seater SUV' : '4x4 Jeep';
+                      const hourlyRate = adminState.vehicleRatesPerHour[vKey] || 150;
+                      return (
+                        <TouchableOpacity
+                          key={vKey}
+                          style={[
+                            styles.vehiclePill,
+                            { borderColor: isSelected ? colors.amber : colors.border },
+                            isSelected && { backgroundColor: 'rgba(245, 197, 24, 0.1)' }
+                          ]}
+                          onPress={() => setBookingVehicle(vKey)}
+                        >
+                          <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary }]}>{name}</Text>
+                          <Text style={styles.vehiclePillRate}>₹{hourlyRate}/hr</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Date Time selection (Only if Prebooking mode) */}
+                  {!adminState.instantBookingEnabled && (
+                    <View style={{ marginTop: verticalScale(14) }}>
+                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Pre-Booking Date</Text>
+                      
+                      {/* Horizontal Date Picker */}
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(12) }}>
+                        {dateOptions.map((opt) => {
+                          const isSelected = bookingDate === opt.dateStr;
+                          return (
+                            <TouchableOpacity
+                              key={opt.dateStr}
+                              style={{
+                                width: scale(50),
+                                height: verticalScale(52),
+                                borderRadius: scale(10),
+                                borderWidth: 1.5,
+                                borderColor: isSelected ? colors.amber : colors.border,
+                                backgroundColor: isSelected ? colors.amber : 'rgba(255,255,255,0.03)',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginRight: scale(8),
+                              }}
+                              onPress={() => setBookingDate(opt.dateStr)}
+                            >
+                              <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.dayName.toUpperCase()}</Text>
+                              <Text style={{ fontSize: moderateFontScale(12), fontWeight: '900', color: isSelected ? '#101014' : colors.textPrimary, marginVertical: verticalScale(1) }}>{opt.dayNum}</Text>
+                              <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.monthName.toUpperCase()}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+
+                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Booking Time</Text>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(8), borderRadius: scale(12), borderWidth: 1.5, borderColor: colors.border }}>
+                        {/* Hour Selection */}
+                        <View style={{ alignItems: 'center', flex: 1.2 }}>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>HOUR</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                            <TouchableOpacity
+                              style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                              onPress={() => setBookingHour(prev => prev === 1 ? 12 : prev - 1)}
+                            >
+                              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                              {bookingHour < 10 ? '0' + bookingHour : bookingHour}
+                            </Text>
+                            <TouchableOpacity
+                              style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                              onPress={() => setBookingHour(prev => prev === 12 ? 1 : prev + 1)}
+                            >
+                              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(18), fontWeight: '900' }}>:</Text>
+
+                        {/* Minute Selection */}
+                        <View style={{ alignItems: 'center', flex: 1.2 }}>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>MINUTE</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                            <TouchableOpacity
+                              style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                              onPress={() => setBookingMinute(prev => prev === 0 ? 55 : prev - 5)}
+                            >
+                              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                            </TouchableOpacity>
+                            <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                              {bookingMinute < 10 ? '0' + bookingMinute : bookingMinute}
+                            </Text>
+                            <TouchableOpacity
+                              style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                              onPress={() => setBookingMinute(prev => prev === 55 ? 0 : prev + 5)}
+                            >
+                              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* AM/PM Switch */}
+                        <View style={{ flexDirection: 'row', gap: scale(4), marginLeft: scale(10), flex: 1.3 }}>
+                          {(['AM', 'PM'] as const).map((period) => {
+                            const isSelected = bookingAmPm === period;
+                            return (
+                              <TouchableOpacity
+                                key={period}
+                                style={{
+                                  flex: 1,
+                                  height: scale(28),
+                                  borderRadius: scale(6),
+                                  borderWidth: 1.5,
+                                  borderColor: isSelected ? colors.amber : colors.border,
+                                  backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                }}
+                                onPress={() => setBookingAmPm(period)}
+                              >
+                                <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '900' }}>
+                                  {period}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Booking Action buttons */}
+                  <TouchableOpacity
+                    style={styles.confirmBtn}
+                    activeOpacity={0.8}
+                    onPress={handleConfirmBooking}
+                  >
+                    <Text style={styles.confirmBtnText}>
+                      {adminState.instantBookingEnabled ? '⚡ Instant Book Ride' : 'Confirm Pre-Booking'}
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              )}
+
+              {/* Connecting Loading step */}
+              {bookingStep === 'connecting' && (
+                <View style={styles.loadingStep}>
+                  <ActivityIndicator color={colors.amber} size="large" />
+                  <Text style={[styles.loadingTitle, { color: colors.textPrimary }]}>Matching Captain</Text>
+                  <Text style={[styles.loadingSub, { color: colors.textMuted }]}>
+                    Contacting nearest premium tour drivers for {selectedPlan.name}...
                   </Text>
                 </View>
-                <TouchableOpacity style={styles.closeButton} onPress={() => setSelectedPlace(null)}>
-                  <MaterialIcons name="close" size={scale(22)} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
+              )}
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
-                {rideTypes.map(ride => {
-                  const isSelected = selectedRide === ride.key;
-                  const estimatedFare = calculateFare(selectedPlace.distanceKm, ride.key);
+              {/* Success matched step */}
+              {bookingStep === 'success' && (
+                <View style={styles.successStep}>
+                  <MaterialIcons name="check-circle" size={scale(64)} color={colors.success} />
+                  <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Trip Scheduled!</Text>
+                  
+                  <View style={[styles.driverDetailCard, { backgroundColor: isDark ? '#16161B' : '#F5F5F7' }]}>
+                    <Text style={styles.driverName}>Captain Suresh Kumar connected</Text>
+                    <Text style={[styles.driverSub, { color: colors.textMuted }]}>Vehicle: {bookingVehicle === '4x4jeep' ? 'Mahindra Thar 4*4' : 'Ertiga SUV'}</Text>
+                    <Text style={[styles.driverSub, { color: colors.textMuted }]}>Contact: +91 98765 43210</Text>
+                  </View>
 
-                  return (
-                    <TouchableOpacity
-                      key={ride.key}
-                      style={[
-                        styles.rideOptionCard,
-                        {
-                          backgroundColor: colors.surfaceCard,
-                          borderColor: isSelected ? colors.amber : colors.border,
-                        },
-                      ]}
-                      onPress={() => setSelectedRide(ride.key)}
-                      activeOpacity={0.9}
-                    >
-                      <View style={styles.rideOptionLeft}>
-                        <View style={[styles.rideIconWrapper, { backgroundColor: isSelected ? 'rgba(245,197,24,0.1)' : 'rgba(255,255,255,0.04)' }]}>
-                          <FontAwesome5 name={ride.icon} size={scale(18)} color={isSelected ? colors.amber : colors.textPrimary} />
-                        </View>
-                        <View style={styles.rideOptionDetails}>
-                          <Text style={[styles.rideOptionName, { color: colors.textPrimary }]}>{ride.name}</Text>
-                          <Text style={[styles.rideOptionDesc, { color: colors.textMuted }]}>{ride.timeEst}</Text>
-                        </View>
-                      </View>
+                  <Text style={[styles.successNote, { color: colors.textMuted }]}>
+                    The tour itinerary has been synced with your Trips tab log. Safe travels!
+                  </Text>
 
-                      <View style={styles.rideOptionRight}>
-                        <Text style={styles.rideFareText}>₹{estimatedFare.toLocaleString('en-IN')}</Text>
-                        <Text style={[styles.rideRateText, { color: colors.textMuted }]}>₹{ride.ratePerKm}/km</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                  <TouchableOpacity
+                    style={styles.doneBtn}
+                    onPress={addTripAndClose}
+                  >
+                    <Text style={styles.doneBtnText}>Got it, View Trips</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
-              <View style={[styles.modalActions, { borderTopColor: colors.border }]}>
-                <TouchableOpacity
-                  style={styles.confirmBookingBtn}
-                  onPress={() => handleConfirmBooking(selectedPlace)}
-                >
-                  <Text style={styles.confirmBookingText}>Confirm & Dispatch Driver</Text>
-                  <MaterialIcons name="local-taxi" size={scale(20)} color="#101010" />
-                </TouchableOpacity>
-              </View>
             </View>
           </View>
         )}
       </Modal>
+
     </SafeAreaView>
   );
 }
@@ -367,292 +555,384 @@ export default function PlanRouteScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#101014',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: scale(18),
-    paddingVertical: verticalScale(12),
+    paddingVertical: verticalScale(10),
   },
   backButton: {
-    padding: scale(4),
+    padding: scale(6),
   },
   headerTitle: {
-    fontSize: moderateFontScale(18),
+    fontSize: moderateFontScale(17),
     fontWeight: '800',
   },
   scrollContent: {
     paddingHorizontal: scale(18),
+    paddingBottom: verticalScale(30),
   },
   welcomeBanner: {
-    marginTop: verticalScale(10),
-    marginBottom: verticalScale(16),
+    marginVertical: verticalScale(10),
   },
   welcomeTitle: {
     fontSize: moderateFontScale(22),
-    fontWeight: '800',
-    color: '#F5C518',
-    lineHeight: moderateFontScale(28),
+    fontWeight: '900',
+    color: '#ffffff',
   },
   welcomeSub: {
-    fontSize: moderateFontScale(13),
-    marginTop: verticalScale(6),
-    lineHeight: moderateFontScale(18),
+    fontSize: moderateFontScale(12),
+    marginTop: verticalScale(4),
+    lineHeight: moderateFontScale(17),
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: scale(25),
-    paddingHorizontal: scale(16),
-    height: verticalScale(46),
-    marginBottom: verticalScale(20),
+    borderRadius: scale(15),
+    paddingHorizontal: scale(12),
+    height: scale(44),
+    marginTop: verticalScale(10),
+    marginBottom: verticalScale(14),
   },
   searchIcon: {
-    marginRight: scale(8),
+    marginRight: scale(6),
   },
   searchInput: {
     flex: 1,
-    fontSize: moderateFontScale(14),
-    height: '100%',
-    padding: 0,
-  },
-  gridHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(14),
-  },
-  sectionTitle: {
-    color: '#F5C518',
-    fontSize: moderateFontScale(16),
-    fontWeight: '700',
-  },
-  resultCount: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '500',
-  },
-  placeCard: {
-    borderRadius: scale(24),
-    borderWidth: 1.2,
-    overflow: 'hidden',
-    marginBottom: verticalScale(20),
-  },
-  placeImage: {
-    width: '100%',
-    height: verticalScale(160),
-    resizeMode: 'cover',
-  },
-  placeBody: {
-    padding: scale(16),
-  },
-  placeTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  placeName: {
-    fontSize: moderateFontScale(17),
-    fontWeight: '800',
-  },
-  placeDistrict: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '600',
-    marginTop: verticalScale(2),
-  },
-  ratingBadge: {
-    backgroundColor: '#F5C518',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: scale(10),
-    paddingHorizontal: scale(8),
-    paddingVertical: verticalScale(3),
-  },
-  ratingVal: {
-    color: '#101010',
-    fontSize: moderateFontScale(11),
-    fontWeight: '800',
-    marginLeft: scale(3),
-  },
-  placeDesc: {
     fontSize: moderateFontScale(13),
-    lineHeight: moderateFontScale(19),
-    marginVertical: verticalScale(12),
-  },
-  footerInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(14),
-  },
-  distanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(6),
-  },
-  distanceText: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '700',
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    gap: scale(6),
-  },
-  tagItem: {
-    borderWidth: 1,
-    borderRadius: scale(8),
-    paddingHorizontal: scale(8),
-    paddingVertical: verticalScale(2),
-  },
-  tagText: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '600',
-  },
-  bookBtn: {
-    backgroundColor: '#F5C518',
-    borderRadius: scale(14),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(12),
-    gap: scale(6),
-  },
-  bookBtnText: {
-    color: '#101010',
-    fontSize: moderateFontScale(14),
-    fontWeight: '800',
+    padding: 0,
   },
   noResults: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(50),
-    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(40),
   },
-  noResultsTitle: {
-    fontSize: moderateFontScale(16),
+  packageCard: {
+    borderWidth: 1,
+    borderRadius: scale(22),
+    overflow: 'hidden',
+    marginBottom: verticalScale(6),
+  },
+  packageImage: {
+    width: '100%',
+    height: verticalScale(160),
+  },
+  packageBody: {
+    padding: scale(16),
+  },
+  packageName: {
+    fontSize: moderateFontScale(17),
+    fontWeight: '800',
+  },
+  checkpointsBlock: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: scale(10),
+    padding: scale(10),
+    marginVertical: verticalScale(10),
+  },
+  blockLabel: {
+    color: '#F5C518',
+    fontSize: moderateFontScale(9),
+    fontWeight: '800',
+    marginBottom: verticalScale(4),
+  },
+  checkpointsText: {
+    fontSize: moderateFontScale(12.5),
+    lineHeight: moderateFontScale(17),
+  },
+  timeBreakdownRow: {
+    flexDirection: 'row',
+    gap: scale(10),
+    marginTop: verticalScale(6),
+    marginBottom: verticalScale(12),
+  },
+  timeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(4),
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: scale(8),
+    paddingVertical: verticalScale(4),
+    paddingHorizontal: scale(8),
+  },
+  timeVal: {
+    fontSize: moderateFontScale(11),
     fontWeight: '700',
   },
-  noResultsSub: {
-    fontSize: moderateFontScale(12),
-    textAlign: 'center',
-    lineHeight: moderateFontScale(18),
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginVertical: verticalScale(8),
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: verticalScale(4),
-    marginBottom: verticalScale(16),
   },
-  resetBtn: {
+  totalDurationLabel: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: moderateFontScale(9),
+    fontWeight: '800',
+  },
+  totalDurationVal: {
+    fontSize: moderateFontScale(18),
+    fontWeight: '900',
+  },
+  bookBtn: {
     backgroundColor: '#F5C518',
-    borderRadius: scale(20),
-    paddingVertical: verticalScale(10),
+    borderRadius: scale(12),
+    paddingVertical: verticalScale(8),
     paddingHorizontal: scale(20),
   },
-  resetBtnText: {
-    color: '#101010',
-    fontWeight: '700',
+  bookBtnText: {
+    color: '#101014',
     fontSize: moderateFontScale(13),
+    fontWeight: '800',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    padding: scale(20),
   },
   modalContent: {
-    borderTopLeftRadius: scale(28),
-    borderTopRightRadius: scale(28),
-    maxHeight: '80%',
-    paddingBottom: verticalScale(20),
-  },
-  dragHandle: {
-    width: scale(40),
-    height: verticalScale(4),
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: scale(2),
-    alignSelf: 'center',
-    marginTop: verticalScale(10),
+    borderRadius: scale(24),
+    padding: scale(20),
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: scale(20),
-    paddingTop: verticalScale(14),
-    paddingBottom: verticalScale(10),
+    alignItems: 'center',
   },
-  modalHeaderTitle: {
+  modalTitle: {
     fontSize: moderateFontScale(18),
+    fontWeight: '900',
+  },
+  modalPlanName: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(12),
+  },
+  priceBox: {
+    borderRadius: scale(14),
+    padding: scale(14),
+    alignItems: 'center',
+    marginBottom: verticalScale(16),
+  },
+  priceLabel: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: moderateFontScale(10),
     fontWeight: '800',
   },
-  modalHeaderSub: {
-    fontSize: moderateFontScale(12),
-    marginTop: verticalScale(2),
+  priceValue: {
+    fontSize: moderateFontScale(28),
+    fontWeight: '900',
+    marginVertical: verticalScale(4),
   },
-  closeButton: {
-    padding: scale(4),
+  priceSubText: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: moderateFontScale(10),
   },
-  modalScroll: {
-    paddingHorizontal: scale(20),
-    paddingBottom: verticalScale(20),
+  selectorLabel: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '700',
+    marginBottom: verticalScale(6),
   },
-  rideOptionCard: {
+  counterRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: scale(16),
-    borderWidth: 1.5,
-    padding: scale(14),
-    marginBottom: verticalScale(10),
   },
-  rideOptionLeft: {
+  counterControls: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: scale(12),
   },
-  rideIconWrapper: {
-    width: scale(38),
-    height: scale(38),
-    borderRadius: scale(10),
+  counterBtn: {
+    width: scale(30),
+    height: scale(30),
+    borderRadius: scale(15),
+    backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rideOptionDetails: {
-    marginLeft: scale(12),
-  },
-  rideOptionName: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '700',
-  },
-  rideOptionDesc: {
-    fontSize: moderateFontScale(10),
-    marginTop: verticalScale(2),
-  },
-  rideOptionRight: {
-    alignItems: 'flex-end',
-  },
-  rideFareText: {
-    color: '#F5C518',
+  counterBtnText: {
+    color: '#ffffff',
     fontSize: moderateFontScale(16),
     fontWeight: '800',
   },
-  rideRateText: {
+  counterVal: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  vehicleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: scale(8),
+    marginTop: verticalScale(4),
+  },
+  vehiclePill: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: scale(12),
+    padding: scale(8),
+    alignItems: 'center',
+  },
+  vehiclePillText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '800',
+  },
+  vehiclePillRate: {
     fontSize: moderateFontScale(10),
-    marginTop: verticalScale(1),
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: verticalScale(2),
   },
-  modalActions: {
-    paddingHorizontal: scale(20),
-    paddingTop: verticalScale(14),
-    borderTopWidth: 1.2,
+  prebookDisclaimer: {
+    fontSize: moderateFontScale(10),
+    marginBottom: verticalScale(8),
   },
-  confirmBookingBtn: {
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: scale(10),
+  },
+  inputTitle: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: moderateFontScale(10),
+    marginBottom: verticalScale(4),
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: scale(10),
+    height: scale(38),
+    paddingHorizontal: scale(10),
+    fontSize: moderateFontScale(12),
+  },
+  confirmBtn: {
     backgroundColor: '#F5C518',
     borderRadius: scale(14),
-    flexDirection: 'row',
+    height: scale(48),
     alignItems: 'center',
     justifyContent: 'center',
-    height: scale(48),
-    gap: scale(6),
+    marginTop: verticalScale(20),
   },
-  confirmBookingText: {
-    color: '#101010',
+  confirmBtnText: {
+    color: '#101014',
     fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  loadingStep: {
+    alignItems: 'center',
+    paddingVertical: verticalScale(40),
+  },
+  loadingTitle: {
+    fontSize: moderateFontScale(16),
+    fontWeight: '800',
+    marginTop: verticalScale(14),
+  },
+  loadingSub: {
+    fontSize: moderateFontScale(12),
+    textAlign: 'center',
+    marginTop: verticalScale(6),
+    paddingHorizontal: scale(20),
+  },
+  successStep: {
+    alignItems: 'center',
+    paddingVertical: verticalScale(20),
+  },
+  successTitle: {
+    fontSize: moderateFontScale(20),
+    fontWeight: '900',
+    marginTop: verticalScale(10),
+  },
+  driverDetailCard: {
+    width: '100%',
+    borderRadius: scale(14),
+    padding: scale(14),
+    marginVertical: verticalScale(16),
+    alignItems: 'center',
+  },
+  driverName: {
+    color: '#F5C518',
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+  },
+  driverSub: {
+    fontSize: moderateFontScale(11),
+    marginTop: verticalScale(2),
+  },
+  successNote: {
+    fontSize: moderateFontScale(11),
+    textAlign: 'center',
+    paddingHorizontal: scale(10),
+    marginBottom: verticalScale(20),
+  },
+  doneBtn: {
+    backgroundColor: '#F5C518',
+    borderRadius: scale(14),
+    height: scale(44),
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneBtnText: {
+    color: '#101014',
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+  },
+  packageListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: scale(14),
+    padding: scale(10),
+  },
+  packageRowImage: {
+    width: scale(72),
+    height: scale(72),
+    borderRadius: scale(10),
+  },
+  packageRowBody: {
+    flex: 1,
+    marginLeft: scale(12),
+    justifyContent: 'center',
+  },
+  packageNameText: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  metaInfoRow: {
+    marginTop: verticalScale(4),
+  },
+  metaText: {
+    fontSize: moderateFontScale(11),
+  },
+  durationsRow: {
+    marginTop: verticalScale(4),
+  },
+  durationValText: {
+    fontSize: moderateFontScale(11.5),
+    fontWeight: '700',
+  },
+  rowActionCol: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: scale(6),
+  },
+  rowBookBtn: {
+    backgroundColor: '#F5C518',
+    borderRadius: scale(8),
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: scale(14),
+  },
+  rowBookBtnText: {
+    color: '#101014',
+    fontSize: moderateFontScale(12),
     fontWeight: '800',
   },
 });

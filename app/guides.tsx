@@ -169,7 +169,7 @@ export default function GuidesScreen() {
 
   const startBookingFlow = (guide: Guide) => {
     setSelectedGuide(guide);
-    if (isInstantBooking) {
+    if (adminState.instantBookingEnabled) {
       setBookingStep('loading');
       setTimeout(() => {
         setBookingStep('map');
@@ -221,8 +221,8 @@ export default function GuidesScreen() {
 
   const checkoutGuide = () => {
     if (!selectedGuide) return;
-    const finalDate = isInstantBooking ? 'Today' : prebookDate;
-    const finalTime = isInstantBooking ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : prebookTime;
+    const finalDate = adminState.instantBookingEnabled ? 'Today' : prebookDate;
+    const finalTime = adminState.instantBookingEnabled ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : prebookTime;
 
     // Add guide booking to upcoming trips
     adminState.userTrips.push({
@@ -266,9 +266,9 @@ export default function GuidesScreen() {
         <View style={{ width: scale(40) }} />
       </View>
 
-      {/* TOP SEARCH BAR (90% width) & INSTANT SWITH (10% width) */}
+      {/* TOP SEARCH BAR */}
       <View style={styles.searchRow}>
-        <View style={[styles.searchBar, { flex: 0.88, borderColor: colors.border }]}>
+        <View style={[styles.searchBar, { flex: 1, borderColor: colors.border }]}>
           <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
           <TextInput
             placeholder="Search guides by city or area..."
@@ -283,18 +283,6 @@ export default function GuidesScreen() {
               <MaterialIcons name="close" size={scale(18)} color={colors.textMuted} />
             </TouchableOpacity>
           )}
-        </View>
-        <View style={styles.switchCol}>
-          <Text style={[styles.switchText, { color: isInstantBooking ? colors.amber : colors.textMuted }]}>
-            {isInstantBooking ? '⚡Instant' : 'Standard'}
-          </Text>
-          <Switch
-            value={isInstantBooking}
-            onValueChange={setIsInstantBooking}
-            trackColor={{ false: 'rgba(255,255,255,0.08)', true: colors.amber }}
-            thumbColor={isInstantBooking ? '#101014' : '#8E8E93'}
-            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-          />
         </View>
       </View>
 

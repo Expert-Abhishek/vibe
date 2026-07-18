@@ -189,62 +189,32 @@ export default function FleetCatalogScreen() {
           </Text>
         </View>
 
-        {/* Fleet Cards */}
+        {/* Fleet List Rows */}
         {currentCategory.cars.map((car, idx) => (
-          <View key={idx} style={[styles.carCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.cardHeaderRow}>
-              <View>
-                <Text style={[styles.carName, { color: colors.textPrimary }]}>{car.name}</Text>
-                <Text style={[styles.carStatusText, { color: colors.amber }]}>★ Certified Driver Vehicle</Text>
-              </View>
-              <View style={styles.fareInfo}>
-                <Text style={styles.farePrice}>
-                  ₹{adminState.vehicleRatesPerHour[currentCategory.key as keyof typeof adminState.vehicleRatesPerHour] || car.rate * 10}/hr
-                </Text>
-                <Text style={[styles.fareUnit, { color: colors.textMuted }]}>base hourly rate</Text>
-              </View>
-            </View>
-
-            {/* Visual Image */}
-            <View style={styles.imageBlock}>
-              <Image source={{ uri: car.image }} style={styles.carVisualImage} resizeMode="cover" />
-            </View>
-
-            {/* Specifications Bar metrics */}
-            <View style={[styles.specsBar, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
-              {/* Capacity */}
-              <View style={styles.specBox}>
-                <FontAwesome5 name="users" size={scale(13)} color={colors.textMuted} />
-                <Text style={[styles.specVal, { color: colors.textPrimary }]}>{car.pax} Passengers</Text>
-                <Text style={[styles.specLbl, { color: colors.textMuted }]}>Capacity</Text>
+          <View key={idx} style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: scale(14),
+            padding: scale(10),
+            marginBottom: verticalScale(10),
+          }}>
+            <Image source={{ uri: car.image }} style={{ width: scale(72), height: scale(72), borderRadius: scale(10) }} />
+            
+            <View style={{ flex: 1, marginLeft: scale(12), justifyContent: 'center' }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800' }}>{car.name}</Text>
+              
+              <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(4) }}>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>👥 {car.pax} Seats</Text>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>💼 {car.boot.split(' ')[0]}</Text>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>❄️ {car.ac ? 'Cabin AC' : 'Non-AC'}</Text>
               </View>
 
-              <View style={[styles.barDivider, { backgroundColor: colors.border }]} />
-
-              {/* Boot space */}
-              <View style={styles.specBox}>
-                <FontAwesome5 name="suitcase" size={scale(13)} color={colors.textMuted} />
-                <Text style={[styles.specVal, { color: colors.textPrimary }]} numberOfLines={1}>{car.boot.split(' ')[0]}</Text>
-                <Text style={[styles.specLbl, { color: colors.textMuted }]}>{car.boot.includes('Bag') ? 'Luggage Space' : 'Boot Space'}</Text>
-              </View>
-
-              <View style={[styles.barDivider, { backgroundColor: colors.border }]} />
-
-              {/* AC Comfort status */}
-              <View style={styles.specBox}>
-                <MaterialIcons name={car.ac ? 'ac-unit' : ('do-not-disturb' as any)} size={scale(15)} color={colors.textMuted} />
-                <Text style={[styles.specVal, { color: colors.textPrimary }]}>{car.ac ? 'Cabin AC' : 'Non-AC'}</Text>
-                <Text style={[styles.specLbl, { color: colors.textMuted }]}>Cabin comfort</Text>
-              </View>
-            </View>
-
-            {/* Description */}
-            <Text style={[styles.carDescText, { color: colors.textMuted }]}>{car.desc}</Text>
-
-            {/* Visual Fleet Only Badge */}
-            <View style={[styles.bookButton, { backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: colors.border }]}>
-              <Text style={[styles.bookButtonText, { color: colors.textMuted }]}>Fleet View Only - Book in Trip Tab</Text>
-              <MaterialIcons name="info-outline" size={scale(15)} color={colors.textMuted} />
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '800' }}>
+                ₹{adminState.vehicleRatesPerHour[currentCategory.key as keyof typeof adminState.vehicleRatesPerHour] || car.rate * 10}/hr
+              </Text>
             </View>
           </View>
         ))}

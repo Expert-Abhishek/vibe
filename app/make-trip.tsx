@@ -59,7 +59,52 @@ const presetDestinations: Checkpoint[] = [
 export default function MakeTripScreen() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
-  const selectedRide = searchParams.selectedRide as string || '';
+  const [selectedRide, setSelectedRide] = useState<string>((searchParams.selectedRide as string) || '5seater');
+
+  const getTomorrowDateString = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  };
+
+  const getInitialTimeParts = () => {
+    const d = new Date();
+    let h = d.getHours();
+    const m = d.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    const roundedM = Math.round(m / 5) * 5;
+    return {
+      hour: h,
+      minute: roundedM >= 60 ? 55 : roundedM,
+      ampm: ampm as 'AM' | 'PM'
+    };
+  };
+
+  const initialTimeParts = getInitialTimeParts();
+  const [bookingHour, setBookingHour] = useState<number>(initialTimeParts.hour);
+  const [bookingMinute, setBookingMinute] = useState<number>(initialTimeParts.minute);
+  const [bookingAmPm, setBookingAmPm] = useState<'AM' | 'PM'>(initialTimeParts.ampm);
+
+  const [bookingDate, setBookingDate] = useState<string>(getTomorrowDateString());
+
+  const bookingTime = `${bookingHour}:${bookingMinute < 10 ? '0' + bookingMinute : bookingMinute} ${bookingAmPm}`;
+
+  const dateOptions = Array.from({ length: 15 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return {
+      dateStr: d.toISOString().split('T')[0],
+      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      dayNum: d.getDate(),
+      monthName: d.toLocaleDateString('en-US', { month: 'short' }),
+    };
+  });
+
+  const timeOptions = [
+    '08:00 AM', '10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM', '06:00 PM', '08:00 PM'
+  ];
 
   const getRideLabel = (key: string) => {
     if (key === '5seater') return '5 Seater Premium';
@@ -85,7 +130,9 @@ export default function MakeTripScreen() {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
 
-  const [quoteStatus, setQuoteStatus] = useState<'none' | 'pending' | 'quoted'>('none');
+  const [travelHours, setTravelHours] = useState<number>(2.9);
+  const [passengerCount, setPassengerCount] = useState<number>(1);
+  const [quoteStatus, setQuoteStatus] = useState<'none' | 'pending' | 'quoted'>('quoted');
   const [quotedPrice, setQuotedPrice] = useState<number>(0);
   const [tripRequestId, setTripRequestId] = useState<string>('');
   const [secondsLeft, setSecondsLeft] = useState(1800);
@@ -340,6 +387,7 @@ export default function MakeTripScreen() {
       const h = Math.floor(estDurationMinutes / 60);
       const m = Math.floor(estDurationMinutes % 60);
       setDuration(`${h > 0 ? `${h}h ` : ''}${m}m (est.)`);
+      setTravelHours(estDurationMinutes / 60);
     };
 
     const fetchRoute = async () => {
@@ -378,6 +426,7 @@ export default function MakeTripScreen() {
           const h = Math.floor(secondsSum / 3600);
           const m = Math.floor((secondsSum % 3600) / 60);
           setDuration(`${h > 0 ? `${h}h ` : ''}${m}m`);
+          setTravelHours(secondsSum / 3600);
         } else {
           // If directions fail, fall back to straight line paths
           console.warn('Google Directions failed with status:', data.status);
@@ -433,38 +482,63 @@ export default function MakeTripScreen() {
     Alert.alert('Simulation Success', 'Manual price quote of ₹2,750 applied successfully.');
   };
 
+  const selectedVehicleKey = selectedRide === '5seater' || selectedRide === '7seater' || selectedRide === '4x4jeep' || selectedRide === 'auto' ? selectedRide : '5seater';
+  const vehicleHourlyRate = adminState.vehicleRatesPerHour[selectedVehicleKey] || 150;
+  const totalTripHours = travelHours + checkpoints.length;
+  const computedTripPrice = Math.round(totalTripHours * vehicleHourlyRate);
+
   const handleConfirmTrip = () => {
     if (checkpoints.length < 2) {
       Alert.alert('Error', 'Please add at least 2 checkpoints to plan a trip.');
       return;
     }
-
-    const requestId = `req_${Date.now()}`;
-    const newReq = {
-      id: requestId,
-      checkpoints: checkpoints.map(c => ({ name: c.name, latitude: c.latitude, longitude: c.longitude })),
-      status: 'Pending' as const,
-      vehicle: selectedRide || '5seater',
-      touristName: 'Abhishek (Tourist)',
-    };
-
-    adminState.customTripRequests.push(newReq);
-    setTripRequestId(requestId);
-    setQuoteStatus('pending');
-    Alert.alert(
-      'Route Request Sent!',
-      'Your custom route has been submitted to the Admin. Please wait up to 30 minutes for a manual price quotation.',
-      [{ text: 'OK' }]
-    );
+    setQuotedPrice(computedTripPrice);
+    setQuoteStatus('quoted');
   };
 
   const handleBookCustomRide = () => {
+    if (checkpoints.length < 2) {
+      Alert.alert('Error', 'Please add at least 2 checkpoints to plan a trip.');
+      return;
+    }
+
+    if (!adminState.instantBookingEnabled) {
+      if (!bookingDate) {
+        Alert.alert('Error', 'Please select a booking date.');
+        return;
+      }
+      const selectedTime = new Date(bookingDate).getTime();
+      const nowTime = new Date().getTime();
+      const maxTime = nowTime + 15 * 24 * 60 * 60 * 1000;
+      if (selectedTime < nowTime - 24 * 60 * 60 * 1000) {
+        Alert.alert('Error', 'Cannot select a date in the past.');
+        return;
+      }
+      if (selectedTime > maxTime) {
+        Alert.alert('Booking Restricted', 'Pre-bookings can only be made up to 15 days in advance.');
+        return;
+      }
+    }
+
     const pickup = checkpoints[0];
     const drop = checkpoints[checkpoints.length - 1];
     const stops = checkpoints.slice(1, -1);
 
-    adminState.customTripRequests.forEach(r => {
-      if (r.id === tripRequestId) r.status = 'Booked';
+    const finalDate = adminState.instantBookingEnabled ? 'Today' : bookingDate;
+    const finalTime = adminState.instantBookingEnabled
+      ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : bookingTime;
+
+    adminState.customTripRequests.push({
+      id: `req_${Date.now()}`,
+      checkpoints: checkpoints.map(c => ({ name: c.name, latitude: c.latitude, longitude: c.longitude })),
+      status: 'Booked',
+      vehicle: selectedRide || '5seater',
+      quotedPrice: computedTripPrice,
+      touristName: 'Abhishek (Tourist)',
+      bookingType: adminState.instantBookingEnabled ? 'spot' : 'prebook',
+      date: finalDate,
+      time: finalTime,
     });
 
     router.replace({
@@ -477,10 +551,13 @@ export default function MakeTripScreen() {
         dropLat: drop.latitude.toString(),
         dropLng: drop.longitude.toString(),
         stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
-        price: quotedPrice.toString(),
+        price: computedTripPrice.toString(),
         type: 'custom_trip',
         vehicle: selectedRide || '5seater',
         paymentMode: 'UPI',
+        passengerCount: passengerCount.toString(),
+        date: finalDate,
+        time: finalTime,
       }
     });
   };
@@ -758,100 +835,215 @@ export default function MakeTripScreen() {
               })}
             </View>
           </View>
+        </View>
 
-          {/* Right Column: Top Places presets */}
-          <View style={styles.rightColumn}>
-            <View style={styles.columnHeader}>
-              <MaterialIcons name="star" size={scale(18)} color={colors.amber} style={{ marginRight: scale(4) }} />
-              <Text style={[styles.columnTitle, { color: colors.amber }]} numberOfLines={1}>Top Places</Text>
-            </View>
-            <Text style={[styles.columnSub, { color: colors.textMuted }]} numberOfLines={1}>Tap stops to add</Text>
+        {/* Action Button States & Pricing Breakdown */}
+        {quoteStatus === 'quoted' && (
+          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20) }]}>
+            <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(10) }}>
+              Custom Route Pricing (Hourly Rate)
+            </Text>
 
-            <ScrollView 
-              style={styles.presetsVerticalScroll} 
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled={true}
-            >
-              {presetDestinations.map(p => {
-                const isAdded = checkpoints.some(c => c.name === p.name);
+            {/* Vehicle Selector Option */}
+            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Choose Vehicle Fleet</Text>
+            <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(12) }}>
+              {(['5seater', '7seater', '4x4jeep'] as const).map((vKey) => {
+                const isSelected = selectedRide === vKey;
+                const name = vKey === '5seater' ? '5 Seater Cab' : vKey === '7seater' ? '7 Seater SUV' : '4x4 Jeep';
+                const rate = adminState.vehicleRatesPerHour[vKey] || 150;
                 return (
                   <TouchableOpacity
-                    key={p.id}
-                    style={[
-                      styles.presetCardVertical, 
-                      { 
-                        borderColor: isAdded ? colors.amber : colors.border, 
-                        backgroundColor: isDark ? '#16161B' : '#F5F5F7',
-                        opacity: isAdded ? 0.6 : 1
-                      }
-                    ]}
-                    onPress={() => handleSelectPreset(p)}
-                    disabled={isAdded}
+                    key={vKey}
+                    style={{
+                      flex: 1,
+                      borderWidth: 1.5,
+                      borderRadius: scale(10),
+                      padding: scale(8),
+                      alignItems: 'center',
+                      borderColor: isSelected ? colors.amber : colors.border,
+                      backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
+                    }}
+                    onPress={() => setSelectedRide(vKey)}
                   >
-                    <View style={styles.presetCardHeaderRow}>
-                      <Text style={[styles.presetCardName, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>{p.name}</Text>
-                      {isAdded && <MaterialIcons name="check-circle" size={scale(12)} color={colors.amber} />}
-                    </View>
-                    <Text style={[styles.presetCardDesc, { color: colors.textMuted }]} numberOfLines={1}>{(p.address || '').split(',')[0]}</Text>
+                    <Text style={{ fontSize: moderateFontScale(10.5), fontWeight: '800', color: isSelected ? colors.amber : colors.textPrimary }}>{name}</Text>
+                    <Text style={{ fontSize: moderateFontScale(9.5), color: colors.textMuted, marginTop: verticalScale(2) }}>₹{rate}/hr</Text>
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
-          </View>
-        </View>
-
-        {/* Action Button States */}
-        {quoteStatus === 'none' && (
-          <TouchableOpacity
-            style={styles.confirmButton}
-            activeOpacity={0.8}
-            onPress={handleConfirmTrip}
-          >
-            <Text style={styles.confirmBtnText}>Lock Route & Request Ride</Text>
-            <MaterialIcons name="check" size={scale(18)} color="#101010" />
-          </TouchableOpacity>
-        )}
-
-        {quoteStatus === 'pending' && (
-          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <View style={styles.pendingHeaderRow}>
-              <ActivityIndicator color={colors.amber} size="small" style={{ marginRight: scale(8) }} />
-              <Text style={[styles.pendingTitle, { color: colors.textPrimary }]}>Awaiting Admin Price Quote</Text>
             </View>
-            <Text style={[styles.pendingSub, { color: colors.textMuted }]}>
-              Admin is manually calculating the price for this route. Est. Wait: {formatTimer(secondsLeft)} mins
-            </Text>
 
-            <TouchableOpacity
-              style={[styles.simulateQuoteBtn, { borderColor: colors.amber }]}
-              onPress={handleSimulateQuote}
-            >
-              <Text style={[styles.simulateQuoteBtnText, { color: colors.amber }]}>
-                Simulate Admin Response (₹2750)
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+            {/* Prebooking Date Time Pickers */}
+            {!adminState.instantBookingEnabled && (
+              <View style={{ marginBottom: verticalScale(12) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Select Pre-Booking Date</Text>
+                
+                {/* Horizontal Date Picker */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(10) }}>
+                  {dateOptions.map((opt) => {
+                    const isSelected = bookingDate === opt.dateStr;
+                    return (
+                      <TouchableOpacity
+                        key={opt.dateStr}
+                        style={{
+                          width: scale(52),
+                          height: verticalScale(54),
+                          borderRadius: scale(10),
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? colors.amber : colors.border,
+                          backgroundColor: isSelected ? colors.amber : 'rgba(255,255,255,0.03)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: scale(8),
+                        }}
+                        onPress={() => setBookingDate(opt.dateStr)}
+                      >
+                        <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.dayName.toUpperCase()}</Text>
+                        <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: isSelected ? '#101014' : colors.textPrimary, marginVertical: verticalScale(2) }}>{opt.dayNum}</Text>
+                        <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.monthName.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
 
-        {quoteStatus === 'quoted' && (
-          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <View style={styles.priceQuotedRow}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(8) }}>Select Booking Time</Text>
+                
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(8), borderRadius: scale(12), borderWidth: 1.5, borderColor: colors.border }}>
+                  {/* Hour Selection */}
+                  <View style={{ alignItems: 'center', flex: 1.2 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>HOUR</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setBookingHour(prev => prev === 1 ? 12 : prev - 1)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                        {bookingHour < 10 ? '0' + bookingHour : bookingHour}
+                      </Text>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setBookingHour(prev => prev === 12 ? 1 : prev + 1)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(18), fontWeight: '900' }}>:</Text>
+
+                  {/* Minute Selection */}
+                  <View style={{ alignItems: 'center', flex: 1.2 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>MINUTE</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setBookingMinute(prev => prev === 0 ? 55 : prev - 5)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                        {bookingMinute < 10 ? '0' + bookingMinute : bookingMinute}
+                      </Text>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setBookingMinute(prev => prev === 55 ? 0 : prev + 5)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* AM/PM Switch */}
+                  <View style={{ flexDirection: 'row', gap: scale(4), marginLeft: scale(10), flex: 1.3 }}>
+                    {(['AM', 'PM'] as const).map((period) => {
+                      const isSelected = bookingAmPm === period;
+                      return (
+                        <TouchableOpacity
+                          key={period}
+                          style={{
+                            flex: 1,
+                            height: scale(28),
+                            borderRadius: scale(6),
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? colors.amber : colors.border,
+                            backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => setBookingAmPm(period)}
+                        >
+                          <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '900' }}>
+                            {period}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Passenger counter */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(12) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>Passenger Count</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(12) }}>
+                <TouchableOpacity
+                  style={{ width: scale(28), height: scale(28), borderRadius: scale(14), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => setPassengerCount(Math.max(1, passengerCount - 1))}
+                >
+                  <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>-</Text>
+                </TouchableOpacity>
+                <Text style={{ fontSize: moderateFontScale(14), fontWeight: '800', color: colors.textPrimary }}>{passengerCount}</Text>
+                <TouchableOpacity
+                  style={{ width: scale(28), height: scale(28), borderRadius: scale(14), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                  onPress={() => setPassengerCount(Math.min(10, passengerCount + 1))}
+                >
+                  <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Base Travel Duration</Text>
+              <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{travelHours.toFixed(1)} hours</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Checkpoints Addon ({checkpoints.length} stops)</Text>
+              <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>+{checkpoints.length} hours</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Total Trip Duration</Text>
+              <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{totalTripHours.toFixed(1)} hours</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Selected Vehicle Rate</Text>
+              <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>₹{vehicleHourlyRate}/hr</Text>
+            </View>
+
+            <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(6) }}>
               <View>
-                <Text style={[styles.approvedQuoteLabel, { color: colors.textMuted }]}>APPROVED MANUAL FARE</Text>
-                <Text style={[styles.approvedPriceVal, { color: colors.amber }]}>₹{quotedPrice}</Text>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }}>ESTIMATED FARE</Text>
+                <Text style={{ fontSize: moderateFontScale(22), fontWeight: '900', color: colors.amber }}>₹{computedTripPrice}</Text>
               </View>
-              <View style={[styles.statusBadgeCompact, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Admin Approved</Text>
+              <View style={[styles.statusBadgeCompact, { backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingVertical: scale(4), paddingHorizontal: scale(8), borderRadius: scale(8) }]}>
+                <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Hourly Rate</Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={[styles.confirmButton, { marginTop: verticalScale(12) }]}
+              style={[styles.confirmButton, { marginTop: verticalScale(14) }]}
               activeOpacity={0.8}
               onPress={handleBookCustomRide}
             >
-              <Text style={styles.confirmBtnText}>Confirm & Book Custom Ride</Text>
-              <MaterialIcons name="credit-card" size={scale(18)} color="#101010" />
+              <Text style={styles.confirmBtnText}>
+                {adminState.instantBookingEnabled ? '⚡ Confirm & Book Custom Ride' : 'Confirm & Pre-Book Custom Ride'}
+              </Text>
+              <MaterialIcons name="credit-card" size={scale(18)} color="#101010" style={{ marginLeft: scale(6) }} />
             </TouchableOpacity>
           </View>
         )}
@@ -1130,7 +1322,7 @@ const styles = StyleSheet.create({
     marginTop: verticalScale(6),
   },
   leftColumn: {
-    flex: 1.1,
+    flex: 1,
   },
   rightColumn: {
     flex: 0.9,
