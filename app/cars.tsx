@@ -13,6 +13,7 @@ import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { adminState } from './admin-state';
 
 interface SubCar {
   name: string;
@@ -64,15 +65,6 @@ const fleetData: CategoryInfo[] = [
         ac: true,
         desc: 'Premium hatchback experience with superior comfort, modern styling, and silent ride quality.',
       },
-      {
-        name: 'Tata Altroz Gold',
-        image: 'https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?w=400',
-        pax: 5,
-        boot: '345L (2 Medium Bags)',
-        rate: 13,
-        ac: true,
-        desc: '5-star safety rated solid build hatchback, ensuring maximum safety and premium legroom.',
-      },
     ],
   },
   {
@@ -98,118 +90,50 @@ const fleetData: CategoryInfo[] = [
         ac: true,
         desc: 'Most popular pocket-friendly multi-purpose vehicle for larger family getaways.',
       },
-      {
-        name: 'Kia Carens Luxury',
-        image: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400',
-        pax: 7,
-        boot: '580L (2 Large Bags)',
-        rate: 20,
-        ac: true,
-        desc: 'Modern lounge design with ambient lighting and roof-mounted blower vents for all seats.',
-      },
-      {
-        name: 'Mahindra Bolero Neo',
-        image: 'https://images.unsplash.com/photo-1532581291347-9c39cf10a73c?w=400',
-        pax: 7,
-        boot: '500L (1 Large Bag)',
-        rate: 16,
-        ac: true,
-        desc: 'Robust metal chassis built to withstand rough village roads and heavy duty load capacity.',
-      },
     ],
   },
   {
     key: '4x4jeep',
-    label: '4*4 Jeep',
-    icon: 'truck-monster',
+    label: '4x4 Jeep',
+    icon: 'mountain',
     cars: [
       {
         name: 'Mahindra Thar 4×4',
-        image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=400',
+        image: 'https://images.unsplash.com/photo-1533560224820-f3861a479916?w=400',
         pax: 4,
-        boot: '320L (1 Medium Bag)',
-        rate: 25,
+        boot: '150L (1 Medium Bag)',
+        rate: 35,
         ac: true,
-        desc: 'Iconic lifestyle offroader. Heavy-duty 4WD torque to conquer hills, streams, and muddy forest tracks.',
-      },
-      {
-        name: 'Force Gurkha Extreme',
-        image: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400',
-        pax: 4,
-        boot: '350L (1 Medium Bag)',
-        rate: 24,
-        ac: true,
-        desc: 'Built specifically for high mountain climbs. Massive ground clearance and snorkel intake.',
-      },
-      {
-        name: 'Maruti Suzuki Jimny',
-        image: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=400',
-        pax: 4,
-        boot: '300L (1 Medium Bag)',
-        rate: 22,
-        ac: true,
-        desc: 'Lightweight compact 4x4. Excellent maneuverability in tight hairpins and narrow mountain pathways.',
-      },
-      {
-        name: 'Jeep Compass Trailhawk 4x4',
-        image: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400',
-        pax: 5,
-        boot: '438L (2 Large Bags)',
-        rate: 30,
-        ac: true,
-        desc: 'Ultra luxury offroader with premium sunroof, electronic terrain management, and high highway speed capabilities.',
+        desc: 'Sleek off-road machinery. High ground clearance, solid 4WD traction, and perfect view for Western Ghats adventures.',
       },
     ],
   },
   {
     key: 'auto',
-    label: 'Auto',
-    icon: 'electric-rickshaw',
+    label: 'Eco Auto',
+    icon: 'motorcycle',
     cars: [
       {
         name: 'Bajaj RE Auto Rickshaw',
-        image: 'https://images.unsplash.com/photo-1561055657-b9e0bf0fa360?w=400',
+        image: 'https://images.unsplash.com/photo-1566371486490-560ded23b5e4?w=400',
         pax: 3,
-        boot: '80L (Handbag/backpack)',
-        rate: 8,
+        boot: '50L (1 Small Handbag)',
+        rate: 10,
         ac: false,
-        desc: 'The iconic symbol of Indian city streets. Nimble, airy, and handles tight traffic bottlenecks like a breeze.',
-      },
-      {
-        name: 'Piaggio Ape City',
-        image: 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?w=400',
-        pax: 3,
-        boot: '90L (1 Small Bag)',
-        rate: 7,
-        ac: false,
-        desc: 'Slightly wider cabin seating for extra passenger comfort during short temple town commutes.',
-      },
-      {
-        name: 'Mahindra Treo Electric',
-        image: 'https://images.unsplash.com/photo-1561055657-b9e0bf0fa360?w=400',
-        pax: 3,
-        boot: '85L (Handbag/backpack)',
-        rate: 6,
-        ac: false,
-        desc: 'Eco-friendly, completely silent electric auto rickshaw. Smooth vibration-free local tour travels.',
+        desc: 'Traditional open-air local commuter. Extremely agile inside city streets and narrow tourist lanes.',
       },
     ],
   },
 ];
 
-export default function CarsListScreen() {
+export default function FleetCatalogScreen() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
+  const initialRide = searchParams.selectedRide as string || '4x4jeep';
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    if (searchParams.selectedRide) {
-      const match = fleetData.find(cat => cat.key === searchParams.selectedRide);
-      if (match) return match.key;
-    }
-    return '5seater';
-  });
+  const [activeTab, setActiveTab] = useState<string>(initialRide);
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -223,13 +147,6 @@ export default function CarsListScreen() {
 
   const currentCategory = fleetData.find(cat => cat.key === activeTab) || fleetData[0];
 
-  const handleBookCar = (carCategoryKey: string) => {
-    router.push({
-      pathname: '/make-trip',
-      params: { selectedRide: carCategoryKey }
-    });
-  };
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -239,31 +156,23 @@ export default function CarsListScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Choose Vehicle Spec</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Vehicle Fleet Showcase</Text>
         <View style={{ width: scale(40) }} />
       </View>
 
-      {/* Category Tabs list */}
+      {/* Categories Tab Bar */}
       <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
-          {fleetData.map((tab) => {
-            const isActive = activeTab === tab.key;
+          {fleetData.map((cat) => {
+            const isSelected = activeTab === cat.key;
             return (
               <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.tabItem,
-                  isActive && { borderBottomColor: colors.amber }
-                ]}
-                onPress={() => setActiveTab(tab.key)}
+                key={cat.key}
+                style={[styles.tabItem, isSelected && { borderBottomColor: colors.amber }]}
+                onPress={() => setActiveTab(cat.key)}
               >
-                {tab.icon === 'electric-rickshaw' ? (
-                  <MaterialIcons name="electric-rickshaw" size={scale(14)} color={isActive ? colors.amber : colors.textMuted} style={{ marginRight: scale(6) }} />
-                ) : (
-                  <FontAwesome5 name={tab.icon} size={scale(12)} color={isActive ? colors.amber : colors.textMuted} style={{ marginRight: scale(6) }} />
-                )}
-                <Text style={[styles.tabItemText, isActive ? { color: colors.amber, fontWeight: '800' } : { color: colors.textMuted }]}>
-                  {tab.label}
+                <Text style={[styles.tabItemText, { color: isSelected ? colors.amber : colors.textMuted }]}>
+                  {cat.label}
                 </Text>
               </TouchableOpacity>
             );
@@ -272,39 +181,31 @@ export default function CarsListScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Intro specifications bar */}
+        {/* Intro */}
         <View style={styles.introBlock}>
-          <Text style={styles.introTitle}>Drivers Fleet: {currentCategory.label} Cars</Text>
+          <Text style={styles.introTitle}>Choose Your Comfort</Text>
           <Text style={[styles.introSub, { color: colors.textMuted }]}>
-            Review luggage allowances, passenger capacities, and models driving in Karnataka matching your choice.
+            Browse our verified local fleet. Standard ride bookings are configured hourly inside your custom itinerary builder.
           </Text>
         </View>
 
-        {/* Cars list of active Category tab */}
+        {/* Fleet Cards */}
         {currentCategory.cars.map((car, idx) => (
-          <View
-            key={idx}
-            style={[
-              styles.carCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            {/* Top Row: Name and Rate */}
+          <View key={idx} style={[styles.carCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.cardHeaderRow}>
-              <View style={{ flex: 0.7 }}>
-                <Text style={[styles.carName, { color: colors.textPrimary }]} numberOfLines={1}>{car.name}</Text>
+              <View>
+                <Text style={[styles.carName, { color: colors.textPrimary }]}>{car.name}</Text>
                 <Text style={[styles.carStatusText, { color: colors.amber }]}>★ Certified Driver Vehicle</Text>
               </View>
               <View style={styles.fareInfo}>
-                <Text style={styles.farePrice}>₹{car.rate}/km</Text>
-                <Text style={[styles.fareUnit, { color: colors.textMuted }]}>estimate</Text>
+                <Text style={styles.farePrice}>
+                  ₹{adminState.vehicleRatesPerHour[currentCategory.key as keyof typeof adminState.vehicleRatesPerHour] || car.rate * 10}/hr
+                </Text>
+                <Text style={[styles.fareUnit, { color: colors.textMuted }]}>base hourly rate</Text>
               </View>
             </View>
 
-            {/* Visual Unsplash Image */}
+            {/* Visual Image */}
             <View style={styles.imageBlock}>
               <Image source={{ uri: car.image }} style={styles.carVisualImage} resizeMode="cover" />
             </View>
@@ -331,7 +232,7 @@ export default function CarsListScreen() {
 
               {/* AC Comfort status */}
               <View style={styles.specBox}>
-                <MaterialIcons name={car.ac ? 'ac-unit' : 'do-not-distrust'} size={scale(15)} color={colors.textMuted} />
+                <MaterialIcons name={car.ac ? 'ac-unit' : ('do-not-disturb' as any)} size={scale(15)} color={colors.textMuted} />
                 <Text style={[styles.specVal, { color: colors.textPrimary }]}>{car.ac ? 'Cabin AC' : 'Non-AC'}</Text>
                 <Text style={[styles.specLbl, { color: colors.textMuted }]}>Cabin comfort</Text>
               </View>
@@ -340,19 +241,14 @@ export default function CarsListScreen() {
             {/* Description */}
             <Text style={[styles.carDescText, { color: colors.textMuted }]}>{car.desc}</Text>
 
-            {/* Book Now Button */}
-            <TouchableOpacity
-              style={styles.bookButton}
-              activeOpacity={0.8}
-              onPress={() => handleBookCar(currentCategory.key)}
-            >
-              <Text style={styles.bookButtonText}>Book This Car</Text>
-              <MaterialIcons name="local-taxi" size={scale(16)} color="#101010" />
-            </TouchableOpacity>
+            {/* Visual Fleet Only Badge */}
+            <View style={[styles.bookButton, { backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: colors.border }]}>
+              <Text style={[styles.bookButtonText, { color: colors.textMuted }]}>Fleet View Only - Book in Trip Tab</Text>
+              <MaterialIcons name="info-outline" size={scale(15)} color={colors.textMuted} />
+            </View>
           </View>
         ))}
 
-        {/* Space */}
         <View style={{ height: verticalScale(30) }} />
       </ScrollView>
     </SafeAreaView>

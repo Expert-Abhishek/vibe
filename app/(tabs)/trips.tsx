@@ -16,7 +16,7 @@ import { adminState } from '../admin-state';
 
 interface TripRecord {
   id: string;
-  type: 'cab' | 'guide' | 'custom_trip';
+  type: 'cab' | 'guide' | 'custom_trip' | 'plan';
   vehicleType?: string;
   title: string;
   route?: string[];
@@ -25,8 +25,9 @@ interface TripRecord {
   time: string;
   price: number;
   paymentMode: 'UPI' | 'Cash';
-  status: 'Completed' | 'Upcoming';
+  status: 'Completed' | 'Upcoming' | 'Cancelled';
   rating?: number;
+  passengerCount?: number;
 }
 
 const initialTripHistory: TripRecord[] = [
@@ -144,20 +145,22 @@ export default function TripsHistoryScreen() {
       paymentMode: 'UPI' as const,
       status: 'Upcoming' as const,
       rawBooking: b,
+      passengerCount: undefined as number | undefined,
     }));
 
-  const allTrips = [...mappedAdvance, ...adminState.userTrips, ...initialTripHistory];
+  const allTrips = [...mappedAdvance, ...adminState.userTrips, ...initialTripHistory].filter(
+    (trip) => trip.status === 'Upcoming'
+  );
 
   const filteredTrips = allTrips.filter((trip) => {
     if (activeFilter === 'all') return true;
-    if (activeFilter === 'cab') return trip.type === 'cab' || trip.type === 'custom_trip';
+    if (activeFilter === 'cab') return trip.type === 'cab' || trip.type === 'custom_trip' || trip.type === 'plan';
     if (activeFilter === 'guide') return trip.type === 'guide';
     return true;
   });
 
-  // Dynamic Spend statistics calculator
   const totalSpend = allTrips.reduce((sum, item) => sum + item.price, 0);
-  const cabCount = allTrips.filter((t) => t.type === 'cab' || t.type === 'custom_trip').length;
+  const cabCount = allTrips.filter((t) => t.type === 'cab' || t.type === 'custom_trip' || t.type === 'plan').length;
   const guideCount = allTrips.filter((t) => t.type === 'guide').length;
 
   const handleCancelPress = (trip: any) => {
@@ -210,6 +213,11 @@ export default function TripsHistoryScreen() {
                 b.status = 'Cancelled';
               }
             });
+            adminState.userTrips.forEach(t => {
+              if (t.id === trip.id) {
+                t.status = 'Cancelled';
+              }
+            });
             Alert.alert('Booking Cancelled', `Your trip has been cancelled. Refund of ₹${refundAmount} will be credited shortly.`);
             setCancelTrigger(prev => prev + 1);
           }
@@ -224,14 +232,14 @@ export default function TripsHistoryScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Trip History</Text>
-        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Record of your travels & bookings</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Upcoming Trips</Text>
+        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage your scheduled rides, guides, and plans</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Expenses Dashboard Summary */}
         <View style={[styles.summaryCard, { backgroundColor: colors.surface }]}>
-          <Text style={styles.summaryTitle}>Total Travel Expenses</Text>
+          <Text style={styles.summaryTitle}>Scheduled Value / Active Bookings</Text>
           <Text style={styles.summaryAmount}>₹{totalSpend.toLocaleString('en-IN')}</Text>
           
           <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
@@ -239,14 +247,14 @@ export default function TripsHistoryScreen() {
           <View style={styles.summaryStatsRow}>
             <View style={styles.statItem}>
               <FontAwesome5 name="car" size={scale(14)} color={colors.amber} />
-              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{cabCount} Rides</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Cabs Booked</Text>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{cabCount} Scheduled</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Cabs & Custom Trips</Text>
             </View>
 
             <View style={styles.statItem}>
               <FontAwesome5 name="explore" size={scale(14)} color={colors.amber} />
-              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{guideCount} Guides</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Tours Guided</Text>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{guideCount} Guided</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>Tours / Guides</Text>
             </View>
           </View>
         </View>
@@ -267,7 +275,7 @@ export default function TripsHistoryScreen() {
             onPress={() => setActiveFilter('cab')}
           >
             <Text style={[styles.filterPillText, { color: activeFilter === 'cab' ? '#101010' : colors.textPrimary }]}>
-              Cabs & Trips
+              Cabs & Plans
             </Text>
           </TouchableOpacity>
 
@@ -282,131 +290,123 @@ export default function TripsHistoryScreen() {
         </View>
 
         {/* History timeline Cards list */}
-        {filteredTrips.map((trip) => {
-          const isCab = trip.type === 'cab' || trip.type === 'custom_trip';
-          const isCompleted = trip.status === 'Completed';
+        {filteredTrips.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+            <MaterialIcons name="navigation" size={scale(36)} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginTop: scale(8) }}>
+              No upcoming trips found.
+            </Text>
+          </View>
+        ) : (
+          filteredTrips.map((trip) => {
+            const isCab = trip.type === 'cab' || trip.type === 'custom_trip' || trip.type === 'plan';
+            const isCompleted = trip.status === 'Completed';
 
-          return (
-            <View key={trip.id} style={[styles.tripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              
-              {/* Card Title Header */}
-              <View style={styles.cardHeaderRow}>
-                <View style={styles.titleIconCol}>
-                  <View style={[styles.iconBox, { backgroundColor: isCab ? 'rgba(245,197,24,0.1)' : 'rgba(16, 185, 129, 0.1)' }]}>
-                    {trip.type === 'auto' ? (
-                      <MaterialIcons name="electric-rickshaw" size={scale(16)} color={colors.amber} />
-                    ) : (
-                      <FontAwesome5 
-                        name={isCab ? (trip.type === 'custom_trip' ? 'map-marked-alt' : 'car') : 'compass'} 
-                        size={scale(14)} 
-                        color={isCab ? colors.amber : '#10B981'} 
-                      />
+            return (
+              <View key={trip.id} style={[styles.tripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                
+                {/* Card Title Header */}
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.titleIconCol}>
+                    <View style={[styles.iconBox, { backgroundColor: isCab ? 'rgba(245,197,24,0.1)' : 'rgba(16, 185, 129, 0.1)' }]}>
+                      {(trip.type as string) === 'auto' ? (
+                        <MaterialIcons name="electric-rickshaw" size={scale(16)} color={colors.amber} />
+                      ) : (
+                        <FontAwesome5 
+                          name={isCab ? (trip.type === 'custom_trip' ? 'map-marked-alt' : 'car') : 'compass'} 
+                          size={scale(14)} 
+                          color={isCab ? colors.amber : '#10B981'} 
+                        />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.tripNameText, { color: colors.textPrimary }]} numberOfLines={2}>
+                        {trip.title}
+                      </Text>
+                      <Text style={[styles.tripDateSub, { color: colors.textMuted }]}>
+                        {trip.date} · {trip.time}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Status indicator */}
+                  <View style={[styles.statusBadge, { backgroundColor: 'rgba(245,197,24,0.1)' }]}>
+                    <Text style={[styles.statusBadgeText, { color: colors.amber }]}>
+                      {trip.status}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Waypoints line visual if it is a cab route */}
+                {isCab && trip.route && (
+                  <View style={styles.routeSection}>
+                    {trip.route.map((stop, idx) => {
+                      const isLast = idx === trip.route!.length - 1;
+                      return (
+                        <View key={idx} style={styles.routeNodeItem}>
+                          <View style={styles.nodeIndicator}>
+                            <View style={[styles.nodeIndicatorDot, { backgroundColor: idx === 0 ? colors.amber : (isLast ? '#ef4444' : '#888') }]} />
+                            {!isLast && <View style={[styles.nodeIndicatorLine, { backgroundColor: colors.border }]} />}
+                          </View>
+                          <Text style={[styles.nodeAddressName, { color: colors.textPrimary }]} numberOfLines={1}>
+                            {stop}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* Service details row */}
+                <View style={[styles.detailsSection, { borderTopColor: colors.border }]}>
+                  {/* Left col info */}
+                  <View>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>
+                      {isCab ? 'Assigned Driver' : 'Tour Guide Name'}
+                    </Text>
+                    <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
+                      {trip.driverOrGuideName}
+                    </Text>
+                    {trip.vehicleType && (
+                      <Text style={[styles.vehicleModelLabel, { color: colors.textMuted }]}>
+                        {trip.vehicleType}
+                      </Text>
+                    )}
+                    {trip.passengerCount !== undefined && (
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: verticalScale(2) }}>
+                        Passengers: {trip.passengerCount}
+                      </Text>
                     )}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.tripNameText, { color: colors.textPrimary }]} numberOfLines={2}>
-                      {trip.title}
-                    </Text>
-                    <Text style={[styles.tripDateSub, { color: colors.textMuted }]}>
-                      {trip.date} · {trip.time}
-                    </Text>
-                  </View>
-                </View>
 
-                {/* Status indicator */}
-                <View style={[styles.statusBadge, { backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)' }]}>
-                  <Text style={[styles.statusBadgeText, { color: isCompleted ? '#10B981' : colors.amber }]}>
-                    {trip.status}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Waypoints line visual if it is a cab route */}
-              {isCab && trip.route && (
-                <View style={styles.routeSection}>
-                  {trip.route.map((stop, idx) => {
-                    const isLast = idx === trip.route!.length - 1;
-                    return (
-                      <View key={idx} style={styles.routeNodeItem}>
-                        <View style={styles.nodeIndicator}>
-                          <View style={[styles.nodeIndicatorDot, { backgroundColor: idx === 0 ? colors.amber : (isLast ? '#ef4444' : '#888') }]} />
-                          {!isLast && <View style={[styles.nodeIndicatorLine, { backgroundColor: colors.border }]} />}
-                        </View>
-                        <Text style={[styles.nodeAddressName, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {stop}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-
-              {/* Service details row */}
-              <View style={[styles.detailsSection, { borderTopColor: colors.border }]}>
-                {/* Left col info */}
-                <View>
-                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>
-                    {isCab ? 'Assigned Driver' : 'Tour Guide Name'}
-                  </Text>
-                  <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                    {trip.driverOrGuideName}
-                  </Text>
-                  {trip.vehicleType && (
-                    <Text style={[styles.vehicleModelLabel, { color: colors.textMuted }]}>
-                      {trip.vehicleType}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Right col info */}
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Expenses</Text>
-                  <Text style={styles.detailPrice}>₹{trip.price}</Text>
-                  <Text style={[styles.payMethodVal, { color: colors.textMuted }]}>
-                    Paid via {trip.paymentMode}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Star Rating details if present */}
-              {isCompleted && trip.rating && (
-                <View style={[styles.ratingSection, { borderTopColor: colors.border }]}>
-                  <View style={styles.starsRow}>
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <MaterialIcons
-                        key={s}
-                        name={s <= Math.floor(trip.rating!) ? 'star' : 'star-border'}
-                        size={scale(14)}
-                        color={colors.amber}
-                      />
-                    ))}
-                    <Text style={[styles.ratingNum, { color: colors.textPrimary }]}>
-                      {trip.rating}
+                  {/* Right col info */}
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Expenses</Text>
+                    <Text style={styles.detailPrice}>₹{trip.price}</Text>
+                    <Text style={[styles.payMethodVal, { color: colors.textMuted }]}>
+                      Paid via {trip.paymentMode}
                     </Text>
                   </View>
-                  <TouchableOpacity style={styles.rebookBtn}>
-                    <Text style={styles.rebookBtnText}>Book Again</Text>
-                  </TouchableOpacity>
                 </View>
-              )}
 
-              {/* Cancellation button for upcoming schedules */}
-              {!isCompleted && (
-                <View style={[styles.ratingSection, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>SCHEDULED STATUS</Text>
-                  <TouchableOpacity 
-                    style={[styles.rebookBtn, { backgroundColor: '#ef4444' }]}
-                    onPress={() => handleCancelPress(trip)}
-                  >
-                    <Text style={styles.rebookBtnText}>Cancel Booking</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          );
-        })}
+                {/* Cancellation button for upcoming schedules */}
+                {!isCompleted && (
+                  <View style={[styles.ratingSection, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>SCHEDULED STATUS</Text>
+                    <TouchableOpacity 
+                      style={[styles.rebookBtn, { backgroundColor: '#ef4444' }]}
+                      onPress={() => handleCancelPress(trip)}
+                    >
+                      <Text style={[styles.rebookBtnText, { color: '#ffffff' }]}>Cancel Trip</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
 
-        {/* Spacing */}
+        {/* Space */}
         <View style={{ height: verticalScale(30) }} />
       </ScrollView>
     </SafeAreaView>
@@ -416,44 +416,50 @@ export default function TripsHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#101014',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: scale(18),
-    paddingTop: verticalScale(12),
-    paddingBottom: verticalScale(14),
+    paddingVertical: verticalScale(12),
   },
   headerTitle: {
-    fontSize: moderateFontScale(22),
+    fontSize: moderateFontScale(20),
     fontWeight: '800',
   },
   headerSub: {
-    fontSize: moderateFontScale(13),
+    fontSize: moderateFontScale(12),
     marginTop: verticalScale(2),
   },
   scrollContent: {
     paddingHorizontal: scale(18),
+    paddingTop: verticalScale(14),
+    paddingBottom: verticalScale(100),
   },
   summaryCard: {
-    borderRadius: scale(22),
+    borderRadius: scale(24),
     padding: scale(18),
-    marginBottom: verticalScale(18),
+    marginBottom: verticalScale(16),
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
   summaryTitle: {
-    color: '#8D8D97',
+    color: '#8E8E93',
     fontSize: moderateFontScale(11),
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   summaryAmount: {
     color: '#F5C518',
     fontSize: moderateFontScale(24),
-    fontWeight: '800',
+    fontWeight: '900',
     marginTop: verticalScale(4),
   },
   summaryDivider: {
     height: 1.2,
-    marginVertical: verticalScale(14),
+    marginVertical: verticalScale(12),
   },
   summaryStatsRow: {
     flexDirection: 'row',
@@ -463,41 +469,40 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statValue: {
-    fontSize: moderateFontScale(14),
+    fontSize: moderateFontScale(13),
     fontWeight: '800',
-    marginTop: verticalScale(6),
+    marginTop: verticalScale(4),
   },
   statLabel: {
     fontSize: moderateFontScale(10),
     fontWeight: '600',
-    marginTop: verticalScale(2),
+    marginTop: verticalScale(1),
   },
   filterPillsRow: {
     flexDirection: 'row',
-    gap: scale(8),
+    gap: scale(10),
     marginBottom: verticalScale(16),
   },
   filterPill: {
-    borderRadius: scale(12),
-    paddingVertical: verticalScale(7),
-    paddingHorizontal: scale(14),
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(16),
+    borderRadius: scale(20),
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   filterPillActive: {
     backgroundColor: '#F5C518',
     borderColor: '#F5C518',
   },
   filterPillText: {
-    fontSize: moderateFontScale(11),
+    fontSize: moderateFontScale(12),
     fontWeight: '700',
   },
   tripCard: {
-    borderRadius: scale(20),
-    padding: scale(16),
-    marginBottom: verticalScale(16),
+    borderRadius: scale(22),
     borderWidth: 1.2,
+    padding: scale(14),
+    marginBottom: verticalScale(14),
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -507,49 +512,46 @@ const styles = StyleSheet.create({
   titleIconCol: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 0.75,
+    gap: scale(10),
+    flex: 1,
   },
   iconBox: {
     width: scale(32),
     height: scale(32),
-    borderRadius: scale(8),
-    alignItems: 'center',
+    borderRadius: scale(10),
     justifyContent: 'center',
-    marginRight: scale(12),
+    alignItems: 'center',
   },
   tripNameText: {
-    fontSize: moderateFontScale(13.5),
+    fontSize: moderateFontScale(14),
     fontWeight: '800',
     lineHeight: moderateFontScale(18),
   },
   tripDateSub: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '600',
+    fontSize: moderateFontScale(11),
     marginTop: verticalScale(2),
   },
   statusBadge: {
-    borderRadius: scale(8),
     paddingVertical: verticalScale(3),
     paddingHorizontal: scale(8),
+    borderRadius: scale(8),
   },
   statusBadgeText: {
-    fontSize: moderateFontScale(9),
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    fontSize: moderateFontScale(10),
+    fontWeight: '700',
   },
   routeSection: {
-    marginTop: verticalScale(14),
+    marginTop: verticalScale(12),
     paddingLeft: scale(6),
   },
   routeNodeItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: verticalScale(20),
+    marginBottom: verticalScale(2),
   },
   nodeIndicator: {
-    width: scale(16),
     alignItems: 'center',
-    justifyContent: 'center',
+    width: scale(14),
     marginRight: scale(8),
   },
   nodeIndicatorDot: {
@@ -558,78 +560,71 @@ const styles = StyleSheet.create({
     borderRadius: scale(3),
   },
   nodeIndicatorLine: {
-    width: scale(1.5),
-    height: verticalScale(15),
-    position: 'absolute',
-    top: scale(10),
+    width: 1.2,
+    height: verticalScale(14),
   },
   nodeAddressName: {
-    fontSize: moderateFontScale(11.5),
+    fontSize: moderateFontScale(11),
     fontWeight: '600',
-    flex: 1,
   },
   detailsSection: {
-    borderTopWidth: 1.2,
-    marginTop: verticalScale(14),
-    paddingTop: verticalScale(12),
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    borderTopWidth: 1.2,
+    marginTop: verticalScale(12),
+    paddingTop: verticalScale(10),
   },
   detailLabel: {
-    fontSize: moderateFontScale(9),
+    fontSize: moderateFontScale(10),
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   detailValue: {
     fontSize: moderateFontScale(13),
-    fontWeight: '700',
-    marginTop: verticalScale(3),
+    fontWeight: '800',
+    marginTop: verticalScale(2),
   },
   vehicleModelLabel: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '600',
+    fontSize: moderateFontScale(11),
     marginTop: verticalScale(1),
   },
   detailPrice: {
     color: '#F5C518',
-    fontSize: moderateFontScale(16),
-    fontWeight: '800',
+    fontSize: moderateFontScale(17),
+    fontWeight: '900',
     marginTop: verticalScale(2),
   },
   payMethodVal: {
-    fontSize: moderateFontScale(9.5),
+    fontSize: moderateFontScale(10),
     fontWeight: '600',
-    marginTop: verticalScale(1),
+    marginTop: verticalScale(2),
   },
   ratingSection: {
-    borderTopWidth: 1.2,
-    marginTop: verticalScale(12),
-    paddingTop: verticalScale(10),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  starsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(2),
-  },
-  ratingNum: {
-    fontSize: moderateFontScale(11),
-    fontWeight: '700',
-    marginLeft: scale(4),
+    borderTopWidth: 1.2,
+    marginTop: verticalScale(10),
+    paddingTop: verticalScale(8),
   },
   rebookBtn: {
-    backgroundColor: '#2C2C34',
-    borderRadius: scale(8),
-    paddingVertical: verticalScale(5),
-    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(6),
+    paddingHorizontal: scale(14),
+    borderRadius: scale(10),
+    backgroundColor: '#F5C518',
   },
   rebookBtnText: {
-    color: '#ffffff',
+    color: '#101010',
     fontSize: moderateFontScale(11),
-    fontWeight: '700',
+    fontWeight: '800',
+  },
+  emptyCard: {
+    borderRadius: scale(20),
+    padding: scale(30),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
 });

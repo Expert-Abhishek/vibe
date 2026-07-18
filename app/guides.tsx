@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,12 +10,30 @@ import {
   Modal,
   StatusBar,
   Alert,
+  Switch,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { adminState } from './admin-state';
+
+// Dynamically import react-native-maps to prevent crashes on web
+let MapView: any = null;
+let Marker: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const Maps = require('react-native-maps');
+    MapView = Maps.default;
+    Marker = Maps.Marker;
+  } catch (e) {
+    console.warn('react-native-maps could not be loaded dynamically in guides:', e);
+  }
+}
 
 interface Guide {
   id: string;
@@ -28,138 +46,107 @@ interface Guide {
   description: string;
   avatarColor: string;
   image: string;
+  chargePerHour: number;
+  latitude: number;
+  longitude: number;
 }
 
 const mockGuides: Guide[] = [
   {
-    id: '1',
+    id: 'g1',
     name: 'Somanna Gowda',
     city: 'Hampi',
     experience: 15,
     rating: 4.9,
-    languages: ['Kannada', 'English', 'Telugu', 'French'],
+    languages: ['Kannada', 'English', 'Telugu'],
     specialty: 'UNESCO Ruins & Architecture',
-    description: 'Born and raised around the ruins of Vijayanagara, I have spent 15 years studying every stone of Hampi. Join me to unlock the secrets of the Virupaksha Temple, Vitthala chariot, and hidden royal enclosures.',
+    description: 'Born and raised in Hampi, studied the ruins for 15 years. Expert on Virupaksha and Vitthala temple details.',
     avatarColor: '#E07A5F',
     image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    chargePerHour: 350,
+    latitude: 15.3350,
+    longitude: 76.4600,
   },
   {
-    id: '2',
+    id: 'g2',
     name: 'Ananya Shastri',
     city: 'Mysuru',
     experience: 10,
     rating: 4.8,
-    languages: ['Kannada', 'English', 'Sanskrit', 'Hindi'],
+    languages: ['Kannada', 'English', 'Hindi'],
     specialty: 'Palace History & Heritage Walks',
-    description: 'Experience Mysuru like royalty. I specialize in historical narratives of the Wodeyar dynasty, palace secrets, and local heritage food trails. Certified yoga practitioner as well!',
+    description: 'Specializes in Wodeyar dynasty history and palace secrets. Guides heritage walks in Mysore.',
     avatarColor: '#3D405B',
     image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+    chargePerHour: 400,
+    latitude: 12.3053,
+    longitude: 76.6552,
   },
   {
-    id: '3',
+    id: 'g3',
     name: 'Ramesh Kumar',
     city: 'Bengaluru',
     experience: 12,
     rating: 4.7,
-    languages: ['Kannada', 'English', 'Hindi'],
+    languages: ['Kannada', 'English'],
     specialty: 'City Heritage & Garden Walks',
-    description: 'Discover Bengaluru beyond the IT hub. We will explore the historical Bengaluru Palace, Tipu Sultan’s Summer Palace, and the botanical marvels of Lalbagh Gardens.',
+    description: 'Explores Tipu summer palace, Lalbagh gardens and colonial-era landmarks of Bangalore.',
     avatarColor: '#81B29A',
     image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    chargePerHour: 300,
+    latitude: 12.9982,
+    longitude: 77.5920,
   },
   {
-    id: '4',
+    id: 'g4',
     name: 'Kavitha Hegde',
     city: 'Coorg',
     experience: 8,
     rating: 4.9,
     languages: ['Kannada', 'English', 'Kodava'],
     specialty: 'Coffee Plantation & Forest Treks',
-    description: 'Let me guide you through the misty hills of Coorg (Kodagu). Learn about coffee harvesting, hike the peaks of Mandalpatti, and enjoy authentic Kodava hospitality.',
+    description: 'Leads hikes through plantation estate trails and peaks like Mandalpatti.',
     avatarColor: '#F4F1DE',
     image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
+    chargePerHour: 350,
+    latitude: 12.4385,
+    longitude: 75.7214,
   },
   {
-    id: '5',
+    id: 'g5',
     name: 'Manjunath Naik',
     city: 'Gokarna',
     experience: 6,
     rating: 4.6,
-    languages: ['Kannada', 'English', 'Konkani'],
+    languages: ['Kannada', 'English'],
     specialty: 'Beach Trekking & Mythological Trails',
-    description: 'Explore the cliffs and sandy shores of Gokarna. I guide tourists along the famous Five Beach Trek (Kudle, Om, Half Moon, Paradise, Gokarna) and share regional legendary tales.',
+    description: 'Guides along beach cliffs and temple routes. Native of Gokarna coast.',
     avatarColor: '#E29578',
     image: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150',
-  },
-  {
-    id: '6',
-    name: 'Chethan Swamy',
-    city: 'Bandipur',
-    experience: 9,
-    rating: 4.9,
-    languages: ['Kannada', 'English', 'Tamil'],
-    specialty: 'Wildlife Tracking & Bird Watching',
-    description: 'A certified naturalist. I help tourists identify flora, fauna, and track pugmarks in the buffer zones of Bandipur National Park. High safety standards guaranteed.',
-    avatarColor: '#DDBDF1',
-    image: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-  },
-  {
-    id: '7',
-    name: 'Basavaraj Patil',
-    city: 'Badami',
-    experience: 11,
-    rating: 4.8,
-    languages: ['Kannada', 'English', 'Hindi'],
-    specialty: 'Cave Temples & Chaluyan Art',
-    description: 'Expert on early Chalukya architecture. I cover the red sandstone cave temples of Badami, the temple complex of Pattadakal (UNESCO), and the ancient fort of Aihole.',
-    avatarColor: '#F2CC8F',
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-  },
-  {
-    id: '8',
-    name: 'Divya Rao',
-    city: 'Chikmagalur',
-    experience: 7,
-    rating: 4.7,
-    languages: ['Kannada', 'English'],
-    specialty: 'Peak Trekking & Waterfalls',
-    description: 'Adventure guide for Western Ghats. I lead hiking trips to Mullayanagiri Peak (highest in Karnataka), Kemmangundi, and secret waterfalls around the Baba Budangiri hills.',
-    avatarColor: '#A8DADC',
-    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-  },
-  {
-    id: '9',
-    name: 'Shanthi Prasad',
-    city: 'Shravanabelagola',
-    experience: 14,
-    rating: 4.9,
-    languages: ['Kannada', 'English', 'Hindi'],
-    specialty: 'Jain Heritage & History',
-    description: 'I guide visitors up the Vindhyagiri hill to see the colossal 57-foot statue of Lord Bahubali, explaining the history of Ganga dynasty and ancient inscriptions on the rock.',
-    avatarColor: '#E63946',
-    image: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150',
-  },
-  {
-    id: '10',
-    name: 'Sunil Fernandes',
-    city: 'Mangaluru',
-    experience: 5,
-    rating: 4.5,
-    languages: ['Kannada', 'English', 'Tulu', 'Konkani'],
-    specialty: 'Coastal Food & History Tours',
-    description: 'Discover Mangalorean culture! I run seafood walks, visits to the St. Aloysius Chapel paintings, Kadri temple, and share Mangaluru port historical stories.',
-    avatarColor: '#457B9D',
-    image: 'https://images.unsplash.com/photo-1552058544-f2b08422138a?w=150',
+    chargePerHour: 250,
+    latitude: 14.5262,
+    longitude: 74.3168,
   },
 ];
 
 export default function GuidesScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const initialInstantParam = params.instantBooking === 'true';
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [isInstantBooking, setIsInstantBooking] = useState(initialInstantParam);
+
+  // Booking process states
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
+  const [bookingStep, setBookingStep] = useState<'none' | 'loading' | 'map' | 'datetime' | 'accepted'>('none');
+  
+  // Advanced prebooking fields
+  const [prebookDate, setPrebookDate] = useState('');
+  const [prebookTime, setPrebookTime] = useState('10:00 AM');
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -169,51 +156,123 @@ export default function GuidesScreen() {
     textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
     border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
+    success: '#10B981',
+    danger: '#ef4444',
   };
 
-  const filteredGuides = searchQuery.trim() === ''
-    ? mockGuides
-    : mockGuides.filter(guide => 
-        guide.city.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+  const filteredGuides = mockGuides.filter(
+    (g) =>
+      g.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const handleBookGuide = (guide: Guide) => {
-    setSelectedGuide(null);
+  const startBookingFlow = (guide: Guide) => {
+    setSelectedGuide(guide);
+    if (isInstantBooking) {
+      setBookingStep('loading');
+      setTimeout(() => {
+        setBookingStep('map');
+      }, 1500);
+    } else {
+      // Set default pre-booking date to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setPrebookDate(tomorrow.toISOString().split('T')[0]);
+      setBookingStep('datetime');
+    }
+  };
+
+  // Date Check validation logic (15 Days Constraint)
+  const validatePrebookDate = (dateStr: string) => {
+    if (!dateStr) return { valid: false, error: 'Please select a date.' };
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return { valid: false, error: 'Invalid date format.' };
+    
+    const selectedDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const today = new Date();
+    
+    selectedDate.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    
+    const diffTime = selectedDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return { valid: false, error: 'Pre-booking date cannot be in the past.' };
+    }
+    if (diffDays > 15) {
+      return { valid: false, error: 'Pre-booking restricted to 15 days in advance only.' };
+    }
+    return { valid: true };
+  };
+
+  const confirmPrebooking = () => {
+    const check = validatePrebookDate(prebookDate);
+    if (!check.valid) {
+      Alert.alert('Date Restriction', check.error);
+      return;
+    }
+    setBookingStep('loading');
+    setTimeout(() => {
+      setBookingStep('accepted');
+    }, 1200);
+  };
+
+  const checkoutGuide = () => {
+    if (!selectedGuide) return;
+    const finalDate = isInstantBooking ? 'Today' : prebookDate;
+    const finalTime = isInstantBooking ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : prebookTime;
+
+    // Add guide booking to upcoming trips
+    adminState.userTrips.push({
+      id: `guide_book_${Date.now()}`,
+      type: 'guide',
+      title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
+      driverOrGuideName: selectedGuide.name,
+      date: finalDate,
+      time: finalTime,
+      price: selectedGuide.chargePerHour * 4, // 4 hours block charge
+      paymentMode: 'UPI',
+      status: 'Upcoming',
+    });
+
     Alert.alert(
-      'Guide Booked!',
-      `You have successfully booked ${guide.name} for your trip to ${guide.city}. Our guide will contact you shortly.`,
-      [{ text: 'Great!' }]
+      'Guide Added to Trips!',
+      `Successfully scheduled ${selectedGuide.name} on ${finalDate} at ${finalTime}. You can track this in your upcoming Trips.`,
+      [
+        {
+          text: 'View Trips',
+          onPress: () => {
+            setBookingStep('none');
+            setSelectedGuide(null);
+            router.replace('/(tabs)/trips');
+          },
+        },
+      ]
     );
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      
-      {/* Header */}
-      <View style={styles.header}>
+
+      {/* Top Navbar */}
+      <View style={styles.navbar}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Local Guides</Text>
+        <Text style={[styles.navTitle, { color: colors.textPrimary }]}>Hire Local Guides</Text>
         <View style={{ width: scale(40) }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Banner Prompt: Custom Way to Ask */}
-        <View style={styles.askBanner}>
-          <Text style={styles.askTitle}>Where is your next adventure?</Text>
-          <Text style={[styles.askSubtitle, { color: colors.textMuted }]}>
-            Enter the city you are planning to visit, and we will connect you with a certified local explorer.
-          </Text>
-        </View>
-
-        {/* Search Bar */}
-        <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border }]}>
+      {/* TOP SEARCH BAR (90% width) & INSTANT SWITH (10% width) */}
+      <View style={styles.searchRow}>
+        <View style={[styles.searchBar, { flex: 0.88, borderColor: colors.border }]}>
           <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
           <TextInput
-            placeholder="Search by city (e.g. Hampi, Coorg, Mysuru)"
-            placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
+            placeholder="Search guides by city or area..."
+            placeholderTextColor={colors.textMuted}
             style={[styles.searchInput, { color: colors.textPrimary }]}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -225,179 +284,281 @@ export default function GuidesScreen() {
             </TouchableOpacity>
           )}
         </View>
-
-        {/* Guides List Header */}
-        <View style={styles.listHeaderRow}>
-          <Text style={styles.sectionTitle}>
-            {searchQuery.trim() === '' ? 'Top 10 Rated Guides' : `Guides in "${searchQuery}"`}
+        <View style={styles.switchCol}>
+          <Text style={[styles.switchText, { color: isInstantBooking ? colors.amber : colors.textMuted }]}>
+            {isInstantBooking ? '⚡Instant' : 'Standard'}
           </Text>
-          <Text style={[styles.resultCount, { color: colors.textMuted }]}>
-            {filteredGuides.length} {filteredGuides.length === 1 ? 'guide' : 'guides'} found
-          </Text>
+          <Switch
+            value={isInstantBooking}
+            onValueChange={setIsInstantBooking}
+            trackColor={{ false: 'rgba(255,255,255,0.08)', true: colors.amber }}
+            thumbColor={isInstantBooking ? '#101014' : '#8E8E93'}
+            style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+          />
         </View>
+      </View>
 
-        {/* Guides List */}
-        {filteredGuides.length > 0 ? (
-          filteredGuides.map((guide) => (
-            <TouchableOpacity
-              key={guide.id}
-              activeOpacity={0.9}
-              style={[styles.guideCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => setSelectedGuide(guide)}
-            >
-              {/* Left Side: Avatar/Image */}
-              <View style={[styles.avatarWrapper, { backgroundColor: guide.avatarColor }]}>
-                <Image
-                  source={{ uri: guide.image }}
-                  style={styles.avatarImage}
-                />
-                <View style={styles.badgeRating}>
-                  <MaterialIcons name="star" size={scale(10)} color="#101010" />
-                  <Text style={styles.ratingText}>{guide.rating}</Text>
-                </View>
-              </View>
+      {/* Guides List */}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={[styles.listHeader, { color: colors.amber }]}>
+          {searchQuery.trim() === '' ? 'Highly Recommended Guides' : `Guides matching "${searchQuery}"`}
+        </Text>
 
-              {/* Right Side: Details */}
-              <View style={styles.guideDetails}>
-                <View style={styles.nameRow}>
-                  <Text style={[styles.guideName, { color: colors.textPrimary }]}>{guide.name}</Text>
-                  <View style={[styles.cityBadge, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : 'rgba(245,197,24,0.15)' }]}>
-                    <Text style={styles.cityBadgeText}>{guide.city}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.experienceRow}>
-                  <MaterialIcons name="history" size={scale(14)} color={colors.amber} />
-                  <Text style={[styles.experienceText, { color: colors.textMuted }]}>
-                    {guide.experience} Years Experience
-                  </Text>
-                </View>
-
-                <Text style={[styles.specialtyText, { color: colors.amber }]} numberOfLines={1}>
-                  {guide.specialty}
-                </Text>
-
-                <View style={styles.languagesRow}>
-                  {guide.languages.slice(0, 3).map((lang, idx) => (
-                    <Text key={idx} style={[styles.langTag, { color: colors.textMuted, borderColor: colors.border }]}>
-                      {lang}
-                    </Text>
-                  ))}
-                  {guide.languages.length > 3 && (
-                    <Text style={[styles.langTag, { color: colors.textMuted, borderColor: colors.border }]}>
-                      +{guide.languages.length - 3}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        ) : (
-          <View style={styles.noResultsCard}>
-            <MaterialIcons name="explore-off" size={scale(48)} color={colors.textMuted} style={{ marginBottom: verticalScale(10) }} />
-            <Text style={[styles.noResultsTitle, { color: colors.textPrimary }]}>No guides found here</Text>
-            <Text style={[styles.noResultsSub, { color: colors.textMuted }]}>
-              {"We are currently expanding our certified network. Try searching for \"Hampi\", \"Coorg\" or \"Mysuru\"."}
+        {filteredGuides.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
+            <MaterialIcons name="explore-off" size={scale(40)} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, marginTop: scale(8), fontSize: moderateFontScale(13) }}>
+              No certified local guides found in this city.
             </Text>
-            <TouchableOpacity style={styles.resetButton} onPress={() => setSearchQuery('')}>
-              <Text style={styles.resetButtonText}>View Top 10 Guides</Text>
-            </TouchableOpacity>
           </View>
-        )}
-
-        {/* Extra spacing */}
-        <View style={{ height: verticalScale(30) }} />
-      </ScrollView>
-
-      {/* Guide Detail Modal */}
-      <Modal
-        visible={selectedGuide !== null}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSelectedGuide(null)}
-      >
-        {selectedGuide && (
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-              {/* Modal Drag handle indicator */}
-              <View style={styles.dragHandle} />
-
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalHeaderTitle, { color: colors.textPrimary }]}>Guide Profile</Text>
-                <TouchableOpacity style={styles.closeButton} onPress={() => setSelectedGuide(null)}>
-                  <MaterialIcons name="close" size={scale(22)} color={colors.textPrimary} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalScroll}>
-                {/* Large Profile Visual */}
-                <View style={styles.modalProfileRow}>
-                  <View style={[styles.modalAvatar, { backgroundColor: selectedGuide.avatarColor }]}>
-                    <Image source={{ uri: selectedGuide.image }} style={styles.modalAvatarImage} />
-                  </View>
-                  <View style={styles.modalProfileText}>
-                    <Text style={[styles.modalName, { color: colors.textPrimary }]}>{selectedGuide.name}</Text>
-                    <View style={styles.modalBadgeRow}>
-                      <View style={[styles.cityBadge, { backgroundColor: 'rgba(245,197,24,0.1)' }]}>
-                        <Text style={styles.cityBadgeText}>{selectedGuide.city}</Text>
-                      </View>
-                      <View style={styles.modalStarRating}>
-                        <MaterialIcons name="star" size={scale(16)} color={colors.amber} />
-                        <Text style={[styles.modalRatingVal, { color: colors.textPrimary }]}>{selectedGuide.rating}</Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.modalExpText, { color: colors.textMuted }]}>
-                      {selectedGuide.experience} years working experience
+        ) : (
+          filteredGuides.map((guide) => (
+            <View key={guide.id} style={[styles.guideCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
+              
+              {/* Photo & main Info */}
+              <View style={styles.guideCardHeader}>
+                <Image source={{ uri: guide.image }} style={styles.guidePhoto} />
+                <View style={styles.guideMeta}>
+                  <Text style={[styles.guideName, { color: colors.textPrimary }]}>{guide.name}</Text>
+                  
+                  <View style={styles.infoBadgeRow}>
+                    <Text style={[styles.cityText, { color: colors.amber }]}>{guide.city}</Text>
+                    <View style={styles.dotSeparator} />
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>
+                      💼 {guide.experience} Yrs Working Exp.
                     </Text>
                   </View>
-                </View>
 
-                {/* Specialties */}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Specialty</Text>
-                  <View style={styles.specialtyPill}>
-                    <MaterialIcons name="verified" size={scale(16)} color={colors.amber} style={{ marginRight: scale(6) }} />
-                    <Text style={styles.specialtyPillText}>{selectedGuide.specialty}</Text>
-                  </View>
-                </View>
-
-                {/* Description */}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Biography</Text>
-                  <Text style={[styles.modalBio, { color: colors.textMuted }]}>
-                    {selectedGuide.description}
+                  <Text style={[styles.specialtyText, { color: colors.textPrimary }]} numberOfLines={1}>
+                    Area: {guide.specialty}
                   </Text>
                 </View>
+              </View>
 
-                {/* Languages */}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Languages Spoken</Text>
-                  <View style={styles.modalLangRow}>
-                    {selectedGuide.languages.map((lang, idx) => (
-                      <View key={idx} style={[styles.modalLangTag, { borderColor: colors.border }]}>
-                        <Text style={[styles.modalLangText, { color: colors.textPrimary }]}>{lang}</Text>
-                      </View>
-                    ))}
+              {/* Languages tags */}
+              <View style={styles.langRow}>
+                {guide.languages.map((lang, idx) => (
+                  <View key={idx} style={[styles.langBadge, { borderColor: colors.border }]}>
+                    <Text style={[styles.langText, { color: colors.textMuted }]}>{lang}</Text>
                   </View>
-                </View>
-              </ScrollView>
+                ))}
+              </View>
 
-              {/* Bottom booking actions */}
-              <View style={[styles.modalActions, { borderTopColor: colors.border }]}>
-                <TouchableOpacity 
-                  style={[styles.contactBtn, { borderColor: colors.border }]} 
-                  onPress={() => Alert.alert('Chat Initiated', `Opening chat with ${selectedGuide.name}...`)}
+              {/* Price & Book Footer */}
+              <View style={[styles.guideCardFooter, { borderTopColor: colors.border }]}>
+                <View>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }}>CHARGE RATE</Text>
+                  <Text style={[styles.priceValue, { color: colors.amber }]}>₹{guide.chargePerHour}/hr</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.bookBtn, { backgroundColor: colors.amber }]}
+                  onPress={() => startBookingFlow(guide)}
                 >
-                  <MaterialIcons name="chat" size={scale(20)} color={colors.textPrimary} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bookBtn} onPress={() => handleBookGuide(selectedGuide)}>
-                  <Text style={styles.bookBtnText}>Book This Guide</Text>
+                  <Text style={styles.bookBtnText}>Book Guide</Text>
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          ))
         )}
+      </ScrollView>
+
+      {/* ==================== 1. BOOKING MODALS ==================== */}
+
+      {/* Loading Modal */}
+      <Modal visible={bookingStep === 'loading'} transparent animationType="fade">
+        <View style={styles.overlayModal}>
+          <View style={[styles.loadingBox, { backgroundColor: colors.surface }]}>
+            <ActivityIndicator size="large" color={colors.amber} />
+            <Text style={{ color: colors.textPrimary, marginTop: scale(12), fontWeight: '700' }}>
+              Communicating with Guides nearby...
+            </Text>
+          </View>
+        </View>
       </Modal>
+
+      {/* MAP MODAL (Instant Booking ON) */}
+      <Modal visible={bookingStep === 'map'} transparent animationType="slide">
+        <View style={styles.overlayModal}>
+          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Radar Nearby guide Search</Text>
+              <TouchableOpacity onPress={() => setBookingStep('none')}>
+                <MaterialIcons name="close" size={scale(20)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Map Area */}
+            <View style={[styles.mockMapArea, { backgroundColor: isDark ? '#141416' : '#EFEFF4' }]}>
+              {Platform.OS !== 'web' && MapView ? (
+                <MapView
+                  style={StyleSheet.absoluteFillObject}
+                  initialRegion={{
+                    latitude: selectedGuide?.latitude || 12.9716,
+                    longitude: selectedGuide?.longitude || 77.5946,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }}
+                >
+                  {/* Tourist Point */}
+                  <Marker
+                    coordinate={{
+                      latitude: (selectedGuide?.latitude || 12.9716) - 0.005,
+                      longitude: (selectedGuide?.longitude || 77.5946) + 0.003,
+                    }}
+                    title="Your Location"
+                    pinColor="blue"
+                  />
+                  {/* Guide Point */}
+                  {selectedGuide && (
+                    <Marker
+                      coordinate={{
+                        latitude: selectedGuide.latitude,
+                        longitude: selectedGuide.longitude,
+                      }}
+                      title={selectedGuide.name}
+                    />
+                  )}
+                </MapView>
+              ) : (
+                // Fallback custom map representation
+                <View style={styles.fallbackMapGraphic}>
+                  <View style={styles.pulseRadar1} />
+                  <View style={styles.pulseRadar2} />
+                  <View style={[styles.mapPin, { left: '40%', top: '50%', backgroundColor: colors.amber }]}>
+                    <MaterialIcons name="person-pin" size={scale(16)} color="#101010" />
+                  </View>
+                  <View style={[styles.mapPin, { right: '35%', top: '35%', backgroundColor: colors.success }]}>
+                    <MaterialIcons name="explore" size={scale(16)} color="#ffffff" />
+                  </View>
+                  <Text style={[styles.radarInfoText, { color: colors.textMuted }]}>
+                    ⚡ Radar ping match: {selectedGuide?.name} is 350 meters away!
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Radar result acceptance */}
+            <View style={styles.acceptedMessageBox}>
+              <MaterialIcons name="check-circle" size={scale(36)} color={colors.success} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.matchStatus, { color: colors.success }]}>Instant Match Accepted!</Text>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13) }}>
+                  {selectedGuide?.name} accepted your booking request.
+                </Text>
+              </View>
+            </View>
+
+            {/* Guide Info */}
+            {selectedGuide && (
+              <View style={[styles.compactGuideCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7' }]}>
+                <Image source={{ uri: selectedGuide.image }} style={styles.compactPhoto} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textPrimary, fontWeight: '800' }}>{selectedGuide.name}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
+                    City: {selectedGuide.city} · 📱 +91 98888 77712
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber }]} onPress={checkoutGuide}>
+              <Text style={styles.actionConfirmText}>Confirm & Add to Trips</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* DATE-TIME PRE-BOOKING MODAL (Instant Booking OFF) */}
+      <Modal visible={bookingStep === 'datetime'} transparent animationType="slide">
+        <View style={styles.overlayModal}>
+          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Advanced Pre-booking</Text>
+              <TouchableOpacity onPress={() => setBookingStep('none')}>
+                <MaterialIcons name="close" size={scale(20)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: scale(16) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
+                Pre-book certified local guides up to <Text style={{ color: colors.amber, fontWeight: '700' }}>15 days in advance</Text>. 
+              </Text>
+
+              {/* Date Input */}
+              <Text style={[styles.inputHeading, { color: colors.textPrimary }]}>Choose Booking Date</Text>
+              <TextInput
+                style={[styles.inputStyle, { color: colors.textPrimary, borderColor: colors.border }]}
+                placeholder="YYYY-MM-DD (e.g. 2026-07-22)"
+                placeholderTextColor={colors.textMuted}
+                value={prebookDate}
+                onChangeText={setPrebookDate}
+              />
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: verticalScale(4), marginBottom: verticalScale(14) }}>
+                Format: YYYY-MM-DD (Must be within 15 days of today)
+              </Text>
+
+              {/* Time Input */}
+              <Text style={[styles.inputHeading, { color: colors.textPrimary }]}>Choose Start Time</Text>
+              <TextInput
+                style={[styles.inputStyle, { color: colors.textPrimary, borderColor: colors.border }]}
+                placeholder="Time (e.g. 10:00 AM)"
+                placeholderTextColor={colors.textMuted}
+                value={prebookTime}
+                onChangeText={setPrebookTime}
+              />
+
+              <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]} onPress={confirmPrebooking}>
+                <Text style={styles.actionConfirmText}>Submit Booking Request</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ACCEPTED FINAL MODAL FOR PRE-BOOKINGS */}
+      <Modal visible={bookingStep === 'accepted'} transparent animationType="slide">
+        <View style={styles.overlayModal}>
+          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(18) }]}>
+            <View style={{ alignItems: 'center', marginVertical: scale(12) }}>
+              <MaterialIcons name="done-all" size={scale(48)} color={colors.success} style={{ marginBottom: scale(10) }} />
+              <Text style={[styles.modalTitle, { color: colors.success }]}>Pre-booking Accepted!</Text>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: scale(4), textAlign: 'center' }}>
+                Guide has successfully accepted your advance booking block.
+              </Text>
+            </View>
+
+            <View style={styles.acceptedDetailCard}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), fontWeight: '700' }}>SCHEDULED INFO</Text>
+              <Text style={[styles.detailCardText, { color: colors.textPrimary }]}>
+                📅 Date: {prebookDate}
+              </Text>
+              <Text style={[styles.detailCardText, { color: colors.textPrimary }]}>
+                ⏰ Time: {prebookTime}
+              </Text>
+              <Text style={[styles.detailCardText, { color: colors.textPrimary }]}>
+                💵 Rate: ₹{selectedGuide?.chargePerHour}/hr
+              </Text>
+            </View>
+
+            {selectedGuide && (
+              <View style={[styles.compactGuideCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', marginTop: scale(12) }]}>
+                <Image source={{ uri: selectedGuide.image }} style={styles.compactPhoto} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textPrimary, fontWeight: '800' }}>{selectedGuide.name}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
+                    Expertise: {selectedGuide.specialty} · 📱 +91 97777 66611
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: scale(18) }]} onPress={checkoutGuide}>
+              <Text style={styles.actionConfirmText}>Confirm & Add to Trips</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -406,7 +567,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  navbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -416,327 +577,279 @@ const styles = StyleSheet.create({
   backButton: {
     padding: scale(4),
   },
-  headerTitle: {
-    fontSize: moderateFontScale(18),
+  navTitle: {
+    fontSize: moderateFontScale(17),
     fontWeight: '800',
   },
-  scrollContent: {
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: scale(18),
-  },
-  askBanner: {
-    marginTop: verticalScale(10),
-    marginBottom: verticalScale(16),
-  },
-  askTitle: {
-    fontSize: moderateFontScale(22),
-    fontWeight: '800',
-    color: '#F5C518',
-    lineHeight: moderateFontScale(28),
-  },
-  askSubtitle: {
-    fontSize: moderateFontScale(13),
-    marginTop: verticalScale(6),
-    lineHeight: moderateFontScale(18),
+    gap: scale(10),
+    marginTop: verticalScale(4),
+    marginBottom: verticalScale(12),
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     borderWidth: 1,
     borderRadius: scale(25),
     paddingHorizontal: scale(16),
-    height: verticalScale(46),
-    marginBottom: verticalScale(20),
+    height: verticalScale(44),
   },
   searchIcon: {
-    marginRight: scale(8),
+    marginRight: scale(6),
   },
   searchInput: {
     flex: 1,
-    fontSize: moderateFontScale(14),
+    fontSize: moderateFontScale(13),
     height: '100%',
     padding: 0,
   },
-  listHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  switchCol: {
+    flex: 0.12,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchText: {
+    fontSize: moderateFontScale(8),
+    fontWeight: '800',
+    marginBottom: verticalScale(2),
+  },
+  scrollContent: {
+    paddingHorizontal: scale(18),
+    paddingBottom: verticalScale(30),
+  },
+  listHeader: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
     marginBottom: verticalScale(12),
   },
-  sectionTitle: {
-    color: '#F5C518',
-    fontSize: moderateFontScale(16),
-    fontWeight: '700',
-  },
-  resultCount: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '500',
+  emptyCard: {
+    borderRadius: scale(20),
+    padding: scale(30),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   guideCard: {
-    flexDirection: 'row',
     borderRadius: scale(20),
     borderWidth: 1.2,
-    padding: scale(12),
+    padding: scale(14),
     marginBottom: verticalScale(12),
   },
-  avatarWrapper: {
-    width: scale(80),
-    height: scale(80),
-    borderRadius: scale(16),
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  badgeRating: {
-    position: 'absolute',
-    bottom: scale(4),
-    right: scale(4),
-    backgroundColor: '#F5C518',
+  guideCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: scale(8),
-    paddingHorizontal: scale(5),
-    paddingVertical: verticalScale(1),
+    gap: scale(12),
   },
-  ratingText: {
-    color: '#101010',
-    fontSize: moderateFontScale(9),
-    fontWeight: '800',
-    marginLeft: scale(2),
+  guidePhoto: {
+    width: scale(64),
+    height: scale(64),
+    borderRadius: scale(32),
   },
-  guideDetails: {
+  guideMeta: {
     flex: 1,
-    marginLeft: scale(14),
-    justifyContent: 'space-between',
-  },
-  nameRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    justifyContent: 'center',
   },
   guideName: {
     fontSize: moderateFontScale(15),
     fontWeight: '800',
   },
-  cityBadge: {
-    paddingHorizontal: scale(8),
-    paddingVertical: verticalScale(2),
-    borderRadius: scale(10),
-  },
-  cityBadgeText: {
-    color: '#F5C518',
-    fontSize: moderateFontScale(10),
-    fontWeight: '700',
-  },
-  experienceRow: {
+  infoBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: verticalScale(4),
+    marginTop: verticalScale(2),
   },
-  experienceText: {
-    fontSize: moderateFontScale(12),
-    marginLeft: scale(4),
+  cityText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
+  },
+  dotSeparator: {
+    width: scale(4),
+    height: scale(4),
+    borderRadius: scale(2),
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: scale(6),
   },
   specialtyText: {
-    fontSize: moderateFontScale(12),
+    fontSize: moderateFontScale(11),
     fontWeight: '600',
     marginTop: verticalScale(4),
   },
-  languagesRow: {
+  langRow: {
     flexDirection: 'row',
     gap: scale(6),
-    marginTop: verticalScale(6),
+    marginTop: verticalScale(10),
   },
-  langTag: {
-    fontSize: moderateFontScale(9),
-    fontWeight: '600',
+  langBadge: {
     borderWidth: 1,
     borderRadius: scale(8),
-    paddingHorizontal: scale(6),
-    paddingVertical: verticalScale(2),
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
   },
-  noResultsCard: {
+  langText: {
+    fontSize: moderateFontScale(9),
+    fontWeight: '600',
+  },
+  guideCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: verticalScale(40),
-    paddingHorizontal: scale(20),
+    borderTopWidth: 1,
+    marginTop: verticalScale(12),
+    paddingTop: verticalScale(10),
   },
-  noResultsTitle: {
+  priceValue: {
     fontSize: moderateFontScale(16),
-    fontWeight: '700',
-    marginBottom: verticalScale(6),
+    fontWeight: '800',
+    marginTop: verticalScale(2),
   },
-  noResultsSub: {
+  bookBtn: {
+    borderRadius: scale(14),
+    paddingVertical: verticalScale(8),
+    paddingHorizontal: scale(16),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bookBtnText: {
+    color: '#101014',
     fontSize: moderateFontScale(12),
-    textAlign: 'center',
-    lineHeight: moderateFontScale(18),
-    marginBottom: verticalScale(16),
+    fontWeight: '800',
   },
-  resetButton: {
-    backgroundColor: '#F5C518',
-    borderRadius: scale(20),
-    paddingVertical: verticalScale(10),
-    paddingHorizontal: scale(20),
-  },
-  resetButtonText: {
-    color: '#101010',
-    fontWeight: '700',
-    fontSize: moderateFontScale(13),
-  },
-  modalOverlay: {
+  overlayModal: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    borderTopLeftRadius: scale(28),
-    borderTopRightRadius: scale(28),
-    maxHeight: '85%',
-    paddingBottom: verticalScale(20),
+  loadingBox: {
+    padding: scale(30),
+    borderTopLeftRadius: scale(24),
+    borderTopRightRadius: scale(24),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  dragHandle: {
-    width: scale(40),
-    height: verticalScale(4),
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: scale(2),
-    alignSelf: 'center',
-    marginTop: verticalScale(10),
+  mapContainerBox: {
+    borderTopLeftRadius: scale(24),
+    borderTopRightRadius: scale(24),
+    paddingBottom: verticalScale(30),
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: scale(20),
-    paddingTop: verticalScale(14),
-    paddingBottom: verticalScale(10),
+    paddingHorizontal: scale(18),
+    paddingVertical: verticalScale(16),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  modalHeaderTitle: {
+  modalTitle: {
     fontSize: moderateFontScale(16),
     fontWeight: '800',
   },
-  closeButton: {
-    padding: scale(4),
-  },
-  modalScroll: {
-    paddingHorizontal: scale(20),
-    paddingBottom: verticalScale(30),
-  },
-  modalProfileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: verticalScale(14),
-  },
-  modalAvatar: {
-    width: scale(90),
-    height: scale(90),
-    borderRadius: scale(20),
+  mockMapArea: {
+    height: verticalScale(220),
+    width: '100%',
     overflow: 'hidden',
   },
-  modalAvatarImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  modalProfileText: {
+  fallbackMapGraphic: {
     flex: 1,
-    marginLeft: scale(16),
     justifyContent: 'center',
-  },
-  modalName: {
-    fontSize: moderateFontScale(19),
-    fontWeight: '800',
-    marginBottom: verticalScale(4),
-  },
-  modalBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(10),
-    marginBottom: verticalScale(4),
-  },
-  modalStarRating: {
-    flexDirection: 'row',
     alignItems: 'center',
   },
-  modalRatingVal: {
-    fontSize: moderateFontScale(12),
+  pulseRadar1: {
+    position: 'absolute',
+    width: scale(120),
+    height: scale(120),
+    borderRadius: scale(60),
+    borderWidth: 1.5,
+    borderColor: 'rgba(245, 197, 24, 0.2)',
+  },
+  pulseRadar2: {
+    position: 'absolute',
+    width: scale(200),
+    height: scale(200),
+    borderRadius: scale(100),
+    borderWidth: 1.5,
+    borderColor: 'rgba(245, 197, 24, 0.08)',
+  },
+  mapPin: {
+    position: 'absolute',
+    width: scale(28),
+    height: scale(28),
+    borderRadius: scale(14),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radarInfoText: {
+    position: 'absolute',
+    bottom: verticalScale(12),
+    fontSize: moderateFontScale(11),
     fontWeight: '700',
-    marginLeft: scale(4),
   },
-  modalExpText: {
-    fontSize: moderateFontScale(12),
-    marginTop: verticalScale(2),
+  acceptedMessageBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scale(18),
+    paddingVertical: verticalScale(14),
+    gap: scale(10),
   },
-  modalSection: {
+  matchStatus: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  compactGuideCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: scale(18),
+    padding: scale(10),
+    borderRadius: scale(14),
+    gap: scale(10),
+  },
+  compactPhoto: {
+    width: scale(38),
+    height: scale(38),
+    borderRadius: scale(19),
+  },
+  actionConfirmBtn: {
+    marginHorizontal: scale(18),
+    height: verticalScale(44),
+    borderRadius: scale(22),
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: verticalScale(16),
   },
-  modalSectionTitle: {
-    color: '#F5C518',
-    fontSize: moderateFontScale(14),
+  actionConfirmText: {
+    color: '#101014',
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+  },
+  inputHeading: {
+    fontSize: moderateFontScale(12),
     fontWeight: '700',
     marginBottom: verticalScale(6),
   },
-  specialtyPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 197, 24, 0.08)',
-    borderRadius: scale(12),
-    paddingVertical: verticalScale(8),
-    paddingHorizontal: scale(12),
-    alignSelf: 'flex-start',
-  },
-  specialtyPillText: {
-    color: '#ffffff',
-    fontSize: moderateFontScale(13),
-    fontWeight: '600',
-  },
-  modalBio: {
-    fontSize: moderateFontScale(13),
-    lineHeight: moderateFontScale(20),
-  },
-  modalLangRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: scale(8),
-  },
-  modalLangTag: {
-    borderWidth: 1,
-    borderRadius: scale(10),
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(4),
-  },
-  modalLangText: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '600',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    paddingHorizontal: scale(20),
-    paddingTop: verticalScale(14),
-    borderTopWidth: 1.2,
-    gap: scale(12),
-  },
-  contactBtn: {
-    width: scale(50),
-    height: scale(50),
-    borderRadius: scale(14),
+  inputStyle: {
     borderWidth: 1.2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: scale(12),
+    height: verticalScale(40),
+    paddingHorizontal: scale(12),
+    fontSize: moderateFontScale(13),
   },
-  bookBtn: {
-    flex: 1,
-    backgroundColor: '#F5C518',
+  acceptedDetailCard: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
     borderRadius: scale(14),
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: scale(50),
+    padding: scale(12),
+    marginHorizontal: scale(18),
   },
-  bookBtnText: {
-    color: '#101010',
-    fontSize: moderateFontScale(15),
-    fontWeight: '800',
+  detailCardText: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '700',
+    marginTop: verticalScale(4),
   },
 });

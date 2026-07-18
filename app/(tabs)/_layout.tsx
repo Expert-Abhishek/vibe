@@ -177,11 +177,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="wallet"
+        name="history"
         options={{
-          title: 'Wallet',
+          title: 'History',
         }}
       />
+
       <Tabs.Screen
         name="driver-wallet"
         options={{

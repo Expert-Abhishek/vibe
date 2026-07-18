@@ -67,12 +67,12 @@ export default function AdminDashboardScreen() {
   const [newCpLat, setNewCpLat] = useState('');
   const [newCpLng, setNewCpLng] = useState('');
 
-  // Per km vehicle prices
+  // Per hour vehicle prices
   const [vehiclePrices, setVehiclePrices] = useState({
-    '5seater': 15,
-    '7seater': 22,
-    '4x4jeep': 35,
-    'auto': 10,
+    '5seater': adminState.vehicleRatesPerHour['5seater'],
+    '7seater': adminState.vehicleRatesPerHour['7seater'],
+    '4x4jeep': adminState.vehicleRatesPerHour['4x4jeep'],
+    'auto': adminState.vehicleRatesPerHour['auto'],
   });
 
   const [quoteInputs, setQuoteInputs] = useState<Record<string, string>>({});
@@ -211,10 +211,11 @@ export default function AdminDashboardScreen() {
   const handleUpdatePrice = (key: '5seater' | '7seater' | '4x4jeep' | 'auto', valStr: string) => {
     const val = parseFloat(valStr);
     if (isNaN(val) || val <= 0) return;
-    setVehiclePrices(prev => ({
-      ...prev,
-      [key]: val,
-    }));
+    setVehiclePrices(prev => {
+      const next = { ...prev, [key]: val };
+      adminState.vehicleRatesPerHour[key] = val;
+      return next;
+    });
   };
 
   const handleSendQuote = (requestId: string) => {
@@ -408,13 +409,13 @@ export default function AdminDashboardScreen() {
         {/* 2. PLAN TAB (Checkpoints & Vehicle rates) */}
         {activeTab === 'plan' && (
           <View>
-            <Text style={[styles.tabHeading, { color: colors.amber }]}>Vehicle Per-Km Pricing rates</Text>
+            <Text style={[styles.tabHeading, { color: colors.amber }]}>Vehicle Per-Hour Pricing rates</Text>
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Set Charge Rates per km</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Set Charge Rates per hour</Text>
               
               {/* pricing inputs */}
               <View style={styles.priceItemRow}>
-                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>5 Seater Premium (₹/km)</Text>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>5 Seater Premium (₹/hour)</Text>
                 <TextInput
                   style={[styles.priceInput, { color: colors.textPrimary, borderColor: colors.line }]}
                   keyboardType="numeric"
@@ -424,7 +425,7 @@ export default function AdminDashboardScreen() {
               </View>
 
               <View style={styles.priceItemRow}>
-                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>7 Seater Spacious (₹/km)</Text>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>7 Seater Spacious (₹/hour)</Text>
                 <TextInput
                   style={[styles.priceInput, { color: colors.textPrimary, borderColor: colors.line }]}
                   keyboardType="numeric"
@@ -434,7 +435,7 @@ export default function AdminDashboardScreen() {
               </View>
 
               <View style={styles.priceItemRow}>
-                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>4x4 Jeep Offroader (₹/km)</Text>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>4x4 Jeep Offroader (₹/hour)</Text>
                 <TextInput
                   style={[styles.priceInput, { color: colors.textPrimary, borderColor: colors.line }]}
                   keyboardType="numeric"
@@ -444,7 +445,7 @@ export default function AdminDashboardScreen() {
               </View>
 
               <View style={styles.priceItemRow}>
-                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>Eco Auto (₹/km)</Text>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>Eco Auto (₹/hour)</Text>
                 <TextInput
                   style={[styles.priceInput, { color: colors.textPrimary, borderColor: colors.line }]}
                   keyboardType="numeric"

@@ -20,7 +20,7 @@ export interface Guide {
 
 export interface TripRecord {
   id: string;
-  type: 'cab' | 'guide' | 'custom_trip';
+  type: 'cab' | 'guide' | 'custom_trip' | 'plan';
   vehicleType?: string;
   title: string;
   route?: string[];
@@ -29,8 +29,9 @@ export interface TripRecord {
   time: string;
   price: number;
   paymentMode: 'UPI' | 'Cash';
-  status: 'Completed' | 'Upcoming';
+  status: 'Completed' | 'Upcoming' | 'Cancelled';
   rating?: number;
+  passengerCount?: number;
 }
 
 export interface CustomTripRequest {
@@ -40,6 +41,9 @@ export interface CustomTripRequest {
   vehicle: string;
   quotedPrice?: number;
   touristName: string;
+  bookingType?: 'spot' | 'prebook';
+  date?: string;
+  time?: string;
 }
 
 export interface AdvanceBooking {
@@ -97,4 +101,10 @@ export const adminState = {
       status: 'Pending',
     }
   ] as AdvanceBooking[],
+  vehicleRatesPerHour: {
+    '5seater': 150,
+    '7seater': 220,
+    '4x4jeep': 350,
+    'auto': 100,
+  },
 };
