@@ -232,8 +232,8 @@ export default function TripsHistoryScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Upcoming Trips</Text>
-        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage your scheduled rides, guides, and plans</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Trips</Text>
+        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Upcoming trip</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

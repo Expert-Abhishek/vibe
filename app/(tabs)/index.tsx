@@ -57,21 +57,7 @@ export default function HomeScreen() {
             <Text style={[styles.brandName, { color: colors.textPrimary }]}>Vibzz</Text>
           </View>
           
-          <View style={styles.headerSwitchCol}>
-            <Text style={[styles.switchLabel, { color: colors.textPrimary }]}>
-              Instant
-            </Text>
-            <Switch
-              value={instantEnabled}
-              onValueChange={(val) => {
-                setInstantEnabled(val);
-                adminState.instantBookingEnabled = val;
-              }}
-              trackColor={{ false: 'rgba(255,255,255,0.08)', true: colors.amber }}
-              thumbColor={instantEnabled ? '#101014' : '#8E8E93'}
-              style={{ transform: [{ scaleX: 0.82 }, { scaleY: 0.82 }], marginTop: verticalScale(1) }}
-            />
-          </View>
+          
         </View>
 
         {/* TOP BAR: Search Bar (100%) */}
@@ -86,6 +72,26 @@ export default function HomeScreen() {
               Where to? Search location...
             </Text>
           </TouchableOpacity>
+        </View>
+
+        {/* INSTANT / PRE-BOOKING TOGGLE */}
+        <View style={styles.bookingTypeRow}>
+          <Text style={[styles.bookingLabel, !instantEnabled ? { color: '#ffffff' } : { color: colors.textMuted }]}>
+            Pre Booking
+          </Text>
+          <Switch
+            value={instantEnabled}
+            onValueChange={(val) => {
+              setInstantEnabled(val);
+              adminState.instantBookingEnabled = val;
+            }}
+            trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(255,255,255,0.08)' }}
+            thumbColor={instantEnabled ? colors.amber : '#ffffff'}
+            style={{ transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }], marginHorizontal: scale(10) }}
+          />
+          <Text style={[styles.bookingLabel, instantEnabled ? { color: '#ffffff' } : { color: colors.textMuted }]}>
+            Instant
+          </Text>
         </View>
 
         {/* Guides & Custom Trip Side-by-Side (50% each) */}
@@ -264,17 +270,24 @@ const styles = StyleSheet.create({
   searchIcon: {
     marginRight: scale(6),
   },
-  switchCol: {
-    flex: 0.1,
+  bookingTypeRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: verticalScale(20),
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignSelf: 'center',
+    paddingHorizontal: scale(20),
+    paddingVertical: verticalScale(6),
+    borderRadius: scale(25),
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  switchLabel: {
-    fontSize: moderateFontScale(9),
-    fontWeight: '800',
-    marginBottom: verticalScale(2),
-    textAlign: 'center',
+  bookingLabel: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '700',
   },
+
   servicesGridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

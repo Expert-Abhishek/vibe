@@ -8,6 +8,8 @@ import {
   Switch,
   ScrollView,
   Alert,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +25,13 @@ export default function ProfileScreen() {
   const [name, setName] = useState('Abhishek');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  
+  const [walletModalVisible, setWalletModalVisible] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(1500);
+  const walletHistory = [
+    { id: '1', type: 'incoming', amount: 500, date: '18 July 2026', title: 'Refund' },
+    { id: '2', type: 'outgoing', amount: 200, date: '15 July 2026', title: 'Cab Booking' },
+  ];
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   const colors = {
@@ -200,6 +209,28 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* WALLET SECTION */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+          <Text style={[styles.cardTitle, { color: colors.amber }]}>Wallet</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+            <View>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(22), fontWeight: 'bold' }}>₹{walletBalance}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setWalletModalVisible(true)}>
+              <Text style={{ color: colors.textPrimary, textDecorationLine: 'underline' }}>History</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ flexDirection: 'row', gap: scale(10) }}>
+            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]} onPress={() => Alert.alert('Send', 'Feature coming soon')}>
+              <Text style={styles.primaryButtonText}>Send to Account</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginTop: 0, borderWidth: 1, borderColor: colors.line }]} onPress={() => Alert.alert('Withdraw', 'Feature coming soon')}>
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Withdraw</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* PREFERENCES SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
           <Text style={[styles.cardTitle, { color: colors.amber }]}>{trans.pref}</Text>
@@ -269,6 +300,35 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* Wallet History Bottom Drawer */}
+      <Modal visible={walletModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWalletModalVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.surface, height: '60%', borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(20) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Wallet History</Text>
+              <TouchableOpacity onPress={() => setWalletModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={walletHistory}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: verticalScale(12), borderBottomWidth: 1, borderBottomColor: colors.line }}>
+                  <View>
+                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14) }}>{item.title}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>{item.date}</Text>
+                  </View>
+                  <Text style={{ color: item.type === 'incoming' ? '#10B981' : colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold' }}>
+                    {item.type === 'incoming' ? '+' : '-'}₹{item.amount}
+                  </Text>
+                </View>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

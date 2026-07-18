@@ -60,6 +60,7 @@ export default function MakeTripScreen() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   const [selectedRide, setSelectedRide] = useState<string>((searchParams.selectedRide as string) || '5seater');
+  const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
 
   const getTomorrowDateString = () => {
     const tomorrow = new Date();
@@ -541,25 +542,39 @@ export default function MakeTripScreen() {
       time: finalTime,
     });
 
-    router.replace({
-      pathname: '/ride-matching' as any,
-      params: {
-        pickupName: pickup.name,
-        pickupLat: pickup.latitude.toString(),
-        pickupLng: pickup.longitude.toString(),
-        dropName: drop.name,
-        dropLat: drop.latitude.toString(),
-        dropLng: drop.longitude.toString(),
-        stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
-        price: computedTripPrice.toString(),
-        type: 'custom_trip',
-        vehicle: selectedRide || '5seater',
-        paymentMode: 'UPI',
-        passengerCount: passengerCount.toString(),
-        date: finalDate,
-        time: finalTime,
-      }
-    });
+    // Mock Razorpay Integration
+    Alert.alert(
+      'Razorpay Secure Checkout',
+      `Amount to Pay: ₹${computedTripPrice}\n\nPlease confirm payment to proceed with booking.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Pay Now', 
+          onPress: () => {
+            // Proceed to success/matching after payment
+            router.replace({
+              pathname: '/ride-matching' as any,
+              params: {
+                pickupName: pickup.name,
+                pickupLat: pickup.latitude.toString(),
+                pickupLng: pickup.longitude.toString(),
+                dropName: drop.name,
+                dropLat: drop.latitude.toString(),
+                dropLng: drop.longitude.toString(),
+                stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
+                price: computedTripPrice.toString(),
+                type: 'custom_trip',
+                vehicle: selectedRide || '5seater',
+                paymentMode: 'Razorpay (Paid)',
+                passengerCount: passengerCount.toString(),
+                date: finalDate,
+                time: finalTime,
+              }
+            });
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -847,10 +862,10 @@ export default function MakeTripScreen() {
             {/* Vehicle Selector Option */}
             <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Choose Vehicle Fleet</Text>
             <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(12) }}>
-              {(['5seater', '7seater', '4x4jeep'] as const).map((vKey) => {
+              {(['5seater', '7seater', '4x4jeep', 'auto'] as const).map((vKey) => {
                 const isSelected = selectedRide === vKey;
-                const name = vKey === '5seater' ? '5 Seater Cab' : vKey === '7seater' ? '7 Seater SUV' : '4x4 Jeep';
-                const rate = adminState.vehicleRatesPerHour[vKey] || 150;
+                const name = vKey === '5seater' ? '5 Seater Cab' : vKey === '7seater' ? '7 Seater SUV' : vKey === '4x4jeep' ? '4x4 Jeep' : 'Auto';
+                const rate = adminState.vehicleRatesPerHour[vKey] || (vKey === 'auto' ? 80 : 150);
                 return (
                   <TouchableOpacity
                     key={vKey}
@@ -871,6 +886,43 @@ export default function MakeTripScreen() {
                 );
               })}
             </View>
+
+            {/* 4x4 Manual Picker */}
+            {selectedRide === '4x4jeep' && (
+              <View style={{ marginBottom: verticalScale(12) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Select 4x4 Vehicle</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {[
+                    { id: 'Thar', name: 'Mahindra Thar', image: require('../assets/images/thar.png') },
+                    { id: 'Gurkha', name: 'Force Gurkha', image: require('../assets/images/thar.png') },
+                    { id: 'Jimny', name: 'Maruti Jimny', image: require('../assets/images/thar.png') },
+                  ].map((car) => {
+                    const isSelected = selected4x4Car === car.id;
+                    return (
+                      <TouchableOpacity
+                        key={car.id}
+                        style={{
+                          width: scale(100),
+                          height: verticalScale(100),
+                          borderWidth: 1.5,
+                          borderRadius: scale(10),
+                          borderColor: isSelected ? colors.amber : colors.border,
+                          backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'rgba(255,255,255,0.02)',
+                          marginRight: scale(10),
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: scale(8)
+                        }}
+                        onPress={() => setSelected4x4Car(car.id)}
+                      >
+                        <Image source={car.image} style={{ width: '100%', height: '60%', resizeMode: 'contain' }} />
+                        <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10), fontWeight: '700', marginTop: verticalScale(4), textAlign: 'center' }}>{car.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
 
             {/* Prebooking Date Time Pickers */}
             {!adminState.instantBookingEnabled && (

@@ -203,17 +203,7 @@ export default function HistoryScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>PAST TRIPS</Text>
-            <Text style={[styles.statValue, { color: colors.amber }]}>{fullHistory.length}</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>TOTAL SPENT</Text>
-            <Text style={[styles.statValue, { color: colors.amber }]}>₹{totalSpend.toLocaleString('en-IN')}</Text>
-          </View>
-        </View>
+
 
         {/* Filter Pills */}
         <View style={styles.filterRow}>
