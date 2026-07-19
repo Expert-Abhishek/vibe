@@ -209,7 +209,6 @@ export default function FleetCatalogScreen() {
               <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(4) }}>
                 <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>👥 {car.pax} Seats</Text>
                 <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>💼 {car.boot.split(' ')[0]}</Text>
-                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>❄️ {car.ac ? 'Cabin AC' : 'Non-AC'}</Text>
               </View>
 
               <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '800' }}>

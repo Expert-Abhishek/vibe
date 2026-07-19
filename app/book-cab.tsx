@@ -74,7 +74,6 @@ export default function BookCabScreen() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const [selectedRide, setSelectedRide] = useState<string>('5seater');
-  const [isAc, setIsAc] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('cash');
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingMode, setBookingMode] = useState<'now' | 'advance'>('now');
@@ -122,12 +121,7 @@ export default function BookCabScreen() {
     }
   }, [searchParams]);
 
-  // Set AC to false if Auto is selected
-  useEffect(() => {
-    if (selectedRide === 'auto') {
-      setIsAc(false);
-    }
-  }, [selectedRide]);
+
 
   // Autocomplete Suggestions
   useEffect(() => {
@@ -311,9 +305,6 @@ export default function BookCabScreen() {
 
   const getBasePrice = (ratePerKm: number) => {
     let fare = distanceKm * ratePerKm;
-    if (isAc && selectedRide !== 'auto') {
-      fare += distanceKm * 2; // AC surcharge ₹2/km
-    }
     return Math.round(fare);
   };
 
@@ -798,56 +789,27 @@ export default function BookCabScreen() {
           </View>
         )}
 
-        {/* AC and Payment Settings Row */}
-        <View style={[styles.optionsSettingGrid, { borderBottomColor: colors.border }]}>
-          {/* AC Toggle - HIDDEN FOR AUTO */}
-          {selectedRide !== 'auto' ? (
-            <View style={styles.settingCell}>
-              <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>AC Cabin Comfort</Text>
-              <View style={styles.togglePillRow}>
-                <TouchableOpacity
-                  style={[styles.togglePillCell, isAc && styles.togglePillCellActive]}
-                  onPress={() => setIsAc(true)}
-                >
-                  <Text style={[styles.togglePillText, { color: isAc ? '#101010' : colors.textPrimary }]}>ON</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.togglePillCell, !isAc && styles.togglePillCellActive]}
-                  onPress={() => setIsAc(false)}
-                >
-                  <Text style={[styles.togglePillText, { color: !isAc ? '#101010' : colors.textPrimary }]}>OFF</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.settingCell}>
-              <Text style={[styles.settingLabel, { color: colors.textMuted }]}>AC Cabin Comfort</Text>
-              <Text style={[styles.noAcAutoDisclaimer, { color: colors.textMuted }]}>Auto (No AC)</Text>
-            </View>
-          )}
+        {/* Payment Settings Row */}
+        <View style={[styles.bookingModeContainer, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.settingLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>
+            Payment Mode
+          </Text>
+          <View style={styles.paymentSelectorRow}>
+            <TouchableOpacity
+              style={[styles.payMethodBtn, paymentMethod === 'cash' && styles.payMethodBtnActive]}
+              onPress={() => setPaymentMethod('cash')}
+            >
+              <MaterialIcons name="attach-money" size={scale(14)} color={paymentMethod === 'cash' ? '#101010' : colors.textPrimary} />
+              <Text style={[styles.payMethodText, { color: paymentMethod === 'cash' ? '#101010' : colors.textPrimary }]}>Cash</Text>
+            </TouchableOpacity>
 
-          <View style={[styles.gridSeparatorLine, { backgroundColor: colors.border }]} />
-
-          {/* Payment Method Option - CASH & UPI */}
-          <View style={styles.settingCell}>
-            <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Payment Mode</Text>
-            <View style={styles.paymentSelectorRow}>
-              <TouchableOpacity
-                style={[styles.payMethodBtn, paymentMethod === 'cash' && styles.payMethodBtnActive]}
-                onPress={() => setPaymentMethod('cash')}
-              >
-                <MaterialIcons name="attach-money" size={scale(14)} color={paymentMethod === 'cash' ? '#101010' : colors.textPrimary} />
-                <Text style={[styles.payMethodText, { color: paymentMethod === 'cash' ? '#101010' : colors.textPrimary }]}>Cash</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.payMethodBtn, paymentMethod === 'upi' && styles.payMethodBtnActive]}
-                onPress={() => setPaymentMethod('upi')}
-              >
-                <FontAwesome5 name="qrcode" size={scale(11)} color={paymentMethod === 'upi' ? '#101010' : colors.textPrimary} />
-                <Text style={[styles.payMethodText, { color: paymentMethod === 'upi' ? '#101010' : colors.textPrimary }]}>UPI</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.payMethodBtn, paymentMethod === 'upi' && styles.payMethodBtnActive]}
+              onPress={() => setPaymentMethod('upi')}
+            >
+              <FontAwesome5 name="qrcode" size={scale(11)} color={paymentMethod === 'upi' ? '#101010' : colors.textPrimary} />
+              <Text style={[styles.payMethodText, { color: paymentMethod === 'upi' ? '#101010' : colors.textPrimary }]}>UPI</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -1218,53 +1180,12 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(11),
     fontWeight: '800',
   },
-  optionsSettingGrid: {
-    flexDirection: 'row',
-    paddingVertical: verticalScale(12),
-    paddingHorizontal: scale(18),
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1.2,
-  },
-  settingCell: {
-    flex: 0.47,
-  },
   settingLabel: {
     fontSize: moderateFontScale(10),
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: verticalScale(6),
-  },
-  noAcAutoDisclaimer: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '700',
-    fontStyle: 'italic',
-  },
-  togglePillRow: {
-    flexDirection: 'row',
-    borderRadius: scale(10),
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    padding: scale(3),
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  togglePillCell: {
-    flex: 1,
-    paddingVertical: verticalScale(5),
-    borderRadius: scale(7),
-    alignItems: 'center',
-  },
-  togglePillCellActive: {
-    backgroundColor: '#F5C518',
-  },
-  togglePillText: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '800',
-  },
-  gridSeparatorLine: {
-    width: 1.2,
-    height: '80%',
   },
   paymentSelectorRow: {
     flexDirection: 'row',

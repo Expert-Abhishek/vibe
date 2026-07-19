@@ -1,24 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  Image,
-  Modal,
-  StatusBar,
-  Alert,
-  Switch,
-  Platform,
-  ActivityIndicator,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
 
 // Dynamically import react-native-maps to prevent crashes on web
@@ -143,10 +142,25 @@ export default function GuidesScreen() {
   // Booking process states
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [bookingStep, setBookingStep] = useState<'none' | 'loading' | 'map' | 'datetime' | 'accepted'>('none');
-  
+
   // Advanced prebooking fields
   const [prebookDate, setPrebookDate] = useState('');
-  const [prebookTime, setPrebookTime] = useState('10:00 AM');
+  const [prebookHour, setPrebookHour] = useState<number>(10);
+  const [prebookMinute, setPrebookMinute] = useState<number>(0);
+  const [prebookAmPm, setPrebookAmPm] = useState<'AM' | 'PM'>('AM');
+  const prebookTime = `${prebookHour}:${prebookMinute < 10 ? '0' + prebookMinute : prebookMinute} ${prebookAmPm}`;
+
+  // Prebooking Date Options
+  const dateOptions = Array.from({ length: 15 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return {
+      dateStr: d.toISOString().split('T')[0],
+      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      dayNum: d.getDate(),
+      monthName: d.toLocaleDateString('en-US', { month: 'short' }),
+    };
+  });
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -188,16 +202,16 @@ export default function GuidesScreen() {
     if (!dateStr) return { valid: false, error: 'Please select a date.' };
     const parts = dateStr.split('-');
     if (parts.length !== 3) return { valid: false, error: 'Invalid date format.' };
-    
+
     const selectedDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     const today = new Date();
-    
-    selectedDate.setHours(0,0,0,0);
-    today.setHours(0,0,0,0);
-    
+
+    selectedDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
     const diffTime = selectedDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) {
       return { valid: false, error: 'Pre-booking date cannot be in the past.' };
     }
@@ -224,7 +238,7 @@ export default function GuidesScreen() {
     const finalDate = adminState.instantBookingEnabled ? 'Today' : prebookDate;
     const finalTime = adminState.instantBookingEnabled ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : prebookTime;
 
-    // Add guide booking to upcoming trips
+    // Add guide booking to upcoming trips silently behind the scenes
     adminState.userTrips.push({
       id: `guide_book_${Date.now()}`,
       type: 'guide',
@@ -237,20 +251,9 @@ export default function GuidesScreen() {
       status: 'Upcoming',
     });
 
-    Alert.alert(
-      'Guide Added to Trips!',
-      `Successfully scheduled ${selectedGuide.name} on ${finalDate} at ${finalTime}. You can track this in your upcoming Trips.`,
-      [
-        {
-          text: 'View Trips',
-          onPress: () => {
-            setBookingStep('none');
-            setSelectedGuide(null);
-            router.replace('/(tabs)/trips');
-          },
-        },
-      ]
-    );
+    // Close the popover immediately
+    setBookingStep('none');
+    setSelectedGuide(null);
   };
 
   return (
@@ -302,13 +305,13 @@ export default function GuidesScreen() {
         ) : (
           filteredGuides.map((guide) => (
             <View key={guide.id} style={[styles.guideCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
-              
+
               {/* Photo & main Info */}
               <View style={styles.guideCardHeader}>
                 <Image source={{ uri: guide.image }} style={styles.guidePhoto} />
                 <View style={styles.guideMeta}>
                   <Text style={[styles.guideName, { color: colors.textPrimary }]}>{guide.name}</Text>
-                  
+
                   <View style={styles.infoBadgeRow}>
                     <Text style={[styles.cityText, { color: colors.amber }]}>{guide.city}</Text>
                     <View style={styles.dotSeparator} />
@@ -336,7 +339,7 @@ export default function GuidesScreen() {
               <View style={[styles.guideCardFooter, { borderTopColor: colors.border }]}>
                 <View>
                   <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }}>CHARGE RATE</Text>
-                  <Text style={[styles.priceValue, { color: colors.amber }]}>₹{guide.chargePerHour}/hr</Text>
+                  <Text style={[styles.priceValue, { color: colors.amber }]}>₹{guide.chargePerHour}/Day</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.bookBtn, { backgroundColor: colors.amber }]}
@@ -443,14 +446,14 @@ export default function GuidesScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.textPrimary, fontWeight: '800' }}>{selectedGuide.name}</Text>
                   <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
-                    City: {selectedGuide.city} · 📱 +91 98888 77712
+                    City: {selectedGuide.city} · Mob: +91 98888 77712
                   </Text>
                 </View>
               </View>
             )}
 
             <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber }]} onPress={checkoutGuide}>
-              <Text style={styles.actionConfirmText}>Confirm & Add to Trips</Text>
+              <Text style={styles.actionConfirmText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -469,31 +472,121 @@ export default function GuidesScreen() {
 
             <ScrollView contentContainerStyle={{ padding: scale(16) }}>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
-                Pre-book certified local guides up to <Text style={{ color: colors.amber, fontWeight: '700' }}>15 days in advance</Text>. 
+                Pre-book certified local guides up to <Text style={{ color: colors.amber, fontWeight: '700' }}>15 days in advance</Text>.
               </Text>
 
-              {/* Date Input */}
-              <Text style={[styles.inputHeading, { color: colors.textPrimary }]}>Choose Booking Date</Text>
-              <TextInput
-                style={[styles.inputStyle, { color: colors.textPrimary, borderColor: colors.border }]}
-                placeholder="YYYY-MM-DD (e.g. 2026-07-22)"
-                placeholderTextColor={colors.textMuted}
-                value={prebookDate}
-                onChangeText={setPrebookDate}
-              />
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: verticalScale(4), marginBottom: verticalScale(14) }}>
-                Format: YYYY-MM-DD (Must be within 15 days of today)
-              </Text>
+              {/* Date Selection */}
+              <View style={{ marginBottom: verticalScale(14) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(8) }}>Select Pre-Booking Date</Text>
 
-              {/* Time Input */}
-              <Text style={[styles.inputHeading, { color: colors.textPrimary }]}>Choose Start Time</Text>
-              <TextInput
-                style={[styles.inputStyle, { color: colors.textPrimary, borderColor: colors.border }]}
-                placeholder="Time (e.g. 10:00 AM)"
-                placeholderTextColor={colors.textMuted}
-                value={prebookTime}
-                onChangeText={setPrebookTime}
-              />
+                {/* Horizontal Date Picker */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(10) }}>
+                  {dateOptions.map((opt) => {
+                    const isSelected = prebookDate === opt.dateStr;
+                    return (
+                      <TouchableOpacity
+                        key={opt.dateStr}
+                        style={{
+                          width: scale(52),
+                          height: verticalScale(54),
+                          borderRadius: scale(10),
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? colors.amber : colors.border,
+                          backgroundColor: isSelected ? colors.amber : 'rgba(255,255,255,0.03)',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: scale(8),
+                        }}
+                        onPress={() => setPrebookDate(opt.dateStr)}
+                      >
+                        <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.dayName.toUpperCase()}</Text>
+                        <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: isSelected ? '#101014' : colors.textPrimary, marginVertical: verticalScale(2) }}>{opt.dayNum}</Text>
+                        <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.monthName.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Time Selection */}
+              <View style={{ marginBottom: verticalScale(14) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(8) }}>Select Start Time</Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(8), borderRadius: scale(12), borderWidth: 1.5, borderColor: colors.border }}>
+                  {/* Hour Selection */}
+                  <View style={{ alignItems: 'center', flex: 1.2 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>HOUR</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setPrebookHour(prev => prev === 1 ? 12 : prev - 1)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                        {prebookHour < 10 ? '0' + prebookHour : prebookHour}
+                      </Text>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setPrebookHour(prev => prev === 12 ? 1 : prev + 1)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(18), fontWeight: '900' }}>:</Text>
+
+                  {/* Minute Selection */}
+                  <View style={{ alignItems: 'center', flex: 1.2 }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>MINUTE</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setPrebookMinute(prev => prev === 0 ? 55 : prev - 5)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                        {prebookMinute < 10 ? '0' + prebookMinute : prebookMinute}
+                      </Text>
+                      <TouchableOpacity
+                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => setPrebookMinute(prev => prev === 55 ? 0 : prev + 5)}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* AM/PM Switch */}
+                  <View style={{ flexDirection: 'row', gap: scale(4), marginLeft: scale(10), flex: 1.3 }}>
+                    {(['AM', 'PM'] as const).map((period) => {
+                      const isSelected = prebookAmPm === period;
+                      return (
+                        <TouchableOpacity
+                          key={period}
+                          style={{
+                            flex: 1,
+                            height: scale(28),
+                            borderRadius: scale(6),
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? colors.amber : colors.border,
+                            backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => setPrebookAmPm(period)}
+                        >
+                          <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '900' }}>
+                            {period}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
 
               <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]} onPress={confirmPrebooking}>
                 <Text style={styles.actionConfirmText}>Submit Booking Request</Text>
@@ -506,42 +599,64 @@ export default function GuidesScreen() {
       {/* ACCEPTED FINAL MODAL FOR PRE-BOOKINGS */}
       <Modal visible={bookingStep === 'accepted'} transparent animationType="slide">
         <View style={styles.overlayModal}>
-          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(18) }]}>
-            <View style={{ alignItems: 'center', marginVertical: scale(12) }}>
-              <MaterialIcons name="done-all" size={scale(48)} color={colors.success} style={{ marginBottom: scale(10) }} />
-              <Text style={[styles.modalTitle, { color: colors.success }]}>Pre-booking Accepted!</Text>
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: scale(4), textAlign: 'center' }}>
-                Guide has successfully accepted your advance booking block.
+          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(20) }]}>
+            <View style={{ alignItems: 'center', marginVertical: scale(10) }}>
+              <View style={{ width: scale(56), height: scale(56), borderRadius: scale(28), backgroundColor: 'rgba(16, 185, 129, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: scale(12) }}>
+                <MaterialIcons name="check-circle" size={scale(36)} color={colors.success} />
+              </View>
+              <Text style={[styles.modalTitle, { color: colors.success, fontSize: moderateFontScale(18) }]}>Booking Confirmed!</Text>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: scale(4), textAlign: 'center', paddingHorizontal: scale(10) }}>
+                Your pre-booking request has been successfully accepted by the guide.
               </Text>
             </View>
 
-            <View style={styles.acceptedDetailCard}>
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), fontWeight: '700' }}>SCHEDULED INFO</Text>
-              <Text style={[styles.detailCardText, { color: colors.textPrimary }]}>
-                📅 Date: {prebookDate}
-              </Text>
-              <Text style={[styles.detailCardText, { color: colors.textPrimary }]}>
-                ⏰ Time: {prebookTime}
-              </Text>
-              <Text style={[styles.detailCardText, { color: colors.textPrimary }]}>
-                💵 Rate: ₹{selectedGuide?.chargePerHour}/hr
-              </Text>
+            <View style={[styles.acceptedDetailCard, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)', borderColor: colors.border }]}>
+              {/* Date Row */}
+              <View style={styles.infoRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                  <MaterialIcons name="event" size={scale(16)} color={colors.amber} />
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>DATE</Text>
+                </View>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>{prebookDate}</Text>
+              </View>
+
+              <View style={[styles.acceptedDivider, { backgroundColor: colors.border }]} />
+
+              {/* Time Row */}
+              <View style={styles.infoRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                  <MaterialIcons name="schedule" size={scale(16)} color={colors.amber} />
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>TIME</Text>
+                </View>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>{prebookTime}</Text>
+              </View>
+
+              <View style={[styles.acceptedDivider, { backgroundColor: colors.border }]} />
+
+              {/* Rate Row */}
+              <View style={styles.infoRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                  <MaterialIcons name="payments" size={scale(16)} color={colors.amber} />
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>RATE</Text>
+                </View>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>₹{selectedGuide?.chargePerHour}/Day</Text>
+              </View>
             </View>
 
             {selectedGuide && (
-              <View style={[styles.compactGuideCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', marginTop: scale(12) }]}>
+              <View style={[styles.compactGuideCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', marginTop: scale(14), borderColor: colors.border, borderWidth: 1, marginHorizontal: 0, width: '100%' }]}>
                 <Image source={{ uri: selectedGuide.image }} style={styles.compactPhoto} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.textPrimary, fontWeight: '800' }}>{selectedGuide.name}</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
-                    Expertise: {selectedGuide.specialty} · 📱 +91 97777 66611
+                  <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>{selectedGuide.name}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 2 }}>
+                    Expertise: {selectedGuide.specialty}
                   </Text>
                 </View>
               </View>
             )}
 
-            <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: scale(18) }]} onPress={checkoutGuide}>
-              <Text style={styles.actionConfirmText}>Confirm & Add to Trips</Text>
+            <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: scale(18), width: '100%', marginHorizontal: 0 }]} onPress={checkoutGuide}>
+              <Text style={styles.actionConfirmText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -828,12 +943,22 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(13),
   },
   acceptedDetailCard: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
     borderWidth: 1.2,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-    borderRadius: scale(14),
-    padding: scale(12),
-    marginHorizontal: scale(18),
+    borderRadius: scale(16),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(6),
+    marginTop: verticalScale(12),
+    width: '100%',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: verticalScale(10),
+  },
+  acceptedDivider: {
+    height: 1,
+    width: '100%',
   },
   detailCardText: {
     fontSize: moderateFontScale(13),

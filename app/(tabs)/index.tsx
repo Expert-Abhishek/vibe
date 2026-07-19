@@ -1,20 +1,19 @@
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Alert,
+  Animated,
   Image,
   ImageBackground,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
-  Switch,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useRouter } from 'expo-router';
 import { adminState } from '../admin-state';
 
 const rides = [
@@ -27,12 +26,27 @@ const rides = [
 export default function HomeScreen() {
   const router = useRouter();
   const [selectedRide, setSelectedRide] = useState<string>('4x4jeep');
-  const [isAc, setIsAc] = useState<boolean>(true);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   // Instant Booking Switch (global state sync)
   const [instantEnabled, setInstantEnabled] = useState<boolean>(adminState.instantBookingEnabled);
+
+  const slideAnim = React.useRef(new Animated.Value(adminState.instantBookingEnabled ? 1 : 0)).current;
+
+  React.useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: instantEnabled ? 1 : 0,
+      tension: 60,
+      friction: 8,
+      useNativeDriver: false,
+    }).start();
+  }, [instantEnabled]);
+
+  const handleToggle = (val: boolean) => {
+    setInstantEnabled(val);
+    adminState.instantBookingEnabled = val;
+  };
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -47,7 +61,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(110) }]} showsVerticalScrollIndicator={false}>
-        
+
         {/* BRAND LOGO, NAME & INSTANT TOGGLE HEADER */}
         <View style={styles.brandHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -56,8 +70,8 @@ export default function HomeScreen() {
             </View>
             <Text style={[styles.brandName, { color: colors.textPrimary }]}>Vibzz</Text>
           </View>
-          
-          
+
+
         </View>
 
         {/* TOP BAR: Search Bar (100%) */}
@@ -76,22 +90,50 @@ export default function HomeScreen() {
 
         {/* INSTANT / PRE-BOOKING TOGGLE */}
         <View style={styles.bookingTypeRow}>
-          <Text style={[styles.bookingLabel, !instantEnabled ? { color: '#ffffff' } : { color: colors.textMuted }]}>
-            Pre Booking
-          </Text>
-          <Switch
-            value={instantEnabled}
-            onValueChange={(val) => {
-              setInstantEnabled(val);
-              adminState.instantBookingEnabled = val;
-            }}
-            trackColor={{ false: 'rgba(255,255,255,0.08)', true: 'rgba(255,255,255,0.08)' }}
-            thumbColor={instantEnabled ? colors.amber : '#ffffff'}
-            style={{ transform: [{ scaleX: 0.9 }, { scaleY: 0.9 }], marginHorizontal: scale(10) }}
+          <Animated.View
+            style={[
+              styles.bookingActiveBg,
+              {
+                left: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['1%', '51%'],
+                }),
+              },
+            ]}
           />
-          <Text style={[styles.bookingLabel, instantEnabled ? { color: '#ffffff' } : { color: colors.textMuted }]}>
-            Instant
-          </Text>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.bookingTab}
+            onPress={() => handleToggle(false)}
+          >
+            <Text
+              style={[
+                styles.bookingLabel,
+                !instantEnabled
+                  ? { color: colors.amber, fontSize: moderateFontScale(15), fontWeight: '800' }
+                  : { color: colors.textMuted, fontSize: moderateFontScale(13), fontWeight: '600' }
+              ]}
+            >
+              Pre Booking
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.bookingTab}
+            onPress={() => handleToggle(true)}
+          >
+            <Text
+              style={[
+                styles.bookingLabel,
+                instantEnabled
+                  ? { color: colors.amber, fontSize: moderateFontScale(15), fontWeight: '800' }
+                  : { color: colors.textMuted, fontSize: moderateFontScale(13), fontWeight: '600' }
+              ]}
+            >
+              Instant
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Guides & Custom Trip Side-by-Side (50% each) */}
@@ -210,24 +252,7 @@ export default function HomeScreen() {
           })}
         </ScrollView>
 
-        {/* AC / NON-AC FILTERS (Hidden if Auto is selected) */}
-        {selectedRide !== 'auto' && (
-          <View style={styles.filterPillsRow}>
-            <TouchableOpacity
-              style={[styles.filterPill, isAc && styles.filterPillSelected]}
-              onPress={() => setIsAc(true)}
-            >
-              <Text style={[styles.filterPillText, { color: isAc ? '#101010' : colors.textPrimary }]}>AC Rides</Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.filterPill, !isAc && styles.filterPillSelected]}
-              onPress={() => setIsAc(false)}
-            >
-              <Text style={[styles.filterPillText, { color: !isAc ? '#101010' : colors.textPrimary }]}>Non-AC</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {/* VIBE WITH US FOOTER CARD */}
         <View style={styles.footerVibeCard}>
@@ -273,15 +298,39 @@ const styles = StyleSheet.create({
   bookingTypeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     marginBottom: verticalScale(20),
     backgroundColor: 'rgba(255,255,255,0.03)',
-    alignSelf: 'center',
-    paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(6),
-    borderRadius: scale(25),
+    width: '100%',
+    height: verticalScale(48),
+    borderRadius: scale(24),
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
+    position: 'relative',
+    padding: scale(4),
+  },
+  bookingTab: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  bookingActiveBg: {
+    position: 'absolute',
+    top: scale(4),
+    bottom: scale(4),
+    width: '48%',
+    borderRadius: scale(20),
+    backgroundColor: 'rgba(245, 197, 24, 0.12)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(245, 197, 24, 0.35)',
+    shadowColor: '#F5C518',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+    zIndex: 1,
   },
   bookingLabel: {
     fontSize: moderateFontScale(13),
@@ -439,28 +488,7 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(11),
     marginTop: verticalScale(2),
   },
-  filterPillsRow: {
-    flexDirection: 'row',
-    gap: scale(10),
-    marginBottom: verticalScale(24),
-  },
-  filterPill: {
-    paddingVertical: verticalScale(8),
-    paddingHorizontal: scale(18),
-    borderRadius: scale(20),
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    backgroundColor: 'transparent',
-  },
-  filterPillSelected: {
-    backgroundColor: '#F5C518',
-    borderColor: '#F5C518',
-  },
-  filterPillText: {
-    color: '#ffffff',
-    fontSize: moderateFontScale(13),
-    fontWeight: '600',
-  },
+
   footerVibeCard: {
     backgroundColor: '#0A0A0C',
     borderRadius: scale(24),
