@@ -190,33 +190,67 @@ export default function FleetCatalogScreen() {
         </View>
 
         {/* Fleet List Rows */}
-        {currentCategory.cars.map((car, idx) => (
-          <View key={idx} style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: colors.surface,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: scale(14),
-            padding: scale(10),
-            marginBottom: verticalScale(10),
-          }}>
-            <Image source={{ uri: car.image }} style={{ width: scale(72), height: scale(72), borderRadius: scale(10) }} />
-            
-            <View style={{ flex: 1, marginLeft: scale(12), justifyContent: 'center' }}>
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800' }}>{car.name}</Text>
-              
-              <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(4) }}>
-                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>👥 {car.pax} Seats</Text>
-                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>💼 {car.boot.split(' ')[0]}</Text>
+        {currentCategory.cars.map((car, idx) => {
+          const ratePerHour = adminState.vehicleRatesPerHour[currentCategory.key as keyof typeof adminState.vehicleRatesPerHour] || car.rate * 10;
+          const ratePerDay = currentCategory.key === '5seater' ? 1800 : currentCategory.key === '7seater' ? 2600 : currentCategory.key === '4x4jeep' ? 4200 : 1200;
+
+          return (
+            <View key={idx} style={{
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: scale(14),
+              padding: scale(12),
+              marginBottom: verticalScale(12),
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Image source={{ uri: car.image }} style={{ width: scale(76), height: scale(76), borderRadius: scale(10) }} />
+                
+                <View style={{ flex: 1, marginLeft: scale(12), justifyContent: 'center' }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14.5), fontWeight: '800' }}>{car.name}</Text>
+                  
+                  <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(4) }}>
+                    <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>👥 {car.pax} Seats</Text>
+                    <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>💼 {car.boot.split(' ')[0]}</Text>
+                  </View>
+
+                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '800' }}>
+                    ₹{ratePerDay}/Day <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), fontWeight: 'normal' }}>(+ ₹{ratePerHour}/hr addon)</Text>
+                  </Text>
+                </View>
               </View>
 
-              <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '800' }}>
-                ₹{adminState.vehicleRatesPerHour[currentCategory.key as keyof typeof adminState.vehicleRatesPerHour] || car.rate * 10}/hr
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: verticalScale(8), lineHeight: moderateFontScale(15) }}>
+                {car.desc}
               </Text>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.amber,
+                  borderRadius: scale(10),
+                  height: scale(36),
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: verticalScale(10),
+                }}
+                onPress={() => {
+                  router.push({
+                    pathname: '/plan-route',
+                    params: {
+                      fromVehicle: 'true',
+                      vehicleType: currentCategory.key,
+                      carName: car.name
+                    }
+                  });
+                }}
+              >
+                <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                  Book Package with this Car
+                </Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        ))}
+          );
+        })}
 
         <View style={{ height: verticalScale(30) }} />
       </ScrollView>

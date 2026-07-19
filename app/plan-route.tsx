@@ -1,8 +1,8 @@
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -61,6 +61,17 @@ export default function PlanRouteScreen() {
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
+
+  const params = useLocalSearchParams();
+  const fromVehicle = params.fromVehicle === 'true';
+  const vehicleTypeParam = params.vehicleType as '5seater' | '7seater' | '4x4jeep' | 'auto';
+  const carNameParam = params.carName as string;
+
+  useEffect(() => {
+    if (fromVehicle && vehicleTypeParam) {
+      setBookingVehicle(vehicleTypeParam);
+    }
+  }, [fromVehicle, vehicleTypeParam]);
 
   // Booking modal state
   const [selectedPlan, setSelectedPlan] = useState<TourPackage | null>(null);
@@ -428,84 +439,110 @@ export default function PlanRouteScreen() {
                     </View>
                   </View>
 
-                  {/* Vehicle selector */}
-                  <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginTop: verticalScale(14) }]}>Choose Vehicle Fleet</Text>
-                  <View style={styles.vehicleRow}>
-                    {(['5seater', '7seater', '4x4jeep', 'auto'] as const).map((vKey) => {
-                      const isSelected = bookingVehicle === vKey;
-                      const name = vKey === '5seater' ? '5 Seater' : vKey === '7seater' ? '7 Seater' : vKey === '4x4jeep' ? (bookingVehicle === '4x4jeep' ? `4x4 (${selected4x4Car})` : '4x4 Jeep') : 'Auto';
-                      const rate = vKey === '5seater' ? 1800 : vKey === '7seater' ? 2600 : vKey === '4x4jeep' ? 4200 : 1200;
-                      return (
-                        <TouchableOpacity
-                          key={vKey}
-                          style={[
-                            styles.vehiclePill,
-                            { borderColor: isSelected ? colors.amber : colors.border, flex: 1, alignItems: 'center', paddingVertical: scale(6) },
-                            isSelected && { backgroundColor: 'rgba(245, 197, 24, 0.1)' }
-                          ]}
-                          onPress={() => setBookingVehicle(vKey)}
-                        >
-                          <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10), fontWeight: '800' }]} numberOfLines={1}>{name}</Text>
-                          <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: 2 }}>₹{rate}/day</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  {fromVehicle && (
+                    <View style={{
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F9F9FB',
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: scale(12),
+                      padding: scale(12),
+                      marginTop: verticalScale(12),
+                      flexDirection: 'row',
+                      alignItems: 'center'
+                    }}>
+                      <MaterialIcons name="directions-car" size={scale(22)} color={colors.amber} style={{ marginRight: scale(10) }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5), fontWeight: '700' }}>SELECTED VEHICLE</Text>
+                        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginTop: verticalScale(2) }}>
+                          {carNameParam || (bookingVehicle === '5seater' ? '5 Seater Cab' : bookingVehicle === '7seater' ? '7 Seater SUV' : bookingVehicle === '4x4jeep' ? '4x4 Jeep Offroader' : 'Eco Auto Rickshaw')}
+                        </Text>
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: verticalScale(2) }}>
+                          Rate: ₹{vehicleRatesPerDay[bookingVehicle] || 1800}/Day (+ ₹{adminState.vehicleRatesPerHour[bookingVehicle] || 150}/hr addon)
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
-                  {/* Inline 4x4 Selector Carousel (Main Drawer View) */}
-                  {bookingVehicle === '4x4jeep' && (
-                    <View style={{ marginTop: verticalScale(14) }}>
-                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select 4x4 Model</Text>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingVertical: verticalScale(6) }}
-                      >
-                        {jeepCarouselData.map((car) => {
-                          const isSelected = selected4x4Car === car.id;
+                  {!fromVehicle && (
+                    <>
+                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginTop: verticalScale(14) }]}>Choose Vehicle Fleet</Text>
+                      <View style={styles.vehicleRow}>
+                        {(['5seater', '7seater', '4x4jeep', 'auto'] as const).map((vKey) => {
+                          const isSelected = bookingVehicle === vKey;
+                          const name = vKey === '5seater' ? '5 Seater' : vKey === '7seater' ? '7 Seater' : vKey === '4x4jeep' ? (bookingVehicle === '4x4jeep' ? `4x4 (${selected4x4Car})` : '4x4 Jeep') : 'Auto';
+                          const rate = vKey === '5seater' ? 1800 : vKey === '7seater' ? 2600 : vKey === '4x4jeep' ? 4200 : 1200;
                           return (
                             <TouchableOpacity
-                              key={car.id}
-                              activeOpacity={0.9}
-                              style={{
-                                width: scale(200),
-                                marginRight: scale(10),
-                                backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F9F9FB',
-                                borderRadius: scale(16),
-                                borderWidth: 1.5,
-                                borderColor: isSelected ? colors.amber : colors.border,
-                                padding: scale(12),
-                                alignItems: 'center',
-                              }}
-                              onPress={() => setSelected4x4Car(car.id)}
+                              key={vKey}
+                              style={[
+                                styles.vehiclePill,
+                                { borderColor: isSelected ? colors.amber : colors.border, flex: 1, alignItems: 'center', paddingVertical: scale(6) },
+                                isSelected && { backgroundColor: 'rgba(245, 197, 24, 0.1)' }
+                              ]}
+                              onPress={() => setBookingVehicle(vKey)}
                             >
-                              <Image source={car.image} style={{ width: '80%', height: verticalScale(60), resizeMode: 'contain', marginBottom: verticalScale(6) }} />
-                              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: '800', textAlign: 'center' }}>{car.name}</Text>
-                              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5), textAlign: 'center', marginTop: 2, height: verticalScale(30) }} numberOfLines={2}>
-                                {car.desc}
-                              </Text>
-                              <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '800', marginTop: verticalScale(4) }}>{car.rateText}</Text>
-                              <View
-                                style={{
-                                  backgroundColor: isSelected ? colors.amber : 'transparent',
-                                  borderWidth: isSelected ? 0 : 1,
-                                  borderColor: colors.amber,
-                                  borderRadius: scale(8),
-                                  paddingVertical: verticalScale(4),
-                                  width: '100%',
-                                  alignItems: 'center',
-                                  marginTop: verticalScale(8),
-                                }}
-                              >
-                                <Text style={{ color: isSelected ? '#101014' : colors.amber, fontWeight: '800', fontSize: moderateFontScale(10.5) }}>
-                                  {isSelected ? '✓ Selected' : 'Choose Model'}
-                                </Text>
-                              </View>
+                              <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10), fontWeight: '800' }]} numberOfLines={1}>{name}</Text>
+                              <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: 2 }}>₹{rate}/day</Text>
                             </TouchableOpacity>
                           );
                         })}
-                      </ScrollView>
-                    </View>
+                      </View>
+
+                      {bookingVehicle === '4x4jeep' && (
+                        <View style={{ marginTop: verticalScale(14) }}>
+                          <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select 4x4 Model</Text>
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ paddingVertical: verticalScale(6) }}
+                          >
+                            {jeepCarouselData.map((car) => {
+                              const isSelected = selected4x4Car === car.id;
+                              return (
+                                <TouchableOpacity
+                                  key={car.id}
+                                  activeOpacity={0.9}
+                                  style={{
+                                    width: scale(200),
+                                    marginRight: scale(10),
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F9F9FB',
+                                    borderRadius: scale(16),
+                                    borderWidth: 1.5,
+                                    borderColor: isSelected ? colors.amber : colors.border,
+                                    padding: scale(12),
+                                    alignItems: 'center',
+                                  }}
+                                  onPress={() => setSelected4x4Car(car.id)}
+                                >
+                                  <Image source={car.image} style={{ width: '80%', height: verticalScale(60), resizeMode: 'contain', marginBottom: verticalScale(6) }} />
+                                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: '800', textAlign: 'center' }}>{car.name}</Text>
+                                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5), textAlign: 'center', marginTop: 2, height: verticalScale(30) }} numberOfLines={2}>
+                                    {car.desc}
+                                  </Text>
+                                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '800', marginTop: verticalScale(4) }}>{car.rateText}</Text>
+                                  <View
+                                    style={{
+                                      backgroundColor: isSelected ? colors.amber : 'transparent',
+                                      borderWidth: isSelected ? 0 : 1,
+                                      borderColor: colors.amber,
+                                      borderRadius: scale(8),
+                                      paddingVertical: verticalScale(4),
+                                      width: '100%',
+                                      alignItems: 'center',
+                                      marginTop: verticalScale(8),
+                                    }}
+                                  >
+                                    <Text style={{ color: isSelected ? '#101014' : colors.amber, fontWeight: '800', fontSize: moderateFontScale(10.5) }}>
+                                      {isSelected ? '✓ Selected' : 'Choose Model'}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </>
                   )}
 
                   {!adminState.instantBookingEnabled && (
