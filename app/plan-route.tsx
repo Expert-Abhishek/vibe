@@ -1,22 +1,22 @@
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  Image,
-  Modal,
-  StatusBar,
-  Alert,
-  ActivityIndicator,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
 
 interface TourPackage {
@@ -61,7 +61,7 @@ export default function PlanRouteScreen() {
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Booking modal state
   const [selectedPlan, setSelectedPlan] = useState<TourPackage | null>(null);
   const [bookingPax, setBookingPax] = useState(1);
@@ -91,6 +91,79 @@ export default function PlanRouteScreen() {
   const bookingTime = `${bookingHour}:${bookingMinute < 10 ? '0' + bookingMinute : bookingMinute} ${bookingAmPm}`;
   const [bookingStep, setBookingStep] = useState<'details' | 'form' | 'connecting' | 'success'>('details');
 
+  // Vehicle selector modal visibility state
+  const [isVehiclePickerVisible, setIsVehiclePickerVisible] = useState(false);
+
+  const jeepCarouselData = [
+    {
+      id: 'Thar',
+      name: 'Mahindra Thar 4x4',
+      desc: 'The legendary offroader. Powerful engine, high clearance, and ultimate commanding presence.',
+      image: require('../assets/images/thar.png'),
+      capacity: '4 Passengers + 1 Bag',
+      rateText: '₹4200/Day (+ ₹350/hr addon)',
+    },
+    {
+      id: 'Gurkha',
+      name: 'Force Gurkha 4x4',
+      desc: 'Extreme adventure machine. Snorkel intake, heavy-duty suspension, and unmatched trail capability.',
+      image: require('../assets/images/thar.png'),
+      capacity: '4 Passengers + 2 Bags',
+      rateText: '₹4200/Day (+ ₹350/hr addon)',
+    },
+    {
+      id: 'Jimny',
+      name: 'Maruti Jimny 4x4',
+      desc: 'Compact mountain climber. Lightweight 4WD, easy maneuvering, and classic styling.',
+      image: require('../assets/images/thar.png'),
+      capacity: '4 Passengers + 1 Bag',
+      rateText: '₹4200/Day (+ ₹350/hr addon)',
+    },
+  ];
+
+  const vehicleRatesPerDay = {
+    '5seater': 1800,
+    '7seater': 2600,
+    '4x4jeep': 4200,
+    'auto': 1200,
+  };
+
+  const calculatePackagePrice = (plan: TourPackage, vehicle: '5seater' | '7seater' | '4x4jeep' | 'auto') => {
+    const baseDayRate = vehicleRatesPerDay[vehicle] || 1800;
+    const vehicleHourlyRate = adminState.vehicleRatesPerHour[vehicle] || 150;
+    const totalTripHours = plan.travelHours + plan.checkpoints.length;
+
+    let h = bookingHour;
+    if (bookingAmPm === 'PM' && bookingHour !== 12) {
+      h += 12;
+    } else if (bookingAmPm === 'AM' && bookingHour === 12) {
+      h = 0;
+    }
+    const startHourDec = h + (bookingMinute / 60);
+    const endHourDec = startHourDec + totalTripHours;
+
+    let extraHours = 0;
+    if (startHourDec < 6) {
+      extraHours += (6 - startHourDec);
+    }
+    if (endHourDec > 18) {
+      extraHours += (endHourDec - 18);
+    }
+
+    const extraHoursRounded = Math.max(0, Math.ceil(extraHours));
+    const extraAddonCharge = extraHoursRounded * vehicleHourlyRate;
+    const computedPrice = baseDayRate + extraAddonCharge;
+
+    return {
+      computedPrice,
+      baseDayRate,
+      extraHoursRounded,
+      extraAddonCharge,
+      vehicleHourlyRate,
+      totalTripHours
+    };
+  };
+
   const dateOptions = Array.from({ length: 15 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
@@ -102,10 +175,6 @@ export default function PlanRouteScreen() {
     };
   });
 
-  const timeOptions = [
-    '08:00 AM', '10:00 AM', '12:00 PM', '02:00 PM', '04:00 PM', '06:00 PM', '08:00 PM'
-  ];
-
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
     surface: isDark ? '#1E1E24' : '#FFFFFF',
@@ -115,6 +184,7 @@ export default function PlanRouteScreen() {
     border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
     success: '#10B981',
+    danger: '#EF4444',
   };
 
   const filteredPackages = packagePlans.filter(
@@ -129,7 +199,6 @@ export default function PlanRouteScreen() {
     setBookingVehicle('5seater');
     setBookingStep('details');
 
-    // Default pre-booking date to tomorrow (YYYY-MM-DD)
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     setBookingDate(tomorrow.toISOString().split('T')[0]);
@@ -138,7 +207,6 @@ export default function PlanRouteScreen() {
   const handleConfirmBooking = () => {
     if (!selectedPlan) return;
 
-    // Validate prebooking date limit (max 15 days in advance)
     if (!adminState.instantBookingEnabled) {
       if (!bookingDate) {
         Alert.alert('Error', 'Please enter a booking date.');
@@ -159,7 +227,6 @@ export default function PlanRouteScreen() {
 
     setBookingStep('connecting');
 
-    // Simulate match connection delay
     setTimeout(() => {
       setBookingStep('success');
     }, 2000);
@@ -168,25 +235,23 @@ export default function PlanRouteScreen() {
   const addTripAndClose = () => {
     if (!selectedPlan) return;
 
-    const totalHours = selectedPlan.travelHours + selectedPlan.checkpoints.length;
-    const rate = adminState.vehicleRatesPerHour[bookingVehicle] || 150;
-    const price = Math.round(totalHours * rate);
+    const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
+    const price = priceInfo.computedPrice;
+    const totalHours = priceInfo.totalTripHours;
 
     const finalDate = adminState.instantBookingEnabled ? 'Today' : bookingDate;
     const finalTime = adminState.instantBookingEnabled
       ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : bookingTime;
 
-    // Mock Razorpay Integration
     Alert.alert(
       'Razorpay Secure Checkout',
       `Amount to Pay: ₹${price}\n\nPlease confirm payment to proceed with booking.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Pay Now', 
+        {
+          text: 'Pay Now',
           onPress: () => {
-            // Add to userTrips Array
             adminState.userTrips.push({
               id: `plan_book_${Date.now()}`,
               type: 'plan',
@@ -214,7 +279,6 @@ export default function PlanRouteScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
@@ -224,7 +288,6 @@ export default function PlanRouteScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Welcome Text */}
         <View style={styles.welcomeBanner}>
           <Text style={styles.welcomeTitle}>Discover Heritage & Nature</Text>
           <Text style={[styles.welcomeSub, { color: colors.textMuted }]}>
@@ -232,7 +295,6 @@ export default function PlanRouteScreen() {
           </Text>
         </View>
 
-        {/* Search Bar */}
         <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border }]}>
           <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
           <TextInput
@@ -250,7 +312,6 @@ export default function PlanRouteScreen() {
           )}
         </View>
 
-        {/* Unified Package List */}
         <View style={{ gap: scale(12), marginTop: verticalScale(10) }}>
           {filteredPackages.length === 0 ? (
             <View style={styles.noResults}>
@@ -269,12 +330,12 @@ export default function PlanRouteScreen() {
                   onPress={() => openBookingPopup(plan)}
                 >
                   <Image source={{ uri: plan.image }} style={styles.packageRowImage} />
-                  
+
                   <View style={styles.packageRowBody}>
                     <Text style={[styles.packageNameText, { color: colors.textPrimary }]} numberOfLines={1}>
                       {plan.name}
                     </Text>
-                    
+
                     <View style={styles.metaInfoRow}>
                       <Text style={[styles.metaText, { color: colors.textMuted }]}>
                         📍 {checkpointsCount} Stops  •  🛣️ {plan.distanceKm} km
@@ -287,16 +348,6 @@ export default function PlanRouteScreen() {
                       </Text>
                     </View>
                   </View>
-
-                  <View style={styles.rowActionCol}>
-                    <TouchableOpacity
-                      style={styles.rowBookBtn}
-                      activeOpacity={0.8}
-                      onPress={() => openBookingPopup(plan)}
-                    >
-                      <Text style={styles.rowBookBtnText}>Book</Text>
-                    </TouchableOpacity>
-                  </View>
                 </TouchableOpacity>
               );
             })
@@ -306,7 +357,6 @@ export default function PlanRouteScreen() {
         <View style={{ height: verticalScale(30) }} />
       </ScrollView>
 
-      {/* Booking Popup Modal */}
       <Modal
         visible={selectedPlan !== null}
         animationType="fade"
@@ -316,8 +366,7 @@ export default function PlanRouteScreen() {
         {selectedPlan && (
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-              
-              {/* Details Step */}
+
               {bookingStep === 'details' && (
                 <ScrollView contentContainerStyle={{ paddingBottom: verticalScale(10) }} showsVerticalScrollIndicator={false}>
                   <View style={styles.modalHeader}>
@@ -326,9 +375,9 @@ export default function PlanRouteScreen() {
                       <MaterialIcons name="close" size={scale(22)} color={colors.textPrimary} />
                     </TouchableOpacity>
                   </View>
-                  
+
                   <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
-                  
+
                   <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(10), padding: scale(12), marginVertical: verticalScale(12) }}>
                     <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', marginBottom: verticalScale(6) }}>CHECKPOINTS</Text>
                     <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), lineHeight: moderateFontScale(18) }}>
@@ -336,10 +385,10 @@ export default function PlanRouteScreen() {
                     </Text>
                   </View>
 
-                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800', marginBottom: verticalScale(10) }}>Gallery</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), justifyContent: 'space-between', marginBottom: verticalScale(20) }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginVertical: verticalScale(10) }}>Gallery</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), justifyContent: 'space-between', marginBottom: verticalScale(16) }}>
                     {['https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=150', 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=150', 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=150', 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=150'].map((imgUrl, i) => (
-                      <Image key={i} source={{ uri: imgUrl }} style={{ width: '48%', height: verticalScale(100), borderRadius: scale(10) }} />
+                      <Image key={i} source={{ uri: imgUrl }} style={{ width: '48%', height: verticalScale(80), borderRadius: scale(10) }} />
                     ))}
                   </View>
 
@@ -352,7 +401,6 @@ export default function PlanRouteScreen() {
                 </ScrollView>
               )}
 
-              {/* Form Step */}
               {bookingStep === 'form' && (
                 <ScrollView contentContainerStyle={{ paddingBottom: verticalScale(10) }} showsVerticalScrollIndicator={false}>
                   <View style={styles.modalHeader}>
@@ -362,16 +410,7 @@ export default function PlanRouteScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
 
-                  {/* Pricing Display */}
-                  <View style={[styles.priceBox, { backgroundColor: isDark ? '#16161B' : '#F5F5F7' }]}>
-                    <Text style={styles.priceLabel}>ESTIMATED PACKAGE PRICE</Text>
-                    <Text style={[styles.priceValue, { color: colors.amber }]}>
-                      ₹{Math.round((selectedPlan.travelHours + selectedPlan.checkpoints.length) * (adminState.vehicleRatesPerHour[bookingVehicle] || (bookingVehicle === 'auto' ? 80 : 150)))}
-                    </Text>
-                    <Text style={styles.priceSubText}>Based on hourly billing: {selectedPlan.travelHours + selectedPlan.checkpoints.length} hrs total duration</Text>
-                  </View>
 
 
 
@@ -379,17 +418,11 @@ export default function PlanRouteScreen() {
                   <View style={styles.counterRow}>
                     <Text style={[styles.selectorLabel, { color: colors.textPrimary }]}>Number of Passengers</Text>
                     <View style={styles.counterControls}>
-                      <TouchableOpacity
-                        style={styles.counterBtn}
-                        onPress={() => setBookingPax(Math.max(1, bookingPax - 1))}
-                      >
+                      <TouchableOpacity style={styles.counterBtn} onPress={() => setBookingPax(Math.max(1, bookingPax - 1))}>
                         <Text style={styles.counterBtnText}>-</Text>
                       </TouchableOpacity>
                       <Text style={[styles.counterVal, { color: colors.textPrimary }]}>{bookingPax}</Text>
-                      <TouchableOpacity
-                        style={styles.counterBtn}
-                        onPress={() => setBookingPax(Math.min(10, bookingPax + 1))}
-                      >
+                      <TouchableOpacity style={styles.counterBtn} onPress={() => setBookingPax(Math.min(10, bookingPax + 1))}>
                         <Text style={styles.counterBtnText}>+</Text>
                       </TouchableOpacity>
                     </View>
@@ -400,55 +433,74 @@ export default function PlanRouteScreen() {
                   <View style={styles.vehicleRow}>
                     {(['5seater', '7seater', '4x4jeep', 'auto'] as const).map((vKey) => {
                       const isSelected = bookingVehicle === vKey;
-                      const name = vKey === '5seater' ? '5 Seater Cab' : vKey === '7seater' ? '7 Seater SUV' : vKey === '4x4jeep' ? '4x4 Jeep' : 'Auto';
-                      const hourlyRate = adminState.vehicleRatesPerHour[vKey] || (vKey === 'auto' ? 80 : 150);
+                      const name = vKey === '5seater' ? '5 Seater' : vKey === '7seater' ? '7 Seater' : vKey === '4x4jeep' ? (bookingVehicle === '4x4jeep' ? `4x4 (${selected4x4Car})` : '4x4 Jeep') : 'Auto';
+                      const rate = vKey === '5seater' ? 1800 : vKey === '7seater' ? 2600 : vKey === '4x4jeep' ? 4200 : 1200;
                       return (
                         <TouchableOpacity
                           key={vKey}
                           style={[
                             styles.vehiclePill,
-                            { borderColor: isSelected ? colors.amber : colors.border },
+                            { borderColor: isSelected ? colors.amber : colors.border, flex: 1, alignItems: 'center', paddingVertical: scale(6) },
                             isSelected && { backgroundColor: 'rgba(245, 197, 24, 0.1)' }
                           ]}
                           onPress={() => setBookingVehicle(vKey)}
                         >
-                          <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary }]}>{name}</Text>
-                          <Text style={styles.vehiclePillRate}>₹{hourlyRate}/hr</Text>
+                          <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10), fontWeight: '800' }]} numberOfLines={1}>{name}</Text>
+                          <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: 2 }}>₹{rate}/day</Text>
                         </TouchableOpacity>
                       );
                     })}
                   </View>
 
-                  {/* 4x4 Manual Picker */}
+                  {/* Inline 4x4 Selector Carousel (Main Drawer View) */}
                   {bookingVehicle === '4x4jeep' && (
                     <View style={{ marginTop: verticalScale(14) }}>
-                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select 4x4 Vehicle</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {[
-                          { id: 'Thar', name: 'Mahindra Thar', image: require('../assets/images/thar.png') },
-                          { id: 'Gurkha', name: 'Force Gurkha', image: require('../assets/images/thar.png') },
-                          { id: 'Jimny', name: 'Maruti Jimny', image: require('../assets/images/thar.png') },
-                        ].map((car) => {
+                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select 4x4 Model</Text>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingVertical: verticalScale(6) }}
+                      >
+                        {jeepCarouselData.map((car) => {
                           const isSelected = selected4x4Car === car.id;
                           return (
                             <TouchableOpacity
                               key={car.id}
+                              activeOpacity={0.9}
                               style={{
-                                width: scale(100),
-                                height: verticalScale(100),
-                                borderWidth: 1.5,
-                                borderRadius: scale(10),
-                                borderColor: isSelected ? colors.amber : colors.border,
-                                backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'rgba(255,255,255,0.02)',
+                                width: scale(200),
                                 marginRight: scale(10),
+                                backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F9F9FB',
+                                borderRadius: scale(16),
+                                borderWidth: 1.5,
+                                borderColor: isSelected ? colors.amber : colors.border,
+                                padding: scale(12),
                                 alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: scale(8)
                               }}
                               onPress={() => setSelected4x4Car(car.id)}
                             >
-                              <Image source={car.image} style={{ width: '100%', height: '60%', resizeMode: 'contain' }} />
-                              <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10), fontWeight: '700', marginTop: verticalScale(4), textAlign: 'center' }}>{car.name}</Text>
+                              <Image source={car.image} style={{ width: '80%', height: verticalScale(60), resizeMode: 'contain', marginBottom: verticalScale(6) }} />
+                              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: '800', textAlign: 'center' }}>{car.name}</Text>
+                              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5), textAlign: 'center', marginTop: 2, height: verticalScale(30) }} numberOfLines={2}>
+                                {car.desc}
+                              </Text>
+                              <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '800', marginTop: verticalScale(4) }}>{car.rateText}</Text>
+                              <View
+                                style={{
+                                  backgroundColor: isSelected ? colors.amber : 'transparent',
+                                  borderWidth: isSelected ? 0 : 1,
+                                  borderColor: colors.amber,
+                                  borderRadius: scale(8),
+                                  paddingVertical: verticalScale(4),
+                                  width: '100%',
+                                  alignItems: 'center',
+                                  marginTop: verticalScale(8),
+                                }}
+                              >
+                                <Text style={{ color: isSelected ? '#101014' : colors.amber, fontWeight: '800', fontSize: moderateFontScale(10.5) }}>
+                                  {isSelected ? '✓ Selected' : 'Choose Model'}
+                                </Text>
+                              </View>
                             </TouchableOpacity>
                           );
                         })}
@@ -456,12 +508,9 @@ export default function PlanRouteScreen() {
                     </View>
                   )}
 
-                  {/* Date Time selection (Only if Prebooking mode) */}
                   {!adminState.instantBookingEnabled && (
                     <View style={{ marginTop: verticalScale(14) }}>
                       <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Pre-Booking Date</Text>
-                      
-                      {/* Horizontal Date Picker */}
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(12) }}>
                         {dateOptions.map((opt) => {
                           const isSelected = bookingDate === opt.dateStr;
@@ -490,7 +539,7 @@ export default function PlanRouteScreen() {
                       </ScrollView>
 
                       <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Booking Time</Text>
-                      
+
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(8), borderRadius: scale(12), borderWidth: 1.5, borderColor: colors.border }}>
                         {/* Hour Selection */}
                         <View style={{ alignItems: 'center', flex: 1.2 }}>
@@ -567,8 +616,67 @@ export default function PlanRouteScreen() {
                       </View>
                     </View>
                   )}
+                  <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
+                  {(() => {
+                    const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
+                    const { computedPrice, baseDayRate, extraHoursRounded, extraAddonCharge, vehicleHourlyRate, totalTripHours } = priceInfo;
+                    return (
+                      <>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6), marginTop: verticalScale(10) }}>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Base Travel Duration</Text>
+                          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(11) }}>{selectedPlan.travelHours.toFixed(1)} hours</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Checkpoints Addon ({selectedPlan.checkpoints.length} stops)</Text>
+                          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(11) }}>+{selectedPlan.checkpoints.length} hours</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Total Trip Duration</Text>
+                          <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(11) }}>{totalTripHours.toFixed(1)} hours</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Base Vehicle Rate</Text>
+                          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(11) }}>₹{baseDayRate}/Day</Text>
+                        </View>
+                        {extraHoursRounded > 0 && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                            <Text style={{ color: colors.danger, fontSize: moderateFontScale(11), fontWeight: '600' }}>Extra Hours Add-on ({extraHoursRounded} hrs)</Text>
+                            <Text style={{ color: colors.danger, fontWeight: '700', fontSize: moderateFontScale(11) }}>+₹{extraAddonCharge}</Text>
+                          </View>
+                        )}
 
-                  {/* Booking Action buttons */}
+                        <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(6) }}>
+                          <View>
+                            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }}>ESTIMATED FARE</Text>
+                            <Text style={{ fontSize: moderateFontScale(22), fontWeight: '900', color: colors.amber }}>₹{computedPrice}</Text>
+                          </View>
+                          <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingVertical: scale(4), paddingHorizontal: scale(8), borderRadius: scale(8) }}>
+                            <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Day Rate + Addon</Text>
+                          </View>
+                        </View>
+
+                        {/* Note about 6 AM - 6 PM policy */}
+                        <View style={{
+                          backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
+                          borderColor: 'rgba(245, 197, 24, 0.3)',
+                          borderWidth: 1,
+                          borderRadius: scale(10),
+                          padding: scale(10),
+                          marginTop: verticalScale(12),
+                          flexDirection: 'row',
+                          alignItems: 'flex-start',
+                          gap: scale(6)
+                        }}>
+                          <MaterialIcons name="info" size={scale(16)} color={colors.amber} style={{ marginTop: 2 }} />
+                          <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(10.5), flex: 1, lineHeight: moderateFontScale(14), fontWeight: '500' }}>
+                            Note: Standard vehicle booking package is valid from <Text style={{ fontWeight: '700', color: colors.amber }}>6:00 AM to 6:00 PM</Text>. Bookings starting before 6:00 AM or ending after 6:00 PM will incur an extra charge of <Text style={{ fontWeight: '700' }}>₹{vehicleHourlyRate}/hr</Text>.
+                          </Text>
+                        </View>
+                      </>
+                    );
+                  })()}
                   <TouchableOpacity
                     style={styles.confirmBtn}
                     activeOpacity={0.8}
@@ -581,7 +689,6 @@ export default function PlanRouteScreen() {
                 </ScrollView>
               )}
 
-              {/* Connecting Loading step */}
               {bookingStep === 'connecting' && (
                 <View style={styles.loadingStep}>
                   <ActivityIndicator color={colors.amber} size="large" />
@@ -592,22 +699,10 @@ export default function PlanRouteScreen() {
                 </View>
               )}
 
-              {/* Success matched step */}
               {bookingStep === 'success' && (
                 <View style={styles.successStep}>
                   <MaterialIcons name="check-circle" size={scale(64)} color={colors.success} />
                   <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Trip Scheduled!</Text>
-                  
-                  <View style={[styles.driverDetailCard, { backgroundColor: isDark ? '#16161B' : '#F5F5F7' }]}>
-                    <Text style={styles.driverName}>Captain Suresh Kumar connected</Text>
-                    <Text style={[styles.driverSub, { color: colors.textMuted }]}>Vehicle: {bookingVehicle === '4x4jeep' ? 'Mahindra Thar 4*4' : 'Ertiga SUV'}</Text>
-                    <Text style={[styles.driverSub, { color: colors.textMuted }]}>Contact: +91 98765 43210</Text>
-                  </View>
-
-                  <Text style={[styles.successNote, { color: colors.textMuted }]}>
-                    The tour itinerary has been synced with your Trips tab log. Safe travels!
-                  </Text>
-
                   <TouchableOpacity
                     style={styles.doneBtn}
                     onPress={addTripAndClose}
@@ -616,7 +711,6 @@ export default function PlanRouteScreen() {
                   </TouchableOpacity>
                 </View>
               )}
-
             </View>
           </View>
         )}
@@ -791,7 +885,7 @@ const styles = StyleSheet.create({
   modalPlanName: {
     fontSize: moderateFontScale(14),
     fontWeight: '800',
-    marginTop: verticalScale(4),
+    marginTop: verticalScale(12),
     marginBottom: verticalScale(12),
   },
   priceBox: {
@@ -823,6 +917,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: verticalScale(4)
   },
   counterControls: {
     flexDirection: 'row',
@@ -1008,6 +1103,29 @@ const styles = StyleSheet.create({
   rowBookBtnText: {
     color: '#101014',
     fontSize: moderateFontScale(12),
+    fontWeight: '800',
+  },
+  overlayModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  mapContainerBox: {
+    borderTopLeftRadius: scale(24),
+    borderTopRightRadius: scale(24),
+    paddingBottom: verticalScale(30),
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: verticalScale(14),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  modalTitle: {
+    fontSize: moderateFontScale(15),
     fontWeight: '800',
   },
 });

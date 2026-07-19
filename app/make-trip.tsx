@@ -1,21 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  StatusBar,
-  Alert,
-  ActivityIndicator,
-  Platform,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
 
 // Dynamically require react-native-maps to prevent compilation or runtime crashes on Web
@@ -51,9 +53,17 @@ const presetDestinations: Checkpoint[] = [
   { id: 'p3', name: 'Hampi Virupaksha', latitude: 15.3350, longitude: 76.4600, address: 'Hampi, Bellary, Karnataka' },
   { id: 'p4', name: 'Abbey Falls Coorg', latitude: 12.4385, longitude: 75.7214, address: 'Madikeri, Coorg, Karnataka' },
   { id: 'p5', name: 'Gokarna Om Beach', latitude: 14.5262, longitude: 74.3168, address: 'Gokarna, Uttara Kannada, Karnataka' },
-  { id: 'p6', name: 'Bandipur Tiger Safari', latitude: 11.6667, longitude: 76.6333, address: 'Bandipur National Park, Chamarajanagar' },
+  { id: 'p6', name: 'Bandipur National Park', latitude: 11.6667, longitude: 76.6333, address: 'Bandipur National Park, Chamarajanagar' },
   { id: 'p7', name: 'Jog Falls', latitude: 14.2272, longitude: 74.8114, address: 'Sagara, Shivamogga, Karnataka' },
-  { id: 'p8', name: 'Chikmagalur Peak', latitude: 13.4216, longitude: 75.7645, address: 'Mullayanagiri, Chikmagalur, Karnataka' },
+  { id: 'p8', name: 'Mullayanagiri Peak', latitude: 13.4216, longitude: 75.7645, address: 'Chikmagalur, Karnataka' },
+  { id: 'p9', name: 'Nandi Hills', latitude: 13.3702, longitude: 77.6835, address: 'Chikkaballapur, Karnataka' },
+  { id: 'p10', name: 'Bannerghatta Zoo', latitude: 12.7854, longitude: 77.5905, address: 'Bannerghatta, Bengaluru' },
+  { id: 'p11', name: 'Murudeshwar Temple', latitude: 14.0942, longitude: 74.4849, address: 'Bhatkal, Uttara Kannada' },
+  { id: 'p12', name: 'Udupi Krishna Temple', latitude: 13.3409, longitude: 74.7421, address: 'Udupi, Karnataka' },
+  { id: 'p13', name: 'Badami Caves', latitude: 15.9189, longitude: 75.6797, address: 'Bagalkot, Karnataka' },
+  { id: 'p14', name: 'Gol Gumbaz', latitude: 16.8282, longitude: 75.7170, address: 'Vijayapura, Karnataka' },
+  { id: 'p15', name: 'Coorg Golden Temple', latitude: 12.4294, longitude: 75.9678, address: 'Bylakuppe, Coorg' },
+  { id: 'p16', name: 'Chitradurga Fort', latitude: 14.2227, longitude: 76.3989, address: 'Chitradurga, Karnataka' },
 ];
 
 export default function MakeTripScreen() {
@@ -61,6 +71,36 @@ export default function MakeTripScreen() {
   const searchParams = useLocalSearchParams();
   const [selectedRide, setSelectedRide] = useState<string>((searchParams.selectedRide as string) || '5seater');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
+
+  // Vehicle selector modal visibility state
+  const [isVehiclePickerVisible, setIsVehiclePickerVisible] = useState(false);
+
+  const jeepCarouselData = [
+    {
+      id: 'Thar',
+      name: 'Mahindra Thar 4x4',
+      desc: 'The legendary offroader. Powerful engine, high clearance, and ultimate commanding presence.',
+      image: require('../assets/images/thar.png'),
+      capacity: '4 Passengers + 1 Bag',
+      rateText: '₹4200/Day (+ ₹350/hr addon)',
+    },
+    {
+      id: 'Gurkha',
+      name: 'Force Gurkha 4x4',
+      desc: 'Extreme adventure machine. Snorkel intake, heavy-duty suspension, and unmatched trail capability.',
+      image: require('../assets/images/thar.png'),
+      capacity: '4 Passengers + 2 Bags',
+      rateText: '₹4200/Day (+ ₹350/hr addon)',
+    },
+    {
+      id: 'Jimny',
+      name: 'Maruti Jimny 4x4',
+      desc: 'Compact mountain climber. Lightweight 4WD, easy maneuvering, and classic styling.',
+      image: require('../assets/images/thar.png'),
+      capacity: '4 Passengers + 1 Bag',
+      rateText: '₹4200/Day (+ ₹350/hr addon)',
+    },
+  ];
 
   const getTomorrowDateString = () => {
     const tomorrow = new Date();
@@ -152,6 +192,7 @@ export default function MakeTripScreen() {
     textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
     border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
+    danger: '#EF4444',
   };
 
   // Google Places Autocomplete API Search
@@ -170,88 +211,35 @@ export default function MakeTripScreen() {
 
   const searchGooglePlaces = async (query: string) => {
     setLoadingSearch(true);
-    try {
-      const queryLower = query.toLowerCase();
-      const localMatches = presetDestinations
-        .filter(p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower))
-        .map(p => ({
-          place_id: `local_${p.id}`,
-          description: `${p.name}, ${p.address || ''}`,
-          isLocal: true,
-          presetData: p,
-        }));
-
-      // Focus location biased on Karnataka (Bangalore coordinates)
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-        query
-      )}&key=${GOOGLE_MAPS_KEY}&location=12.9716,77.5946&radius=300000`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      let googleSuggestions = [];
-      if (data.predictions) {
-        googleSuggestions = data.predictions;
-      }
-      setSuggestions([...localMatches, ...googleSuggestions]);
-    } catch (e) {
-      console.warn('Error fetching autocomplete suggestions, using local backup:', e);
-      const queryLower = query.toLowerCase();
-      const localMatches = presetDestinations
-        .filter(p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower))
-        .map(p => ({
-          place_id: `local_${p.id}`,
-          description: `${p.name}, ${p.address || ''}`,
-          isLocal: true,
-          presetData: p,
-        }));
-      setSuggestions(localMatches);
-    } finally {
-      setLoadingSearch(false);
-    }
+    const queryLower = query.toLowerCase();
+    const localMatches = presetDestinations
+      .filter(p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower))
+      .map(p => ({
+        place_id: `local_${p.id}`,
+        description: `${p.name}, ${p.address || ''}`,
+        isLocal: true,
+        presetData: p,
+      }));
+    setSuggestions(localMatches);
+    setLoadingSearch(false);
   };
 
   const triggerSearchAndAddFirst = async (query: string) => {
     setLoadingSearch(true);
-    try {
-      const queryLower = query.toLowerCase();
-      const localMatch = presetDestinations.find(
-        p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower)
+    const queryLower = query.toLowerCase();
+    const localMatch = presetDestinations.find(
+      p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower)
+    );
+
+    if (localMatch) {
+      handleSelectPreset(localMatch);
+    } else {
+      Alert.alert(
+        'Location Restricted',
+        `"${query}" is not in our approved tourist places list. Please select one of our curated destinations.`
       );
-
-      if (localMatch) {
-        handleSelectPreset(localMatch);
-        setLoadingSearch(false);
-        return;
-      }
-
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-        query
-      )}&key=${GOOGLE_MAPS_KEY}&location=12.9716,77.5946&radius=300000`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.predictions && data.predictions.length > 0) {
-        const first = data.predictions[0];
-        handleSelectSuggestion(first.place_id, first.description);
-      } else {
-        Alert.alert('No Results', `Could not find any location matching "${query}".`);
-      }
-    } catch (e) {
-      console.error('Error in search and add first:', e);
-      const queryLower = query.toLowerCase();
-      const localMatch = presetDestinations.find(
-        p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower)
-      );
-
-      if (localMatch) {
-        handleSelectPreset(localMatch);
-      } else {
-        Alert.alert('No Results', `Could not find any location matching "${query}".`);
-      }
-    } finally {
-      setLoadingSearch(false);
     }
+    setLoadingSearch(false);
   };
 
   // Select place from Google Suggestions & fetch Lat/Lng
@@ -264,7 +252,7 @@ export default function MakeTripScreen() {
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${GOOGLE_MAPS_KEY}`;
       const response = await fetch(url);
       const data = await response.json();
-      
+
       if (data.result && data.result.geometry) {
         const { lat, lng } = data.result.geometry.location;
         const newPoint: Checkpoint = {
@@ -295,6 +283,8 @@ export default function MakeTripScreen() {
       id: Math.random().toString(),
     };
     setCheckpoints(prev => [...prev, newPoint]);
+    setSearchText('');
+    setSuggestions([]);
   };
 
   // Checkpoint Reordering and Deleting
@@ -372,8 +362,8 @@ export default function MakeTripScreen() {
         const Δλ = ((p2.longitude - p1.longitude) * Math.PI) / 180;
 
         const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                  Math.cos(φ1) * Math.cos(φ2) *
-                  Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+          Math.cos(φ1) * Math.cos(φ2) *
+          Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         totalMeters += R * c;
       }
@@ -384,7 +374,7 @@ export default function MakeTripScreen() {
       const estDurationMinutes = (estRoadDistanceKm / 50) * 60;
 
       setDistance(`${estRoadDistanceKm.toFixed(1)} km (est.)`);
-      
+
       const h = Math.floor(estDurationMinutes / 60);
       const m = Math.floor(estDurationMinutes % 60);
       setDuration(`${h > 0 ? `${h}h ` : ''}${m}m (est.)`);
@@ -396,7 +386,7 @@ export default function MakeTripScreen() {
       try {
         const origin = `${checkpoints[0].latitude},${checkpoints[0].longitude}`;
         const destination = `${checkpoints[checkpoints.length - 1].latitude},${checkpoints[checkpoints.length - 1].longitude}`;
-        
+
         let waypoints = '';
         if (checkpoints.length > 2) {
           const middlePoints = checkpoints.slice(1, -1);
@@ -483,10 +473,42 @@ export default function MakeTripScreen() {
     Alert.alert('Simulation Success', 'Manual price quote of ₹2,750 applied successfully.');
   };
 
+  const vehicleRatesPerDay = {
+    '5seater': 1800,
+    '7seater': 2600,
+    '4x4jeep': 4200,
+    'auto': 1200,
+  };
+
   const selectedVehicleKey = selectedRide === '5seater' || selectedRide === '7seater' || selectedRide === '4x4jeep' || selectedRide === 'auto' ? selectedRide : '5seater';
+  const baseDayRate = vehicleRatesPerDay[selectedVehicleKey] || 1800;
   const vehicleHourlyRate = adminState.vehicleRatesPerHour[selectedVehicleKey] || 150;
   const totalTripHours = travelHours + checkpoints.length;
-  const computedTripPrice = Math.round(totalTripHours * vehicleHourlyRate);
+
+  const getStartHourDec = () => {
+    let h = bookingHour;
+    if (bookingAmPm === 'PM' && bookingHour !== 12) {
+      h += 12;
+    } else if (bookingAmPm === 'AM' && bookingHour === 12) {
+      h = 0;
+    }
+    return h + (bookingMinute / 60);
+  };
+
+  const startHourDec = getStartHourDec();
+  const endHourDec = startHourDec + totalTripHours;
+
+  let extraHours = 0;
+  if (startHourDec < 6) {
+    extraHours += (6 - startHourDec);
+  }
+  if (endHourDec > 18) {
+    extraHours += (endHourDec - 18);
+  }
+
+  const extraHoursRounded = Math.max(0, Math.ceil(extraHours));
+  const extraAddonCharge = extraHoursRounded * vehicleHourlyRate;
+  const computedTripPrice = baseDayRate + extraAddonCharge;
 
   const handleConfirmTrip = () => {
     if (checkpoints.length < 2) {
@@ -548,8 +570,8 @@ export default function MakeTripScreen() {
       `Amount to Pay: ₹${computedTripPrice}\n\nPlease confirm payment to proceed with booking.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Pay Now', 
+        {
+          text: 'Pay Now',
           onPress: () => {
             // Proceed to success/matching after payment
             router.replace({
@@ -607,7 +629,7 @@ export default function MakeTripScreen() {
             // Premium Web / Fallback visual map panel
             <View style={styles.webMapPlaceholder}>
               <View style={styles.mapGridLines} />
-              
+
               {/* Draw connected checkpoints in a visual panel */}
               <View style={styles.hudTelemetry}>
                 <Text style={styles.hudTitle}>GPS LINK ACTIVE</Text>
@@ -628,11 +650,11 @@ export default function MakeTripScreen() {
               {/* Central Map Canvas Nodes */}
               <View style={styles.nodesCanvas}>
                 {checkpoints.map((c, i) => (
-                  <View 
-                    key={c.id} 
+                  <View
+                    key={c.id}
                     style={[
-                      styles.canvasNodeCircle, 
-                      { 
+                      styles.canvasNodeCircle,
+                      {
                         backgroundColor: i === 0 ? colors.amber : i === checkpoints.length - 1 ? '#E63946' : '#2a2a35',
                         left: scale(40 + (i * 25) % 180),
                         top: verticalScale(30 + (i * 45) % 110),
@@ -644,7 +666,7 @@ export default function MakeTripScreen() {
                   </View>
                 ))}
               </View>
-              
+
               <Text style={styles.webFallbackFootnote}>
                 Interactive Map renders on Android & iOS device screens
               </Text>
@@ -654,7 +676,7 @@ export default function MakeTripScreen() {
             <MapView
               provider="google"
               style={StyleSheet.absoluteFillObject}
-              customMapStyle={isDark ? darkMapStyle : []}
+              customMapStyle={isDark ? [] : darkMapStyle}
               initialRegion={{
                 latitude: 12.9716,
                 longitude: 77.5946,
@@ -790,7 +812,7 @@ export default function MakeTripScreen() {
               {checkpoints.map((checkpoint, index) => {
                 const isFirst = index === 0;
                 const isLast = index === checkpoints.length - 1;
-                
+
                 let bulletColor = '#3b82f6';
                 if (isFirst) bulletColor = colors.amber;
                 if (isLast) bulletColor = '#ef4444';
@@ -856,7 +878,7 @@ export default function MakeTripScreen() {
         {quoteStatus === 'quoted' && (
           <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20) }]}>
             <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(10) }}>
-              Custom Route Pricing (Hourly Rate)
+              Custom Route Pricing
             </Text>
 
             {/* Vehicle Selector Option */}
@@ -864,8 +886,8 @@ export default function MakeTripScreen() {
             <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(12) }}>
               {(['5seater', '7seater', '4x4jeep', 'auto'] as const).map((vKey) => {
                 const isSelected = selectedRide === vKey;
-                const name = vKey === '5seater' ? '5 Seater Cab' : vKey === '7seater' ? '7 Seater SUV' : vKey === '4x4jeep' ? '4x4 Jeep' : 'Auto';
-                const rate = adminState.vehicleRatesPerHour[vKey] || (vKey === 'auto' ? 80 : 150);
+                const name = vKey === '5seater' ? '5 Seater' : vKey === '7seater' ? '7 Seater' : vKey === '4x4jeep' ? (selectedRide === '4x4jeep' ? `4x4 (${selected4x4Car})` : '4x4 Jeep') : 'Auto';
+                const rate = vKey === '5seater' ? 1800 : vKey === '7seater' ? 2600 : vKey === '4x4jeep' ? 4200 : 1200;
                 return (
                   <TouchableOpacity
                     key={vKey}
@@ -878,57 +900,26 @@ export default function MakeTripScreen() {
                       borderColor: isSelected ? colors.amber : colors.border,
                       backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
                     }}
-                    onPress={() => setSelectedRide(vKey)}
+                    onPress={() => {
+                      if (vKey === '4x4jeep') {
+                        setIsVehiclePickerVisible(true);
+                      } else {
+                        setSelectedRide(vKey);
+                      }
+                    }}
                   >
-                    <Text style={{ fontSize: moderateFontScale(10.5), fontWeight: '800', color: isSelected ? colors.amber : colors.textPrimary }}>{name}</Text>
-                    <Text style={{ fontSize: moderateFontScale(9.5), color: colors.textMuted, marginTop: verticalScale(2) }}>₹{rate}/hr</Text>
+                    <Text style={{ fontSize: moderateFontScale(9.5), fontWeight: '800', color: isSelected ? colors.amber : colors.textPrimary }} numberOfLines={1}>{name}</Text>
+                    <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: verticalScale(2) }}>₹{rate}/day</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {/* 4x4 Manual Picker */}
-            {selectedRide === '4x4jeep' && (
-              <View style={{ marginBottom: verticalScale(12) }}>
-                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Select 4x4 Vehicle</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {[
-                    { id: 'Thar', name: 'Mahindra Thar', image: require('../assets/images/thar.png') },
-                    { id: 'Gurkha', name: 'Force Gurkha', image: require('../assets/images/thar.png') },
-                    { id: 'Jimny', name: 'Maruti Jimny', image: require('../assets/images/thar.png') },
-                  ].map((car) => {
-                    const isSelected = selected4x4Car === car.id;
-                    return (
-                      <TouchableOpacity
-                        key={car.id}
-                        style={{
-                          width: scale(100),
-                          height: verticalScale(100),
-                          borderWidth: 1.5,
-                          borderRadius: scale(10),
-                          borderColor: isSelected ? colors.amber : colors.border,
-                          backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'rgba(255,255,255,0.02)',
-                          marginRight: scale(10),
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: scale(8)
-                        }}
-                        onPress={() => setSelected4x4Car(car.id)}
-                      >
-                        <Image source={car.image} style={{ width: '100%', height: '60%', resizeMode: 'contain' }} />
-                        <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10), fontWeight: '700', marginTop: verticalScale(4), textAlign: 'center' }}>{car.name}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-
             {/* Prebooking Date Time Pickers */}
             {!adminState.instantBookingEnabled && (
               <View style={{ marginBottom: verticalScale(12) }}>
                 <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Select Pre-Booking Date</Text>
-                
+
                 {/* Horizontal Date Picker */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(10) }}>
                   {dateOptions.map((opt) => {
@@ -958,7 +949,7 @@ export default function MakeTripScreen() {
                 </ScrollView>
 
                 <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(8) }}>Select Booking Time</Text>
-                
+
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(8), borderRadius: scale(12), borderWidth: 1.5, borderColor: colors.border }}>
                   {/* Hour Selection */}
                   <View style={{ alignItems: 'center', flex: 1.2 }}>
@@ -1057,7 +1048,6 @@ export default function MakeTripScreen() {
             </View>
 
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
-
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Base Travel Duration</Text>
               <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{travelHours.toFixed(1)} hours</Text>
@@ -1071,9 +1061,15 @@ export default function MakeTripScreen() {
               <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{totalTripHours.toFixed(1)} hours</Text>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Selected Vehicle Rate</Text>
-              <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>₹{vehicleHourlyRate}/hr</Text>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Base Vehicle Rate</Text>
+              <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>₹{baseDayRate}/Day</Text>
             </View>
+            {extraHoursRounded > 0 && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                <Text style={{ color: colors.danger, fontSize: moderateFontScale(12), fontWeight: '600' }}>Extra Hours Add-on ({extraHoursRounded} hrs)</Text>
+                <Text style={{ color: colors.danger, fontWeight: '700' }}>+₹{extraAddonCharge}</Text>
+              </View>
+            )}
 
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
 
@@ -1083,8 +1079,26 @@ export default function MakeTripScreen() {
                 <Text style={{ fontSize: moderateFontScale(22), fontWeight: '900', color: colors.amber }}>₹{computedTripPrice}</Text>
               </View>
               <View style={[styles.statusBadgeCompact, { backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingVertical: scale(4), paddingHorizontal: scale(8), borderRadius: scale(8) }]}>
-                <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Hourly Rate</Text>
+                <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Day Rate + Addon</Text>
               </View>
+            </View>
+
+            {/* Note about 6 AM - 6 PM policy */}
+            <View style={{
+              backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
+              borderColor: 'rgba(245, 197, 24, 0.3)',
+              borderWidth: 1,
+              borderRadius: scale(10),
+              padding: scale(10),
+              marginTop: verticalScale(12),
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+              gap: scale(6)
+            }}>
+              <MaterialIcons name="info" size={scale(16)} color={colors.amber} style={{ marginTop: 2 }} />
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), flex: 1, lineHeight: moderateFontScale(15), fontWeight: '500' }}>
+                Note: Standard vehicle booking package is valid from <Text style={{ fontWeight: '700', color: colors.amber }}>6:00 AM to 6:00 PM</Text>. Bookings starting before 6:00 AM or ending after 6:00 PM will incur an extra charge of <Text style={{ fontWeight: '700' }}>₹{vehicleHourlyRate}/hr</Text>.
+              </Text>
             </View>
 
             <TouchableOpacity
@@ -1103,6 +1117,88 @@ export default function MakeTripScreen() {
         {/* Extra spacing */}
         <View style={{ height: verticalScale(30) }} />
       </ScrollView>
+
+      {/* VEHICLE PICKER DRAWER MODAL */}
+      <Modal visible={isVehiclePickerVisible} transparent animationType="slide">
+        <View style={styles.overlayModal}>
+          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(20) }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary, fontSize: moderateFontScale(15) }]}>Choose 4x4 Jeep Model</Text>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 2 }}>Swipe left or right to explore models</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsVehiclePickerVisible(false)}>
+                <MaterialIcons name="close" size={scale(20)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              pagingEnabled
+              contentContainerStyle={{ paddingVertical: verticalScale(14) }}
+            >
+              {jeepCarouselData.map((car) => {
+                const isSelected = selectedRide === '4x4jeep' && selected4x4Car === car.id;
+                return (
+                  <View
+                    key={car.id}
+                    style={{
+                      width: scale(280),
+                      marginHorizontal: scale(10),
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F9F9FB',
+                      borderRadius: scale(20),
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? colors.amber : colors.border,
+                      padding: scale(16),
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <View style={{ width: '100%', alignItems: 'center' }}>
+                      <Image source={car.image} style={{ width: '80%', height: verticalScale(90), resizeMode: 'contain', marginBottom: verticalScale(10) }} />
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(15), fontWeight: '900', textAlign: 'center' }}>{car.name}</Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), textAlign: 'center', marginTop: verticalScale(4), height: verticalScale(44) }} numberOfLines={3}>
+                        {car.desc}
+                      </Text>
+                      
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4), marginTop: verticalScale(8), backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', paddingHorizontal: scale(8), paddingVertical: scale(4), borderRadius: scale(8) }}>
+                        <MaterialIcons name="people" size={scale(13)} color={colors.textMuted} />
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), fontWeight: '700' }}>{car.capacity}</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ width: '100%', marginTop: verticalScale(14) }}>
+                      <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '900', textAlign: 'center', marginBottom: verticalScale(10) }}>
+                        {car.rateText}
+                      </Text>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: isSelected ? colors.amber : 'transparent',
+                          borderWidth: isSelected ? 0 : 1.5,
+                          borderColor: colors.amber,
+                          borderRadius: scale(12),
+                          paddingVertical: verticalScale(8),
+                          alignItems: 'center',
+                        }}
+                        onPress={() => {
+                          setSelectedRide('4x4jeep');
+                          setSelected4x4Car(car.id);
+                          setIsVehiclePickerVisible(false);
+                        }}
+                      >
+                        <Text style={{ color: isSelected ? '#101014' : colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                          {isSelected ? '✓ Selected' : 'Choose Model'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1112,17 +1208,17 @@ const darkMapStyle = [
   { elementType: 'geometry', stylers: [{ color: '#101014' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#101014' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-  {featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-  {featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
-  {featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#181b17' }] },
-  {featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
-  {featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2C2C34' }] },
-  {featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1b1b22' }] },
-  {featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
-  {featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F5C518', opacity: 0.8 }] },
-  {featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
-  {featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
-  {featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#181b17' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2C2C34' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1b1b22' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F5C518', opacity: 0.8 }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
 ];
 
 const styles = StyleSheet.create({
@@ -1565,5 +1661,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(8),
     paddingVertical: verticalScale(4),
     borderRadius: scale(6),
+  },
+  overlayModal: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  mapContainerBox: {
+    borderTopLeftRadius: scale(24),
+    borderTopRightRadius: scale(24),
+    paddingBottom: verticalScale(30),
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: verticalScale(14),
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  modalTitle: {
+    fontSize: moderateFontScale(15),
+    fontWeight: '800',
   },
 });
