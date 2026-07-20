@@ -318,3 +318,140 @@ export const getDashboardStats = (customersCount: number, driversCount: number, 
     ]
   };
 };
+
+export async function fetchCustomersApi(): Promise<Customer[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/customers`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.customers)) {
+      const dbCustomers: Customer[] = data.customers.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        email: c.email || `${c.phone}@vibzz.com`,
+        status: c.status || 'Active',
+        dateJoined: c.created_at ? new Date(c.created_at).toISOString().split('T')[0] : '2026-07-20',
+        walletBalance: 0,
+        totalSpent: 0,
+        totalTripsCount: 0,
+        recentTrips: []
+      }));
+      // Filter duplicates by phone
+      const combined = [...dbCustomers];
+      initialCustomers.forEach(ic => {
+        if (!combined.some(c => c.phone === ic.phone)) combined.push(ic);
+      });
+      return combined;
+    }
+  } catch (e) {
+    console.warn('Error fetching backend customers, using mock:', e);
+  }
+  return initialCustomers;
+}
+
+export async function fetchDriversApi(): Promise<Driver[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/drivers`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.drivers)) {
+      const dbDrivers: Driver[] = data.drivers.map((d: any) => ({
+        id: d.user_id,
+        name: d.name,
+        phone: d.phone,
+        email: d.email || undefined,
+        vehicleType: d.vehicle_type || '5seater',
+        vehicleModel: d.vehicle_model || 'Standard Cab',
+        vehicleNumber: d.vehicle_number || 'KA-01-EX-0000',
+        licenseNumber: d.license_number || 'DL-00000000',
+        status: d.status || 'Pending KYC',
+        rating: Number(d.rating) || 5.0,
+        walletBalance: Number(d.wallet_balance) || 0,
+        dateRegistered: d.created_at ? new Date(d.created_at).toISOString().split('T')[0] : '2026-07-20',
+        docs: {
+          photo: d.photo_url || null,
+          rc: d.rc_url || null,
+          dl: d.dl_url || null,
+          insurance: d.insurance_url || null,
+          aadhar: d.aadhar_url || null,
+        },
+        carPhotos: {
+          front: d.car_front_url || null,
+          left: d.car_left_url || null,
+          right: d.car_right_url || null,
+          back: d.car_back_url || null,
+        }
+      }));
+      const combined = [...dbDrivers];
+      initialDrivers.forEach(id => {
+        if (!combined.some(d => d.phone === id.phone)) combined.push(id);
+      });
+      return combined;
+    }
+  } catch (e) {
+    console.warn('Error fetching backend drivers, using mock:', e);
+  }
+  return initialDrivers;
+}
+
+export async function fetchGuidesApi(): Promise<Guide[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/guides`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.guides)) {
+      const dbGuides: Guide[] = data.guides.map((g: any) => ({
+        id: g.user_id,
+        name: g.name,
+        phone: g.phone,
+        email: g.email || undefined,
+        expertise: g.expertise || 'General Tour Guide',
+        licenseId: g.license_id || 'KA-GUIDE-TEMP',
+        bio: g.bio || 'Tour guide profile',
+        status: g.status || 'Pending KYC',
+        rating: Number(g.rating) || 5.0,
+        walletBalance: Number(g.wallet_balance) || 0,
+        dateRegistered: g.created_at ? new Date(g.created_at).toISOString().split('T')[0] : '2026-07-20',
+        documents: {
+          photo: g.photo_url || null,
+          licenseCert: g.license_cert_url || null,
+          idProof: g.id_proof_url || null,
+        }
+      }));
+      const combined = [...dbGuides];
+      initialGuides.forEach(ig => {
+        if (!combined.some(g => g.phone === ig.phone)) combined.push(ig);
+      });
+      return combined;
+    }
+  } catch (e) {
+    console.warn('Error fetching backend guides, using mock:', e);
+  }
+  return initialGuides;
+}
+
+export async function updateUserStatusApi(userId: string, status: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/users/${userId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    return data.success;
+  } catch (e) {
+    console.warn('Error updating status on backend:', e);
+    return false;
+  }
+}
+
+export async function deleteUserApi(userId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/users/${userId}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    return data.success;
+  } catch (e) {
+    console.warn('Error deleting user on backend:', e);
+    return false;
+  }
+}

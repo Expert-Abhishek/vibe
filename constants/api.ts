@@ -20,10 +20,21 @@ export interface RegisterPayload {
   vehicle_model?: string;
   vehicle_number?: string;
   license_number?: string;
+  photo_url?: string;
+  rc_url?: string;
+  dl_url?: string;
+  insurance_url?: string;
+  aadhar_url?: string;
+  car_front_url?: string;
+  car_left_url?: string;
+  car_right_url?: string;
+  car_back_url?: string;
   // Guide fields
   expertise?: string;
   license_id?: string;
   bio?: string;
+  license_cert_url?: string;
+  id_proof_url?: string;
 }
 
 export interface AuthResponse {
@@ -89,5 +100,39 @@ export async function loginUser(phone: string, pass: string): Promise<AuthRespon
       message: 'Failed to connect to backend server. Make sure Node.js server is running.',
       error: error?.message || String(error),
     };
+  }
+}
+
+/**
+ * Helper to update user status (Admin API)
+ */
+export async function updateUserStatus(userId: string, status: string): Promise<AuthResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/users/${userId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status }),
+    });
+    return await response.json();
+  } catch (error: any) {
+    console.error('API updateUserStatus error:', error);
+    return { success: false, message: 'Failed to update user status' };
+  }
+}
+
+/**
+ * Helper to delete user (Admin API)
+ */
+export async function deleteUser(userId: string): Promise<AuthResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/users/${userId}`, {
+      method: 'DELETE',
+    });
+    return await response.json();
+  } catch (error: any) {
+    console.error('API deleteUser error:', error);
+    return { success: false, message: 'Failed to delete user' };
   }
 }

@@ -31,6 +31,16 @@ export default function SignInScreen() {
     try {
       const apiRes = await loginUser(phone, pass);
       if (apiRes.success && apiRes.user) {
+        // Strict status verification check
+        if (apiRes.user.role === 'driver' || apiRes.user.role === 'guide') {
+          if (apiRes.user.status !== 'Active') {
+            const title = apiRes.user.status === 'Pending KYC' ? 'KYC Pending Verification' : 'Account Restricted';
+            const msg = apiRes.message || `Your account is currently ${apiRes.user.status}. Please wait for admin approval.`;
+            Alert.alert(title, msg);
+            return;
+          }
+        }
+
         if (apiRes.user.role === 'driver') {
           router.replace('/driver-dashboard');
           return;
@@ -41,6 +51,9 @@ export default function SignInScreen() {
           router.replace('/(tabs)');
           return;
         }
+      } else if (apiRes.message && (apiRes.message.includes('pending') || apiRes.message.includes('deactivated') || apiRes.message.includes('declined') || apiRes.message.includes('KYC'))) {
+        Alert.alert('Access Restricted', apiRes.message);
+        return;
       }
     } catch (e) {
       console.warn('Backend login attempt failed, using local check:', e);

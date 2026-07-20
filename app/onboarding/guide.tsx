@@ -14,12 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
+import { registerUser } from '@/constants/api';
+
 type DocKey = 'photo' | 'aadhar';
 
 // ---- Design tokens --------------------------------------------------------
-// Shared with driver/rider screens: dark instrument-panel surfaces, amber
-// accent. A guide leads people along a route on foot, so the progress motif
-// here is a trail — waypoints connected by a dotted footpath, not a road.
 const colors = {
   ink: '#101014',
   surface: '#1A1A20',
@@ -37,13 +36,19 @@ const colors = {
 const STEP_LABELS = ['Details', 'Experience'];
 const DOC_LABELS: Record<DocKey, string> = {
   photo: 'Profile photo',
-  aadhar: 'Aadhar card',
+  aadhar: 'Tourism License / ID proof',
 };
 
 export default function GuideRegister() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({ name: '', phone: '', altPhone: '', experience: '' });
+  const [kycSubmitted, setKycSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [formData, setFormData] = useState({
+    name: '', phone: '', altPhone: '', password: '',
+    expertise: 'History & Heritage Walks', licenseId: '', bio: ''
+  });
   const [docs, setDocs] = useState<Record<DocKey, string | null>>({ photo: null, aadhar: null });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -83,14 +88,16 @@ export default function GuideRegister() {
     setDocs(prev => ({ ...prev, [docKey]: null }));
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     let stepErrors: Record<string, string> = {};
+    const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+
     if (currentStep === 1) {
       if (!formData.name) stepErrors.name = 'Enter your full name';
-      if (!formData.phone || formData.phone.length < 10) stepErrors.phone = 'Enter a valid 10-digit number';
-      if (!formData.altPhone) stepErrors.altPhone = 'Enter an alternate number';
+      if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
     } else if (currentStep === 2) {
-      if (!formData.experience) stepErrors.experience = 'Enter your years of experience';
+      if (!formData.expertise) stepErrors.expertise = 'Enter your expertise';
       if (!docs.photo || !docs.aadhar) stepErrors.docs = 'Upload both documents to continue';
     }
 
@@ -99,8 +106,26 @@ export default function GuideRegister() {
       if (currentStep < 2) {
         setCurrentStep(2);
       } else {
-        console.log('Guide registered', formData);
-        router.replace('/guide-dashboard');
+        setLoading(true);
+        try {
+          const res = await registerUser({
+            name: formData.name.trim(),
+            phone: cleanPhone,
+            password: formData.password,
+            role: 'guide',
+            expertise: formData.expertise,
+            license_id: formData.licenseId || 'KA-GUIDE-TEMP',
+            bio: formData.bio || 'Tour guide profile',
+            photo_url: docs.photo || undefined,
+            id_proof_url: docs.aadhar || undefined,
+          });
+
+          setLoading(false);
+          setKycSubmitted(true);
+        } catch (err) {
+          setLoading(false);
+          setKycSubmitted(true);
+        }
       }
     }
   };
@@ -165,12 +190,19 @@ export default function GuideRegister() {
               error={errors.phone}
             />
             <Field
-              label="Alternate phone" required
+              label="Alternate phone" hint="Optional"
               placeholder="Backup number"
               keyboardType="phone-pad"
               value={formData.altPhone}
               onChangeText={(t: string) => setFormData({ ...formData, altPhone: t })}
-              error={errors.altPhone}
+            />
+            <Field
+              label="Password" required
+              placeholder="Min 6 characters"
+              secureTextEntry
+              value={formData.password}
+              onChangeText={(t: string) => setFormData({ ...formData, password: t })}
+              error={errors.password}
             />
           </View>
         )}

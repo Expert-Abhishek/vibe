@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Compass,
   Search,
@@ -13,7 +13,7 @@ import {
   FileText,
   Star,
 } from 'lucide-react';
-import { initialGuides } from '@/lib/api';
+import { initialGuides, fetchGuidesApi, updateUserStatusApi, deleteUserApi } from '@/lib/api';
 import { Guide, KYCStatus } from '@/lib/types';
 
 export default function GuidesPage() {
@@ -21,6 +21,14 @@ export default function GuidesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
+
+  useEffect(() => {
+    fetchGuidesApi().then((data) => {
+      if (data && data.length > 0) {
+        setGuidesList(data);
+      }
+    });
+  }, []);
 
   const filteredGuides = guidesList.filter((g) => {
     const matchesSearch =
@@ -32,19 +40,21 @@ export default function GuidesPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleUpdateStatus = (id: string, newStatus: KYCStatus) => {
+  const handleUpdateStatus = async (id: string, newStatus: KYCStatus) => {
     setGuidesList((prev) =>
       prev.map((g) => (g.id === id ? { ...g, status: newStatus } : g))
     );
     if (selectedGuide && selectedGuide.id === id) {
       setSelectedGuide((prev) => (prev ? { ...prev, status: newStatus } : null));
     }
+    await updateUserStatusApi(id, newStatus);
   };
 
-  const handleDeleteGuide = (id: string) => {
+  const handleDeleteGuide = async (id: string) => {
     if (confirm('Are you sure you want to delete this guide profile?')) {
       setGuidesList((prev) => prev.filter((g) => g.id !== id));
       if (selectedGuide?.id === id) setSelectedGuide(null);
+      await deleteUserApi(id);
     }
   };
 

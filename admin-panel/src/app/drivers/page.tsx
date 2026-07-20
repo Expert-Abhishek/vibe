@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Car,
   Search,
@@ -14,7 +14,7 @@ import {
   Camera,
   Star,
 } from 'lucide-react';
-import { initialDrivers } from '@/lib/api';
+import { initialDrivers, fetchDriversApi, updateUserStatusApi, deleteUserApi } from '@/lib/api';
 import { Driver, KYCStatus } from '@/lib/types';
 
 export default function DriversPage() {
@@ -22,6 +22,14 @@ export default function DriversPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+
+  useEffect(() => {
+    fetchDriversApi().then((data) => {
+      if (data && data.length > 0) {
+        setDriversList(data);
+      }
+    });
+  }, []);
 
   const filteredDrivers = driversList.filter((d) => {
     const matchesSearch =
@@ -33,19 +41,21 @@ export default function DriversPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleUpdateStatus = (id: string, newStatus: KYCStatus) => {
+  const handleUpdateStatus = async (id: string, newStatus: KYCStatus) => {
     setDriversList((prev) =>
       prev.map((d) => (d.id === id ? { ...d, status: newStatus } : d))
     );
     if (selectedDriver && selectedDriver.id === id) {
       setSelectedDriver((prev) => (prev ? { ...prev, status: newStatus } : null));
     }
+    await updateUserStatusApi(id, newStatus);
   };
 
-  const handleDeleteDriver = (id: string) => {
+  const handleDeleteDriver = async (id: string) => {
     if (confirm('Are you sure you want to delete this driver profile?')) {
       setDriversList((prev) => prev.filter((d) => d.id !== id));
       if (selectedDriver?.id === id) setSelectedDriver(null);
+      await deleteUserApi(id);
     }
   };
 

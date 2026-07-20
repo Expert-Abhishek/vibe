@@ -49,17 +49,20 @@ const DOC_LABELS: Record<DocKey, string> = {
   carBack: 'Car back view',
 };
 
+import { registerUser } from '@/constants/api';
+
 export default function DriverRegister() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [kycStatus, setKycStatus] = useState<KYCStatus>('form');
+  const [loading, setLoading] = useState(false);
   const [appId] = useState(
     () => `DRV/${new Date().getFullYear()}/${Math.floor(100000 + Math.random() * 900000)}`
   );
 
   const [formData, setFormData] = useState({
-    name: '', phone: '', altPhone: '',
-    rcNo: '', dlNo: '', aadharNo: '',
+    name: '', phone: '', altPhone: '', password: '',
+    rcNo: '', dlNo: '', aadharNo: '', vehicleModel: '',
     capacity: '',
   });
 
@@ -112,9 +115,12 @@ export default function DriverRegister() {
 
   const validateStep = () => {
     let stepErrors: Record<string, string> = {};
+    const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+
     if (currentStep === 1) {
       if (!formData.name) stepErrors.name = 'Enter the name as it appears on your Aadhar';
-      if (!formData.phone || formData.phone.length < 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
       if (!formData.aadharNo || formData.aadharNo.length !== 12) stepErrors.aadharNo = 'Enter a valid 12-digit Aadhar number';
     } else if (currentStep === 2) {
       if (!formData.rcNo) stepErrors.rcNo = 'Enter your vehicle RC number';
@@ -139,12 +145,45 @@ export default function DriverRegister() {
     return Object.keys(stepErrors).length === 0;
   };
 
-  const handleNext = () => {
-    if (validateStep()) {
-      if (currentStep < 3) {
-        setCurrentStep(prev => prev + 1);
-      } else {
-        setKycStatus('pending');
+  const handleNext = async () => {
+    if (!validateStep()) return;
+
+    if (currentStep < 3) {
+      setCurrentStep(prev => prev + 1);
+    } else {
+      setLoading(true);
+      const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+
+      try {
+        const res = await registerUser({
+          name: formData.name.trim(),
+          phone: cleanPhone,
+          password: formData.password,
+          role: 'driver',
+          vehicle_model: formData.vehicleModel || 'Standard Cab',
+          vehicle_number: formData.rcNo,
+          license_number: formData.dlNo,
+          photo_url: docs.photo || undefined,
+          rc_url: docs.rc || undefined,
+          dl_url: docs.dl || undefined,
+          insurance_url: docs.insurance || undefined,
+          aadhar_url: docs.aadhar || undefined,
+          car_front_url: docs.carFront || undefined,
+          car_left_url: docs.carLeft || undefined,
+          car_right_url: docs.carRight || undefined,
+          car_back_url: docs.carBack || undefined,
+        });
+
+        setLoading(false);
+
+        if (res.success) {
+          setKycStatus('pending');
+        } else {
+          Alert.alert('Registration Failed', res.message || 'Error submitting registration.');
+        }
+      } catch (err: any) {
+        setLoading(false);
+        setKycStatus('pending'); // fallback demo
       }
     }
   };
@@ -272,6 +311,14 @@ export default function DriverRegister() {
               keyboardType="phone-pad"
               value={formData.altPhone}
               onChangeText={(t: string) => setFormData({ ...formData, altPhone: t })}
+            />
+            <Field
+              label="Password" required
+              placeholder="Min 6 characters"
+              secureTextEntry
+              value={formData.password}
+              onChangeText={(t: string) => setFormData({ ...formData, password: t })}
+              error={errors.password}
             />
             <Field
               label="Aadhar number" required

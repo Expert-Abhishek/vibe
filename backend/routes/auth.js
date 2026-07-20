@@ -105,9 +105,18 @@ router.post('/register', async (req, res) => {
 
     // 5. Create role specific profile
     if (cleanRole === 'driver') {
+      const {
+        photo_url, rc_url, dl_url, insurance_url, aadhar_url,
+        car_front_url, car_left_url, car_right_url, car_back_url,
+      } = req.body;
+
       const insertDriverQuery = `
-        INSERT INTO driver_profiles (user_id, vehicle_type, vehicle_model, vehicle_number, license_number)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO driver_profiles (
+          user_id, vehicle_type, vehicle_model, vehicle_number, license_number,
+          photo_url, rc_url, dl_url, insurance_url, aadhar_url,
+          car_front_url, car_left_url, car_right_url, car_back_url
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `;
       const driverResult = await client.query(insertDriverQuery, [
@@ -116,12 +125,23 @@ router.post('/register', async (req, res) => {
         vehicle_model || '',
         vehicle_number || '',
         license_number || '',
+        photo_url || null,
+        rc_url || null,
+        dl_url || null,
+        insurance_url || null,
+        aadhar_url || null,
+        car_front_url || null,
+        car_left_url || null,
+        car_right_url || null,
+        car_back_url || null,
       ]);
       profileData = driverResult.rows[0];
     } else if (cleanRole === 'guide') {
+      const { photo_url, license_cert_url, id_proof_url } = req.body;
+
       const insertGuideQuery = `
-        INSERT INTO guide_profiles (user_id, expertise, license_id, bio)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO guide_profiles (user_id, expertise, license_id, bio, photo_url, license_cert_url, id_proof_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING *
       `;
       const guideResult = await client.query(insertGuideQuery, [
@@ -129,6 +149,9 @@ router.post('/register', async (req, res) => {
         expertise || 'General Tour Guide',
         license_id || '',
         bio || '',
+        photo_url || null,
+        license_cert_url || null,
+        id_proof_url || null,
       ]);
       profileData = guideResult.rows[0];
     }
@@ -211,6 +234,31 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Strict KYC Status Enforcement for Driver & Guide
+    if (user.role === 'driver' || user.role === 'guide') {
+      if (user.status === 'Pending KYC') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your registration is currently pending admin KYC approval. Please wait for admin verification.',
+          status: 'Pending KYC',
+        });
+      }
+      if (user.status === 'Inactive') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been deactivated by the admin.',
+          status: 'Inactive',
+        });
+      }
+      if (user.status === 'KYC Declined') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your driver/guide registration KYC was declined by the admin.',
+          status: 'KYC Declined',
+        });
+      }
+    }
+
     // Fetch profile details based on role
     let profileData = null;
     if (user.role === 'driver') {
@@ -249,6 +297,67 @@ router.post('/login', async (req, res) => {
       message: 'Server error during login',
       error: error.message,
     });
+  }
+});
+
+/**
+ * PATCH /api/auth/users/:id/status
+ * Admin API: Update user status (Active, Pending KYC, KYC Declined, Inactive)
+ */
+router.patch('/users/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['Active', 'Pending KYC', 'KYC Declined', 'Inactive'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status provided.' });
+    }
+
+    const userRes = await db.query(
+      'UPDATE users SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, name, phone, role, status',
+      [status, id]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const updatedUser = userRes.rows[0];
+
+    // Also update active flag in profile
+    if (updatedUser.role === 'driver') {
+      await db.query('UPDATE driver_profiles SET is_active = $1 WHERE user_id = $2', [status === 'Active', id]);
+    } else if (updatedUser.role === 'guide') {
+      await db.query('UPDATE guide_profiles SET is_active = $1 WHERE user_id = $2', [status === 'Active', id]);
+    }
+
+    return res.json({
+      success: true,
+      message: `User status updated to ${status}`,
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update user status', error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/auth/users/:id
+ * Admin API: Delete user account and profile
+ */
+router.delete('/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleteRes = await db.query('DELETE FROM users WHERE id = $1 RETURNING id, name', [id]);
+    if (deleteRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    return res.json({ success: true, message: 'User deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete user', error: error.message });
   }
 });
 

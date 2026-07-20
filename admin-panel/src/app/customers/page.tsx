@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -14,13 +14,21 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import { initialCustomers } from '@/lib/api';
+import { initialCustomers, fetchCustomersApi } from '@/lib/api';
 import { Customer } from '@/lib/types';
 
 export default function CustomersPage() {
   const [customersList, setCustomersList] = useState<Customer[]>(initialCustomers);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  useEffect(() => {
+    fetchCustomersApi().then((data) => {
+      if (data && data.length > 0) {
+        setCustomersList(data);
+      }
+    });
+  }, []);
 
   const filteredCustomers = customersList.filter(
     (c) =>
