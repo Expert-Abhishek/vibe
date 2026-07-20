@@ -16,7 +16,7 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 
 import { registerUser } from '@/constants/api';
 
-type DocKey = 'photo' | 'aadhar';
+type DocKey = 'photo' | 'license' | 'aadhar';
 
 // ---- Design tokens --------------------------------------------------------
 const colors = {
@@ -33,10 +33,11 @@ const colors = {
   textFaint: '#5C5C66',
 };
 
-const STEP_LABELS = ['Details', 'Experience'];
+const STEP_LABELS = ['Details', 'Experience & Docs'];
 const DOC_LABELS: Record<DocKey, string> = {
-  photo: 'Profile photo',
-  aadhar: 'Tourism License / ID proof',
+  photo: 'Profile photo (Face Image)',
+  license: 'Tourism License Certificate',
+  aadhar: 'Aadhar card / Govt ID proof',
 };
 
 export default function GuideRegister() {
@@ -49,7 +50,7 @@ export default function GuideRegister() {
     name: '', phone: '', altPhone: '', password: '',
     expertise: 'History & Heritage Walks', licenseId: '', bio: ''
   });
-  const [docs, setDocs] = useState<Record<DocKey, string | null>>({ photo: null, aadhar: null });
+  const [docs, setDocs] = useState<Record<DocKey, string | null>>({ photo: null, license: null, aadhar: null });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const pickDocument = (docKey: DocKey) => {
@@ -98,7 +99,7 @@ export default function GuideRegister() {
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
     } else if (currentStep === 2) {
       if (!formData.expertise) stepErrors.expertise = 'Enter your expertise';
-      if (!docs.photo || !docs.aadhar) stepErrors.docs = 'Upload both documents to continue';
+      if (!docs.photo || !docs.license || !docs.aadhar) stepErrors.docs = 'Upload profile photo, license, and Aadhar card to continue';
     }
 
     setErrors(stepErrors);
@@ -114,9 +115,10 @@ export default function GuideRegister() {
             password: formData.password,
             role: 'guide',
             expertise: formData.expertise,
-            license_id: formData.licenseId || 'KA-GUIDE-TEMP',
+            license_id: formData.licenseId || 'KA-GUIDE-CERT',
             bio: formData.bio || 'Tour guide profile',
             photo_url: docs.photo || undefined,
+            license_cert_url: docs.license || undefined,
             id_proof_url: docs.aadhar || undefined,
           });
 
