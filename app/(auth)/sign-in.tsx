@@ -11,6 +11,7 @@ import { SocialLogin } from '@/components/auth/social-login';
 import { FooterLink } from '@/components/auth/footer-link';
 import { scale, verticalScale } from '@/constants/responsive';
 import { adminState } from '../admin-state';
+import { loginUser } from '@/constants/api';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -21,10 +22,29 @@ export default function SignInScreen() {
     playerInstance.play();
   });
 
-  const handleLogin = (phone: string, pass: string) => {
+  const handleLogin = async (phone: string, pass: string) => {
     console.log('Logging in with:', phone, pass);
     const lowerPhone = phone.toLowerCase();
     const lowerPass = pass.toLowerCase();
+
+    // First attempt backend authentication
+    try {
+      const apiRes = await loginUser(phone, pass);
+      if (apiRes.success && apiRes.user) {
+        if (apiRes.user.role === 'driver') {
+          router.replace('/driver-dashboard');
+          return;
+        } else if (apiRes.user.role === 'guide') {
+          router.replace('/guide-dashboard');
+          return;
+        } else {
+          router.replace('/(tabs)');
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Backend login attempt failed, using local check:', e);
+    }
 
     // Check registered driver list
     const driver = adminState.drivers.find(d => d.username === lowerPhone || d.phone === phone);

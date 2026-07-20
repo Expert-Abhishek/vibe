@@ -3,10 +3,12 @@ import React, { useState } from 'react';
 import {
   Alert,
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -26,6 +28,14 @@ export default function RegisterScreen() {
   const [licenseId, setLicenseId] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(msg, ToastAndroid.LONG);
+    }
+  };
 
   const getTitle = () => {
     if (role === 'rider') return 'Sign Up as Rider';
@@ -35,12 +45,14 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter your full name.');
       return;
     }
-    if (!phone.trim() || phone.trim().length < 10) {
-      Alert.alert('Required', 'Please enter a valid 10-digit phone number.');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits.');
       return;
     }
     if (!password || password.length < 6) {
@@ -54,7 +66,7 @@ export default function RegisterScreen() {
 
     const res = await registerUser({
       name: name.trim(),
-      phone: phone.trim(),
+      phone: cleanPhone,
       email: email.trim() || undefined,
       password: password,
       role: mappedRole,
@@ -65,16 +77,10 @@ export default function RegisterScreen() {
     setLoading(false);
 
     if (res.success) {
-      Alert.alert(
-        'Registration Successful! 🎉',
-        res.message || 'Your account has been created.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(auth)/sign-in'),
-          },
-        ]
-      );
+      showToast('Successfully registered');
+      setTimeout(() => {
+        router.replace('/(auth)/sign-in');
+      }, 1500);
     } else {
       Alert.alert('Registration Failed', res.message || 'Something went wrong.');
     }
@@ -82,6 +88,11 @@ export default function RegisterScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+      {toastMessage && (
+        <View style={styles.toastBanner}>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      )}
       <View style={styles.container}>
         <Text style={styles.title}>{getTitle()}</Text>
         <Text style={styles.subtitle}>Please fill the details to continue</Text>
@@ -107,9 +118,10 @@ export default function RegisterScreen() {
           style={styles.input}
           placeholder="Phone Number (10 digits)"
           keyboardType="phone-pad"
+          maxLength={10}
           placeholderTextColor="#aaa"
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
         />
         <TextInput
           style={styles.input}
@@ -182,4 +194,16 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   backButton: { marginTop: 24, alignItems: 'center' },
   backText: { color: '#666', fontSize: 14 },
+  toastBanner: {
+    backgroundColor: '#10B981',
+    padding: 16,
+    borderRadius: 12,
+    margin: 16,
+    alignItems: 'center',
+  },
+  toastText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
