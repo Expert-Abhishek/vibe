@@ -292,4 +292,33 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/auth/users-list
+ * Helper endpoint to fetch all registered users and role profiles for testing & verification.
+ */
+router.get('/users-list', async (req, res) => {
+  try {
+    const usersRes = await db.query(
+      'SELECT id, name, phone, email, role, status, created_at FROM users ORDER BY created_at DESC'
+    );
+    const driversRes = await db.query(
+      'SELECT d.*, u.name, u.phone FROM driver_profiles d JOIN users u ON d.user_id = u.id'
+    );
+    const guidesRes = await db.query(
+      'SELECT g.*, u.name, u.phone FROM guide_profiles g JOIN users u ON g.user_id = u.id'
+    );
+
+    return res.json({
+      success: true,
+      total_users: usersRes.rows.length,
+      users: usersRes.rows,
+      drivers: driversRes.rows,
+      guides: guidesRes.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching users list:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching database records', error: error.message });
+  }
+});
+
 module.exports = router;
