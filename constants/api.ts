@@ -4,9 +4,10 @@ import { Platform } from 'react-native';
 // - Android Emulator: 10.0.2.2:5000
 // - iOS Simulator / Web: localhost:5000
 // - Physical Device: Replace with your PC local IP (e.g., http://192.168.1.10:5000)
+const RENDER_API_URL = 'https://vibe-backend-tlaw.onrender.com';
 const DEV_API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEV_API_URL;
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || RENDER_API_URL || DEV_API_URL;
 
 export interface RegisterPayload {
   name: string;
