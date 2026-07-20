@@ -3,11 +3,13 @@
 # dependencies
 node_modules/
 
-# Expo
+# Expo & Next
 .expo/
 dist/
 web-build/
 expo-env.d.ts
+.next/
+admin-panel/.next/
 
 # Native
 .kotlin/
