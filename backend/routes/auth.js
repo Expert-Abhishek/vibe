@@ -293,6 +293,158 @@ router.get('/me', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/auth/customers
+ * Read API: Fetch all Customers / Tourists
+ */
+router.get('/customers', async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT id, name, phone, email, role, status, created_at FROM users WHERE role = $1 ORDER BY created_at DESC',
+      ['tourist']
+    );
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      customers: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching customers:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch customers', error: error.message });
+  }
+});
+
+/**
+ * GET /api/auth/customers/:id
+ * Read API: Fetch single Customer details by User ID
+ */
+router.get('/customers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(
+      'SELECT id, name, phone, email, role, status, created_at FROM users WHERE id = $1 AND role = $2',
+      [id, 'tourist']
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+    return res.json({ success: true, customer: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching customer by id:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch customer', error: error.message });
+  }
+});
+
+/**
+ * GET /api/auth/drivers
+ * Read API: Fetch all Drivers with profile details
+ */
+router.get('/drivers', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
+        d.id AS driver_profile_id, d.vehicle_type, d.vehicle_model, d.vehicle_number, 
+        d.license_number, d.is_active, d.rating, d.wallet_balance
+      FROM users u
+      LEFT JOIN driver_profiles d ON u.id = d.user_id
+      WHERE u.role = 'driver'
+      ORDER BY u.created_at DESC
+    `;
+    const result = await db.query(query);
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      drivers: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching drivers:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch drivers', error: error.message });
+  }
+});
+
+/**
+ * GET /api/auth/drivers/:id
+ * Read API: Fetch single Driver profile by User ID
+ */
+router.get('/drivers/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const query = `
+      SELECT 
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
+        d.id AS driver_profile_id, d.vehicle_type, d.vehicle_model, d.vehicle_number, 
+        d.license_number, d.is_active, d.rating, d.wallet_balance
+      FROM users u
+      LEFT JOIN driver_profiles d ON u.id = d.user_id
+      WHERE u.id = $1 AND u.role = 'driver'
+    `;
+    const result = await db.query(query, [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Driver not found' });
+    }
+    return res.json({ success: true, driver: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching driver by id:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch driver', error: error.message });
+  }
+});
+
+/**
+ * GET /api/auth/guides
+ * Read API: Fetch all Guides with profile details
+ */
+router.get('/guides', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
+        g.id AS guide_profile_id, g.expertise, g.license_id, g.bio, 
+        g.is_active, g.rating, g.wallet_balance
+      FROM users u
+      LEFT JOIN guide_profiles g ON u.id = g.user_id
+      WHERE u.role = 'guide'
+      ORDER BY u.created_at DESC
+    `;
+    const result = await db.query(query);
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      guides: result.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching guides:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch guides', error: error.message });
+  }
+});
+
+/**
+ * GET /api/auth/guides/:id
+ * Read API: Fetch single Guide profile by User ID
+ */
+router.get('/guides/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const query = `
+      SELECT 
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
+        g.id AS guide_profile_id, g.expertise, g.license_id, g.bio, 
+        g.is_active, g.rating, g.wallet_balance
+      FROM users u
+      LEFT JOIN guide_profiles g ON u.id = g.user_id
+      WHERE u.id = $1 AND u.role = 'guide'
+    `;
+    const result = await db.query(query, [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Guide not found' });
+    }
+    return res.json({ success: true, guide: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching guide by id:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch guide', error: error.message });
+  }
+});
+
+/**
  * GET /api/auth/users-list
  * Helper endpoint to fetch all registered users and role profiles for testing & verification.
  */
