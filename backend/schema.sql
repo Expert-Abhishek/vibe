@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
--- 3. Driver Profiles (Vehicle details, KYC documents & active status)
+-- 3. Driver Profiles (Vehicle details, KYC documents, pricing rates & active status)
 CREATE TABLE IF NOT EXISTS driver_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS driver_profiles (
     is_active BOOLEAN DEFAULT FALSE,
     rating NUMERIC(3,2) DEFAULT 5.0,
     wallet_balance NUMERIC(10,2) DEFAULT 0.00,
+    daily_rate NUMERIC(10,2) DEFAULT 2500.00,
+    hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00,
     photo_url TEXT,
     rc_url TEXT,
     dl_url TEXT,
@@ -54,7 +56,7 @@ CREATE TABLE IF NOT EXISTS driver_profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Guide Profiles (Expertise, certification & documents)
+-- 4. Guide Profiles (Expertise, certification, pricing rate & documents)
 CREATE TABLE IF NOT EXISTS guide_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS guide_profiles (
     rating NUMERIC(3,2) DEFAULT 5.0,
     is_active BOOLEAN DEFAULT FALSE,
     wallet_balance NUMERIC(10,2) DEFAULT 0.00,
+    daily_rate NUMERIC(10,2) DEFAULT 2000.00,
     photo_url TEXT,
     license_cert_url TEXT,
     id_proof_url TEXT,

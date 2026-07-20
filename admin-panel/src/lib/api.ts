@@ -367,6 +367,8 @@ export async function fetchDriversApi(): Promise<Driver[]> {
         rating: Number(d.rating) || 5.0,
         walletBalance: Number(d.wallet_balance) || 0,
         dateRegistered: d.created_at ? new Date(d.created_at).toISOString().split('T')[0] : '2026-07-20',
+        dailyRate: Number(d.daily_rate) || 2500,
+        hourlyAddonRate: Number(d.hourly_addon_rate) || 200,
         docs: {
           photo: d.photo_url || null,
           rc: d.rc_url || null,
@@ -410,6 +412,7 @@ export async function fetchGuidesApi(): Promise<Guide[]> {
         rating: Number(g.rating) || 5.0,
         walletBalance: Number(g.wallet_balance) || 0,
         dateRegistered: g.created_at ? new Date(g.created_at).toISOString().split('T')[0] : '2026-07-20',
+        dailyRate: Number(g.daily_rate) || 2000,
         documents: {
           photo: g.photo_url || null,
           licenseCert: g.license_cert_url || null,
@@ -439,6 +442,36 @@ export async function updateUserStatusApi(userId: string, status: string): Promi
     return data.success;
   } catch (e) {
     console.warn('Error updating status on backend:', e);
+    return false;
+  }
+}
+
+export async function updateDriverRateApi(userId: string, dailyRate: number, hourlyAddonRate: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/drivers/${userId}/rate`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daily_rate: dailyRate, hourly_addon_rate: hourlyAddonRate }),
+    });
+    const data = await res.json();
+    return data.success;
+  } catch (e) {
+    console.warn('Error updating driver rate on backend:', e);
+    return false;
+  }
+}
+
+export async function updateGuideRateApi(userId: string, dailyRate: number): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/guides/${userId}/rate`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daily_rate: dailyRate }),
+    });
+    const data = await res.json();
+    return data.success;
+  } catch (e) {
+    console.warn('Error updating guide rate on backend:', e);
     return false;
   }
 }

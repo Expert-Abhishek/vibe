@@ -14,7 +14,7 @@ import {
   Camera,
   Star,
 } from 'lucide-react';
-import { initialDrivers, fetchDriversApi, updateUserStatusApi, deleteUserApi } from '@/lib/api';
+import { initialDrivers, fetchDriversApi, updateUserStatusApi, updateDriverRateApi, deleteUserApi } from '@/lib/api';
 import { Driver, KYCStatus } from '@/lib/types';
 
 export default function DriversPage() {
@@ -234,11 +234,12 @@ export default function DriversPage() {
           driver={selectedDriver}
           onClose={() => setSelectedDriver(null)}
           onUpdateStatus={handleUpdateStatus}
-          onSaveRates={(daily, addon) => {
+          onSaveRates={async (daily, addon) => {
             setDriversList((prev) =>
               prev.map((d) => (d.id === selectedDriver.id ? { ...d, dailyRate: daily, hourlyAddonRate: addon } : d))
             );
             setSelectedDriver((prev) => (prev ? { ...prev, dailyRate: daily, hourlyAddonRate: addon } : null));
+            await updateDriverRateApi(selectedDriver.id, daily, addon);
           }}
         />
       )}

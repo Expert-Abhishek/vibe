@@ -13,7 +13,7 @@ import {
   FileText,
   Star,
 } from 'lucide-react';
-import { initialGuides, fetchGuidesApi, updateUserStatusApi, deleteUserApi } from '@/lib/api';
+import { initialGuides, fetchGuidesApi, updateUserStatusApi, updateGuideRateApi, deleteUserApi } from '@/lib/api';
 import { Guide, KYCStatus } from '@/lib/types';
 
 export default function GuidesPage() {
@@ -234,11 +234,12 @@ export default function GuidesPage() {
           guide={selectedGuide}
           onClose={() => setSelectedGuide(null)}
           onUpdateStatus={handleUpdateStatus}
-          onSaveRate={(daily) => {
+          onSaveRate={async (daily) => {
             setGuidesList((prev) =>
               prev.map((g) => (g.id === selectedGuide.id ? { ...g, dailyRate: daily } : g))
             );
             setSelectedGuide((prev) => (prev ? { ...prev, dailyRate: daily } : null));
+            await updateGuideRateApi(selectedGuide.id, daily);
           }}
         />
       )}

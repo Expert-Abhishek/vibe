@@ -395,6 +395,75 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 /**
+ * PATCH /api/auth/drivers/:id/rate
+ * Admin API: Update Driver daily_rate and hourly_addon_rate
+ */
+router.patch('/drivers/:id/rate', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { daily_rate, hourly_addon_rate } = req.body;
+
+    const daily = parseFloat(daily_rate) || 2500;
+    const hourly = parseFloat(hourly_addon_rate) || 200;
+
+    const result = await db.query(
+      `UPDATE driver_profiles 
+       SET daily_rate = $1, hourly_addon_rate = $2, updated_at = CURRENT_TIMESTAMP 
+       WHERE user_id = $3 
+       RETURNING *`,
+      [daily, hourly, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Driver profile not found' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Driver rates updated successfully',
+      profile: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error updating driver rate:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update driver rates', error: error.message });
+  }
+});
+
+/**
+ * PATCH /api/auth/guides/:id/rate
+ * Admin API: Update Guide daily_rate
+ */
+router.patch('/guides/:id/rate', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { daily_rate } = req.body;
+
+    const daily = parseFloat(daily_rate) || 2000;
+
+    const result = await db.query(
+      `UPDATE guide_profiles 
+       SET daily_rate = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE user_id = $2 
+       RETURNING *`,
+      [daily, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Guide profile not found' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Guide rate updated successfully',
+      profile: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error updating guide rate:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update guide rate', error: error.message });
+  }
+});
+
+/**
  * GET /api/auth/me
  * Get currently authenticated user details using JWT Bearer header.
  */
