@@ -478,15 +478,14 @@ router.get('/customers/:id', async (req, res) => {
 
 /**
  * GET /api/auth/drivers
- * Read API: Fetch all Drivers with profile details
+ * Read API: Fetch all Drivers with full profile & document details
  */
 router.get('/drivers', async (req, res) => {
   try {
     const query = `
       SELECT 
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
-        d.id AS driver_profile_id, d.vehicle_type, d.vehicle_model, d.vehicle_number, 
-        d.license_number, d.is_active, d.rating, d.wallet_balance
+        d.*,
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN driver_profiles d ON u.id = d.user_id
       WHERE u.role = 'driver'
@@ -513,9 +512,8 @@ router.get('/drivers/:id', async (req, res) => {
     const { id } = req.params;
     const query = `
       SELECT 
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
-        d.id AS driver_profile_id, d.vehicle_type, d.vehicle_model, d.vehicle_number, 
-        d.license_number, d.is_active, d.rating, d.wallet_balance
+        d.*,
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN driver_profiles d ON u.id = d.user_id
       WHERE u.id = $1 AND u.role = 'driver'
@@ -533,15 +531,14 @@ router.get('/drivers/:id', async (req, res) => {
 
 /**
  * GET /api/auth/guides
- * Read API: Fetch all Guides with profile details
+ * Read API: Fetch all Guides with full profile & document details
  */
 router.get('/guides', async (req, res) => {
   try {
     const query = `
       SELECT 
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
-        g.id AS guide_profile_id, g.expertise, g.license_id, g.bio, 
-        g.is_active, g.rating, g.wallet_balance
+        g.*,
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN guide_profiles g ON u.id = g.user_id
       WHERE u.role = 'guide'
@@ -568,9 +565,8 @@ router.get('/guides/:id', async (req, res) => {
     const { id } = req.params;
     const query = `
       SELECT 
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at,
-        g.id AS guide_profile_id, g.expertise, g.license_id, g.bio, 
-        g.is_active, g.rating, g.wallet_balance
+        g.*,
+        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN guide_profiles g ON u.id = g.user_id
       WHERE u.id = $1 AND u.role = 'guide'

@@ -109,7 +109,7 @@ export default function GuidesPage() {
                 <th className="py-4 px-6">Expertise / Specialty</th>
                 <th className="py-4 px-6">License ID</th>
                 <th className="py-4 px-6">Status</th>
-                <th className="py-4 px-6">Rating</th>
+                <th className="py-4 px-6">Daily Rate (/day)</th>
                 <th className="py-4 px-6">Wallet Balance</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
@@ -119,11 +119,19 @@ export default function GuidesPage() {
                 <tr key={guide.id} className="hover:bg-dark-hover/40 transition-colors">
                   <td className="py-4 px-6">
                     <div className="flex items-center space-x-3">
-                      <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-400 font-bold flex items-center justify-center text-xs">
-                        {guide.name.substring(0, 2).toUpperCase()}
-                      </div>
+                      {guide.documents?.photo ? (
+                        <img
+                          src={guide.documents.photo}
+                          alt={guide.name}
+                          className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500/40 shadow-sm"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 font-bold flex items-center justify-center text-xs border border-emerald-500/30">
+                          {guide.name.substring(0, 2).toUpperCase()}
+                        </div>
+                      )}
                       <div>
-                        <span className="font-bold text-white block">{guide.name}</span>
+                        <span className="font-bold text-white block text-sm">{guide.name}</span>
                         <span className="text-[11px] text-dark-textMuted">{guide.phone}</span>
                       </div>
                     </div>
@@ -162,11 +170,8 @@ export default function GuidesPage() {
                     </span>
                   </td>
 
-                  <td className="py-4 px-6">
-                    <span className="font-bold text-yellow-400 flex items-center">
-                      <Star className="w-3.5 h-3.5 fill-yellow-400 mr-1" />
-                      {guide.rating}
-                    </span>
+                  <td className="py-4 px-6 font-black text-emerald-400 text-sm">
+                    ₹{guide.dailyRate ? guide.dailyRate.toLocaleString('en-IN') : '2,000'} <span className="text-[10px] font-normal text-dark-textMuted">/day</span>
                   </td>
 
                   <td className="py-4 px-6 font-bold text-white">
@@ -179,7 +184,7 @@ export default function GuidesPage() {
                       className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black font-bold transition-all text-xs inline-flex items-center space-x-1"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      <span>View & Verify</span>
+                      <span>View & Edit</span>
                     </button>
 
                     {guide.status === 'Pending KYC' && (
@@ -225,157 +230,245 @@ export default function GuidesPage() {
 
       {/* Guide Detail & Document Inspection Modal */}
       {selectedGuide && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-10">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 rounded-xl bg-emerald-500 text-black font-black flex items-center justify-center text-lg shadow-lg">
-                  {selectedGuide.name.substring(0, 2).toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h2 className="text-lg font-bold text-white">{selectedGuide.name}</h2>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        selectedGuide.status === 'Active'
-                          ? 'bg-green-500/20 text-green-400'
-                          : selectedGuide.status === 'Pending KYC'
-                          ? 'bg-amber-500/20 text-amber-400'
-                          : 'bg-red-500/20 text-red-400'
-                      }`}
-                    >
-                      {selectedGuide.status}
-                    </span>
-                  </div>
-                  <span className="text-xs text-dark-textMuted">
-                    License: {selectedGuide.licenseId || 'N/A'}
-                  </span>
-                </div>
+        <GuideDetailModal
+          guide={selectedGuide}
+          onClose={() => setSelectedGuide(null)}
+          onUpdateStatus={handleUpdateStatus}
+          onSaveRate={(daily) => {
+            setGuidesList((prev) =>
+              prev.map((g) => (g.id === selectedGuide.id ? { ...g, dailyRate: daily } : g))
+            );
+            setSelectedGuide((prev) => (prev ? { ...prev, dailyRate: daily } : null));
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function GuideDetailModal({
+  guide,
+  onClose,
+  onUpdateStatus,
+  onSaveRate,
+}: {
+  guide: Guide;
+  onClose: () => void;
+  onUpdateStatus: (id: string, status: KYCStatus) => void;
+  onSaveRate: (dailyRate: number) => void;
+}) {
+  const [dailyRate, setDailyRate] = useState<number>(guide.dailyRate || 2000);
+  const [rateSavedMsg, setRateSavedMsg] = useState(false);
+
+  const handleSave = () => {
+    onSaveRate(Number(dailyRate));
+    setRateSavedMsg(true);
+    setTimeout(() => setRateSavedMsg(false), 2500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+        {/* Modal Header */}
+        <div className="p-6 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-10">
+          <div className="flex items-center space-x-4">
+            {guide.documents?.photo ? (
+              <img
+                src={guide.documents.photo}
+                alt={guide.name}
+                className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-500 shadow-lg"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500 text-black font-black flex items-center justify-center text-xl shadow-lg">
+                {guide.name.substring(0, 2).toUpperCase()}
               </div>
-              <button
-                onClick={() => setSelectedGuide(null)}
-                className="p-2 rounded-xl bg-dark-hover hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-6 flex-1">
-              {/* Bio & Specialty */}
-              <div className="p-4 rounded-xl bg-dark-hover/60 border border-dark-border/80 space-y-2">
-                <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Expertise & Bio</span>
-                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold text-xs inline-block">
-                  {selectedGuide.expertise}
-                </span>
-                <p className="text-xs text-gray-300 leading-relaxed mt-2">{selectedGuide.bio}</p>
-              </div>
-
-              {/* Quick Info Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-                  <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Phone</span>
-                  <span className="text-xs font-bold text-white mt-1 block truncate">
-                    {selectedGuide.phone}
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-                  <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Certification</span>
-                  <span className="text-xs font-bold text-emerald-400 mt-1 block truncate">
-                    {selectedGuide.licenseId}
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-                  <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Rating</span>
-                  <span className="text-xs font-bold text-yellow-400 mt-1 block flex items-center">
-                    <Star className="w-3 h-3 fill-yellow-400 mr-1" />
-                    {selectedGuide.rating} / 5.0
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-                  <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Wallet Balance</span>
-                  <span className="text-xs font-bold text-white mt-1 block">
-                    ₹{selectedGuide.walletBalance.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Documents Gallery */}
-              <div>
-                <h3 className="text-sm font-bold text-white mb-3 flex items-center space-x-2">
-                  <FileText className="w-4 h-4 text-emerald-400" />
-                  <span>Guide Verification Documents</span>
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {Object.entries(selectedGuide.documents).map(([key, url]) => (
-                    <div key={key} className="p-3 rounded-xl bg-dark-hover/40 border border-dark-border flex flex-col items-center">
-                      <span className="text-[10px] font-bold text-dark-textMuted uppercase mb-2">
-                        {key === 'photo' ? 'Profile Photo' : key === 'licenseCert' ? 'Tourism License Cert' : 'ID Proof'}
-                      </span>
-                      {url ? (
-                        <img src={url} alt={key} className="w-full h-36 object-cover rounded-lg border border-dark-border" />
-                      ) : (
-                        <div className="w-full h-36 bg-dark-hover rounded-lg border border-dashed border-dark-border flex items-center justify-center text-xs text-dark-textMuted">
-                          Not Uploaded
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer Controls */}
-            <div className="p-4 border-t border-dark-border bg-dark-card flex flex-wrap items-center justify-between gap-3">
+            )}
+            <div>
               <div className="flex items-center space-x-2">
-                <span className="text-xs text-dark-textMuted">Change Status:</span>
-                <button
-                  onClick={() => handleUpdateStatus(selectedGuide.id, 'Active')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                    selectedGuide.status === 'Active'
-                      ? 'bg-green-500 text-black'
-                      : 'bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black'
-                  } transition-colors`}
+                <h2 className="text-lg font-bold text-white">{guide.name}</h2>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    guide.status === 'Active'
+                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      : guide.status === 'Pending KYC'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  }`}
                 >
-                  Approve / Set Active
-                </button>
-                <button
-                  onClick={() => handleUpdateStatus(selectedGuide.id, 'KYC Declined')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                    selectedGuide.status === 'KYC Declined'
-                      ? 'bg-red-500 text-white'
-                      : 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
-                  } transition-colors`}
-                >
-                  Decline KYC
-                </button>
-                <button
-                  onClick={() => handleUpdateStatus(selectedGuide.id, 'Inactive')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                    selectedGuide.status === 'Inactive'
-                      ? 'bg-gray-600 text-white'
-                      : 'bg-dark-hover text-gray-400 hover:text-white'
-                  } transition-colors`}
-                >
-                  Deactivate
-                </button>
+                  {guide.status}
+                </span>
+              </div>
+              <span className="text-xs text-dark-textMuted">
+                License ID: <span className="text-emerald-400 font-bold">{guide.licenseId || 'N/A'}</span>
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl bg-dark-hover hover:bg-dark-border text-gray-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 space-y-6 flex-1">
+          {/* RATE MANAGEMENT SECTION (Directly in Guide View) */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-dark-hover/80 to-dark-card border border-emerald-500/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-2">
+                  <Compass className="w-4 h-4 text-emerald-400" />
+                  <span>Guide Per-Day Rate Setup</span>
+                </h3>
+                <p className="text-[11px] text-dark-textMuted">
+                  Set daily charge for this certified tour guide (no hourly addon).
+                </p>
+              </div>
+              {rateSavedMsg && (
+                <span className="text-xs font-bold text-green-400 bg-green-500/20 px-3 py-1 rounded-lg border border-green-500/30 animate-pulse">
+                  ✓ Daily Rate Saved!
+                </span>
+              )}
+            </div>
+
+            <div className="pt-2 flex items-center space-x-3">
+              <div className="flex-1">
+                <label className="text-[11px] font-bold text-dark-textMuted uppercase block mb-1">
+                  Daily Charge (₹/day)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold text-sm">₹</span>
+                  <input
+                    type="number"
+                    value={dailyRate}
+                    onChange={(e) => setDailyRate(Number(e.target.value))}
+                    className="w-full pl-8 pr-4 py-2.5 bg-dark-card border border-dark-border rounded-xl text-sm font-bold text-white focus:outline-none focus:border-emerald-400"
+                    placeholder="2000"
+                  />
+                </div>
               </div>
 
               <button
-                onClick={() => setSelectedGuide(null)}
-                className="px-5 py-2 rounded-xl bg-dark-hover hover:bg-dark-border text-white text-xs font-bold transition-colors"
+                onClick={handleSave}
+                className="mt-5 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs rounded-xl shadow-lg transition-transform active:scale-95"
               >
-                Close
+                Save Guide Rate
               </button>
             </div>
           </div>
+
+          {/* Bio & Specialty */}
+          <div className="p-4 rounded-xl bg-dark-hover/60 border border-dark-border/80 space-y-2">
+            <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Expertise & Bio</span>
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold text-xs inline-block">
+              {guide.expertise}
+            </span>
+            <p className="text-xs text-gray-300 leading-relaxed mt-2">{guide.bio}</p>
+          </div>
+
+          {/* Quick Info Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Phone</span>
+              <span className="text-xs font-bold text-white mt-1 block truncate">
+                {guide.phone}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Certification</span>
+              <span className="text-xs font-bold text-emerald-400 mt-1 block truncate">
+                {guide.licenseId}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Rating</span>
+              <span className="text-xs font-bold text-yellow-400 mt-1 block flex items-center">
+                <Star className="w-3 h-3 fill-yellow-400 mr-1" />
+                {guide.rating} / 5.0
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Wallet Balance</span>
+              <span className="text-xs font-bold text-white mt-1 block">
+                ₹{guide.walletBalance.toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+
+          {/* Documents Gallery (Profile Photo & Aadhar / ID Proof) */}
+          <div>
+            <h3 className="text-sm font-bold text-white mb-3 flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-emerald-400" />
+              <span>Guide Verification Documents & ID Proof</span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {Object.entries(guide.documents).map(([key, url]) => (
+                <div key={key} className="p-3 rounded-xl bg-dark-hover/40 border border-dark-border flex flex-col items-center">
+                  <span className="text-[10px] font-bold text-dark-textMuted uppercase mb-2">
+                    {key === 'photo' ? '👤 Profile Photo' : key === 'licenseCert' ? '📜 Tourism License Cert' : '🆔 Aadhar / ID Proof'}
+                  </span>
+                  {url ? (
+                    <img src={url} alt={key} className="w-full h-36 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
+                  ) : (
+                    <div className="w-full h-36 bg-dark-hover rounded-lg border border-dashed border-dark-border flex items-center justify-center text-xs text-dark-textMuted">
+                      Not Uploaded
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      )}
+
+        {/* Modal Footer Controls */}
+        <div className="p-4 border-t border-dark-border bg-dark-card flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-2">
+            <span className="text-xs text-dark-textMuted">Change Status:</span>
+            <button
+              onClick={() => onUpdateStatus(guide.id, 'Active')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+                guide.status === 'Active'
+                  ? 'bg-green-500 text-black'
+                  : 'bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black'
+              } transition-colors`}
+            >
+              Approve / Set Active
+            </button>
+            <button
+              onClick={() => onUpdateStatus(guide.id, 'KYC Declined')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+                guide.status === 'KYC Declined'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
+              } transition-colors`}
+            >
+              Decline KYC
+            </button>
+            <button
+              onClick={() => onUpdateStatus(guide.id, 'Inactive')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+                guide.status === 'Inactive'
+                  ? 'bg-gray-600 text-white'
+                  : 'bg-dark-hover text-gray-400 hover:text-white'
+              } transition-colors`}
+            >
+              Deactivate
+            </button>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl bg-dark-hover hover:bg-dark-border text-white text-xs font-bold transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -54,6 +54,8 @@ export interface Driver {
   rating: number;
   walletBalance: number;
   dateRegistered: string;
+  dailyRate?: number;
+  hourlyAddonRate?: number;
   docs: DriverDocs;
   carPhotos: CarPhotos;
 }
@@ -70,6 +72,7 @@ export interface Guide {
   rating: number;
   walletBalance: number;
   dateRegistered: string;
+  dailyRate?: number;
   documents: {
     photo: string | null;
     licenseCert: string | null;
