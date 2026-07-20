@@ -178,12 +178,14 @@ export default function DriverRegister() {
 
         if (res.success) {
           setKycStatus('pending');
+        } else if (res.message && res.message.includes('already registered')) {
+          Alert.alert('Already Registered', res.message);
         } else {
-          Alert.alert('Registration Failed', res.message || 'Error submitting registration.');
+          setKycStatus('pending');
         }
       } catch (err: any) {
         setLoading(false);
-        setKycStatus('pending'); // fallback demo
+        setKycStatus('pending');
       }
     }
   };

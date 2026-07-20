@@ -110,50 +110,83 @@ router.post('/register', async (req, res) => {
         car_front_url, car_left_url, car_right_url, car_back_url,
       } = req.body;
 
-      const insertDriverQuery = `
-        INSERT INTO driver_profiles (
-          user_id, vehicle_type, vehicle_model, vehicle_number, license_number,
-          photo_url, rc_url, dl_url, insurance_url, aadhar_url,
-          car_front_url, car_left_url, car_right_url, car_back_url
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-        RETURNING *
-      `;
-      const driverResult = await client.query(insertDriverQuery, [
-        newUser.id,
-        vehicle_type || '5seater',
-        vehicle_model || '',
-        vehicle_number || '',
-        license_number || '',
-        photo_url || null,
-        rc_url || null,
-        dl_url || null,
-        insurance_url || null,
-        aadhar_url || null,
-        car_front_url || null,
-        car_left_url || null,
-        car_right_url || null,
-        car_back_url || null,
-      ]);
-      profileData = driverResult.rows[0];
+      try {
+        const insertDriverQuery = `
+          INSERT INTO driver_profiles (
+            user_id, vehicle_type, vehicle_model, vehicle_number, license_number,
+            photo_url, rc_url, dl_url, insurance_url, aadhar_url,
+            car_front_url, car_left_url, car_right_url, car_back_url
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          RETURNING *
+        `;
+        const driverResult = await client.query(insertDriverQuery, [
+          newUser.id,
+          vehicle_type || '5seater',
+          vehicle_model || '',
+          vehicle_number || '',
+          license_number || '',
+          photo_url || null,
+          rc_url || null,
+          dl_url || null,
+          insurance_url || null,
+          aadhar_url || null,
+          car_front_url || null,
+          car_left_url || null,
+          car_right_url || null,
+          car_back_url || null,
+        ]);
+        profileData = driverResult.rows[0];
+      } catch (profileErr) {
+        console.warn('Inserting driver document columns failed, using fallback insert:', profileErr.message);
+        const fallbackDriverQuery = `
+          INSERT INTO driver_profiles (user_id, vehicle_type, vehicle_model, vehicle_number, license_number)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *
+        `;
+        const fallbackRes = await client.query(fallbackDriverQuery, [
+          newUser.id,
+          vehicle_type || '5seater',
+          vehicle_model || '',
+          vehicle_number || '',
+          license_number || '',
+        ]);
+        profileData = fallbackRes.rows[0];
+      }
     } else if (cleanRole === 'guide') {
       const { photo_url, license_cert_url, id_proof_url } = req.body;
 
-      const insertGuideQuery = `
-        INSERT INTO guide_profiles (user_id, expertise, license_id, bio, photo_url, license_cert_url, id_proof_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *
-      `;
-      const guideResult = await client.query(insertGuideQuery, [
-        newUser.id,
-        expertise || 'General Tour Guide',
-        license_id || '',
-        bio || '',
-        photo_url || null,
-        license_cert_url || null,
-        id_proof_url || null,
-      ]);
-      profileData = guideResult.rows[0];
+      try {
+        const insertGuideQuery = `
+          INSERT INTO guide_profiles (user_id, expertise, license_id, bio, photo_url, license_cert_url, id_proof_url)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING *
+        `;
+        const guideResult = await client.query(insertGuideQuery, [
+          newUser.id,
+          expertise || 'General Tour Guide',
+          license_id || '',
+          bio || '',
+          photo_url || null,
+          license_cert_url || null,
+          id_proof_url || null,
+        ]);
+        profileData = guideResult.rows[0];
+      } catch (profileErr) {
+        console.warn('Inserting guide document columns failed, using fallback insert:', profileErr.message);
+        const fallbackGuideQuery = `
+          INSERT INTO guide_profiles (user_id, expertise, license_id, bio)
+          VALUES ($1, $2, $3, $4)
+          RETURNING *
+        `;
+        const fallbackRes = await client.query(fallbackGuideQuery, [
+          newUser.id,
+          expertise || 'General Tour Guide',
+          license_id || '',
+          bio || '',
+        ]);
+        profileData = fallbackRes.rows[0];
+      }
     }
 
     await client.query('COMMIT');

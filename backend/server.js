@@ -221,15 +221,31 @@ app.get('/', (req, res) => {
   });
 });
 
-// Auto-create database tables on server boot
+// Auto-create & migrate database tables on server boot
 async function initTablesOnBoot() {
   try {
     const schemaPath = path.join(__dirname, 'schema.sql');
     if (fs.existsSync(schemaPath)) {
       const sqlScript = fs.readFileSync(schemaPath, 'utf8');
       await db.query(sqlScript);
-      console.log('✅ PostgreSQL Schema verified/initialized successfully.');
     }
+    // Auto-migrate missing columns for existing PostgreSQL tables
+    await db.query(`
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS rc_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS dl_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS insurance_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS aadhar_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS car_front_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS car_left_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS car_right_url TEXT;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS car_back_url TEXT;
+
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS license_cert_url TEXT;
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS id_proof_url TEXT;
+    `);
+    console.log('✅ PostgreSQL Schema verified & migrated successfully.');
   } catch (err) {
     console.warn('⚠️ Database schema boot status:', err.message);
   }
