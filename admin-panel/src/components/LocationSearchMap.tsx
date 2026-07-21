@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Search, MapPin, Navigation, Globe, Check, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, MapPin, Navigation, Globe, Check, Loader2, X } from 'lucide-react';
 
 interface LocationSearchMapProps {
   location: string;
@@ -26,94 +26,141 @@ export default function LocationSearchMap({
   longitude,
   onLocationChange,
 }: LocationSearchMapProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(location || '');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    setIsSearching(true);
-    setShowResults(true);
-
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          searchQuery
-        )}&limit=5`
-      );
-      const data = await res.json();
-      setSearchResults(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.warn('Geocoding search failed:', err);
+  // Debounced Instant Autocomplete Search as admin types
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
       setSearchResults([]);
-    } finally {
-      setIsSearching(false);
+      setShowResults(false);
+      return;
     }
-  };
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            searchQuery.trim()
+          )}&limit=5`
+        );
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setSearchResults(data);
+          setShowResults(true);
+        } else {
+          setSearchResults([]);
+        }
+      } catch (err) {
+        console.warn('Location search error:', err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Click outside listener to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSelectResult = (item: any) => {
     const lat = parseFloat(item.lat);
     const lng = parseFloat(item.lon);
-    const name = item.display_name.split(',').slice(0, 3).join(', ');
+    const parts = item.display_name.split(',').map((s: string) => s.trim());
+    // Format place name (e.g. "Taj Mahal, Agra, Uttar Pradesh")
+    const formattedName = parts.slice(0, 3).join(', ');
 
-    onLocationChange(name, lat, lng);
+    setSearchQuery(formattedName);
+    onLocationChange(formattedName, lat, lng);
     setShowResults(false);
-    setSearchQuery('');
+  };
+
+  const handlePresetSelect = (preset: { label: string; lat: number; lng: number }) => {
+    setSearchQuery(preset.label);
+    onLocationChange(preset.label, preset.lat, preset.lng);
+    setShowResults(false);
   };
 
   const mapEmbedUrl = `https://maps.google.com/maps?q=${latitude},${longitude}&z=14&output=embed`;
 
   return (
-    <div className="space-y-3 p-4 bg-dark-hover/60 rounded-xl border border-dark-border">
+    <div className="space-y-3 p-4 bg-dark-hover/60 rounded-xl border border-dark-border" ref={dropdownRef}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-bold text-brand-500 uppercase tracking-wider flex items-center space-x-1.5">
           <MapPin className="w-4 h-4" />
-          <span>Interactive Location & Map Pin Picker</span>
+          <span>Location Search & Map Pin Picker</span>
         </span>
         <span className="text-[10px] text-gray-400 font-mono">
           {latitude.toFixed(4)}° N, {longitude.toFixed(4)}° E
         </span>
       </div>
 
-      {/* Location Search Box */}
+      {/* Autocomplete Location Search Box */}
       <div className="relative">
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search location name (e.g. Hampi, Taj Mahal, Goa Beach)..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onFocus={() => searchResults.length > 0 && setShowResults(true)}
-              className="w-full bg-dark-card border border-dark-border rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={isSearching}
-            className="px-3.5 py-2 bg-brand-500 text-black font-bold text-xs rounded-xl hover:bg-brand-400 flex items-center space-x-1"
-          >
-            {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-            <span>Search</span>
-          </button>
-        </form>
+        <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+          Search Location / City * (Type to see suggestions)
+        </label>
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" />
+          <input
+            type="text"
+            required
+            placeholder="Type location (e.g. Hampi, Taj Mahal Agra, Om Beach Gokarna)..."
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              onLocationChange(e.target.value, latitude, longitude);
+            }}
+            onFocus={() => searchResults.length > 0 && setShowResults(true)}
+            className="w-full bg-dark-card border border-dark-border rounded-xl pl-9 pr-8 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500 font-semibold"
+          />
 
-        {/* Dropdown Search Results */}
+          {isSearching ? (
+            <Loader2 className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 animate-spin" />
+          ) : searchQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSearchResults([]);
+                setShowResults(false);
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          ) : null}
+        </div>
+
+        {/* Dropdown Instant Search Suggestions */}
         {showResults && searchResults.length > 0 && (
-          <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-dark-card border border-dark-border rounded-xl shadow-2xl overflow-hidden divide-y divide-dark-border">
+          <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-dark-card border border-dark-border rounded-xl shadow-2xl overflow-hidden divide-y divide-dark-border max-h-56 overflow-y-auto">
             {searchResults.map((item, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => handleSelectResult(item)}
-                className="w-full text-left p-2.5 text-xs text-gray-200 hover:bg-dark-hover hover:text-white flex items-start space-x-2"
+                className="w-full text-left p-2.5 text-xs text-gray-200 hover:bg-dark-hover hover:text-brand-400 flex items-start space-x-2 transition-colors"
               >
                 <MapPin className="w-4 h-4 text-brand-500 flex-shrink-0 mt-0.5" />
-                <span className="line-clamp-2">{item.display_name}</span>
+                <div className="min-w-0">
+                  <span className="font-bold block truncate">{item.display_name.split(',')[0]}</span>
+                  <span className="text-[10px] text-gray-400 block truncate">{item.display_name}</span>
+                </div>
               </button>
             ))}
           </div>
@@ -127,7 +174,7 @@ export default function LocationSearchMap({
           <button
             key={preset.label}
             type="button"
-            onClick={() => onLocationChange(preset.label, preset.lat, preset.lng)}
+            onClick={() => handlePresetSelect(preset)}
             className="px-2.5 py-1 bg-dark-card border border-dark-border hover:border-brand-500 rounded-lg text-[10px] text-gray-300 font-semibold flex-shrink-0 transition-colors"
           >
             📍 {preset.label}
@@ -160,7 +207,7 @@ export default function LocationSearchMap({
             step="0.000001"
             required
             value={latitude}
-            onChange={e => onLocationChange(location, parseFloat(e.target.value) || 0, longitude)}
+            onChange={e => onLocationChange(searchQuery, parseFloat(e.target.value) || 0, longitude)}
             className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
           />
         </div>
@@ -174,7 +221,7 @@ export default function LocationSearchMap({
             step="0.000001"
             required
             value={longitude}
-            onChange={e => onLocationChange(location, latitude, parseFloat(e.target.value) || 0)}
+            onChange={e => onLocationChange(searchQuery, latitude, parseFloat(e.target.value) || 0)}
             className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
           />
         </div>

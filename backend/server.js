@@ -287,12 +287,17 @@ async function initTablesOnBoot() {
       CREATE TABLE IF NOT EXISTS plan_checkpoints (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
-          destination_id UUID NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,
+          destination_id UUID REFERENCES destinations(id) ON DELETE CASCADE,
           is_active BOOLEAN DEFAULT TRUE,
           order_index INT DEFAULT 0,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+
+      ALTER TABLE plan_checkpoints ADD COLUMN IF NOT EXISTS destination_id UUID REFERENCES destinations(id) ON DELETE CASCADE;
+      ALTER TABLE plan_checkpoints ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+      ALTER TABLE plan_checkpoints ADD COLUMN IF NOT EXISTS order_index INT DEFAULT 0;
     `);
+
 
     // Auto-seed Demo Destination and Demo Plan if DB is empty
     const destCountRes = await db.query('SELECT COUNT(*) FROM destinations');
