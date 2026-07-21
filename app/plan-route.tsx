@@ -215,11 +215,28 @@ export default function PlanRouteScreen() {
     danger: '#EF4444',
   };
 
-  const filteredPackages = packagePlans.filter(
+  const displayPackagePlans: (TourPackage & { price?: number })[] = livePlans.length > 0
+    ? livePlans.map((p, idx) => ({
+        id: p.id || `p_${idx}`,
+        name: p.name,
+        checkpoints: Array.isArray(p.checkpoints)
+          ? p.checkpoints.map((cp: any) => typeof cp === 'string' ? cp : (cp.name || 'Tourist Place'))
+          : ['Tourist Place'],
+        travelHours: parseFloat(p.duration) || 8,
+        distanceKm: parseFloat(p.km) || 150,
+        price: parseFloat(p.price) || 4999,
+        image: p.checkpoints && p.checkpoints[0]?.images?.[0]
+          ? p.checkpoints[0].images[0]
+          : 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
+      }))
+    : packagePlans;
+
+  const filteredPackages = displayPackagePlans.filter(
     (p) =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.checkpoints.some((cp) => cp.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
 
   const openBookingPopup = (plan: TourPackage) => {
     setSelectedPlan(plan);

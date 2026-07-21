@@ -301,6 +301,25 @@ export default function MakeTripScreen() {
     setSuggestions([]);
   };
 
+  const handleSelectLiveDestination = (dest: any) => {
+    const name = dest.name || 'Tourist Place';
+    if (checkpoints.find(c => c.name.toLowerCase() === name.toLowerCase())) {
+      Alert.alert('Checkpoint Exists', `${name} is already in your itinerary.`);
+      return;
+    }
+    const newPoint: Checkpoint = {
+      id: Math.random().toString(),
+      name: dest.name,
+      latitude: parseFloat(dest.latitude) || 15.3350,
+      longitude: parseFloat(dest.longitude) || 76.4600,
+      address: dest.location || 'Tourist Place',
+    };
+    setCheckpoints(prev => [...prev, newPoint]);
+    setSearchText('');
+    setSuggestions([]);
+  };
+
+
   // Checkpoint Reordering and Deleting
   const handleMoveUp = (index: number) => {
     if (index === 0) return;
@@ -785,9 +804,37 @@ export default function MakeTripScreen() {
           </View>
         </View>
 
-        {/* Google Places Autocomplete Suggestions */}
-        {suggestions.length > 0 && (
+        {/* Admin Panel Verified Tourist Places Dropdown & Google Places Suggestions */}
+        {(liveDestinations.length > 0 || suggestions.length > 0) && searchText.length > 0 && (
           <View style={[styles.suggestionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {/* Live Admin Master Destinations */}
+            {liveDestinations
+              .filter(d =>
+                d.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                (d.location && d.location.toLowerCase().includes(searchText.toLowerCase()))
+              )
+              .map((dest) => (
+                <TouchableOpacity
+                  key={`admin-${dest.id}`}
+                  style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
+                  onPress={() => handleSelectLiveDestination(dest)}
+                >
+                  <View style={styles.suggestionLeft}>
+                    <MaterialIcons name="stars" size={scale(18)} color={colors.amber} style={{ marginRight: scale(10) }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.suggestionText, { color: colors.textPrimary, fontWeight: 'bold' }]} numberOfLines={1}>
+                        {dest.name}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }} numberOfLines={1}>
+                        📍 {dest.location || 'Verified Tourist Place'}
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons name="add-circle-outline" size={scale(20)} color={colors.amber} />
+                </TouchableOpacity>
+              ))}
+
+            {/* Google Places Autocomplete Suggestions */}
             {suggestions.map((item) => (
               <TouchableOpacity
                 key={item.place_id}
@@ -811,6 +858,7 @@ export default function MakeTripScreen() {
             ))}
           </View>
         )}
+
 
         {/* Side-by-Side Content Container */}
         <View style={styles.sideBySideRow}>

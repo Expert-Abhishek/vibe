@@ -222,14 +222,15 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           <View style={{ flexDirection: 'row', gap: scale(10) }}>
-            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]} onPress={() => Alert.alert('Send', 'Feature coming soon')}>
-              <Text style={styles.primaryButtonText}>Send to Account</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginTop: 0, borderWidth: 1, borderColor: colors.line }]} onPress={() => Alert.alert('Withdraw', 'Feature coming soon')}>
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Withdraw</Text>
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]}
+              onPress={() => router.push('/(tabs)/trips')}
+            >
+              <Text style={styles.primaryButtonText}>📜 My Trip & Booking History</Text>
             </TouchableOpacity>
           </View>
         </View>
+
 
         {/* PREFERENCES SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
