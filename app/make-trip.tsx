@@ -157,7 +157,9 @@ export default function MakeTripScreen() {
     return '';
   };
   const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [liveDestinations, setLiveDestinations] = useState<any[]>([]);
+
 
 
   useEffect(() => {
@@ -184,6 +186,8 @@ export default function MakeTripScreen() {
   const [duration, setDuration] = useState<string>('0 mins');
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
+  const [isDestPickerOpen, setIsDestPickerOpen] = useState(false);
+
 
   const [travelHours, setTravelHours] = useState<number>(2.9);
   const [passengerCount, setPassengerCount] = useState<number>(1);
@@ -771,12 +775,30 @@ export default function MakeTripScreen() {
           </View>
         </View>
 
-        {/* Search Bar / Input for Adding Checkpoint - Full Width */}
-        <View style={{ marginBottom: verticalScale(14) }}>
+        {/* Select Admin Tourist Places Master Button & Search Bar */}
+        <View style={{ marginBottom: verticalScale(14), gap: verticalScale(8) }}>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.amber,
+              borderRadius: scale(14),
+              paddingVertical: verticalScale(10),
+              gap: scale(6),
+            }}
+            onPress={() => setIsDestPickerOpen(true)}
+          >
+            <MaterialIcons name="stars" size={scale(20)} color="#101010" />
+            <Text style={{ color: '#101010', fontSize: moderateFontScale(13), fontWeight: '900' }}>
+              Select Admin Tourist Places ({liveDestinations.length})
+            </Text>
+          </TouchableOpacity>
+
           <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border, width: '100%', flex: undefined }]}>
-            <MaterialIcons name="add-location" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
+            <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
             <TextInput
-              placeholder="Search & Add checkpoint..."
+              placeholder="Search Admin Tourist Places..."
               placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
               style={[styles.searchInput, { color: colors.textPrimary }]}
               value={searchText}
@@ -784,14 +806,17 @@ export default function MakeTripScreen() {
               autoCorrect={false}
               returnKeyType="search"
               onSubmitEditing={() => {
-                if (suggestions.length > 0) {
-                  if (suggestions[0].isLocal) {
-                    handleSelectPreset(suggestions[0].presetData);
-                  } else {
-                    handleSelectSuggestion(suggestions[0].place_id, suggestions[0].description);
-                  }
-                } else if (searchText.trim().length > 0) {
-                  triggerSearchAndAddFirst(searchText);
+                const matched = liveDestinations.filter(d =>
+                  d.name.toLowerCase().includes(searchText.toLowerCase()) ||
+                  (d.location && d.location.toLowerCase().includes(searchText.toLowerCase()))
+                );
+                if (matched.length > 0) {
+                  handleSelectLiveDestination(matched[0]);
+                } else {
+                  Alert.alert(
+                    'Restricted Location',
+                    'Only Tourist Places created by Admin in Destination Master can be added to your Custom Trip. Outside locations cannot be added.'
+                  );
                 }
               }}
             />
@@ -803,6 +828,7 @@ export default function MakeTripScreen() {
             )}
           </View>
         </View>
+
 
         {/* Admin Panel Verified Tourist Places Dropdown & Google Places Suggestions */}
         {(liveDestinations.length > 0 || suggestions.length > 0) && searchText.length > 0 && (
@@ -1258,12 +1284,70 @@ export default function MakeTripScreen() {
                 );
               })}
             </ScrollView>
+      {/* Admin Destination Master Picker Modal */}
+      <Modal visible={isDestPickerOpen} animationType="slide" transparent>
+        <View style={styles.overlayModal}>
+          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(16) }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                <MaterialIcons name="stars" size={scale(22)} color={colors.amber} />
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Verified Tourist Place</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsDestPickerOpen(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginVertical: verticalScale(10) }}>
+              Only Tourist Places created by Admin in Destination Master can be added to custom trips.
+            </Text>
+
+            <ScrollView style={{ maxHeight: verticalScale(400) }} showsVerticalScrollIndicator={false}>
+              {liveDestinations.length > 0 ? (
+                liveDestinations.map((dest) => (
+                  <TouchableOpacity
+                    key={`modal-dest-${dest.id}`}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: verticalScale(12),
+                      paddingHorizontal: scale(12),
+                      borderRadius: scale(12),
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      marginBottom: verticalScale(8),
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FAF9F6',
+                    }}
+                    onPress={() => {
+                      handleSelectLiveDestination(dest);
+                      setIsDestPickerOpen(false);
+                    }}
+                  >
+                    <MaterialIcons name="place" size={scale(24)} color={colors.amber} style={{ marginRight: scale(10) }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(14) }}>
+                        {dest.name}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: verticalScale(2) }}>
+                        📍 {dest.location || 'Official Tourist Destination'}
+                      </Text>
+                    </View>
+                    <MaterialIcons name="add-circle" size={scale(24)} color={colors.amber} />
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={{ padding: scale(20), alignItems: 'center' }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13) }}>Loading Admin Destinations...</Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
     </SafeAreaView>
   );
 }
+
 
 // Dark styled maps theme variables
 const darkMapStyle = [
