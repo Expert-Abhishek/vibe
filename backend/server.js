@@ -296,7 +296,18 @@ async function initTablesOnBoot() {
       ALTER TABLE plan_checkpoints ADD COLUMN IF NOT EXISTS destination_id UUID REFERENCES destinations(id) ON DELETE CASCADE;
       ALTER TABLE plan_checkpoints ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
       ALTER TABLE plan_checkpoints ADD COLUMN IF NOT EXISTS order_index INT DEFAULT 0;
+
+      DO $$ 
+      BEGIN 
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name='plan_checkpoints' AND column_name='checkpoint_id'
+        ) THEN
+          ALTER TABLE plan_checkpoints ALTER COLUMN checkpoint_id DROP NOT NULL;
+        END IF;
+      END $$;
     `);
+
 
 
     // Auto-seed Demo Destination and Demo Plan if DB is empty

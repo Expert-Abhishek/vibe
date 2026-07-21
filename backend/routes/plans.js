@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
       SELECT 
         pc.id AS plan_checkpoint_id,
         pc.plan_id,
-        pc.destination_id,
+        COALESCE(pc.destination_id, pc.checkpoint_id) AS destination_id,
         pc.is_active AS plan_checkpoint_active,
         pc.order_index,
         d.name AS destination_name,
@@ -27,9 +27,10 @@ router.get('/', async (req, res) => {
         d.longitude AS destination_longitude,
         d.is_active AS master_destination_active
       FROM plan_checkpoints pc
-      JOIN destinations d ON pc.destination_id = d.id
+      JOIN destinations d ON COALESCE(pc.destination_id, pc.checkpoint_id) = d.id
       ORDER BY pc.order_index ASC, pc.created_at ASC
     `;
+
 
     const pcRes = await db.query(planCheckpointsQuery);
 
@@ -100,19 +101,38 @@ router.post('/', async (req, res) => {
 
     const newPlan = insertPlanRes.rows[0];
 
+    // Check if checkpoint_id column exists in plan_checkpoints table
+    const colCheck = await client.query(
+      `SELECT column_name FROM information_schema.columns 
+       WHERE table_name = 'plan_checkpoints' AND column_name = 'checkpoint_id'`
+    );
+    const hasCheckpointIdCol = colCheck.rows.length > 0;
+
     // Insert destination checkpoints into plan_checkpoints
     if (Array.isArray(destinationIds) && destinationIds.length > 0) {
       for (let i = 0; i < destinationIds.length; i++) {
-        await client.query(
-          `INSERT INTO plan_checkpoints (plan_id, destination_id, order_index, is_active)
-           SELECT $1, $2, $3, TRUE
-           WHERE NOT EXISTS (
-             SELECT 1 FROM plan_checkpoints WHERE plan_id = $1 AND destination_id = $2
-           )`,
-          [newPlan.id, destinationIds[i], i]
-        );
+        if (hasCheckpointIdCol) {
+          await client.query(
+            `INSERT INTO plan_checkpoints (plan_id, destination_id, checkpoint_id, order_index, is_active)
+             SELECT $1, $2, $2, $3, TRUE
+             WHERE NOT EXISTS (
+               SELECT 1 FROM plan_checkpoints WHERE plan_id = $1 AND (destination_id = $2 OR checkpoint_id = $2)
+             )`,
+            [newPlan.id, destinationIds[i], i]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO plan_checkpoints (plan_id, destination_id, order_index, is_active)
+             SELECT $1, $2, $3, TRUE
+             WHERE NOT EXISTS (
+               SELECT 1 FROM plan_checkpoints WHERE plan_id = $1 AND destination_id = $2
+             )`,
+            [newPlan.id, destinationIds[i], i]
+          );
+        }
       }
     }
+
 
 
     await client.query('COMMIT');
