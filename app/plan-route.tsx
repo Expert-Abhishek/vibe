@@ -55,7 +55,8 @@ const packagePlans: TourPackage[] = [
   },
 ];
 
-import { fetchPlansApi } from '@/constants/api';
+import { fetchPlansApi, fetchDriversApi, createTripApi } from '@/constants/api';
+
 
 export default function PlanRouteScreen() {
   const router = useRouter();
@@ -65,6 +66,8 @@ export default function PlanRouteScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [livePlans, setLivePlans] = useState<any[]>([]);
   const [loadingLivePlans, setLoadingLivePlans] = useState(true);
+  const [backendDrivers, setBackendDrivers] = useState<any[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
 
   const params = useLocalSearchParams();
   const fromVehicle = params.fromVehicle === 'true';
@@ -72,16 +75,21 @@ export default function PlanRouteScreen() {
   const carNameParam = params.carName as string;
 
   useEffect(() => {
-    async function loadBackendPlans() {
+    async function loadBackendData() {
       setLoadingLivePlans(true);
       const data = await fetchPlansApi();
       if (data && data.length > 0) {
         setLivePlans(data);
       }
+      const drivers = await fetchDriversApi();
+      if (drivers && drivers.length > 0) {
+        setBackendDrivers(drivers);
+      }
       setLoadingLivePlans(false);
     }
-    loadBackendPlans();
+    loadBackendData();
   }, []);
+
 
   useEffect(() => {
     if (fromVehicle && vehicleTypeParam) {
@@ -157,9 +165,10 @@ export default function PlanRouteScreen() {
   };
 
   const calculatePackagePrice = (plan: TourPackage, vehicle: '5seater' | '7seater' | '4x4jeep' | 'auto') => {
-    const baseDayRate = vehicleRatesPerDay[vehicle] || 1800;
-    const vehicleHourlyRate = adminState.vehicleRatesPerHour[vehicle] || 150;
-    const totalTripHours = plan.travelHours + plan.checkpoints.length;
+    // Admin set Plan Base Price (e.g. ₹4999)
+    const baseDayRate = (plan as any).price ? Number((plan as any).price) : (vehicleRatesPerDay[vehicle] || 1800);
+    const vehicleHourlyRate = selectedDriver?.hourly_addon_rate ? Number(selectedDriver.hourly_addon_rate) : (adminState.vehicleRatesPerHour[vehicle] || 150);
+    const totalTripHours = plan.travelHours + (plan.checkpoints ? plan.checkpoints.length : 2);
 
     let h = bookingHour;
     if (bookingAmPm === 'PM' && bookingHour !== 12) {
@@ -177,6 +186,9 @@ export default function PlanRouteScreen() {
     if (endHourDec > 18) {
       extraHours += (endHourDec - 18);
     }
+    if (totalTripHours > 12 && extraHours < (totalTripHours - 12)) {
+      extraHours = totalTripHours - 12;
+    }
 
     const extraHoursRounded = Math.max(0, Math.ceil(extraHours));
     const extraAddonCharge = extraHoursRounded * vehicleHourlyRate;
@@ -191,6 +203,7 @@ export default function PlanRouteScreen() {
       totalTripHours
     };
   };
+
 
   const dateOptions = Array.from({ length: 15 }, (_, i) => {
     const d = new Date();
@@ -499,85 +512,102 @@ export default function PlanRouteScreen() {
 
                   {!fromVehicle && (
                     <>
-                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginTop: verticalScale(14) }]}>Choose Vehicle Fleet</Text>
+                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginTop: verticalScale(14) }]}>1. Choose Vehicle Category</Text>
                       <View style={styles.vehicleRow}>
                         {(['5seater', '7seater', '4x4jeep', 'auto'] as const).map((vKey) => {
                           const isSelected = bookingVehicle === vKey;
-                          const name = vKey === '5seater' ? '5 Seater' : vKey === '7seater' ? '7 Seater' : vKey === '4x4jeep' ? (bookingVehicle === '4x4jeep' ? `4x4 (${selected4x4Car})` : '4x4 Jeep') : 'Auto';
-                          const rate = vKey === '5seater' ? 1800 : vKey === '7seater' ? 2600 : vKey === '4x4jeep' ? 4200 : 1200;
+                          const name = vKey === '5seater' ? '5 Seater' : vKey === '7seater' ? '7 Seater' : vKey === '4x4jeep' ? '4*4 Off-Road' : 'Auto';
                           return (
                             <TouchableOpacity
                               key={vKey}
                               style={[
                                 styles.vehiclePill,
-                                { borderColor: isSelected ? colors.amber : colors.border, flex: 1, alignItems: 'center', paddingVertical: scale(6) },
-                                isSelected && { backgroundColor: 'rgba(245, 197, 24, 0.1)' }
+                                { borderColor: isSelected ? colors.amber : colors.border, flex: 1, alignItems: 'center', paddingVertical: scale(8) },
+                                isSelected && { backgroundColor: 'rgba(245, 197, 24, 0.12)' }
                               ]}
-                              onPress={() => setBookingVehicle(vKey)}
+                              onPress={() => {
+                                setBookingVehicle(vKey);
+                                setSelectedDriver(null);
+                              }}
                             >
-                              <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10), fontWeight: '800' }]} numberOfLines={1}>{name}</Text>
-                              <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: 2 }}>₹{rate}/day</Text>
+                              <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10.5), fontWeight: '800' }]} numberOfLines={1}>{name}</Text>
                             </TouchableOpacity>
                           );
                         })}
                       </View>
 
-                      {bookingVehicle === '4x4jeep' && (
-                        <View style={{ marginTop: verticalScale(14) }}>
-                          <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select 4x4 Model</Text>
-                          <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={{ paddingVertical: verticalScale(6) }}
-                          >
-                            {jeepCarouselData.map((car) => {
-                              const isSelected = selected4x4Car === car.id;
+                      {/* Real Cars / Drivers List from Backend */}
+                      <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginTop: verticalScale(12), marginBottom: verticalScale(6) }]}>2. Select Car & Driver</Text>
+                      {(() => {
+                        const categoryDrivers = backendDrivers.filter(
+                          (d: any) => (d.vehicle_type || '5seater') === bookingVehicle && d.status === 'Active'
+                        );
+
+                        const displayDrivers = categoryDrivers.length > 0 ? categoryDrivers : [
+                          {
+                            id: `demo_${bookingVehicle}_1`,
+                            name: 'Verified Driver',
+                            vehicle_model: bookingVehicle === '5seater' ? 'Swift Dzire (AC)' : bookingVehicle === '7seater' ? 'Toyota Innova Crysta' : bookingVehicle === '4x4jeep' ? 'Mahindra Thar 4x4' : 'Bajaj RE Auto',
+                            vehicle_number: 'KA-01-EX-1008',
+                            daily_rate: vehicleRatesPerDay[bookingVehicle] || 1800,
+                            hourly_addon_rate: adminState.vehicleRatesPerHour[bookingVehicle] || 150,
+                            car_front_url: bookingVehicle === '4x4jeep' ? 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=600&q=80' : 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80',
+                          }
+                        ];
+
+                        return (
+                          <View style={{ gap: verticalScale(8), marginBottom: verticalScale(10) }}>
+                            {displayDrivers.map((driverCard: any) => {
+                              const isSelected = selectedDriver?.id === driverCard.id || (selectedDriver === null && displayDrivers.length === 1 && selectedDriver?.id === driverCard.id);
+                              const frontPic = driverCard.car_front_url || driverCard.photo_url;
+                              const hrRate = driverCard.hourly_addon_rate ? Number(driverCard.hourly_addon_rate) : 150;
+
                               return (
                                 <TouchableOpacity
-                                  key={car.id}
-                                  activeOpacity={0.9}
+                                  key={driverCard.id}
                                   style={{
-                                    width: scale(200),
-                                    marginRight: scale(10),
-                                    backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#F9F9FB',
-                                    borderRadius: scale(16),
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.08)' : isDark ? '#16161B' : '#F9F9FB',
                                     borderWidth: 1.5,
                                     borderColor: isSelected ? colors.amber : colors.border,
-                                    padding: scale(12),
-                                    alignItems: 'center',
+                                    borderRadius: scale(12),
+                                    padding: scale(10),
                                   }}
-                                  onPress={() => setSelected4x4Car(car.id)}
+                                  onPress={() => setSelectedDriver(driverCard)}
                                 >
-                                  <Image source={car.image} style={{ width: '80%', height: verticalScale(60), resizeMode: 'contain', marginBottom: verticalScale(6) }} />
-                                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: '800', textAlign: 'center' }}>{car.name}</Text>
-                                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5), textAlign: 'center', marginTop: 2, height: verticalScale(30) }} numberOfLines={2}>
-                                    {car.desc}
-                                  </Text>
-                                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '800', marginTop: verticalScale(4) }}>{car.rateText}</Text>
-                                  <View
-                                    style={{
-                                      backgroundColor: isSelected ? colors.amber : 'transparent',
-                                      borderWidth: isSelected ? 0 : 1,
-                                      borderColor: colors.amber,
-                                      borderRadius: scale(8),
-                                      paddingVertical: verticalScale(4),
-                                      width: '100%',
-                                      alignItems: 'center',
-                                      marginTop: verticalScale(8),
-                                    }}
-                                  >
-                                    <Text style={{ color: isSelected ? '#101014' : colors.amber, fontWeight: '800', fontSize: moderateFontScale(10.5) }}>
-                                      {isSelected ? '✓ Selected' : 'Choose Model'}
+                                  <View style={{ width: scale(50), height: scale(50), borderRadius: scale(8), backgroundColor: '#212129', overflow: 'hidden', marginRight: scale(10), justifyContent: 'center', alignItems: 'center' }}>
+                                    {frontPic && (frontPic.startsWith('http') || frontPic.startsWith('data:image')) ? (
+                                      <Image source={{ uri: frontPic }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                                    ) : (
+                                      <MaterialIcons name="directions-car" size={scale(26)} color={colors.amber} />
+                                    )}
+                                  </View>
+
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800' }} numberOfLines={1}>
+                                      {driverCard.vehicle_model || 'Standard AC Cab'}
                                     </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: 1 }}>
+                                      Driver: {driverCard.name} ({driverCard.vehicle_number || 'KA-01-EX-0000'})
+                                    </Text>
+                                    <Text style={{ color: colors.amber, fontSize: moderateFontScale(10.5), fontWeight: '700', marginTop: 2 }}>
+                                      + ₹{hrRate}/hr addon rate
+                                    </Text>
+                                  </View>
+
+                                  <View style={{ width: scale(20), height: scale(20), borderRadius: scale(10), borderWidth: 2, borderColor: isSelected ? colors.amber : colors.border, justifyContent: 'center', alignItems: 'center', backgroundColor: isSelected ? colors.amber : 'transparent' }}>
+                                    {isSelected && <MaterialIcons name="check" size={scale(12)} color="#101014" />}
                                   </View>
                                 </TouchableOpacity>
                               );
                             })}
-                          </ScrollView>
-                        </View>
-                      )}
+                          </View>
+                        );
+                      })()}
                     </>
                   )}
+
 
                   {!adminState.instantBookingEnabled && (
                     <View style={{ marginTop: verticalScale(14) }}>
