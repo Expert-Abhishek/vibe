@@ -114,37 +114,23 @@ export interface DashboardStats {
   }[];
 }
 
-export interface Checkpoint {
+export interface Destination {
   id: string;
-  destinationId: string;
   name: string;
+  location: string;
   description: string;
   images: string[];
   videos: string[];
   isActive: boolean;
-  orderIndex?: number;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface Destination {
-  id: string;
-  name: string;
-  description: string;
-  location: string;
-  imageUrl: string;
-  isActive: boolean;
-  checkpoints: Checkpoint[];
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface PlanCheckpoint {
-  planCheckpointId?: string;
-  checkpointId: string;
-  destinationId?: string;
-  destinationName?: string;
+  planDestinationId?: string;
+  destinationId: string;
   name: string;
+  location: string;
   description: string;
   images: string[];
   videos: string[];
@@ -165,4 +151,5 @@ export interface Plan {
   createdAt?: string;
   updatedAt?: string;
 }
+
 

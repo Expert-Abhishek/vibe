@@ -6,10 +6,10 @@ import {
   GuideRateConfig,
   DashboardStats,
   Destination,
-  Checkpoint,
   Plan,
   PlanCheckpoint,
 } from './types';
+
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -508,126 +508,89 @@ export async function deleteUserApi(userId: string): Promise<boolean> {
 export const initialDestinations: Destination[] = [
   {
     id: 'dest-1',
-    name: 'Hampi Heritage Valley',
-    description: 'Ancient capital of the Vijayanagara Empire featuring monolithic monuments and boulder hillscapes.',
-    location: 'Vijayanagara, Karnataka',
-    imageUrl: 'https://images.unsplash.com/photo-1600100397608-f090742f40eb?auto=format&fit=crop&w=800&q=80',
+    name: 'Virupaksha Temple',
+    location: 'Hampi, Karnataka',
+    description: '7th century functional temple complex dedicated to Lord Shiva featuring a majestic 160ft gopuram tower.',
+    images: [
+      'https://images.unsplash.com/photo-1600100397608-f090742f40eb?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=800&q=80'
+    ],
+    videos: [
+      'https://www.w3schools.com/html/mov_bbb.mp4'
+    ],
     isActive: true,
-    checkpoints: [
-      {
-        id: 'cp-1',
-        destinationId: 'dest-1',
-        name: 'Virupaksha Temple',
-        description: '7th century functional temple complex dedicated to Lord Shiva with a majestic 160ft gopuram.',
-        images: [
-          'https://images.unsplash.com/photo-1600100397608-f090742f40eb?auto=format&fit=crop&w=800&q=80',
-          'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=800&q=80'
-        ],
-        videos: [
-          'https://www.w3schools.com/html/mov_bbb.mp4'
-        ],
-        isActive: true,
-        orderIndex: 1
-      },
-      {
-        id: 'cp-2',
-        destinationId: 'dest-1',
-        name: 'Vittala Temple & Stone Chariot',
-        description: 'World-famous UNESCO monument featuring 56 musical pillars and iconic carved stone chariot.',
-        images: [
-          'https://images.unsplash.com/photo-1620766182966-c6eb5ed2b788?auto=format&fit=crop&w=800&q=80',
-          'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80'
-        ],
-        videos: [
-          'https://www.w3schools.com/html/mov_bbb.mp4'
-        ],
-        isActive: true,
-        orderIndex: 2
-      },
-      {
-        id: 'cp-3',
-        destinationId: 'dest-1',
-        name: 'Hemakuta Hill Sunset Point',
-        description: 'Panoramas of ancient granite temples nestled on hilltop rocks overlooking banana plantations.',
-        images: [
-          'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80'
-        ],
-        videos: [],
-        isActive: true,
-        orderIndex: 3
-      }
-    ]
   },
   {
     id: 'dest-2',
-    name: 'Gokarna Coastal Trail',
-    description: 'Pristine beaches, cliffside walking tracks, and sacred ancient temple shrines.',
-    location: 'Uttara Kannada, Karnataka',
-    imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    name: 'Vittala Temple & Stone Chariot',
+    location: 'Hampi, Karnataka',
+    description: 'World-famous UNESCO monument featuring 56 musical pillars and the iconic carved stone chariot.',
+    images: [
+      'https://images.unsplash.com/photo-1620766182966-c6eb5ed2b788?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80'
+    ],
+    videos: [
+      'https://www.w3schools.com/html/mov_bbb.mp4'
+    ],
     isActive: true,
-    checkpoints: [
-      {
-        id: 'cp-4',
-        destinationId: 'dest-2',
-        name: 'Om Beach',
-        description: 'Naturally formed beach in the shape of the sacred Om symbol with water sports and beach cafes.',
-        images: [
-          'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
-          'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=800&q=80'
-        ],
-        videos: [
-          'https://www.w3schools.com/html/mov_bbb.mp4'
-        ],
-        isActive: true,
-        orderIndex: 1
-      },
-      {
-        id: 'cp-5',
-        destinationId: 'dest-2',
-        name: 'Kudle Beach Sunset Cove',
-        description: 'Secluded crescent bay famous for relaxing sunset walks and seaside dining.',
-        images: [
-          'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80'
-        ],
-        videos: [],
-        isActive: true,
-        orderIndex: 2
-      }
-    ]
   },
   {
     id: 'dest-3',
-    name: 'Coorg Highland Reserve',
-    description: 'Rolling hills, aroma of coffee blossoms, misty waterfalls, and elephant conservation reserves.',
-    location: 'Kodagu, Karnataka',
-    imageUrl: 'https://images.unsplash.com/photo-1511497584788-876761c13906?auto=format&fit=crop&w=800&q=80',
+    name: 'Hemakuta Hill Sunset Point',
+    location: 'Hampi, Karnataka',
+    description: 'Panoramas of ancient granite temples nestled on hilltop rocks overlooking lush banana plantations.',
+    images: [
+      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80'
+    ],
+    videos: [],
     isActive: true,
-    checkpoints: [
-      {
-        id: 'cp-6',
-        destinationId: 'dest-3',
-        name: 'Abbey Falls Cascade',
-        description: 'Tumbling waterfall surrounded by private spice plantations and hanging bridge view.',
-        images: [
-          'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=800&q=80'
-        ],
-        videos: [],
-        isActive: true,
-        orderIndex: 1
-      },
-      {
-        id: 'cp-7',
-        destinationId: 'dest-3',
-        name: "Raja's Seat Viewpoint",
-        description: 'Historic garden amphitheater offering views of valley horizons and sunset clouds.',
-        images: [
-          'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80'
-        ],
-        videos: [],
-        isActive: true,
-        orderIndex: 2
-      }
-    ]
+  },
+  {
+    id: 'dest-4',
+    name: 'Om Beach',
+    location: 'Gokarna, Karnataka',
+    description: 'Naturally formed beach in the shape of the sacred Om symbol with water sports and beachside cafes.',
+    images: [
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=800&q=80'
+    ],
+    videos: [
+      'https://www.w3schools.com/html/mov_bbb.mp4'
+    ],
+    isActive: true,
+  },
+  {
+    id: 'dest-5',
+    name: 'Kudle Beach Sunset Cove',
+    location: 'Gokarna, Karnataka',
+    description: 'Secluded crescent bay famous for relaxing sunset walks and seaside candle-light dining.',
+    images: [
+      'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80'
+    ],
+    videos: [],
+    isActive: true,
+  },
+  {
+    id: 'dest-6',
+    name: 'Abbey Falls Cascade',
+    location: 'Coorg, Karnataka',
+    description: 'Tumbling waterfall surrounded by private spice plantations, coffee estates, and hanging bridge views.',
+    images: [
+      'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=800&q=80'
+    ],
+    videos: [],
+    isActive: true,
+  },
+  {
+    id: 'dest-7',
+    name: "Raja's Seat Viewpoint",
+    location: 'Coorg, Karnataka',
+    description: 'Historic garden amphitheater offering views of green valley horizons and glowing sunset clouds.',
+    images: [
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80'
+    ],
+    videos: [],
+    isActive: true,
   }
 ];
 
@@ -642,12 +605,11 @@ export const initialPlans: Plan[] = [
     isActive: true,
     checkpoints: [
       {
-        planCheckpointId: 'pc-1',
-        checkpointId: 'cp-1',
+        planDestinationId: 'pd-1',
         destinationId: 'dest-1',
-        destinationName: 'Hampi Heritage Valley',
         name: 'Virupaksha Temple',
-        description: '7th century functional temple complex dedicated to Lord Shiva with a majestic 160ft gopuram.',
+        location: 'Hampi, Karnataka',
+        description: '7th century functional temple complex dedicated to Lord Shiva featuring a majestic 160ft gopuram tower.',
         images: ['https://images.unsplash.com/photo-1600100397608-f090742f40eb?auto=format&fit=crop&w=800&q=80'],
         videos: ['https://www.w3schools.com/html/mov_bbb.mp4'],
         isMasterActive: true,
@@ -655,12 +617,11 @@ export const initialPlans: Plan[] = [
         orderIndex: 1
       },
       {
-        planCheckpointId: 'pc-2',
-        checkpointId: 'cp-2',
-        destinationId: 'dest-1',
-        destinationName: 'Hampi Heritage Valley',
+        planDestinationId: 'pd-2',
+        destinationId: 'dest-2',
         name: 'Vittala Temple & Stone Chariot',
-        description: 'World-famous UNESCO monument featuring 56 musical pillars and iconic carved stone chariot.',
+        location: 'Hampi, Karnataka',
+        description: 'World-famous UNESCO monument featuring 56 musical pillars and the iconic carved stone chariot.',
         images: ['https://images.unsplash.com/photo-1620766182966-c6eb5ed2b788?auto=format&fit=crop&w=800&q=80'],
         videos: ['https://www.w3schools.com/html/mov_bbb.mp4'],
         isMasterActive: true,
@@ -668,12 +629,11 @@ export const initialPlans: Plan[] = [
         orderIndex: 2
       },
       {
-        planCheckpointId: 'pc-3',
-        checkpointId: 'cp-3',
-        destinationId: 'dest-1',
-        destinationName: 'Hampi Heritage Valley',
+        planDestinationId: 'pd-3',
+        destinationId: 'dest-3',
         name: 'Hemakuta Hill Sunset Point',
-        description: 'Panoramas of ancient granite temples nestled on hilltop rocks overlooking banana plantations.',
+        location: 'Hampi, Karnataka',
+        description: 'Panoramas of ancient granite temples nestled on hilltop rocks overlooking lush banana plantations.',
         images: ['https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80'],
         videos: [],
         isMasterActive: true,
@@ -692,12 +652,11 @@ export const initialPlans: Plan[] = [
     isActive: true,
     checkpoints: [
       {
-        planCheckpointId: 'pc-4',
-        checkpointId: 'cp-4',
-        destinationId: 'dest-2',
-        destinationName: 'Gokarna Coastal Trail',
+        planDestinationId: 'pd-4',
+        destinationId: 'dest-4',
         name: 'Om Beach',
-        description: 'Naturally formed beach in the shape of the sacred Om symbol with water sports and beach cafes.',
+        location: 'Gokarna, Karnataka',
+        description: 'Naturally formed beach in the shape of the sacred Om symbol with water sports and beachside cafes.',
         images: ['https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80'],
         videos: ['https://www.w3schools.com/html/mov_bbb.mp4'],
         isMasterActive: true,
@@ -705,12 +664,11 @@ export const initialPlans: Plan[] = [
         orderIndex: 1
       },
       {
-        planCheckpointId: 'pc-5',
-        checkpointId: 'cp-5',
-        destinationId: 'dest-2',
-        destinationName: 'Gokarna Coastal Trail',
+        planDestinationId: 'pd-5',
+        destinationId: 'dest-5',
         name: 'Kudle Beach Sunset Cove',
-        description: 'Secluded crescent bay famous for relaxing sunset walks and seaside dining.',
+        location: 'Gokarna, Karnataka',
+        description: 'Secluded crescent bay famous for relaxing sunset walks and seaside candle-light dining.',
         images: ['https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80'],
         videos: [],
         isMasterActive: true,
@@ -729,12 +687,11 @@ export const initialPlans: Plan[] = [
     isActive: true,
     checkpoints: [
       {
-        planCheckpointId: 'pc-6',
-        checkpointId: 'cp-6',
-        destinationId: 'dest-3',
-        destinationName: 'Coorg Highland Reserve',
+        planDestinationId: 'pd-6',
+        destinationId: 'dest-6',
         name: 'Abbey Falls Cascade',
-        description: 'Tumbling waterfall surrounded by private spice plantations and hanging bridge view.',
+        location: 'Coorg, Karnataka',
+        description: 'Tumbling waterfall surrounded by private spice plantations, coffee estates, and hanging bridge views.',
         images: ['https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=800&q=80'],
         videos: [],
         isMasterActive: true,
@@ -742,12 +699,11 @@ export const initialPlans: Plan[] = [
         orderIndex: 1
       },
       {
-        planCheckpointId: 'pc-7',
-        checkpointId: 'cp-7',
-        destinationId: 'dest-3',
-        destinationName: 'Coorg Highland Reserve',
+        planDestinationId: 'pd-7',
+        destinationId: 'dest-7',
         name: "Raja's Seat Viewpoint",
-        description: 'Historic garden amphitheater offering views of valley horizons and sunset clouds.',
+        location: 'Coorg, Karnataka',
+        description: 'Historic garden amphitheater offering views of green valley horizons and glowing sunset clouds.',
         images: ['https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80'],
         videos: [],
         isMasterActive: true,
@@ -813,7 +769,7 @@ export async function toggleDestinationStatusApi(id: string): Promise<boolean> {
     const data = await res.json();
     return data.success;
   } catch (e) {
-    console.warn('Error toggling destination on backend:', e);
+    console.warn('Error toggling destination status on backend:', e);
     return false;
   }
 }
@@ -831,62 +787,6 @@ export async function deleteDestinationApi(id: string): Promise<boolean> {
   }
 }
 
-export async function addCheckpointApi(destinationId: string, payload: Partial<Checkpoint>): Promise<Checkpoint | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/destinations/${destinationId}/checkpoints`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (data.success) return data.data;
-  } catch (e) {
-    console.warn('Error adding checkpoint on backend:', e);
-  }
-  return null;
-}
-
-export async function updateCheckpointApi(checkpointId: string, payload: Partial<Checkpoint>): Promise<Checkpoint | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/destinations/checkpoints/${checkpointId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (data.success) return data.data;
-  } catch (e) {
-    console.warn('Error updating checkpoint on backend:', e);
-  }
-  return null;
-}
-
-export async function toggleCheckpointStatusApi(checkpointId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/destinations/checkpoints/${checkpointId}/toggle`, {
-      method: 'PATCH',
-    });
-    const data = await res.json();
-    return data.success;
-  } catch (e) {
-    console.warn('Error toggling checkpoint status on backend:', e);
-    return false;
-  }
-}
-
-export async function deleteCheckpointApi(checkpointId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/destinations/checkpoints/${checkpointId}`, {
-      method: 'DELETE',
-    });
-    const data = await res.json();
-    return data.success;
-  } catch (e) {
-    console.warn('Error deleting checkpoint on backend:', e);
-    return false;
-  }
-}
-
 export async function fetchPlansApi(): Promise<Plan[]> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/plans`);
@@ -900,7 +800,7 @@ export async function fetchPlansApi(): Promise<Plan[]> {
   return initialPlans;
 }
 
-export async function createPlanApi(payload: { name: string; description: string; km: number; duration: string; price: number; checkpointIds: string[] }): Promise<Plan | null> {
+export async function createPlanApi(payload: { name: string; description: string; km: number; duration: string; price: number; destinationIds: string[] }): Promise<Plan | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/plans`, {
       method: 'POST',
@@ -956,24 +856,24 @@ export async function deletePlanApi(id: string): Promise<boolean> {
   }
 }
 
-export async function addPlanCheckpointApi(planId: string, checkpointId: string): Promise<boolean> {
+export async function addPlanDestinationApi(planId: string, destinationId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/plans/${planId}/checkpoints`, {
+    const res = await fetch(`${API_BASE_URL}/api/plans/${planId}/destinations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkpointId }),
+      body: JSON.stringify({ destinationId }),
     });
     const data = await res.json();
     return data.success;
   } catch (e) {
-    console.warn('Error adding checkpoint to plan on backend:', e);
+    console.warn('Error adding destination to plan on backend:', e);
     return false;
   }
 }
 
-export async function togglePlanCheckpointApi(planId: string, checkpointId: string): Promise<boolean> {
+export async function togglePlanDestinationApi(planId: string, destinationId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/plans/${planId}/checkpoints/${checkpointId}/toggle`, {
+    const res = await fetch(`${API_BASE_URL}/api/plans/${planId}/destinations/${destinationId}/toggle`, {
       method: 'PATCH',
     });
     const data = await res.json();
@@ -984,9 +884,9 @@ export async function togglePlanCheckpointApi(planId: string, checkpointId: stri
   }
 }
 
-export async function deletePlanCheckpointApi(planId: string, checkpointId: string): Promise<boolean> {
+export async function deletePlanDestinationApi(planId: string, destinationId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/plans/${planId}/checkpoints/${checkpointId}`, {
+    const res = await fetch(`${API_BASE_URL}/api/plans/${planId}/destinations/${destinationId}`, {
       method: 'DELETE',
     });
     const data = await res.json();
@@ -996,4 +896,5 @@ export async function deletePlanCheckpointApi(planId: string, checkpointId: stri
     return false;
   }
 }
+
 

@@ -73,33 +73,20 @@ CREATE TABLE IF NOT EXISTS guide_profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. Destinations Master Table
+-- 5. Destinations Master Table (Destination = Checkpoint = Tourist Place)
 CREATE TABLE IF NOT EXISTS destinations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    description TEXT,
     location VARCHAR(255),
-    image_url TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- 6. Checkpoints Master Table (Belongs to Destination Master)
-CREATE TABLE IF NOT EXISTS checkpoints (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    destination_id UUID NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
     description TEXT,
     images TEXT[] DEFAULT '{}',
     videos TEXT[] DEFAULT '{}',
     is_active BOOLEAN DEFAULT TRUE,
-    order_index INT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. Plans / Tour Packages Table
+-- 6. Plans / Tour Packages Table
 CREATE TABLE IF NOT EXISTS plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
@@ -112,14 +99,15 @@ CREATE TABLE IF NOT EXISTS plans (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. Plan Checkpoints (Junction Table: Plan <-> Master Checkpoint)
+-- 7. Plan Checkpoints (Junction Table: Plan <-> Destination/Tourist Place)
 CREATE TABLE IF NOT EXISTS plan_checkpoints (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
-    checkpoint_id UUID NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
+    destination_id UUID NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,
     is_active BOOLEAN DEFAULT TRUE,
     order_index INT DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_plan_checkpoint UNIQUE (plan_id, checkpoint_id)
+    CONSTRAINT unique_plan_destination UNIQUE (plan_id, destination_id)
 );
+
 

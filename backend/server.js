@@ -256,26 +256,18 @@ async function initTablesOnBoot() {
       CREATE TABLE IF NOT EXISTS destinations (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           name VARCHAR(255) NOT NULL,
-          description TEXT,
           location VARCHAR(255),
-          image_url TEXT,
+          description TEXT,
+          images TEXT[] DEFAULT '{}',
+          videos TEXT[] DEFAULT '{}',
           is_active BOOLEAN DEFAULT TRUE,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS checkpoints (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          destination_id UUID NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,
-          name VARCHAR(255) NOT NULL,
-          description TEXT,
-          images TEXT[] DEFAULT '{}',
-          videos TEXT[] DEFAULT '{}',
-          is_active BOOLEAN DEFAULT TRUE,
-          order_index INT DEFAULT 0,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
+      ALTER TABLE destinations ADD COLUMN IF NOT EXISTS location VARCHAR(255);
+      ALTER TABLE destinations ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}';
+      ALTER TABLE destinations ADD COLUMN IF NOT EXISTS videos TEXT[] DEFAULT '{}';
 
       CREATE TABLE IF NOT EXISTS plans (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -292,13 +284,13 @@ async function initTablesOnBoot() {
       CREATE TABLE IF NOT EXISTS plan_checkpoints (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
-          checkpoint_id UUID NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
+          destination_id UUID NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,
           is_active BOOLEAN DEFAULT TRUE,
           order_index INT DEFAULT 0,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT unique_plan_checkpoint UNIQUE (plan_id, checkpoint_id)
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
     console.log('✅ PostgreSQL Schema verified & migrated successfully.');
   } catch (err) {
     console.warn('⚠️ Database schema boot status:', err.message);

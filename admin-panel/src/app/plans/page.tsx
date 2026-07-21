@@ -17,14 +17,12 @@ import {
   MapPin,
   Layers,
   X,
-  Eye,
   Check
 } from 'lucide-react';
 import {
   Plan,
   Destination,
-  PlanCheckpoint,
-  Checkpoint
+  PlanCheckpoint
 } from '@/lib/types';
 import {
   fetchPlansApi,
@@ -33,9 +31,9 @@ import {
   togglePlanStatusApi,
   deletePlanApi,
   fetchDestinationsApi,
-  addPlanCheckpointApi,
-  togglePlanCheckpointApi,
-  deletePlanCheckpointApi,
+  addPlanDestinationApi,
+  togglePlanDestinationApi,
+  deletePlanDestinationApi,
   initialPlans,
   initialDestinations
 } from '@/lib/api';
@@ -52,14 +50,14 @@ export default function PlansPage() {
   const [addPlanForm, setAddPlanForm] = useState({
     name: '',
     description: '',
-    km: 100,
+    km: 150,
     duration: '2 Days / 1 Night',
     price: 4999,
-    selectedCheckpointIds: [] as string[],
+    selectedDestinationIds: [] as string[],
     isActive: true,
   });
 
-  // Edit Plan / Manage Checkpoints Modal State
+  // Edit Plan Modal State
   const [isEditPlanModalOpen, setIsEditPlanModalOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editPlanForm, setEditPlanForm] = useState({
@@ -71,11 +69,11 @@ export default function PlansPage() {
     isActive: true,
   });
 
-  // Add Checkpoint to Existing Plan State
-  const [isAddCpToPlanModalOpen, setIsAddCpToPlanModalOpen] = useState(false);
-  const [selectedCpToAdd, setSelectedCpToAdd] = useState<string>('');
+  // Add Destination to Existing Plan Modal State
+  const [isAddDestToPlanModalOpen, setIsAddDestToPlanModalOpen] = useState(false);
+  const [selectedDestToAdd, setSelectedDestToAdd] = useState<string>('');
 
-  // Media Preview State
+  // Media Preview Modal
   const [activeMediaPreview, setActiveMediaPreview] = useState<{ type: 'image' | 'video'; url: string; title: string } | null>(null);
 
   useEffect(() => {
@@ -98,7 +96,7 @@ export default function PlansPage() {
     setTimeout(() => setNotification(null), 3500);
   };
 
-  // Create Plan Handler
+  // Open Add Plan Modal
   const handleOpenAddPlan = () => {
     setAddPlanForm({
       name: '',
@@ -106,20 +104,20 @@ export default function PlansPage() {
       km: 150,
       duration: '2 Days / 1 Night',
       price: 4999,
-      selectedCheckpointIds: [],
+      selectedDestinationIds: [],
       isActive: true,
     });
     setIsAddPlanModalOpen(true);
   };
 
-  const handleToggleCheckpointSelectionInAdd = (cpId: string) => {
+  const handleToggleDestinationSelectionInAdd = (destId: string) => {
     setAddPlanForm(prev => {
-      const exists = prev.selectedCheckpointIds.includes(cpId);
+      const exists = prev.selectedDestinationIds.includes(destId);
       return {
         ...prev,
-        selectedCheckpointIds: exists
-          ? prev.selectedCheckpointIds.filter(id => id !== cpId)
-          : [...prev.selectedCheckpointIds, cpId]
+        selectedDestinationIds: exists
+          ? prev.selectedDestinationIds.filter(id => id !== destId)
+          : [...prev.selectedDestinationIds, destId]
       };
     });
   };
@@ -128,31 +126,21 @@ export default function PlansPage() {
     e.preventDefault();
     if (!addPlanForm.name.trim()) return;
 
-    // Create plan API
     const created = await createPlanApi({
       name: addPlanForm.name,
       description: addPlanForm.description,
       km: addPlanForm.km,
       duration: addPlanForm.duration,
       price: addPlanForm.price,
-      checkpointIds: addPlanForm.selectedCheckpointIds,
+      destinationIds: addPlanForm.selectedDestinationIds,
     });
 
-    // Resolve checkpoint items from master destinations
-    const allMasterCheckpoints: (Checkpoint & { destinationName: string })[] = [];
-    destinations.forEach(d => {
-      d.checkpoints.forEach(cp => {
-        allMasterCheckpoints.push({ ...cp, destinationName: d.name });
-      });
-    });
-
-    const populatedCheckpoints: PlanCheckpoint[] = addPlanForm.selectedCheckpointIds.map(id => {
-      const found = allMasterCheckpoints.find(m => m.id === id);
+    const populatedCheckpoints: PlanCheckpoint[] = addPlanForm.selectedDestinationIds.map(id => {
+      const found = destinations.find(d => d.id === id);
       return {
-        checkpointId: id,
-        destinationId: found?.destinationId,
-        destinationName: found?.destinationName || 'Destination Master',
-        name: found?.name || 'Checkpoint',
+        destinationId: id,
+        name: found?.name || 'Tourist Place',
+        location: found?.location || 'Location',
         description: found?.description || '',
         images: found?.images || [],
         videos: found?.videos || [],
@@ -174,10 +162,9 @@ export default function PlansPage() {
 
     setPlans(prev => [newPlan, ...prev]);
     setIsAddPlanModalOpen(false);
-    showToast(`Plan Package "${addPlanForm.name}" created successfully!`);
+    showToast(`Plan Package "${addPlanForm.name}" created!`);
   };
 
-  // Toggle Plan Status
   const handleTogglePlan = async (planId: string) => {
     setPlans(prev =>
       prev.map(p => (p.id === planId ? { ...p, isActive: !p.isActive } : p))
@@ -186,16 +173,14 @@ export default function PlansPage() {
     showToast('Plan active status toggled!');
   };
 
-  // Delete Plan
   const handleDeletePlan = async (planId: string, name: string) => {
-    if (confirm(`Are you sure you want to delete tour plan "${name}"?`)) {
+    if (confirm(`Delete tour plan package "${name}"?`)) {
       setPlans(prev => prev.filter(p => p.id !== planId));
       await deletePlanApi(planId);
       showToast(`Plan "${name}" deleted.`);
     }
   };
 
-  // Edit Plan Details & Checkpoints Modal
   const handleOpenEditPlan = (plan: Plan) => {
     setEditingPlan(plan);
     setEditPlanForm({
@@ -226,15 +211,14 @@ export default function PlansPage() {
     showToast('Plan details updated!');
   };
 
-  // Toggle Checkpoint ON/OFF inside Plan
-  const handleTogglePlanCheckpoint = async (planId: string, cpId: string) => {
+  const handleTogglePlanCheckpoint = async (planId: string, destId: string) => {
     setPlans(prev =>
       prev.map(p => {
         if (p.id === planId) {
           return {
             ...p,
             checkpoints: p.checkpoints.map(cp =>
-              cp.checkpointId === cpId ? { ...cp, isActiveInPlan: !cp.isActiveInPlan } : cp
+              cp.destinationId === destId ? { ...cp, isActiveInPlan: !cp.isActiveInPlan } : cp
             )
           };
         }
@@ -246,24 +230,23 @@ export default function PlansPage() {
       setEditingPlan(prev => prev ? {
         ...prev,
         checkpoints: prev.checkpoints.map(cp =>
-          cp.checkpointId === cpId ? { ...cp, isActiveInPlan: !cp.isActiveInPlan } : cp
+          cp.destinationId === destId ? { ...cp, isActiveInPlan: !cp.isActiveInPlan } : cp
         )
       } : null);
     }
 
-    await togglePlanCheckpointApi(planId, cpId);
+    await togglePlanDestinationApi(planId, destId);
     showToast('Checkpoint status inside plan toggled!');
   };
 
-  // Delete Checkpoint from Plan
-  const handleDeletePlanCheckpoint = async (planId: string, cpId: string, cpName: string) => {
-    if (confirm(`Remove checkpoint "${cpName}" from this plan?`)) {
+  const handleDeletePlanCheckpoint = async (planId: string, destId: string, cpName: string) => {
+    if (confirm(`Remove tourist place / checkpoint "${cpName}" from this plan?`)) {
       setPlans(prev =>
         prev.map(p => {
           if (p.id === planId) {
             return {
               ...p,
-              checkpoints: p.checkpoints.filter(cp => cp.checkpointId !== cpId)
+              checkpoints: p.checkpoints.filter(cp => cp.destinationId !== destId)
             };
           }
           return p;
@@ -273,37 +256,29 @@ export default function PlansPage() {
       if (editingPlan && editingPlan.id === planId) {
         setEditingPlan(prev => prev ? {
           ...prev,
-          checkpoints: prev.checkpoints.filter(cp => cp.checkpointId !== cpId)
+          checkpoints: prev.checkpoints.filter(cp => cp.destinationId !== destId)
         } : null);
       }
 
-      await deletePlanCheckpointApi(planId, cpId);
+      await deletePlanDestinationApi(planId, destId);
       showToast(`Checkpoint "${cpName}" removed from plan.`);
     }
   };
 
-  // Add Checkpoint to existing plan
-  const handleAddCpToExistingPlan = async () => {
-    if (!editingPlan || !selectedCpToAdd) return;
+  const handleAddDestToExistingPlan = async () => {
+    if (!editingPlan || !selectedDestToAdd) return;
 
-    // Find checkpoint details from Master
-    let masterCp: (Checkpoint & { destinationName: string }) | null = null;
-    destinations.forEach(d => {
-      const found = d.checkpoints.find(c => c.id === selectedCpToAdd);
-      if (found) masterCp = { ...found, destinationName: d.name };
-    });
-
-    if (!masterCp) return;
+    const foundDest = destinations.find(d => d.id === selectedDestToAdd);
+    if (!foundDest) return;
 
     const newPlanCp: PlanCheckpoint = {
-      checkpointId: (masterCp as Checkpoint).id,
-      destinationId: (masterCp as Checkpoint).destinationId,
-      destinationName: (masterCp as any).destinationName,
-      name: (masterCp as Checkpoint).name,
-      description: (masterCp as Checkpoint).description,
-      images: (masterCp as Checkpoint).images,
-      videos: (masterCp as Checkpoint).videos,
-      isMasterActive: (masterCp as Checkpoint).isActive,
+      destinationId: foundDest.id,
+      name: foundDest.name,
+      location: foundDest.location,
+      description: foundDest.description,
+      images: foundDest.images,
+      videos: foundDest.videos,
+      isMasterActive: foundDest.isActive,
       isActiveInPlan: true,
     };
 
@@ -324,10 +299,10 @@ export default function PlansPage() {
       checkpoints: [...prev.checkpoints, newPlanCp]
     } : null);
 
-    await addPlanCheckpointApi(editingPlan.id, selectedCpToAdd);
-    setIsAddCpToPlanModalOpen(false);
-    setSelectedCpToAdd('');
-    showToast('New checkpoint added to plan from Destination Master!');
+    await addPlanDestinationApi(editingPlan.id, selectedDestToAdd);
+    setIsAddDestToPlanModalOpen(false);
+    setSelectedDestToAdd('');
+    showToast('Tourist place checkpoint added to plan from Master!');
   };
 
   const filteredPlans = plans.filter(p =>
@@ -353,7 +328,7 @@ export default function PlansPage() {
             <h1 className="text-2xl font-extrabold text-white tracking-tight">Plan & Tour Packages</h1>
           </div>
           <p className="text-xs text-dark-textMuted">
-            Configure Tour Packages & Custom Plans (Name, Distance, Duration, Price & Included Checkpoints pulled from Destination Master).
+            Create Tour Packages by combining multiple Destinations/Tourist Places from Destination Master.
           </p>
         </div>
 
@@ -366,13 +341,13 @@ export default function PlansPage() {
         </button>
       </div>
 
-      {/* Search & Overview Stats */}
+      {/* Search & Overview */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search plans or tour packages..."
+            placeholder="Search plans or packages..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full bg-dark-card border border-dark-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors"
@@ -381,19 +356,19 @@ export default function PlansPage() {
 
         <div className="flex items-center space-x-3 text-xs text-dark-textMuted">
           <span className="bg-dark-card px-3 py-1.5 rounded-lg border border-dark-border font-semibold">
-            Active Packages: <strong className="text-brand-500">{plans.filter(p => p.isActive).length}</strong> / {plans.length}
+            Active Tour Packages: <strong className="text-brand-500">{plans.filter(p => p.isActive).length}</strong> / {plans.length}
           </span>
         </div>
       </div>
 
-      {/* Plans Grid */}
+      {/* Plans List */}
       {loading ? (
         <div className="p-12 text-center text-gray-400">Loading Tour Plans...</div>
       ) : filteredPlans.length === 0 ? (
         <div className="bg-dark-card p-12 rounded-2xl border border-dark-border text-center space-y-3">
           <Route className="w-12 h-12 text-gray-600 mx-auto" />
-          <h3 className="text-base font-bold text-white">No plans found</h3>
-          <p className="text-xs text-dark-textMuted">Create a new plan to start listing tour packages.</p>
+          <h3 className="text-base font-bold text-white">No tour plans found</h3>
+          <p className="text-xs text-dark-textMuted">Create a new tour plan to display package options.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -419,9 +394,9 @@ export default function PlansPage() {
                     <p className="text-xs text-dark-textMuted line-clamp-2">{plan.description}</p>
                   </div>
 
-                  {/* Plan Price Tag */}
+                  {/* Plan Price */}
                   <div className="text-right flex-shrink-0">
-                    <span className="text-xs text-dark-textMuted block uppercase font-bold">Package Price</span>
+                    <span className="text-[10px] text-dark-textMuted block uppercase font-bold">Package Price</span>
                     <span className="text-xl font-black text-brand-500 flex items-center justify-end">
                       <IndianRupee className="w-4 h-4 inline" />
                       <span>{plan.price.toLocaleString('en-IN')}</span>
@@ -429,12 +404,12 @@ export default function PlansPage() {
                   </div>
                 </div>
 
-                {/* Plan Metrics Bar: KM & Duration */}
+                {/* Plan Metrics Bar */}
                 <div className="grid grid-cols-2 gap-3 p-3 bg-dark-hover/50 rounded-xl border border-dark-border/80 text-xs">
                   <div className="flex items-center space-x-2 text-gray-300">
                     <Navigation className="w-4 h-4 text-brand-400" />
                     <div>
-                      <span className="text-[10px] text-gray-500 block">Distance</span>
+                      <span className="text-[10px] text-gray-500 block">Total Distance</span>
                       <strong className="text-white">{plan.km} KM</strong>
                     </div>
                   </div>
@@ -448,26 +423,26 @@ export default function PlansPage() {
                   </div>
                 </div>
 
-                {/* Included Checkpoints Preview (Pulled from Master) */}
+                {/* Included Destinations / Checkpoints List */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-gray-300 uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
                       <Layers className="w-3.5 h-3.5 text-brand-500" />
-                      <span>Included Checkpoints ({plan.checkpoints.length})</span>
+                      <span>Included Checkpoints / Tourist Places ({plan.checkpoints.length})</span>
                     </span>
-                    <span className="text-[10px] text-brand-400">Pulled from Destination Master</span>
+                    <span className="text-[10px] text-brand-400">Data pulled from Master</span>
                   </div>
 
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                     {plan.checkpoints.map((cp, idx) => (
                       <div
-                        key={cp.checkpointId || idx}
+                        key={cp.destinationId || idx}
                         className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${
                           cp.isActiveInPlan ? 'bg-dark-hover/70 border-dark-border' : 'bg-red-950/20 border-red-500/20 opacity-60'
                         }`}
                       >
                         <div className="flex items-center space-x-2.5 min-w-0">
-                          {/* Image thumbnail from Master */}
+                          {/* Image thumbnail from Destination Master */}
                           {cp.images && cp.images.length > 0 ? (
                             <img
                               src={cp.images[0]}
@@ -476,22 +451,23 @@ export default function PlansPage() {
                             />
                           ) : (
                             <div className="w-8 h-8 rounded-lg bg-dark-card border border-dark-border flex items-center justify-center text-[10px] font-bold text-brand-500">
-                              CP
+                              <MapPin className="w-4 h-4 text-brand-500" />
                             </div>
                           )}
 
                           <div className="min-w-0">
                             <span className="font-bold text-white truncate block">{cp.name}</span>
                             <span className="text-[10px] text-dark-textMuted block truncate">
-                              {cp.destinationName} • {cp.images?.length || 0} pics {cp.videos?.length ? `, ${cp.videos.length} video` : ''}
+                              <MapPin className="w-3 h-3 text-brand-500 inline mr-0.5" />
+                              {cp.location} • {cp.images?.length || 0} pics {cp.videos?.length ? `, ${cp.videos.length} video` : ''}
                             </span>
                           </div>
                         </div>
 
-                        {/* Toggle ON/OFF Checkpoint inside Plan */}
+                        {/* Toggle Checkpoint ON/OFF inside plan */}
                         <div className="flex items-center space-x-2">
                           <button
-                            onClick={() => handleTogglePlanCheckpoint(plan.id, cp.checkpointId)}
+                            onClick={() => handleTogglePlanCheckpoint(plan.id, cp.destinationId)}
                             className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
                               cp.isActiveInPlan
                                 ? 'bg-green-500/20 text-green-400 border-green-500/30'
@@ -508,7 +484,7 @@ export default function PlansPage() {
                 </div>
               </div>
 
-              {/* Plan Actions */}
+              {/* Footer Actions */}
               <div className="pt-3 border-t border-dark-border flex items-center justify-between">
                 <button
                   onClick={() => handleTogglePlan(plan.id)}
@@ -545,14 +521,14 @@ export default function PlansPage() {
         </div>
       )}
 
-      {/* CREATE PLAN MODAL */}
+      {/* CREATE NEW PLAN MODAL */}
       {isAddPlanModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
             <div className="p-5 border-b border-dark-border flex items-center justify-between">
               <h3 className="font-extrabold text-white text-base flex items-center space-x-2">
                 <Route className="w-5 h-5 text-brand-500" />
-                <span>Create New Tour Package / Plan</span>
+                <span>Create New Tour Package Plan</span>
               </h3>
               <button onClick={() => setIsAddPlanModalOpen(false)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -568,7 +544,7 @@ export default function PlansPage() {
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Hampi 3-Day Heritage & Sunset Tour"
+                    placeholder="e.g. Hampi 3-Day Express Heritage Tour"
                     value={addPlanForm.name}
                     onChange={e => setAddPlanForm({ ...addPlanForm, name: e.target.value })}
                     className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
@@ -582,7 +558,7 @@ export default function PlansPage() {
                   <input
                     type="number"
                     required
-                    placeholder="150"
+                    placeholder="180"
                     value={addPlanForm.km}
                     onChange={e => setAddPlanForm({ ...addPlanForm, km: Number(e.target.value) })}
                     className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
@@ -605,7 +581,7 @@ export default function PlansPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Package Price (₹) *
+                    Price (₹) *
                   </label>
                   <input
                     type="number"
@@ -618,7 +594,7 @@ export default function PlansPage() {
                 </div>
 
                 <div className="flex items-center justify-between sm:pt-6">
-                  <span className="text-xs font-bold text-gray-300 uppercase">Status</span>
+                  <span className="text-xs font-bold text-gray-300 uppercase">Plan Active Status</span>
                   <button
                     type="button"
                     onClick={() => setAddPlanForm({ ...addPlanForm, isActive: !addPlanForm.isActive })}
@@ -636,7 +612,7 @@ export default function PlansPage() {
                   </label>
                   <textarea
                     rows={2}
-                    placeholder="Provide overview of the tour package..."
+                    placeholder="Brief description of the tour plan..."
                     value={addPlanForm.description}
                     onChange={e => setAddPlanForm({ ...addPlanForm, description: e.target.value })}
                     className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 resize-none"
@@ -644,44 +620,37 @@ export default function PlansPage() {
                 </div>
               </div>
 
-              {/* Select Checkpoints from Destination Master */}
+              {/* Select Tourist Places / Checkpoints from Destination Master */}
               <div className="space-y-2 pt-2 border-t border-dark-border">
                 <label className="block text-xs font-bold text-brand-500 uppercase tracking-wider">
-                  Select Checkpoints (From Destination Master)
+                  Select Tourist Places / Checkpoints (From Destination Master)
                 </label>
 
-                <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                  {destinations.map(dest => (
-                    <div key={dest.id} className="bg-dark-hover/40 rounded-xl p-3 border border-dark-border/60">
-                      <span className="text-xs font-bold text-white block mb-2">{dest.name} ({dest.location})</span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {dest.checkpoints.map(cp => {
-                          const isSelected = addPlanForm.selectedCheckpointIds.includes(cp.id);
-                          return (
-                            <div
-                              key={cp.id}
-                              onClick={() => handleToggleCheckpointSelectionInAdd(cp.id)}
-                              className={`p-2.5 rounded-lg border text-xs cursor-pointer flex items-center justify-between transition-all ${
-                                isSelected
-                                  ? 'bg-brand-500/20 border-brand-500 text-white font-bold'
-                                  : 'bg-dark-card border-dark-border text-gray-400 hover:border-gray-600'
-                              }`}
-                            >
-                              <div className="truncate mr-2">
-                                <span className="block truncate">{cp.name}</span>
-                                <span className="text-[10px] text-dark-textMuted font-normal">{cp.images.length} imgs</span>
-                              </div>
-                              <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                                isSelected ? 'bg-brand-500 border-brand-500 text-black' : 'border-gray-600'
-                              }`}>
-                                {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                              </div>
-                            </div>
-                          );
-                        })}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {destinations.map(d => {
+                    const isSelected = addPlanForm.selectedDestinationIds.includes(d.id);
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => handleToggleDestinationSelectionInAdd(d.id)}
+                        className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
+                          isSelected
+                            ? 'bg-brand-500/20 border-brand-500 text-white font-bold'
+                            : 'bg-dark-hover/50 border-dark-border text-gray-300 hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="truncate mr-2">
+                          <span className="block truncate">{d.name}</span>
+                          <span className="text-[10px] text-dark-textMuted font-normal">{d.location}</span>
+                        </div>
+                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 ${
+                          isSelected ? 'bg-brand-500 border-brand-500 text-black' : 'border-gray-600'
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -720,7 +689,6 @@ export default function PlansPage() {
             </div>
 
             <div className="p-6 space-y-6 overflow-y-auto">
-              {/* Plan Edit Form */}
               <form onSubmit={handleSaveEditPlan} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
@@ -788,54 +756,53 @@ export default function PlansPage() {
                 </div>
               </form>
 
-              {/* Included Checkpoints Management Section */}
+              {/* Manage Checkpoints inside plan */}
               <div className="pt-4 border-t border-dark-border space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-brand-500 flex items-center space-x-2">
                     <Layers className="w-4 h-4" />
-                    <span>Manage Checkpoints in Plan ({editingPlan.checkpoints.length})</span>
+                    <span>Manage Included Checkpoints ({editingPlan.checkpoints.length})</span>
                   </h4>
 
                   <button
-                    onClick={() => setIsAddCpToPlanModalOpen(true)}
+                    onClick={() => setIsAddDestToPlanModalOpen(true)}
                     className="px-3 py-1 bg-brand-500/10 border border-brand-500/30 text-brand-400 rounded-xl text-xs font-bold flex items-center space-x-1 hover:bg-brand-500/20"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>Add Checkpoint from Master</span>
+                    <span>Add Tourist Place from Master</span>
                   </button>
                 </div>
 
                 <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                   {editingPlan.checkpoints.map(cp => (
                     <div
-                      key={cp.checkpointId}
+                      key={cp.destinationId}
                       className="p-3 bg-dark-hover/50 rounded-xl border border-dark-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                     >
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-3 min-w-0">
                         {cp.images && cp.images.length > 0 ? (
                           <img
                             src={cp.images[0]}
                             alt={cp.name}
-                            className="w-10 h-10 rounded-lg object-cover border border-dark-border"
+                            className="w-10 h-10 rounded-lg object-cover border border-dark-border flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-dark-card border border-dark-border flex items-center justify-center text-[10px] font-bold text-brand-500">
-                            CP
+                          <div className="w-10 h-10 rounded-lg bg-dark-card border border-dark-border flex items-center justify-center text-[10px] font-bold text-brand-500 flex-shrink-0">
+                            <MapPin className="w-4 h-4 text-brand-500" />
                           </div>
                         )}
 
-                        <div>
-                          <span className="font-bold text-white block">{cp.name}</span>
-                          <span className="text-[10px] text-dark-textMuted block">
-                            {cp.destinationName || 'Destination Master'} • {cp.images?.length || 0} images {cp.videos?.length ? `, ${cp.videos.length} video` : ''}
+                        <div className="min-w-0">
+                          <span className="font-bold text-white block truncate">{cp.name}</span>
+                          <span className="text-[10px] text-dark-textMuted block truncate">
+                            {cp.location} • {cp.images?.length || 0} pics {cp.videos?.length ? `, ${cp.videos.length} video` : ''}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2 self-end sm:self-center">
-                        {/* Toggle Checkpoint ON/OFF inside plan */}
                         <button
-                          onClick={() => handleTogglePlanCheckpoint(editingPlan.id, cp.checkpointId)}
+                          onClick={() => handleTogglePlanCheckpoint(editingPlan.id, cp.destinationId)}
                           className={`px-3 py-1 rounded-lg font-bold text-[11px] border transition-colors ${
                             cp.isActiveInPlan
                               ? 'bg-green-500/20 text-green-400 border-green-500/30'
@@ -846,7 +813,7 @@ export default function PlansPage() {
                         </button>
 
                         <button
-                          onClick={() => handleDeletePlanCheckpoint(editingPlan.id, cp.checkpointId, cp.name)}
+                          onClick={() => handleDeletePlanCheckpoint(editingPlan.id, cp.destinationId, cp.name)}
                           className="p-1.5 text-red-400 hover:text-red-300 bg-red-500/10 rounded-lg border border-red-500/20"
                           title="Remove from plan"
                         >
@@ -862,13 +829,13 @@ export default function PlansPage() {
         </div>
       )}
 
-      {/* ADD CHECKPOINT FROM MASTER TO PLAN MODAL */}
-      {isAddCpToPlanModalOpen && editingPlan && (
+      {/* ADD TOURIST PLACE TO EXISTING PLAN MODAL */}
+      {isAddDestToPlanModalOpen && editingPlan && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-dark-border flex items-center justify-between">
-              <h4 className="font-bold text-white text-sm">Add Checkpoint to {editingPlan.name}</h4>
-              <button onClick={() => setIsAddCpToPlanModalOpen(false)} className="text-gray-400 hover:text-white">
+              <h4 className="font-bold text-white text-sm">Add Tourist Place to {editingPlan.name}</h4>
+              <button onClick={() => setIsAddDestToPlanModalOpen(false)} className="text-gray-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -876,36 +843,32 @@ export default function PlansPage() {
             <div className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
-                  Select Checkpoint from Destination Master
+                  Select Tourist Place / Checkpoint
                 </label>
                 <select
-                  value={selectedCpToAdd}
-                  onChange={e => setSelectedCpToAdd(e.target.value)}
+                  value={selectedDestToAdd}
+                  onChange={e => setSelectedDestToAdd(e.target.value)}
                   className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
                 >
-                  <option value="">-- Choose Checkpoint --</option>
+                  <option value="">-- Choose Tourist Place --</option>
                   {destinations.map(d => (
-                    <optgroup key={d.id} label={d.name}>
-                      {d.checkpoints.map(cp => (
-                        <option key={cp.id} value={cp.id}>
-                          {cp.name}
-                        </option>
-                      ))}
-                    </optgroup>
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.location})
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div className="flex items-center justify-end space-x-3 pt-3 border-t border-dark-border">
                 <button
-                  onClick={() => setIsAddCpToPlanModalOpen(false)}
+                  onClick={() => setIsAddDestToPlanModalOpen(false)}
                   className="px-4 py-2 bg-dark-hover text-gray-300 rounded-xl text-xs font-semibold"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleAddCpToExistingPlan}
-                  disabled={!selectedCpToAdd}
+                  onClick={handleAddDestToExistingPlan}
+                  disabled={!selectedDestToAdd}
                   className="px-4 py-2 bg-brand-500 disabled:opacity-50 text-black font-bold rounded-xl text-xs hover:bg-brand-400"
                 >
                   Add to Plan

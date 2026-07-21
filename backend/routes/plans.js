@@ -5,7 +5,7 @@ const router = express.Router();
 
 /**
  * GET /api/plans
- * Get all tour plans/packages with included checkpoints pulled from Destination Master
+ * Get all tour plans with included checkpoints pulled from Destinations Master
  */
 router.get('/', async (req, res) => {
   try {
@@ -15,19 +15,17 @@ router.get('/', async (req, res) => {
       SELECT 
         pc.id AS plan_checkpoint_id,
         pc.plan_id,
-        pc.checkpoint_id,
+        pc.destination_id,
         pc.is_active AS plan_checkpoint_active,
         pc.order_index,
-        c.name AS checkpoint_name,
-        c.description AS checkpoint_description,
-        c.images AS checkpoint_images,
-        c.videos AS checkpoint_videos,
-        c.is_active AS master_checkpoint_active,
-        d.id AS destination_id,
-        d.name AS destination_name
+        d.name AS destination_name,
+        d.location AS destination_location,
+        d.description AS destination_description,
+        d.images AS destination_images,
+        d.videos AS destination_videos,
+        d.is_active AS master_destination_active
       FROM plan_checkpoints pc
-      JOIN checkpoints c ON pc.checkpoint_id = c.id
-      JOIN destinations d ON c.destination_id = d.id
+      JOIN destinations d ON pc.destination_id = d.id
       ORDER BY pc.order_index ASC, pc.created_at ASC
     `;
 
@@ -40,15 +38,14 @@ router.get('/', async (req, res) => {
         checkpointsByPlan[row.plan_id] = [];
       }
       checkpointsByPlan[row.plan_id].push({
-        planCheckpointId: row.plan_checkpoint_id,
-        checkpointId: row.checkpoint_id,
+        planDestinationId: row.plan_checkpoint_id,
         destinationId: row.destination_id,
-        destinationName: row.destination_name,
-        name: row.checkpoint_name,
-        description: row.checkpoint_description || '',
-        images: Array.isArray(row.checkpoint_images) ? row.checkpoint_images : [],
-        videos: Array.isArray(row.checkpoint_videos) ? row.checkpoint_videos : [],
-        isMasterActive: row.master_checkpoint_active,
+        name: row.destination_name,
+        location: row.destination_location || '',
+        description: row.destination_description || '',
+        images: Array.isArray(row.destination_images) ? row.destination_images : [],
+        videos: Array.isArray(row.destination_videos) ? row.destination_videos : [],
+        isMasterActive: row.master_destination_active,
         isActiveInPlan: row.plan_checkpoint_active,
         orderIndex: row.order_index
       });
@@ -76,12 +73,12 @@ router.get('/', async (req, res) => {
 
 /**
  * POST /api/plans
- * Create a new Plan with selected Checkpoint IDs
+ * Create a new Plan with selected Destination / Checkpoint IDs
  */
 router.post('/', async (req, res) => {
   const client = await db.pool.connect();
   try {
-    const { name, description = '', km = 0, duration = '1 Day', price = 0, checkpointIds = [], isActive = true } = req.body;
+    const { name, description = '', km = 0, duration = '1 Day', price = 0, destinationIds = [], isActive = true } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Plan name is required' });
@@ -98,14 +95,14 @@ router.post('/', async (req, res) => {
 
     const newPlan = insertPlanRes.rows[0];
 
-    // Insert checkpoints into plan_checkpoints
-    if (Array.isArray(checkpointIds) && checkpointIds.length > 0) {
-      for (let i = 0; i < checkpointIds.length; i++) {
+    // Insert destination checkpoints into plan_checkpoints
+    if (Array.isArray(destinationIds) && destinationIds.length > 0) {
+      for (let i = 0; i < destinationIds.length; i++) {
         await client.query(
-          `INSERT INTO plan_checkpoints (plan_id, checkpoint_id, order_index, is_active)
+          `INSERT INTO plan_checkpoints (plan_id, destination_id, order_index, is_active)
            VALUES ($1, $2, $3, TRUE)
-           ON CONFLICT (plan_id, checkpoint_id) DO NOTHING`,
-          [newPlan.id, checkpointIds[i], i]
+           ON CONFLICT (plan_id, destination_id) DO NOTHING`,
+          [newPlan.id, destinationIds[i], i]
         );
       }
     }
@@ -236,62 +233,62 @@ router.delete('/:id', async (req, res) => {
 });
 
 // ==========================================
-// PLAN CHECKPOINTS MANAGEMENT ENDPOINTS
+// PLAN DESTINATION CHECKPOINTS ENDPOINTS
 // ==========================================
 
 /**
- * POST /api/plans/:planId/checkpoints
- * Add a checkpoint from Master to Plan
+ * POST /api/plans/:planId/destinations
+ * Add a Destination / Checkpoint from Master to Plan
  */
-router.post('/:planId/checkpoints', async (req, res) => {
+router.post('/:planId/destinations', async (req, res) => {
   try {
     const { planId } = req.params;
-    const { checkpointId } = req.body;
+    const { destinationId } = req.body;
 
-    if (!checkpointId) {
-      return res.status(400).json({ success: false, message: 'Checkpoint ID is required' });
+    if (!destinationId) {
+      return res.status(400).json({ success: false, message: 'Destination ID is required' });
     }
 
     const countRes = await db.query('SELECT COUNT(*) FROM plan_checkpoints WHERE plan_id = $1', [planId]);
     const nextOrder = parseInt(countRes.rows[0].count, 10);
 
     const result = await db.query(
-      `INSERT INTO plan_checkpoints (plan_id, checkpoint_id, order_index, is_active)
+      `INSERT INTO plan_checkpoints (plan_id, destination_id, order_index, is_active)
        VALUES ($1, $2, $3, TRUE)
-       ON CONFLICT (plan_id, checkpoint_id) DO UPDATE SET is_active = TRUE
+       ON CONFLICT (plan_id, destination_id) DO UPDATE SET is_active = TRUE
        RETURNING *`,
-      [planId, checkpointId, nextOrder]
+      [planId, destinationId, nextOrder]
     );
 
     res.status(201).json({
       success: true,
-      message: 'Checkpoint added to plan',
+      message: 'Destination checkpoint added to plan',
       data: result.rows[0]
     });
   } catch (error) {
-    console.error('Error adding checkpoint to plan:', error);
-    res.status(500).json({ success: false, message: 'Failed to add checkpoint to plan', error: error.message });
+    console.error('Error adding destination to plan:', error);
+    res.status(500).json({ success: false, message: 'Failed to add destination to plan', error: error.message });
   }
 });
 
 /**
- * PATCH /api/plans/:planId/checkpoints/:checkpointId/toggle
- * Toggle checkpoint active status inside plan
+ * PATCH /api/plans/:planId/destinations/:destinationId/toggle
+ * Toggle destination checkpoint active status inside plan
  */
-router.patch('/:planId/checkpoints/:checkpointId/toggle', async (req, res) => {
+router.patch('/:planId/destinations/:destinationId/toggle', async (req, res) => {
   try {
-    const { planId, checkpointId } = req.params;
+    const { planId, destinationId } = req.params;
 
     const result = await db.query(
       `UPDATE plan_checkpoints
        SET is_active = NOT is_active
-       WHERE plan_id = $1 AND checkpoint_id = $2
+       WHERE plan_id = $1 AND destination_id = $2
        RETURNING *`,
-      [planId, checkpointId]
+      [planId, destinationId]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Checkpoint association not found in plan' });
+      return res.status(404).json({ success: false, message: 'Destination checkpoint association not found in plan' });
     }
 
     res.json({
@@ -301,30 +298,30 @@ router.patch('/:planId/checkpoints/:checkpointId/toggle', async (req, res) => {
     });
   } catch (error) {
     console.error('Error toggling plan checkpoint:', error);
-    res.status(500).json({ success: false, message: 'Failed to toggle plan checkpoint', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to toggle checkpoint in plan', error: error.message });
   }
 });
 
 /**
- * DELETE /api/plans/:planId/checkpoints/:checkpointId
- * Remove checkpoint from plan
+ * DELETE /api/plans/:planId/destinations/:destinationId
+ * Remove destination checkpoint from plan
  */
-router.delete('/:planId/checkpoints/:checkpointId', async (req, res) => {
+router.delete('/:planId/destinations/:destinationId', async (req, res) => {
   try {
-    const { planId, checkpointId } = req.params;
+    const { planId, destinationId } = req.params;
 
     const result = await db.query(
-      'DELETE FROM plan_checkpoints WHERE plan_id = $1 AND checkpoint_id = $2 RETURNING id',
-      [planId, checkpointId]
+      'DELETE FROM plan_checkpoints WHERE plan_id = $1 AND destination_id = $2 RETURNING id',
+      [planId, destinationId]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Checkpoint association not found in plan' });
+      return res.status(404).json({ success: false, message: 'Destination checkpoint association not found in plan' });
     }
 
-    res.json({ success: true, message: 'Checkpoint removed from plan', checkpointId });
+    res.json({ success: true, message: 'Destination checkpoint removed from plan', destinationId });
   } catch (error) {
-    console.error('Error removing checkpoint from plan:', error);
+    console.error('Error removing destination checkpoint from plan:', error);
     res.status(500).json({ success: false, message: 'Failed to remove checkpoint from plan', error: error.message });
   }
 });
