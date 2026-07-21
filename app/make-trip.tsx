@@ -1029,25 +1029,30 @@ export default function MakeTripScreen() {
           </Text>
 
           {(() => {
-            const categoryDrivers = backendDrivers.filter(
-              (d: any) => (d.vehicle_type || '5seater') === selectedRide && d.status === 'Active'
-            );
+            const categoryDrivers = backendDrivers.filter((d: any) => {
+              const dType = (d.vehicle_type || d.vehicleType || '5seater').toLowerCase().replace(/[^a-z0-9]/g, '');
+              const sel = selectedRide.toLowerCase().replace(/[^a-z0-9]/g, '');
+              return dType === sel || (sel === '4x4jeep' && (dType.includes('4x4') || dType.includes('jeep')));
+            });
 
-            // Fallback demo drivers if backend drivers for category aren't present yet
-            const displayDrivers = categoryDrivers.length > 0 ? categoryDrivers : [
-              {
-                id: `demo_${selectedRide}_1`,
-                name: 'Verified Driver',
-                vehicle_model: selectedRide === '5seater' ? 'Swift Dzire (AC)' : selectedRide === '7seater' ? 'Toyota Innova Crysta' : selectedRide === '4x4jeep' ? 'Mahindra Thar 4x4' : 'Bajaj RE Auto',
-                vehicle_number: 'KA-01-EX-1008',
-                daily_rate: defaultDayRate,
-                hourly_addon_rate: defaultHourlyRate,
-                car_front_url: selectedRide === '4x4jeep' ? 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=600&q=80' : 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80',
-              }
-            ];
+            // If category-specific driver not registered yet, show all registered backend drivers or fallback
+            const displayDrivers = categoryDrivers.length > 0
+              ? categoryDrivers
+              : (backendDrivers.length > 0 ? backendDrivers : [
+                  {
+                    id: `demo_${selectedRide}_1`,
+                    name: 'Verified Driver',
+                    vehicle_model: selectedRide === '5seater' ? 'Swift Dzire (AC)' : selectedRide === '7seater' ? 'Toyota Innova Crysta' : selectedRide === '4x4jeep' ? 'Mahindra Thar 4x4' : 'Bajaj RE Auto',
+                    vehicle_number: 'KA-01-EX-1008',
+                    daily_rate: defaultDayRate,
+                    hourly_addon_rate: defaultHourlyRate,
+                    car_front_url: selectedRide === '4x4jeep' ? 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=600&q=80' : 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80',
+                  }
+                ]);
 
             return (
               <View style={{ gap: verticalScale(10) }}>
+
                 {displayDrivers.map((driverCard: any) => {
                   const isSelected = selectedDriver?.id === driverCard.id || (selectedDriver === null && displayDrivers.length === 1 && selectedDriver?.id === driverCard.id);
                   const frontPic = driverCard.car_front_url || driverCard.photo_url;

@@ -225,13 +225,19 @@ export async function fetchDriversApi(): Promise<any[]> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/drivers`);
     const data = await res.json();
-    if (data.success && Array.isArray(data.data)) {
-      return data.data;
+    if (data.success) {
+      if (Array.isArray(data.drivers)) {
+        return data.drivers;
+      }
+      if (Array.isArray(data.data)) {
+        return data.data;
+      }
     }
   } catch (e) {
     console.warn('fetchDriversApi error:', e);
   }
   return [];
 }
+
 
 
