@@ -168,7 +168,9 @@ export default function PlansPage() {
     setPlans(prev => [newPlan, ...prev]);
     setIsAddPlanModalOpen(false);
     showToast(`Plan Package "${addPlanForm.name}" created!`);
+    await loadData();
   };
+
 
   const handleTogglePlan = async (planId: string) => {
     setPlans(prev =>

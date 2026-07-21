@@ -294,6 +294,52 @@ async function initTablesOnBoot() {
       );
     `);
 
+    // Auto-seed Demo Destination and Demo Plan if DB is empty
+    const destCountRes = await db.query('SELECT COUNT(*) FROM destinations');
+    if (parseInt(destCountRes.rows[0].count, 10) === 0) {
+      const seedDest = await db.query(
+        `INSERT INTO destinations (name, location, description, images, videos, latitude, longitude, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id`,
+        [
+          'Virupaksha Temple',
+          'Hampi, Karnataka',
+          '7th century functional temple complex dedicated to Lord Shiva featuring a majestic 160ft gopuram tower.',
+          ['https://images.unsplash.com/photo-1600100397608-f090742f40eb?auto=format&fit=crop&w=800&q=80', 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&w=800&q=80'],
+          ['https://www.w3schools.com/html/mov_bbb.mp4'],
+          15.335000,
+          76.460000,
+          true
+        ]
+      );
+      const destId = seedDest.rows[0].id;
+
+      const planCountRes = await db.query('SELECT COUNT(*) FROM plans');
+      if (parseInt(planCountRes.rows[0].count, 10) === 0) {
+        const seedPlan = await db.query(
+          `INSERT INTO plans (name, description, km, duration, price, is_active)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id`,
+          [
+            'Demo Tour Package - Hampi Express',
+            'Complete guided tour of Vijayanagara empire monuments, royal enclosures, and sunset viewpoints.',
+            150,
+            '2 Days / 1 Night',
+            4999,
+            true
+          ]
+        );
+        const planId = seedPlan.rows[0].id;
+
+        await db.query(
+          `INSERT INTO plan_checkpoints (plan_id, destination_id, order_index, is_active)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT DO NOTHING`,
+          [planId, destId, 0, true]
+        );
+      }
+    }
+
     console.log('✅ PostgreSQL Schema verified & migrated successfully.');
   } catch (err) {
     console.warn('⚠️ Database schema boot status:', err.message);

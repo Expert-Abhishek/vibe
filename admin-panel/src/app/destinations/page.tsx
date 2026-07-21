@@ -26,6 +26,8 @@ import {
   deleteDestinationApi,
   initialDestinations
 } from '@/lib/api';
+import LocationSearchMap from '@/components/LocationSearchMap';
+
 
 const PRESET_LOCATIONS = [
   { label: 'Hampi', lat: 15.335000, lng: 76.460000 },
@@ -172,7 +174,9 @@ export default function DestinationsPage() {
       showToast(`New Tourist Place "${form.name}" added to Master!`);
     }
     setIsModalOpen(false);
+    await loadDestinations();
   };
+
 
   const handleToggleStatus = async (destId: string) => {
     setDestinations(prev =>
@@ -425,74 +429,23 @@ export default function DestinationsPage() {
                   />
                 </div>
 
+                {/* Location Search Box & Interactive Map Picker */}
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Location (City / State) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Hampi, Karnataka"
-                    value={form.location}
-                    onChange={e => setForm({ ...form, location: e.target.value })}
-                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
+                  <LocationSearchMap
+                    location={form.location}
+                    latitude={form.latitude}
+                    longitude={form.longitude}
+                    onLocationChange={(loc, lat, lng) =>
+                      setForm(prev => ({
+                        ...prev,
+                        location: loc || prev.location,
+                        latitude: lat,
+                        longitude: lng,
+                      }))
+                    }
                   />
                 </div>
 
-                {/* Map Coordinates: Latitude & Longitude */}
-                <div className="sm:col-span-2 p-3 bg-dark-hover/50 rounded-xl border border-dark-border space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-brand-500 uppercase tracking-wider flex items-center space-x-1">
-                      <MapIcon className="w-3.5 h-3.5" />
-                      <span>Map Location Coordinates (Lat / Lng)</span>
-                    </span>
-                    <span className="text-[10px] text-gray-400">Presets:</span>
-                  </div>
-
-                  {/* Preset Buttons */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESET_LOCATIONS.map(preset => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => setForm({ ...form, latitude: preset.lat, longitude: preset.lng })}
-                        className="px-2.5 py-1 bg-dark-card border border-dark-border text-gray-300 hover:text-white hover:border-brand-500 rounded-lg text-[10px] font-bold"
-                      >
-                        📍 {preset.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">
-                        Latitude (N)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        required
-                        value={form.latitude}
-                        onChange={e => setForm({ ...form, latitude: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">
-                        Longitude (E)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.000001"
-                        required
-                        value={form.longitude}
-                        onChange={e => setForm({ ...form, longitude: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-                  </div>
-                </div>
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
