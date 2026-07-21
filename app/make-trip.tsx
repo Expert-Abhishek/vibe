@@ -19,7 +19,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from './admin-state';
-import { fetchDestinationsApi } from '@/constants/api';
+import { fetchDestinationsApi, fetchDriversApi, createTripApi } from '@/constants/api';
+
 
 
 // Dynamically require react-native-maps to prevent compilation or runtime crashes on Web
@@ -159,18 +160,23 @@ export default function MakeTripScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [liveDestinations, setLiveDestinations] = useState<any[]>([]);
-
-
+  const [backendDrivers, setBackendDrivers] = useState<any[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
 
   useEffect(() => {
-    async function loadBackendDestinations() {
+    async function loadBackendData() {
       const data = await fetchDestinationsApi();
       if (data && data.length > 0) {
         setLiveDestinations(data);
       }
+      const drivers = await fetchDriversApi();
+      if (drivers && drivers.length > 0) {
+        setBackendDrivers(drivers);
+      }
     }
-    loadBackendDestinations();
+    loadBackendData();
   }, []);
+
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
     { id: 'start', name: 'Bengaluru (Start)', latitude: 12.9716, longitude: 77.5946, address: 'Bengaluru City Center' },
@@ -518,8 +524,12 @@ export default function MakeTripScreen() {
   };
 
   const selectedVehicleKey = selectedRide === '5seater' || selectedRide === '7seater' || selectedRide === '4x4jeep' || selectedRide === 'auto' ? selectedRide : '5seater';
-  const baseDayRate = vehicleRatesPerDay[selectedVehicleKey] || 1800;
-  const vehicleHourlyRate = adminState.vehicleRatesPerHour[selectedVehicleKey] || 150;
+  const defaultDayRate = vehicleRatesPerDay[selectedVehicleKey] || 1800;
+  const defaultHourlyRate = adminState.vehicleRatesPerHour[selectedVehicleKey] || 150;
+
+  const baseDayRate = selectedDriver?.daily_rate ? Number(selectedDriver.daily_rate) : defaultDayRate;
+  const vehicleHourlyRate = selectedDriver?.hourly_addon_rate ? Number(selectedDriver.hourly_addon_rate) : defaultHourlyRate;
+
   const totalTripHours = travelHours + checkpoints.length;
 
   const getStartHourDec = () => {
@@ -542,10 +552,14 @@ export default function MakeTripScreen() {
   if (endHourDec > 18) {
     extraHours += (endHourDec - 18);
   }
+  if (totalTripHours > 12 && extraHours < (totalTripHours - 12)) {
+    extraHours = totalTripHours - 12;
+  }
 
   const extraHoursRounded = Math.max(0, Math.ceil(extraHours));
   const extraAddonCharge = extraHoursRounded * vehicleHourlyRate;
   const computedTripPrice = baseDayRate + extraAddonCharge;
+
 
   const handleConfirmTrip = () => {
     if (checkpoints.length < 2) {
@@ -962,46 +976,144 @@ export default function MakeTripScreen() {
           </View>
         </View>
 
-        {/* Action Button States & Pricing Breakdown */}
-        {quoteStatus === 'quoted' && (
-          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20) }]}>
+        {/* Step 2: Choose Vehicle Category & Driver's Car List */}
+        <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20), marginTop: verticalScale(16) }]}>
+          <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(6) }}>
+            1. Select Vehicle Category
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(12) }}>
+            Choose car category to see available active drivers and cars set by admin
+          </Text>
+
+          {/* Vehicle Category Chips */}
+          <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(16) }}>
+            {[
+              { id: '5seater', label: '5 Seater' },
+              { id: '7seater', label: '7 Seater' },
+              { id: '4x4jeep', label: '4*4 Off-Road' },
+              { id: 'auto', label: 'Auto' },
+            ].map((cat) => {
+              const isSelected = selectedRide === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={{
+                    flex: 1,
+                    borderWidth: 1.5,
+                    borderRadius: scale(10),
+                    paddingVertical: verticalScale(10),
+                    paddingHorizontal: scale(4),
+                    alignItems: 'center',
+                    borderColor: isSelected ? colors.amber : colors.border,
+                    backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.12)' : 'transparent',
+                  }}
+                  onPress={() => {
+                    setSelectedRide(cat.id);
+                    setSelectedDriver(null); // reset selected car on category change
+                  }}
+                >
+                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: isSelected ? colors.amber : colors.textPrimary }} numberOfLines={1}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Available Cars & Drivers List from Backend */}
+          <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginBottom: verticalScale(8) }}>
+            2. Available Cars ({selectedRide === '5seater' ? '5 Seater' : selectedRide === '7seater' ? '7 Seater' : selectedRide === '4x4jeep' ? '4*4 Off-Road' : 'Auto'})
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginBottom: verticalScale(12) }}>
+            Tap a car card to view total price and proceed with booking
+          </Text>
+
+          {(() => {
+            const categoryDrivers = backendDrivers.filter(
+              (d: any) => (d.vehicle_type || '5seater') === selectedRide && d.status === 'Active'
+            );
+
+            // Fallback demo drivers if backend drivers for category aren't present yet
+            const displayDrivers = categoryDrivers.length > 0 ? categoryDrivers : [
+              {
+                id: `demo_${selectedRide}_1`,
+                name: 'Verified Driver',
+                vehicle_model: selectedRide === '5seater' ? 'Swift Dzire (AC)' : selectedRide === '7seater' ? 'Toyota Innova Crysta' : selectedRide === '4x4jeep' ? 'Mahindra Thar 4x4' : 'Bajaj RE Auto',
+                vehicle_number: 'KA-01-EX-1008',
+                daily_rate: defaultDayRate,
+                hourly_addon_rate: defaultHourlyRate,
+                car_front_url: selectedRide === '4x4jeep' ? 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=600&q=80' : 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80',
+              }
+            ];
+
+            return (
+              <View style={{ gap: verticalScale(10) }}>
+                {displayDrivers.map((driverCard: any) => {
+                  const isSelected = selectedDriver?.id === driverCard.id || (selectedDriver === null && displayDrivers.length === 1 && selectedDriver?.id === driverCard.id);
+                  const frontPic = driverCard.car_front_url || driverCard.photo_url;
+                  const dayRate = driverCard.daily_rate ? Number(driverCard.daily_rate) : defaultDayRate;
+                  const hrRate = driverCard.hourly_addon_rate ? Number(driverCard.hourly_addon_rate) : defaultHourlyRate;
+
+                  return (
+                    <TouchableOpacity
+                      key={driverCard.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.08)' : isDark ? '#16161B' : '#F9F9FB',
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? colors.amber : colors.border,
+                        borderRadius: scale(14),
+                        padding: scale(12),
+                      }}
+                      onPress={() => setSelectedDriver(driverCard)}
+                    >
+                      {/* Car Front Photo Thumbnail */}
+                      <View style={{ width: scale(64), height: scale(64), borderRadius: scale(10), backgroundColor: '#212129', overflow: 'hidden', marginRight: scale(12), borderHeight: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}>
+                        {frontPic && (frontPic.startsWith('http') || frontPic.startsWith('data:image')) ? (
+                          <Image source={{ uri: frontPic }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                        ) : (
+                          <MaterialIcons name="directions-car" size={scale(32)} color={colors.amber} />
+                        )}
+                      </View>
+
+                      {/* Driver & Car Specs */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800' }} numberOfLines={1}>
+                          {driverCard.vehicle_model || 'Standard AC Cab'}
+                        </Text>
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
+                          Driver: {driverCard.name} ({driverCard.vehicle_number || 'KA-01-EX-0000'})
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(4) }}>
+                          <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '900' }}>
+                            ₹{dayRate}/Day
+                          </Text>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }}>
+                            (+ ₹{hrRate}/hr addon)
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Radio Check Indicator */}
+                      <View style={{ width: scale(22), height: scale(22), borderRadius: scale(11), borderWidth: 2, borderColor: isSelected ? colors.amber : colors.border, justifyContent: 'center', alignItems: 'center', backgroundColor: isSelected ? colors.amber : 'transparent' }}>
+                        {isSelected && <MaterialIcons name="check" size={scale(14)} color="#101014" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            );
+          })()}
+        </View>
+
+        {/* Step 3: Fare Breakdown & Booking Section (Rendered ONLY after car selection) */}
+        {selectedDriver && (
+          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20), marginTop: verticalScale(16) }]}>
             <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(10) }}>
-              Custom Route Pricing
+              3. Custom Trip Fare & Booking
             </Text>
 
-            {/* Vehicle Selector Option */}
-            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Choose Vehicle Fleet</Text>
-            <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(12) }}>
-              {(['5seater', '7seater', '4x4jeep', 'auto'] as const).map((vKey) => {
-                const isSelected = selectedRide === vKey;
-                const name = vKey === '5seater' ? '5 Seater' : vKey === '7seater' ? '7 Seater' : vKey === '4x4jeep' ? (selectedRide === '4x4jeep' ? `4x4 (${selected4x4Car})` : '4x4 Jeep') : 'Auto';
-                const rate = vKey === '5seater' ? 1800 : vKey === '7seater' ? 2600 : vKey === '4x4jeep' ? 4200 : 1200;
-                return (
-                  <TouchableOpacity
-                    key={vKey}
-                    style={{
-                      flex: 1,
-                      borderWidth: 1.5,
-                      borderRadius: scale(10),
-                      padding: scale(8),
-                      alignItems: 'center',
-                      borderColor: isSelected ? colors.amber : colors.border,
-                      backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
-                    }}
-                    onPress={() => {
-                      if (vKey === '4x4jeep') {
-                        setIsVehiclePickerVisible(true);
-                      } else {
-                        setSelectedRide(vKey);
-                      }
-                    }}
-                  >
-                    <Text style={{ fontSize: moderateFontScale(9.5), fontWeight: '800', color: isSelected ? colors.amber : colors.textPrimary }} numberOfLines={1}>{name}</Text>
-                    <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: verticalScale(2) }}>₹{rate}/day</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
 
             {/* Prebooking Date Time Pickers */}
             {!adminState.instantBookingEnabled && (
