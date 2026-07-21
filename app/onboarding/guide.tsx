@@ -67,9 +67,12 @@ export default function GuideRegister() {
       Alert.alert('Camera access needed', 'Turn on camera permission from Settings to take a photo.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setDocs(prev => ({ ...prev, [docKey]: result.assets[0].uri }));
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+    if (!result.canceled && result.assets?.[0]) {
+      const img = result.assets[0].base64
+        ? `data:image/jpeg;base64,${result.assets[0].base64}`
+        : result.assets[0].uri;
+      setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
 
@@ -79,11 +82,19 @@ export default function GuideRegister() {
       Alert.alert('Photo access needed', 'Turn on photo library permission from Settings to attach a file.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, mediaTypes: ImagePicker.MediaTypeOptions.Images });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setDocs(prev => ({ ...prev, [docKey]: result.assets[0].uri }));
+    const result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.5,
+      base64: true,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const img = result.assets[0].base64
+        ? `data:image/jpeg;base64,${result.assets[0].base64}`
+        : result.assets[0].uri;
+      setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
+
 
   const removeDocument = (docKey: DocKey) => {
     setDocs(prev => ({ ...prev, [docKey]: null }));

@@ -211,25 +211,51 @@ export default function ProfileScreen() {
 
         {/* WALLET SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.cardTitle, { color: colors.amber }]}>Wallet</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
-            <View>
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
-              <Text style={{ color: colors.amber, fontSize: moderateFontScale(22), fontWeight: 'bold' }}>₹{walletBalance}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setWalletModalVisible(true)}>
-              <Text style={{ color: colors.textPrimary, textDecorationLine: 'underline' }}>History</Text>
-            </TouchableOpacity>
+          <Text style={[styles.cardTitle, { color: colors.amber }]}>Wallet Balance & Payments</Text>
+          <View style={{ marginBottom: verticalScale(16) }}>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
+            <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
           </View>
+
           <View style={{ flexDirection: 'row', gap: scale(10) }}>
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]}
-              onPress={() => router.push('/(tabs)/trips')}
+              onPress={() => {
+                Alert.prompt(
+                  'Add Money via Razorpay',
+                  'Enter amount to add to your Vibe Wallet (₹):',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Pay via Razorpay',
+                      onPress: (val) => {
+                        const amt = parseFloat(val || '0');
+                        if (isNaN(amt) || amt <= 0) {
+                          Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+                          return;
+                        }
+                        setWalletBalance(prev => prev + amt);
+                        Alert.alert('Razorpay Payment Success!', `₹${amt} successfully added to your Vibe Wallet.`);
+                      },
+                    },
+                  ],
+                  'plain-text',
+                  '500'
+                );
+              }}
             >
-              <Text style={styles.primaryButtonText}>📜 My Trip & Booking History</Text>
+              <Text style={styles.primaryButtonText}>💳 Add Money (Razorpay)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line }]}
+              onPress={() => setWalletModalVisible(true)}
+            >
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 Wallet History</Text>
             </TouchableOpacity>
           </View>
         </View>
+
 
 
         {/* PREFERENCES SECTION */}

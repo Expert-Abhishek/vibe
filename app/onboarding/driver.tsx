@@ -91,9 +91,12 @@ export default function DriverRegister() {
       Alert.alert('Camera access needed', 'Turn on camera permission from Settings to take a photo.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setDocs(prev => ({ ...prev, [docKey]: result.assets[0].uri }));
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+    if (!result.canceled && result.assets?.[0]) {
+      const img = result.assets[0].base64
+        ? `data:image/jpeg;base64,${result.assets[0].base64}`
+        : result.assets[0].uri;
+      setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
 
@@ -103,9 +106,16 @@ export default function DriverRegister() {
       Alert.alert('Photo access needed', 'Turn on photo library permission from Settings to attach a file.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.7, mediaTypes: ImagePicker.MediaTypeOptions.Images });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setDocs(prev => ({ ...prev, [docKey]: result.assets[0].uri }));
+    const result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.5,
+      base64: true,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      const img = result.assets[0].base64
+        ? `data:image/jpeg;base64,${result.assets[0].base64}`
+        : result.assets[0].uri;
+      setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
 
@@ -167,7 +177,6 @@ export default function DriverRegister() {
           vehicle_model: formData.vehicleModel || 'Standard Cab',
           vehicle_number: formData.rcNo,
           license_number: formData.dlNo,
-
           photo_url: docs.photo || undefined,
           rc_url: docs.rc || undefined,
           dl_url: docs.dl || undefined,
@@ -215,33 +224,33 @@ export default function DriverRegister() {
                 {isApproved ? '✓' : '⏳'}
               </Text>
               <Text style={[styles.stampWord, { color: isApproved ? colors.success : colors.amber }]}>
-                {isApproved ? 'VERIFIED' : 'IN REVIEW'}
+                {isApproved ? 'VERIFIED' : 'REVIEW IN PROCESS'}
               </Text>
             </View>
           </View>
 
           <Text style={styles.kycTitle}>
-            {isApproved ? 'You\u2019re cleared to drive' : 'Verification underway'}
+            {isApproved ? 'You’re cleared to drive' : 'Application Review Under Process'}
           </Text>
           <Text style={styles.kycSubtitle}>
             {isApproved
               ? 'Your account is now active. You are ready to accept rides!'
-              : 'We are checking your documents. This process may take about 4 hours.'}
+              : 'Your profile, vehicle details, and documents have been submitted. Admin review is currently under process.'}
           </Text>
 
           {!isApproved && (
             <View style={styles.etaPill}>
               <View style={styles.etaDot} />
-              <Text style={styles.etaText}>Estimated review time · ~4 hours</Text>
+              <Text style={styles.etaText}>Review under process · ~4 hours</Text>
             </View>
           )}
 
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => (isApproved ? router.replace('/driver-dashboard') : setKycStatus('approved'))}
+            onPress={() => router.replace('/(auth)/sign-in')}
           >
             <Text style={styles.primaryButtonText}>
-              {isApproved ? 'Go to dashboard' : 'Simulate approval (demo)'}
+              Go to Login Screen
             </Text>
           </TouchableOpacity>
         </View>
@@ -249,7 +258,9 @@ export default function DriverRegister() {
     );
   }
 
+
   // ---- Form ---------------------------------------------------------------
+
 
   return (
     <SafeAreaView style={styles.mainContainer}>

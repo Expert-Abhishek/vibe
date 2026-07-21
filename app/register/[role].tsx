@@ -98,9 +98,11 @@ export default function RegisterScreen() {
     <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
       {toastMessage && (
         <View style={styles.toastBanner}>
+          <MaterialIcons name="check-circle" size={24} color="#101014" style={{ marginRight: 8 }} />
           <Text style={styles.toastText}>{toastMessage}</Text>
         </View>
       )}
+
       <View style={styles.container}>
         <Text style={styles.title}>{getTitle()}</Text>
         <Text style={styles.subtitle}>Please fill the details to continue</Text>
@@ -215,15 +217,25 @@ const styles = StyleSheet.create({
   backButton: { marginTop: 24, alignItems: 'center' },
   backText: { color: '#666', fontSize: 14 },
   toastBanner: {
-    backgroundColor: '#10B981',
-    padding: 16,
-    borderRadius: 12,
-    margin: 16,
+    backgroundColor: '#F5C518',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 30,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginVertical: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
   },
   toastText: {
-    color: '#ffffff',
+    color: '#101014',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
+
 });
