@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Platform,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type KYCStatus = 'form' | 'pending' | 'approved';
@@ -63,8 +65,10 @@ export default function DriverRegister() {
   const [formData, setFormData] = useState({
     name: '', phone: '', altPhone: '', password: '',
     rcNo: '', dlNo: '', aadharNo: '', vehicleModel: '',
-    capacity: '',
+    vehicleType: '5seater',
+    capacity: '4',
   });
+
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -74,6 +78,11 @@ export default function DriverRegister() {
   });
 
   const pickDocument = (docKey: DocKey) => {
+    if (docKey === 'photo') {
+      // Profile Photo: Camera ONLY
+      captureFromCamera('photo');
+      return;
+    }
     Alert.alert(
       DOC_LABELS[docKey],
       'Attach this document',
@@ -85,17 +94,40 @@ export default function DriverRegister() {
     );
   };
 
+  const convertUriToBase64 = async (asset: ImagePicker.ImagePickerAsset): Promise<string> => {
+    if (asset.base64) {
+      return `data:image/jpeg;base64,${asset.base64}`;
+    }
+    try {
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            resolve(asset.uri);
+          }
+        };
+        reader.onerror = () => resolve(asset.uri);
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.warn('Base64 conversion fallback error:', err);
+      return asset.uri;
+    }
+  };
+
   const captureFromCamera = async (docKey: DocKey) => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Camera access needed', 'Turn on camera permission from Settings to take a photo.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.3, base64: true });
     if (!result.canceled && result.assets?.[0]) {
-      const img = result.assets[0].base64
-        ? `data:image/jpeg;base64,${result.assets[0].base64}`
-        : result.assets[0].uri;
+      const img = await convertUriToBase64(result.assets[0]);
       setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
@@ -107,17 +139,16 @@ export default function DriverRegister() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.5,
+      quality: 0.3,
       base64: true,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
     });
     if (!result.canceled && result.assets?.[0]) {
-      const img = result.assets[0].base64
-        ? `data:image/jpeg;base64,${result.assets[0].base64}`
-        : result.assets[0].uri;
+      const img = await convertUriToBase64(result.assets[0]);
       setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
+
 
   const removeDocument = (docKey: DocKey) => {
     setDocs(prev => ({ ...prev, [docKey]: null }));
@@ -131,7 +162,11 @@ export default function DriverRegister() {
     if (currentStep === 1) {
       if (!formData.name) stepErrors.name = 'Enter the name as it appears on your Aadhar';
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
-      if (!cleanAltPhone || cleanAltPhone.length !== 10) stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
+      if (!cleanAltPhone) {
+        stepErrors.altPhone = 'Alternate phone number is required';
+      } else if (cleanAltPhone.length !== 10) {
+        stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
+      }
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
       if (!formData.aadharNo || formData.aadharNo.length !== 12) stepErrors.aadharNo = 'Enter a valid 12-digit Aadhar number';
     } else if (currentStep === 2) {
@@ -174,8 +209,10 @@ export default function DriverRegister() {
           alternate_phone: cleanAltPhone,
           password: formData.password,
           role: 'driver',
+          vehicle_type: formData.vehicleType,
           vehicle_model: formData.vehicleModel || 'Standard Cab',
           vehicle_number: formData.rcNo,
+
           license_number: formData.dlNo,
           photo_url: docs.photo || undefined,
           rc_url: docs.rc || undefined,
@@ -246,7 +283,7 @@ export default function DriverRegister() {
           )}
 
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={styles.standalonePrimaryButton}
             onPress={() => router.replace('/(auth)/sign-in')}
           >
             <Text style={styles.primaryButtonText}>
@@ -257,6 +294,7 @@ export default function DriverRegister() {
       </SafeAreaView>
     );
   }
+
 
 
   // ---- Form ---------------------------------------------------------------
@@ -317,19 +355,23 @@ export default function DriverRegister() {
             />
             <Field
               label="Phone number" required
-              placeholder="9876543210"
+              placeholder="10-digit phone number"
               keyboardType="phone-pad"
+              maxLength={10}
               value={formData.phone}
-              onChangeText={(t: string) => setFormData({ ...formData, phone: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
               error={errors.phone}
             />
             <Field
-              label="Alternate phone" hint="Optional"
-              placeholder="Backup number"
+              label="Alternate phone" required
+              placeholder="10-digit backup number"
               keyboardType="phone-pad"
+              maxLength={10}
               value={formData.altPhone}
-              onChangeText={(t: string) => setFormData({ ...formData, altPhone: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, altPhone: t.replace(/[^0-9]/g, '') })}
+              error={errors.altPhone}
             />
+
             <Field
               label="Password" required
               placeholder="Min 6 characters"
@@ -353,9 +395,49 @@ export default function DriverRegister() {
         {/* STEP 2 */}
         {currentStep === 2 && (
           <View style={styles.formSection}>
+            <View style={{ marginBottom: 16 }}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Vehicle Category</Text>
+                <View style={styles.requiredDot} />
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+                {[
+                  { id: '5seater', label: '5 Seater' },
+                  { id: '7seater', label: '7 Seater' },
+                  { id: '4x4jeep', label: '4*4' },
+                  { id: 'auto', label: 'Auto' },
+                ].map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryChip,
+                      formData.vehicleType === cat.id && styles.categoryChipSelected,
+                    ]}
+                    onPress={() => setFormData({ ...formData, vehicleType: cat.id })}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        formData.vehicleType === cat.id && styles.categoryChipTextSelected,
+                      ]}
+                    >
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <Field
+              label="Vehicle model" required
+              placeholder="e.g. Swift Dzire, Innova, Thar, Auto"
+              value={formData.vehicleModel}
+              onChangeText={(t: string) => setFormData({ ...formData, vehicleModel: t })}
+              error={errors.vehicleModel}
+            />
             <Field
               label="Vehicle RC number" required
-              placeholder="DL 01 CA 1234"
+              placeholder="KA-01-EX-0000"
               autoCapitalize="characters"
               value={formData.rcNo}
               onChangeText={(t: string) => setFormData({ ...formData, rcNo: t })}
@@ -379,6 +461,7 @@ export default function DriverRegister() {
             />
           </View>
         )}
+
 
         {/* STEP 3 — documents as ticket stubs */}
         {currentStep === 3 && (
@@ -435,17 +518,33 @@ export default function DriverRegister() {
           >
             <Text style={styles.secondaryButtonText}>Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
-            <Text style={styles.primaryButtonText}>
-              {currentStep === 3 ? 'Submit for verification' : 'Continue'}
-            </Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleNext} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={colors.ink} />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {currentStep === 3 ? 'Submit for verification' : 'Continue'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
       </ScrollView>
+
+      {/* Centered Submit Loader Overlay */}
+      {loading && (
+        <View style={styles.loaderOverlay}>
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="large" color={colors.amber} />
+            <Text style={styles.loaderTitle}>Submitting Application...</Text>
+            <Text style={styles.loaderSub}>Uploading driver profile & documents to backend server</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
+
 
 // ---- Small reusable field component --------------------------------------
 
@@ -598,4 +697,72 @@ const styles = StyleSheet.create({
   },
   etaDot: { width: scale(6), height: scale(6), borderRadius: scale(3), backgroundColor: colors.amber, marginRight: scale(8) },
   etaText: { color: colors.textMuted, fontSize: moderateFontScale(12), fontWeight: '600' },
+  standalonePrimaryButton: {
+    backgroundColor: colors.amber,
+    paddingHorizontal: scale(28),
+    paddingVertical: verticalScale(14),
+    borderRadius: scale(12),
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: scale(300),
+    marginTop: verticalScale(8),
+  },
+  loaderOverlay: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  loaderBox: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.line,
+    borderWidth: 1,
+    borderRadius: scale(16),
+    padding: scale(28),
+    alignItems: 'center',
+    maxWidth: scale(320),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  loaderTitle: {
+    color: colors.textPrimary,
+    fontSize: moderateFontScale(16),
+    fontWeight: '800',
+    marginTop: verticalScale(14),
+    marginBottom: verticalScale(6),
+  },
+  loaderSub: {
+    color: colors.textMuted,
+    fontSize: moderateFontScale(12),
+    textAlign: 'center',
+    lineHeight: verticalScale(17),
+  },
+
+  // Vehicle Category chips
+  categoryChip: {
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(10),
+    borderRadius: scale(10),
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+  },
+  categoryChipSelected: {
+    backgroundColor: 'rgba(245, 197, 24, 0.15)',
+    borderColor: colors.amber,
+  },
+  categoryChipText: {
+    color: colors.textMuted,
+    fontSize: moderateFontScale(13),
+    fontWeight: '700',
+  },
+  categoryChipTextSelected: {
+    color: colors.amber,
+  },
 });
+

@@ -1,22 +1,23 @@
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
 import { registerUser } from '@/constants/api';
 
-type DocKey = 'photo' | 'license' | 'aadhar';
+type DocKey = 'photo' | 'aadhar';
 
 // ---- Design tokens --------------------------------------------------------
 const colors = {
@@ -33,10 +34,9 @@ const colors = {
   textFaint: '#5C5C66',
 };
 
-const STEP_LABELS = ['Details', 'Experience & Docs'];
+const STEP_LABELS = ['Details', 'Exp. & Docs'];
 const DOC_LABELS: Record<DocKey, string> = {
   photo: 'Profile photo (Face Image)',
-  license: 'Tourism License Certificate',
   aadhar: 'Aadhar card / Govt ID proof',
 };
 
@@ -48,17 +48,48 @@ export default function GuideRegister() {
 
   const [formData, setFormData] = useState({
     name: '', phone: '', altPhone: '', password: '',
-    expertise: 'History & Heritage Walks', licenseId: '', bio: ''
+    expertise: 'History & Heritage Walks', licenseId: '', bio: '', experience: '3'
   });
-  const [docs, setDocs] = useState<Record<DocKey, string | null>>({ photo: null, license: null, aadhar: null });
+  const [docs, setDocs] = useState<Record<DocKey, string | null>>({ photo: null, aadhar: null });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const pickDocument = (docKey: DocKey) => {
+    if (docKey === 'photo') {
+      // Profile Photo: Camera ONLY
+      captureFromCamera('photo');
+      return;
+    }
     Alert.alert(DOC_LABELS[docKey], 'Attach this document', [
       { text: 'Take photo', onPress: () => captureFromCamera(docKey) },
       { text: 'Choose from gallery', onPress: () => captureFromLibrary(docKey) },
       { text: 'Cancel', style: 'cancel' },
     ]);
+  };
+
+
+  const convertUriToBase64 = async (asset: ImagePicker.ImagePickerAsset): Promise<string> => {
+    if (asset.base64) {
+      return `data:image/jpeg;base64,${asset.base64}`;
+    }
+    try {
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            resolve(asset.uri);
+          }
+        };
+        reader.onerror = () => resolve(asset.uri);
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      console.warn('Base64 conversion fallback error:', err);
+      return asset.uri;
+    }
   };
 
   const captureFromCamera = async (docKey: DocKey) => {
@@ -67,11 +98,9 @@ export default function GuideRegister() {
       Alert.alert('Camera access needed', 'Turn on camera permission from Settings to take a photo.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.3, base64: true });
     if (!result.canceled && result.assets?.[0]) {
-      const img = result.assets[0].base64
-        ? `data:image/jpeg;base64,${result.assets[0].base64}`
-        : result.assets[0].uri;
+      const img = await convertUriToBase64(result.assets[0]);
       setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
@@ -83,17 +112,16 @@ export default function GuideRegister() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.5,
+      quality: 0.3,
       base64: true,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
     });
     if (!result.canceled && result.assets?.[0]) {
-      const img = result.assets[0].base64
-        ? `data:image/jpeg;base64,${result.assets[0].base64}`
-        : result.assets[0].uri;
+      const img = await convertUriToBase64(result.assets[0]);
       setDocs(prev => ({ ...prev, [docKey]: img }));
     }
   };
+
 
 
   const removeDocument = (docKey: DocKey) => {
@@ -108,11 +136,16 @@ export default function GuideRegister() {
     if (currentStep === 1) {
       if (!formData.name) stepErrors.name = 'Enter your full name';
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
-      if (!cleanAltPhone || cleanAltPhone.length !== 10) stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
+      if (!cleanAltPhone) {
+        stepErrors.altPhone = 'Alternate phone number is required';
+      } else if (cleanAltPhone.length !== 10) {
+        stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
+      }
+
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
     } else if (currentStep === 2) {
       if (!formData.expertise) stepErrors.expertise = 'Enter your expertise';
-      if (!docs.photo || !docs.license || !docs.aadhar) stepErrors.docs = 'Upload profile photo, license, and Aadhar card to continue';
+      if (!docs.photo || !docs.aadhar) stepErrors.docs = 'Upload profile photo and Aadhar card to continue';
     }
 
     setErrors(stepErrors);
@@ -131,9 +164,7 @@ export default function GuideRegister() {
             expertise: formData.expertise,
             license_id: formData.licenseId || 'KA-GUIDE-CERT',
             bio: formData.bio || 'Tour guide profile',
-
             photo_url: docs.photo || undefined,
-            license_cert_url: docs.license || undefined,
             id_proof_url: docs.aadhar || undefined,
           });
 
@@ -146,6 +177,40 @@ export default function GuideRegister() {
       }
     }
   };
+
+  // ---- KYC Submitted State (Review Under Process) ----
+  if (kycSubmitted) {
+    return (
+      <SafeAreaView style={styles.mainContainer}>
+        <View style={styles.stampScreen}>
+          <View style={[styles.stampOuter, { borderColor: colors.amber, transform: [{ rotate: '-6deg' }] }]}>
+            <View style={[styles.stampInner, { borderColor: colors.amber }]}>
+              <Text style={[styles.stampMark, { color: colors.amber }]}>⏳</Text>
+              <Text style={[styles.stampWord, { color: colors.amber }]}>REVIEW IN PROCESS</Text>
+            </View>
+          </View>
+
+          <Text style={styles.kycTitle}>Guide Application Under Review</Text>
+          <Text style={styles.kycSubtitle}>
+            Your profile, expertise, and ID documents have been submitted. Admin review is currently under process.
+          </Text>
+
+          <View style={styles.etaPill}>
+            <View style={styles.etaDot} />
+            <Text style={styles.etaText}>Review under process · ~4 hours</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.standalonePrimaryButton}
+            onPress={() => router.replace('/(auth)/sign-in')}
+          >
+            <Text style={styles.primaryButtonText}>Go to Login Screen</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
 
   return (
     <SafeAreaView style={styles.mainContainer}>
@@ -200,19 +265,23 @@ export default function GuideRegister() {
             />
             <Field
               label="Phone number" required
-              placeholder="9876543210"
+              placeholder="10-digit phone number"
               keyboardType="phone-pad"
+              maxLength={10}
               value={formData.phone}
-              onChangeText={(t: string) => setFormData({ ...formData, phone: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
               error={errors.phone}
             />
             <Field
-              label="Alternate phone" hint="Optional"
-              placeholder="Backup number"
+              label="Alternate phone" required
+              placeholder="10-digit backup number"
               keyboardType="phone-pad"
+              maxLength={10}
               value={formData.altPhone}
-              onChangeText={(t: string) => setFormData({ ...formData, altPhone: t })}
+              onChangeText={(t: string) => setFormData({ ...formData, altPhone: t.replace(/[^0-9]/g, '') })}
+              error={errors.altPhone}
             />
+
             <Field
               label="Password" required
               placeholder="Min 6 characters"
@@ -288,17 +357,33 @@ export default function GuideRegister() {
           >
             <Text style={styles.secondaryButtonText}>Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
-            <Text style={styles.primaryButtonText}>
-              {currentStep === 2 ? 'Finish setup' : 'Continue'}
-            </Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleNext} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color={colors.ink} />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {currentStep === 2 ? 'Finish setup' : 'Continue'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
       </ScrollView>
+
+      {/* Centered Submit Loader Overlay */}
+      {loading && (
+        <View style={styles.loaderOverlay}>
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="large" color={colors.amber} />
+            <Text style={styles.loaderTitle}>Submitting Guide Application...</Text>
+            <Text style={styles.loaderSub}>Uploading guide profile & documents to backend server</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
+
 
 // ---- Small reusable field component ---------------------------------------
 
@@ -417,4 +502,74 @@ const styles = StyleSheet.create({
     alignItems: 'center', borderWidth: 1.5, borderColor: colors.line,
   },
   secondaryButtonText: { color: colors.textPrimary, fontSize: moderateFontScale(15), fontWeight: '700' },
-});
+
+  // Review in Process stamp screens
+  stampScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: scale(32) },
+  stampOuter: {
+    width: scale(140), height: scale(140), borderRadius: scale(70),
+    borderWidth: 3, borderStyle: 'dashed',
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: verticalScale(8), marginBottom: verticalScale(28),
+  },
+  stampInner: {
+    width: scale(112), height: scale(112), borderRadius: scale(56),
+    borderWidth: 1.5,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  stampMark: { fontSize: moderateFontScale(32), marginBottom: verticalScale(4) },
+  stampWord: { fontSize: moderateFontScale(12), fontWeight: '800', letterSpacing: 2 },
+  kycTitle: { fontSize: moderateFontScale(22), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(10), textAlign: 'center' },
+  kycSubtitle: { fontSize: moderateFontScale(14), color: colors.textMuted, textAlign: 'center', lineHeight: verticalScale(21), marginBottom: verticalScale(20), maxWidth: scale(300) },
+  etaPill: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line,
+    paddingVertical: verticalScale(8), paddingHorizontal: scale(14), borderRadius: scale(20), marginBottom: verticalScale(28),
+  },
+  etaDot: { width: scale(6), height: scale(6), borderRadius: scale(3), backgroundColor: colors.amber, marginRight: scale(8) },
+  etaText: { color: colors.textMuted, fontSize: moderateFontScale(12), fontWeight: '600' },
+  standalonePrimaryButton: {
+    backgroundColor: colors.amber,
+    paddingHorizontal: scale(28),
+    paddingVertical: verticalScale(14),
+    borderRadius: scale(12),
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: scale(300),
+    marginTop: verticalScale(8),
+  },
+  loaderOverlay: {
+    position: 'absolute',
+    top: 0, bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  loaderBox: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.line,
+    borderWidth: 1,
+    borderRadius: scale(16),
+    padding: scale(28),
+    alignItems: 'center',
+    maxWidth: scale(320),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  loaderTitle: {
+    color: colors.textPrimary,
+    fontSize: moderateFontScale(16),
+    fontWeight: '800',
+    marginTop: verticalScale(14),
+    marginBottom: verticalScale(6),
+  },
+  loaderSub: {
+    color: colors.textMuted,
+    fontSize: moderateFontScale(12),
+    textAlign: 'center',
+    lineHeight: verticalScale(17),
+  },
+});
