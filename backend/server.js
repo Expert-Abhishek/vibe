@@ -299,6 +299,15 @@ async function initTablesOnBoot() {
 
       DO $$ 
       BEGIN 
+        -- 1. Drop old foreign key constraint on checkpoint_id if it exists
+        IF EXISTS (
+          SELECT 1 FROM information_schema.table_constraints 
+          WHERE constraint_name = 'plan_checkpoints_checkpoint_id_fkey'
+        ) THEN
+          ALTER TABLE plan_checkpoints DROP CONSTRAINT plan_checkpoints_checkpoint_id_fkey;
+        END IF;
+
+        -- 2. Drop NOT NULL constraint on checkpoint_id if present
         IF EXISTS (
           SELECT 1 FROM information_schema.columns 
           WHERE table_name='plan_checkpoints' AND column_name='checkpoint_id'
@@ -307,6 +316,7 @@ async function initTablesOnBoot() {
         END IF;
       END $$;
     `);
+
 
 
 
