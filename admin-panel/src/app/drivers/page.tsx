@@ -133,10 +133,14 @@ export default function DriversPage() {
                       )}
                       <div>
                         <span className="font-bold text-white block text-sm">{driver.name}</span>
-                        <span className="text-[11px] text-dark-textMuted">{driver.phone}</span>
+                        <span className="text-[11px] text-dark-textMuted block">📞 {driver.phone}</span>
+                        {driver.alternatePhone && (
+                          <span className="text-[10px] text-brand-400 font-semibold block">📱 Alt: {driver.alternatePhone}</span>
+                        )}
                       </div>
                     </div>
                   </td>
+
 
                   <td className="py-4 px-6">
                     <span className="font-semibold text-gray-200 block">{driver.vehicleModel}</span>
@@ -381,11 +385,19 @@ function DriverDetailModal({
           {/* Quick Info Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Phone Number</span>
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Primary Phone</span>
               <span className="text-xs font-bold text-white mt-1 block truncate">
-                {driver.phone}
+                📞 {driver.phone}
               </span>
             </div>
+
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Alternate Phone</span>
+              <span className="text-xs font-bold text-brand-400 mt-1 block truncate">
+                📱 {driver.alternatePhone || 'Not provided'}
+              </span>
+            </div>
+
 
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
               <span className="text-[10px] text-dark-textMuted uppercase font-bold block">License No</span>

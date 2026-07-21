@@ -37,6 +37,9 @@ router.post('/register', async (req, res) => {
     const {
       name,
       phone,
+      alternate_phone,
+      alt_phone,
+      alternatePhone,
       email,
       password,
       role = 'tourist',
@@ -50,6 +53,8 @@ router.post('/register', async (req, res) => {
       license_id,
       bio,
     } = req.body;
+
+    const cleanAltPhone = (alternate_phone || alt_phone || alternatePhone || '').trim();
 
     // 1. Validation
     if (!name || !phone || !password) {
@@ -87,18 +92,20 @@ router.post('/register', async (req, res) => {
     await client.query('BEGIN');
 
     const insertUserQuery = `
-      INSERT INTO users (name, phone, email, password, role, status)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, name, phone, email, role, status, created_at
+      INSERT INTO users (name, phone, alternate_phone, email, password, role, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, name, phone, alternate_phone, email, role, status, created_at
     `;
     const userResult = await client.query(insertUserQuery, [
       name.trim(),
       cleanPhone,
+      cleanAltPhone || null,
       cleanEmail,
       passwordHash,
       cleanRole,
       initialStatus,
     ]);
+
 
     const newUser = userResult.rows[0];
     let profileData = null;
@@ -554,7 +561,7 @@ router.get('/drivers', async (req, res) => {
     const query = `
       SELECT 
         d.*,
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
+        u.id AS user_id, u.name, u.phone, COALESCE(d.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN driver_profiles d ON u.id = d.user_id
       WHERE u.role = 'driver'
@@ -582,7 +589,7 @@ router.get('/drivers/:id', async (req, res) => {
     const query = `
       SELECT 
         d.*,
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
+        u.id AS user_id, u.name, u.phone, COALESCE(d.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN driver_profiles d ON u.id = d.user_id
       WHERE u.id = $1 AND u.role = 'driver'
@@ -607,7 +614,7 @@ router.get('/guides', async (req, res) => {
     const query = `
       SELECT 
         g.*,
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
+        u.id AS user_id, u.name, u.phone, COALESCE(g.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN guide_profiles g ON u.id = g.user_id
       WHERE u.role = 'guide'
@@ -635,11 +642,12 @@ router.get('/guides/:id', async (req, res) => {
     const query = `
       SELECT 
         g.*,
-        u.id AS user_id, u.name, u.phone, u.email, u.status, u.created_at
+        u.id AS user_id, u.name, u.phone, COALESCE(g.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
       FROM users u
       LEFT JOIN guide_profiles g ON u.id = g.user_id
       WHERE u.id = $1 AND u.role = 'guide'
     `;
+
     const result = await db.query(query, [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Guide not found' });

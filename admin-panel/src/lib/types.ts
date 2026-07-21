@@ -45,6 +45,7 @@ export interface Driver {
   id: string;
   name: string;
   phone: string;
+  alternatePhone?: string;
   email?: string;
   vehicleType: string;
   vehicleModel: string;
@@ -64,6 +65,7 @@ export interface Guide {
   id: string;
   name: string;
   phone: string;
+  alternatePhone?: string;
   email?: string;
   expertise: string;
   licenseId: string;
@@ -79,6 +81,7 @@ export interface Guide {
     idProof: string | null;
   };
 }
+
 
 export interface DriverRateConfig {
   id: string;

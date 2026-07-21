@@ -132,10 +132,14 @@ export default function GuidesPage() {
                       )}
                       <div>
                         <span className="font-bold text-white block text-sm">{guide.name}</span>
-                        <span className="text-[11px] text-dark-textMuted">{guide.phone}</span>
+                        <span className="text-[11px] text-dark-textMuted block">📞 {guide.phone}</span>
+                        {guide.alternatePhone && (
+                          <span className="text-[10px] text-emerald-400 font-semibold block">📱 Alt: {guide.alternatePhone}</span>
+                        )}
                       </div>
                     </div>
                   </td>
+
 
                   <td className="py-4 px-6">
                     <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 text-[11px] inline-block">
@@ -371,11 +375,19 @@ function GuideDetailModal({
           {/* Quick Info Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Phone</span>
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Primary Phone</span>
               <span className="text-xs font-bold text-white mt-1 block truncate">
-                {guide.phone}
+                📞 {guide.phone}
               </span>
             </div>
+
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Alternate Phone</span>
+              <span className="text-xs font-bold text-emerald-400 mt-1 block truncate">
+                📱 {guide.alternatePhone || 'Not provided'}
+              </span>
+            </div>
+
 
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
               <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Certification</span>

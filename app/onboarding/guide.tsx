@@ -92,10 +92,12 @@ export default function GuideRegister() {
   const handleNext = async () => {
     let stepErrors: Record<string, string> = {};
     const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+    const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
 
     if (currentStep === 1) {
       if (!formData.name) stepErrors.name = 'Enter your full name';
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!cleanAltPhone || cleanAltPhone.length !== 10) stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
     } else if (currentStep === 2) {
       if (!formData.expertise) stepErrors.expertise = 'Enter your expertise';
@@ -112,11 +114,13 @@ export default function GuideRegister() {
           const res = await registerUser({
             name: formData.name.trim(),
             phone: cleanPhone,
+            alternate_phone: cleanAltPhone,
             password: formData.password,
             role: 'guide',
             expertise: formData.expertise,
             license_id: formData.licenseId || 'KA-GUIDE-CERT',
             bio: formData.bio || 'Tour guide profile',
+
             photo_url: docs.photo || undefined,
             license_cert_url: docs.license || undefined,
             id_proof_url: docs.aadhar || undefined,

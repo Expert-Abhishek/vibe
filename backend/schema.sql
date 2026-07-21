@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
     phone VARCHAR(15) UNIQUE NOT NULL,
+    alternate_phone VARCHAR(15),
     email VARCHAR(120) UNIQUE,
     password VARCHAR(255) NOT NULL,
     role user_role NOT NULL DEFAULT 'tourist',
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS driver_profiles (
     vehicle_model VARCHAR(100),    -- e.g. 'Mahindra Thar', 'Swift Dzire'
     vehicle_number VARCHAR(30),   -- e.g. 'KA-03-MY-7788'
     license_number VARCHAR(50),
+    alternate_phone VARCHAR(15),
     is_active BOOLEAN DEFAULT FALSE,
     rating NUMERIC(3,2) DEFAULT 5.0,
     wallet_balance NUMERIC(10,2) DEFAULT 0.00,
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS guide_profiles (
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expertise VARCHAR(255),        -- e.g. 'Historical Tours, Jungle Safari'
     license_id VARCHAR(50),       -- e.g. Certification / License ID
+    alternate_phone VARCHAR(15),
     bio TEXT,
     rating NUMERIC(3,2) DEFAULT 5.0,
     is_active BOOLEAN DEFAULT FALSE,
@@ -72,6 +75,7 @@ CREATE TABLE IF NOT EXISTS guide_profiles (
     id_proof_url TEXT,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- 5. Destinations Master Table (Destination = Checkpoint = Tourist Place)
 CREATE TABLE IF NOT EXISTS destinations (

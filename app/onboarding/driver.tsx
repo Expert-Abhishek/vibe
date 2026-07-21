@@ -116,10 +116,12 @@ export default function DriverRegister() {
   const validateStep = () => {
     let stepErrors: Record<string, string> = {};
     const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+    const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
 
     if (currentStep === 1) {
       if (!formData.name) stepErrors.name = 'Enter the name as it appears on your Aadhar';
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!cleanAltPhone || cleanAltPhone.length !== 10) stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
       if (!formData.aadharNo || formData.aadharNo.length !== 12) stepErrors.aadharNo = 'Enter a valid 12-digit Aadhar number';
     } else if (currentStep === 2) {
@@ -153,16 +155,19 @@ export default function DriverRegister() {
     } else {
       setLoading(true);
       const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+      const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
 
       try {
         const res = await registerUser({
           name: formData.name.trim(),
           phone: cleanPhone,
+          alternate_phone: cleanAltPhone,
           password: formData.password,
           role: 'driver',
           vehicle_model: formData.vehicleModel || 'Standard Cab',
           vehicle_number: formData.rcNo,
           license_number: formData.dlNo,
+
           photo_url: docs.photo || undefined,
           rc_url: docs.rc || undefined,
           dl_url: docs.dl || undefined,

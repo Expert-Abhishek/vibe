@@ -12,8 +12,10 @@ export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || RENDER_API_URL ||
 export interface RegisterPayload {
   name: string;
   phone: string;
+  alternate_phone?: string;
   email?: string;
   password?: string;
+
   role: 'tourist' | 'driver' | 'guide';
   // Driver fields
   vehicle_type?: string;

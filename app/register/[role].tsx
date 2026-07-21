@@ -21,6 +21,7 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [altPhone, setAltPhone] = useState('');
   const [password, setPassword] = useState('');
 
   // Role specific fields
@@ -46,6 +47,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
 
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter your full name.');
@@ -53,6 +55,10 @@ export default function RegisterScreen() {
     }
     if (!cleanPhone || cleanPhone.length !== 10) {
       Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits.');
+      return;
+    }
+    if ((role === 'driver' || role === 'guide') && (!cleanAltPhone || cleanAltPhone.length !== 10)) {
+      Alert.alert('Required', 'Alternate phone number is mandatory for Drivers and Guides (10 digits).');
       return;
     }
     if (!password || password.length < 6) {
@@ -67,12 +73,14 @@ export default function RegisterScreen() {
     const res = await registerUser({
       name: name.trim(),
       phone: cleanPhone,
+      alternate_phone: cleanAltPhone || undefined,
       email: email.trim() || undefined,
       password: password,
       role: mappedRole,
       vehicle_number: role === 'driver' ? vehicleNumber : undefined,
       license_id: role === 'guide' ? licenseId : undefined,
     });
+
 
     setLoading(false);
 
@@ -123,6 +131,17 @@ export default function RegisterScreen() {
           value={phone}
           onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
         />
+        {(role === 'driver' || role === 'guide') && (
+          <TextInput
+            style={styles.input}
+            placeholder="Alternate Phone Number (10 digits) *"
+            keyboardType="phone-pad"
+            maxLength={10}
+            placeholderTextColor="#aaa"
+            value={altPhone}
+            onChangeText={(t) => setAltPhone(t.replace(/[^0-9]/g, ''))}
+          />
+        )}
         <TextInput
           style={styles.input}
           placeholder="Password (min 6 chars)"
@@ -133,6 +152,7 @@ export default function RegisterScreen() {
         />
 
         {/* Conditional Role Inputs */}
+
         {role === 'driver' && (
           <TextInput
             style={styles.input}
