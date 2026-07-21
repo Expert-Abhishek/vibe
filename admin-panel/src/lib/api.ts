@@ -11,7 +11,9 @@ import {
 } from './types';
 
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const LIVE_BACKEND_URL = 'https://vibe-backend-tlaw.onrender.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || LIVE_BACKEND_URL;
+
 
 
 // Mock Initial Datasets (1 Demo Record Each)
