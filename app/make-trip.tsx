@@ -1284,6 +1284,10 @@ export default function MakeTripScreen() {
                 );
               })}
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Admin Destination Master Picker Modal */}
       <Modal visible={isDestPickerOpen} animationType="slide" transparent>
         <View style={styles.overlayModal}>
@@ -1347,6 +1351,7 @@ export default function MakeTripScreen() {
     </SafeAreaView>
   );
 }
+
 
 
 // Dark styled maps theme variables
