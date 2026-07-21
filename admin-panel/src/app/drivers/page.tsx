@@ -17,6 +17,14 @@ import {
 import { initialDrivers, fetchDriversApi, updateUserStatusApi, updateDriverRateApi, deleteUserApi } from '@/lib/api';
 import { Driver, KYCStatus } from '@/lib/types';
 
+function isValidImageUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('file://') || trimmed.startsWith('content://')) return false;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/')) return true;
+  return false;
+}
+
 export default function DriversPage() {
   const [driversList, setDriversList] = useState<Driver[]>(initialDrivers);
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,16 +109,16 @@ export default function DriversPage() {
       </div>
 
       {/* Driver Table */}
-      <div className="glass-card rounded-2xl overflow-hidden border border-dark-border shadow-xl">
+      <div className="bg-dark-card border border-dark-border rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-dark-hover/80 text-dark-textMuted font-bold border-b border-dark-border uppercase tracking-wider text-[11px]">
-                <th className="py-4 px-6">Driver Info</th>
-                <th className="py-4 px-6">Vehicle Details</th>
+          <table className="w-full text-left text-xs">
+            <thead className="bg-dark-hover/80 text-dark-textMuted font-bold uppercase tracking-wider border-b border-dark-border">
+              <tr>
+                <th className="py-4 px-6">Driver Name</th>
+                <th className="py-4 px-6">Vehicle Info</th>
                 <th className="py-4 px-6">Status</th>
                 <th className="py-4 px-6">Daily Rate (/day)</th>
-                <th className="py-4 px-6">Hourly Addon (/hr)</th>
+                <th className="py-4 px-6">Addon (/hr)</th>
                 <th className="py-4 px-6">Wallet Balance</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
@@ -120,9 +128,9 @@ export default function DriversPage() {
                 <tr key={driver.id} className="hover:bg-dark-hover/40 transition-colors">
                   <td className="py-4 px-6">
                     <div className="flex items-center space-x-3">
-                      {driver.docs?.photo ? (
+                      {isValidImageUrl(driver.docs?.photo) ? (
                         <img
-                          src={driver.docs.photo}
+                          src={driver.docs!.photo!}
                           alt={driver.name}
                           className="w-10 h-10 rounded-full object-cover border-2 border-brand-500/40 shadow-sm"
                         />
@@ -278,9 +286,9 @@ function DriverDetailModal({
         {/* Modal Header */}
         <div className="p-6 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-10">
           <div className="flex items-center space-x-4">
-            {driver.docs?.photo ? (
+            {isValidImageUrl(driver.docs?.photo) ? (
               <img
-                src={driver.docs.photo}
+                src={driver.docs.photo!}
                 alt={driver.name}
                 className="w-14 h-14 rounded-2xl object-cover border-2 border-brand-500 shadow-lg"
               />
@@ -289,6 +297,7 @@ function DriverDetailModal({
                 {driver.name.substring(0, 2).toUpperCase()}
               </div>
             )}
+
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-bold text-white">{driver.name}</h2>
@@ -435,11 +444,11 @@ function DriverDetailModal({
                   <span className="text-[10px] font-bold text-dark-textMuted uppercase mb-2">
                     {key === 'photo' ? '👤 Profile Photo' : key === 'rc' ? '📄 RC Copy' : key === 'dl' ? '🪪 Driving License' : key === 'insurance' ? '📑 Insurance' : '🆔 Aadhar Card'}
                   </span>
-                  {url ? (
-                    <img src={url} alt={key} className="w-full h-32 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
+                  {isValidImageUrl(url) ? (
+                    <img src={url!} alt={key} className="w-full h-32 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
                   ) : (
-                    <div className="w-full h-32 bg-dark-hover rounded-lg border border-dashed border-dark-border flex items-center justify-center text-xs text-dark-textMuted">
-                      Not Attached
+                    <div className="w-full h-32 bg-dark-hover rounded-lg border border-dashed border-dark-border flex flex-col items-center justify-center text-xs text-dark-textMuted p-2 text-center">
+                      <span>Not Attached</span>
                     </div>
                   )}
                 </div>
@@ -460,13 +469,14 @@ function DriverDetailModal({
                   <span className="text-[10px] font-bold text-dark-textMuted uppercase mb-2">
                     {angle} View
                   </span>
-                  {url ? (
-                    <img src={url} alt={angle} className="w-full h-32 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
+                  {isValidImageUrl(url) ? (
+                    <img src={url!} alt={angle} className="w-full h-32 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
                   ) : (
-                    <div className="w-full h-32 bg-dark-hover rounded-lg border border-dashed border-dark-border flex items-center justify-center text-xs text-dark-textMuted">
-                      No Photo
+                    <div className="w-full h-32 bg-dark-hover rounded-lg border border-dashed border-dark-border flex flex-col items-center justify-center text-xs text-dark-textMuted p-2 text-center">
+                      <span>No Photo</span>
                     </div>
                   )}
+
                 </div>
               ))}
             </div>

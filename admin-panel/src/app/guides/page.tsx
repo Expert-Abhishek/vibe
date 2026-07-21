@@ -16,6 +16,14 @@ import {
 import { initialGuides, fetchGuidesApi, updateUserStatusApi, updateGuideRateApi, deleteUserApi } from '@/lib/api';
 import { Guide, KYCStatus } from '@/lib/types';
 
+function isValidImageUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('file://') || trimmed.startsWith('content://')) return false;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/')) return true;
+  return false;
+}
+
 export default function GuidesPage() {
   const [guidesList, setGuidesList] = useState<Guide[]>(initialGuides);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,7 +76,7 @@ export default function GuidesPage() {
             <span>Guide Management & Verification</span>
           </h1>
           <p className="text-xs text-dark-textMuted mt-1">
-            Review tourist guide certifications, verify expertise badges, approve applications, and handle guide status.
+            Review guide certifications, verify expertise badges, approve applications, and handle guide rates.
           </p>
         </div>
 
@@ -77,7 +85,7 @@ export default function GuidesPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3.5 py-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-500"
+            className="px-3.5 py-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-emerald-400"
           >
             <option value="ALL">All Statuses</option>
             <option value="Pending KYC">Pending KYC Only</option>
@@ -90,17 +98,17 @@ export default function GuidesPage() {
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-dark-textMuted" />
             <input
               type="text"
-              placeholder="Search by guide name or expertise..."
+              placeholder="Search guide name or expertise..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500 transition-colors"
+              className="w-full pl-10 pr-4 py-2.5 bg-dark-card border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-emerald-400 transition-colors"
             />
           </div>
         </div>
       </div>
 
       {/* Guide Table */}
-      <div className="glass-card rounded-2xl overflow-hidden border border-dark-border shadow-xl">
+      <div className="bg-dark-card border border-dark-border rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -119,9 +127,9 @@ export default function GuidesPage() {
                 <tr key={guide.id} className="hover:bg-dark-hover/40 transition-colors">
                   <td className="py-4 px-6">
                     <div className="flex items-center space-x-3">
-                      {guide.documents?.photo ? (
+                      {isValidImageUrl(guide.documents?.photo) ? (
                         <img
-                          src={guide.documents.photo}
+                          src={guide.documents.photo!}
                           alt={guide.name}
                           className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500/40 shadow-sm"
                         />
@@ -277,9 +285,9 @@ function GuideDetailModal({
         {/* Modal Header */}
         <div className="p-6 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-10">
           <div className="flex items-center space-x-4">
-            {guide.documents?.photo ? (
+            {isValidImageUrl(guide.documents?.photo) ? (
               <img
-                src={guide.documents.photo}
+                src={guide.documents.photo!}
                 alt={guide.name}
                 className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-500 shadow-lg"
               />
@@ -288,6 +296,7 @@ function GuideDetailModal({
                 {guide.name.substring(0, 2).toUpperCase()}
               </div>
             )}
+
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-bold text-white">{guide.name}</h2>
@@ -425,13 +434,14 @@ function GuideDetailModal({
                   <span className="text-[10px] font-bold text-dark-textMuted uppercase mb-2">
                     {key === 'photo' ? '👤 Profile Photo' : key === 'licenseCert' ? '📜 Tourism License Cert' : '🆔 Aadhar / ID Proof'}
                   </span>
-                  {url ? (
-                    <img src={url} alt={key} className="w-full h-36 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
+                  {isValidImageUrl(url) ? (
+                    <img src={url!} alt={key} className="w-full h-36 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
                   ) : (
-                    <div className="w-full h-36 bg-dark-hover rounded-lg border border-dashed border-dark-border flex items-center justify-center text-xs text-dark-textMuted">
-                      Not Uploaded
+                    <div className="w-full h-36 bg-dark-hover rounded-lg border border-dashed border-dark-border flex flex-col items-center justify-center text-xs text-dark-textMuted p-2 text-center">
+                      <span>Not Uploaded / Invalid Path</span>
                     </div>
                   )}
+
                 </div>
               ))}
             </div>
