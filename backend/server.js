@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const db = require('./config/db');
 const authRoutes = require('./routes/auth');
+const destinationsRoutes = require('./routes/destinations');
+const plansRoutes = require('./routes/plans');
 
 dotenv.config();
 
@@ -17,6 +19,9 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/destinations', destinationsRoutes);
+app.use('/api/plans', plansRoutes);
+
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -247,6 +252,52 @@ async function initTablesOnBoot() {
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS license_cert_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS id_proof_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2) DEFAULT 2000.00;
+
+      CREATE TABLE IF NOT EXISTS destinations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          location VARCHAR(255),
+          image_url TEXT,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS checkpoints (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          destination_id UUID NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          images TEXT[] DEFAULT '{}',
+          videos TEXT[] DEFAULT '{}',
+          is_active BOOLEAN DEFAULT TRUE,
+          order_index INT DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS plans (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          km NUMERIC(10,2) DEFAULT 0.00,
+          duration VARCHAR(100) NOT NULL DEFAULT '1 Day',
+          price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS plan_checkpoints (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+          checkpoint_id UUID NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
+          is_active BOOLEAN DEFAULT TRUE,
+          order_index INT DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT unique_plan_checkpoint UNIQUE (plan_id, checkpoint_id)
+      );
     `);
     console.log('✅ PostgreSQL Schema verified & migrated successfully.');
   } catch (err) {

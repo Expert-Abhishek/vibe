@@ -7,7 +7,8 @@ import {
   Users,
   Car,
   Compass,
-  IndianRupee,
+  MapPin,
+  Route,
   ShieldCheck,
   ChevronRight,
 } from 'lucide-react';
@@ -17,8 +18,10 @@ const navItems = [
   { name: 'Customers', href: '/customers', icon: Users },
   { name: 'Drivers', href: '/drivers', icon: Car },
   { name: 'Guides', href: '/guides', icon: Compass },
-  { name: 'Rate Setup', href: '/rates', icon: IndianRupee },
+  { name: 'Destinations', href: '/destinations', icon: MapPin },
+  { name: 'Plans & Packages', href: '/plans', icon: Route },
 ];
+
 
 export default function Sidebar() {
   const pathname = usePathname();
