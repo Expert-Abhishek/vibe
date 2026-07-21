@@ -23,6 +23,8 @@ router.get('/', async (req, res) => {
         d.description AS destination_description,
         d.images AS destination_images,
         d.videos AS destination_videos,
+        d.latitude AS destination_latitude,
+        d.longitude AS destination_longitude,
         d.is_active AS master_destination_active
       FROM plan_checkpoints pc
       JOIN destinations d ON pc.destination_id = d.id
@@ -45,11 +47,14 @@ router.get('/', async (req, res) => {
         description: row.destination_description || '',
         images: Array.isArray(row.destination_images) ? row.destination_images : [],
         videos: Array.isArray(row.destination_videos) ? row.destination_videos : [],
+        latitude: row.destination_latitude ? parseFloat(row.destination_latitude) : 15.335000,
+        longitude: row.destination_longitude ? parseFloat(row.destination_longitude) : 76.460000,
         isMasterActive: row.master_destination_active,
         isActiveInPlan: row.plan_checkpoint_active,
         orderIndex: row.order_index
       });
     });
+
 
     const plans = plansRes.rows.map(p => ({
       id: p.id,

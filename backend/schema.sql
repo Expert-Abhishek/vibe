@@ -81,10 +81,13 @@ CREATE TABLE IF NOT EXISTS destinations (
     description TEXT,
     images TEXT[] DEFAULT '{}',
     videos TEXT[] DEFAULT '{}',
+    latitude NUMERIC(10,6) DEFAULT 15.335000,
+    longitude NUMERIC(10,6) DEFAULT 76.460000,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
 
 -- 6. Plans / Tour Packages Table
 CREATE TABLE IF NOT EXISTS plans (

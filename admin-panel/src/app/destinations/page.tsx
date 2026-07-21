@@ -12,7 +12,10 @@ import {
   XCircle,
   Search,
   X,
-  Compass
+  Compass,
+  Map as MapIcon,
+  Navigation,
+  Globe
 } from 'lucide-react';
 import { Destination } from '@/lib/types';
 import {
@@ -23,6 +26,14 @@ import {
   deleteDestinationApi,
   initialDestinations
 } from '@/lib/api';
+
+const PRESET_LOCATIONS = [
+  { label: 'Hampi', lat: 15.335000, lng: 76.460000 },
+  { label: 'Gokarna', lat: 14.547900, lng: 74.318800 },
+  { label: 'Coorg', lat: 12.424400, lng: 75.738200 },
+  { label: 'Mysore', lat: 12.305200, lng: 76.655200 },
+  { label: 'Bengaluru', lat: 12.971600, lng: 77.594600 },
+];
 
 export default function DestinationsPage() {
   const [destinations, setDestinations] = useState<Destination[]>([]);
@@ -39,11 +50,13 @@ export default function DestinationsPage() {
     description: '',
     imageUrls: '',
     videoUrls: '',
+    latitude: 15.335000,
+    longitude: 76.460000,
     isActive: true,
   });
 
-  // Media Zoom Preview State
-  const [activeMediaPreview, setActiveMediaPreview] = useState<{ type: 'image' | 'video'; url: string; title: string } | null>(null);
+  // Media & Map Preview Modal State
+  const [activeMediaPreview, setActiveMediaPreview] = useState<{ type: 'image' | 'video' | 'map'; url: string; title: string; lat?: number; lng?: number } | null>(null);
 
   useEffect(() => {
     loadDestinations();
@@ -69,6 +82,8 @@ export default function DestinationsPage() {
       description: '',
       imageUrls: '',
       videoUrls: '',
+      latitude: 15.335000,
+      longitude: 76.460000,
       isActive: true,
     });
     setIsModalOpen(true);
@@ -82,6 +97,8 @@ export default function DestinationsPage() {
       description: dest.description,
       imageUrls: dest.images ? dest.images.join('\n') : '',
       videoUrls: dest.videos ? dest.videos.join('\n') : '',
+      latitude: dest.latitude ?? 15.335000,
+      longitude: dest.longitude ?? 76.460000,
       isActive: dest.isActive,
     });
     setIsModalOpen(true);
@@ -102,6 +119,8 @@ export default function DestinationsPage() {
         description: form.description,
         images,
         videos,
+        latitude: form.latitude,
+        longitude: form.longitude,
         isActive: form.isActive,
       });
 
@@ -115,6 +134,8 @@ export default function DestinationsPage() {
                 description: form.description,
                 images: images.length > 0 ? images : d.images,
                 videos,
+                latitude: form.latitude,
+                longitude: form.longitude,
                 isActive: form.isActive,
                 ...(updated || {}),
               }
@@ -130,6 +151,8 @@ export default function DestinationsPage() {
         description: form.description,
         images,
         videos,
+        latitude: form.latitude,
+        longitude: form.longitude,
         isActive: form.isActive,
       });
 
@@ -140,6 +163,8 @@ export default function DestinationsPage() {
         description: form.description,
         images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80'],
         videos,
+        latitude: form.latitude,
+        longitude: form.longitude,
         isActive: form.isActive,
       };
 
@@ -189,7 +214,7 @@ export default function DestinationsPage() {
             <h1 className="text-2xl font-extrabold text-white tracking-tight">Destination & Tourist Place Master</h1>
           </div>
           <p className="text-xs text-dark-textMuted">
-            Each entry is a single Tourist Place / Checkpoint with photos, videos, and ON/OFF status. Tour Plans pull directly from here.
+            Each entry is a single Tourist Place / Checkpoint with Map Latitude & Longitude, photos, videos, and ON/OFF status.
           </p>
         </div>
 
@@ -238,6 +263,9 @@ export default function DestinationsPage() {
               ? dest.images[0]
               : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80';
 
+            const lat = dest.latitude ?? 15.335000;
+            const lng = dest.longitude ?? 76.460000;
+
             return (
               <div
                 key={dest.id}
@@ -252,10 +280,10 @@ export default function DestinationsPage() {
                     alt={dest.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />
 
                   {/* Location Badge */}
-                  <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/10 flex items-center space-x-1">
+                  <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/10 flex items-center space-x-1">
                     <MapPin className="w-3 h-3 text-brand-500" />
                     <span>{dest.location || 'Karnataka'}</span>
                   </div>
@@ -275,9 +303,24 @@ export default function DestinationsPage() {
                     </button>
                   </div>
 
-                  {/* Title overlay */}
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <h3 className="text-base font-extrabold text-white line-clamp-1 drop-shadow-md">{dest.name}</h3>
+                  {/* Map Button & Title Overlay */}
+                  <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
+                    <div>
+                      <h3 className="text-base font-extrabold text-white line-clamp-1 drop-shadow-md">{dest.name}</h3>
+                      <span className="text-[10px] text-brand-400 font-mono flex items-center space-x-1 mt-0.5">
+                        <Navigation className="w-3 h-3 text-brand-400 inline" />
+                        <span>{lat.toFixed(4)}° N, {lng.toFixed(4)}° E</span>
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveMediaPreview({ type: 'map', url: `https://maps.google.com/maps?q=${lat},${lng}&z=14&output=embed`, title: dest.name, lat, lng })}
+                      className="px-2.5 py-1 bg-brand-500 text-black font-bold text-[10px] rounded-lg shadow-lg flex items-center space-x-1 hover:bg-brand-400"
+                      title="View Live Interactive Map"
+                    >
+                      <MapIcon className="w-3 h-3" />
+                      <span>View Map</span>
+                    </button>
                   </div>
                 </div>
 
@@ -328,7 +371,7 @@ export default function DestinationsPage() {
 
                 {/* Card Footer Actions */}
                 <div className="p-3 bg-dark-hover/40 border-t border-dark-border flex items-center justify-between">
-                  <span className="text-[10px] text-dark-textMuted font-bold uppercase">Master Destination</span>
+                  <span className="text-[10px] text-dark-textMuted font-bold uppercase">Master Tourist Place</span>
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handleOpenEditModal(dest)}
@@ -355,7 +398,7 @@ export default function DestinationsPage() {
       {/* ADD / EDIT TOURIST PLACE MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95">
+          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
             <div className="p-5 border-b border-dark-border flex items-center justify-between">
               <h3 className="font-extrabold text-white text-base flex items-center space-x-2">
                 <Compass className="w-5 h-5 text-brand-500" />
@@ -366,74 +409,131 @@ export default function DestinationsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveDestination} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  Tourist Place / Checkpoint Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Virupaksha Temple"
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
-                />
-              </div>
+            <form onSubmit={handleSaveDestination} className="p-6 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                    Tourist Place / Checkpoint Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Virupaksha Temple"
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  Location (City / State) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Hampi, Karnataka"
-                  value={form.location}
-                  onChange={e => setForm({ ...form, location: e.target.value })}
-                  className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
-                />
-              </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                    Location (City / State) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Hampi, Karnataka"
+                    value={form.location}
+                    onChange={e => setForm({ ...form, location: e.target.value })}
+                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                  Description / Info
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Historical highlights, attraction details..."
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 resize-none"
-                />
-              </div>
+                {/* Map Coordinates: Latitude & Longitude */}
+                <div className="sm:col-span-2 p-3 bg-dark-hover/50 rounded-xl border border-dark-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-brand-500 uppercase tracking-wider flex items-center space-x-1">
+                      <MapIcon className="w-3.5 h-3.5" />
+                      <span>Map Location Coordinates (Lat / Lng)</span>
+                    </span>
+                    <span className="text-[10px] text-gray-400">Presets:</span>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                  <span>Image URLs (1 per line)</span>
-                  <span className="text-[10px] text-brand-400 lowercase">https://...</span>
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="https://images.unsplash.com/photo-...\nhttps://..."
-                  value={form.imageUrls}
-                  onChange={e => setForm({ ...form, imageUrls: e.target.value })}
-                  className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
-                />
-              </div>
+                  {/* Preset Buttons */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRESET_LOCATIONS.map(preset => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setForm({ ...form, latitude: preset.lat, longitude: preset.lng })}
+                        className="px-2.5 py-1 bg-dark-card border border-dark-border text-gray-300 hover:text-white hover:border-brand-500 rounded-lg text-[10px] font-bold"
+                      >
+                        📍 {preset.label}
+                      </button>
+                    ))}
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                  <span>Video URLs (1 per line)</span>
-                  <span className="text-[10px] text-purple-400 lowercase">https://... (mp4/webm)</span>
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="https://www.w3schools.com/html/mov_bbb.mp4"
-                  value={form.videoUrls}
-                  onChange={e => setForm({ ...form, videoUrls: e.target.value })}
-                  className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
-                />
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">
+                        Latitude (N)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        required
+                        value={form.latitude}
+                        onChange={e => setForm({ ...form, latitude: parseFloat(e.target.value) || 0 })}
+                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">
+                        Longitude (E)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        required
+                        value={form.longitude}
+                        onChange={e => setForm({ ...form, longitude: parseFloat(e.target.value) || 0 })}
+                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                    Description / Info
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Historical highlights, attraction details..."
+                    value={form.description}
+                    onChange={e => setForm({ ...form, description: e.target.value })}
+                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 resize-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Image URLs (1 per line)</span>
+                    <span className="text-[10px] text-brand-400 lowercase">https://...</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="https://images.unsplash.com/photo-...\nhttps://..."
+                    value={form.imageUrls}
+                    onChange={e => setForm({ ...form, imageUrls: e.target.value })}
+                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Video URLs (1 per line)</span>
+                    <span className="text-[10px] text-purple-400 lowercase">https://... (mp4/webm)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="https://www.w3schools.com/html/mov_bbb.mp4"
+                    value={form.videoUrls}
+                    onChange={e => setForm({ ...form, videoUrls: e.target.value })}
+                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-1">
@@ -469,21 +569,31 @@ export default function DestinationsPage() {
         </div>
       )}
 
-      {/* MEDIA PREVIEW MODAL */}
+      {/* MEDIA & MAP PREVIEW MODAL */}
       {activeMediaPreview && (
         <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl relative">
+          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl relative">
             <div className="p-4 border-b border-dark-border flex items-center justify-between">
-              <span className="font-bold text-white text-sm">{activeMediaPreview.title} - Media Preview</span>
+              <span className="font-bold text-white text-sm flex items-center space-x-2">
+                {activeMediaPreview.type === 'map' ? <MapIcon className="w-4 h-4 text-brand-500" /> : <Globe className="w-4 h-4 text-purple-400" />}
+                <span>{activeMediaPreview.title} - {activeMediaPreview.type === 'map' ? 'Live Interactive Map' : 'Media Preview'}</span>
+              </span>
               <button onClick={() => setActiveMediaPreview(null)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 bg-black flex items-center justify-center min-h-[300px]">
+            <div className="p-2 bg-black flex items-center justify-center min-h-[350px]">
               {activeMediaPreview.type === 'image' ? (
                 <img src={activeMediaPreview.url} alt="preview" className="max-h-[500px] w-auto object-contain rounded-lg" />
-              ) : (
+              ) : activeMediaPreview.type === 'video' ? (
                 <video src={activeMediaPreview.url} controls autoPlay className="max-h-[500px] w-full rounded-lg" />
+              ) : (
+                <iframe
+                  title="Map View"
+                  src={activeMediaPreview.url}
+                  className="w-full h-[450px] rounded-lg border-0"
+                  allowFullScreen
+                />
               )}
             </div>
           </div>

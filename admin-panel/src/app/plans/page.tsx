@@ -15,10 +15,12 @@ import {
   Clock,
   Navigation,
   MapPin,
+  Map as MapIcon,
   Layers,
   X,
   Check
 } from 'lucide-react';
+
 import {
   Plan,
   Destination,
@@ -73,8 +75,8 @@ export default function PlansPage() {
   const [isAddDestToPlanModalOpen, setIsAddDestToPlanModalOpen] = useState(false);
   const [selectedDestToAdd, setSelectedDestToAdd] = useState<string>('');
 
-  // Media Preview Modal
-  const [activeMediaPreview, setActiveMediaPreview] = useState<{ type: 'image' | 'video'; url: string; title: string } | null>(null);
+  // Media Preview State
+  const [activeMediaPreview, setActiveMediaPreview] = useState<{ type: 'image' | 'video' | 'map'; url: string; title: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -144,10 +146,13 @@ export default function PlansPage() {
         description: found?.description || '',
         images: found?.images || [],
         videos: found?.videos || [],
+        latitude: found?.latitude ?? 15.335000,
+        longitude: found?.longitude ?? 76.460000,
         isMasterActive: found?.isActive ?? true,
         isActiveInPlan: true,
       };
     });
+
 
     const newPlan: Plan = created || {
       id: `plan-${Date.now()}`,
@@ -278,9 +283,12 @@ export default function PlansPage() {
       description: foundDest.description,
       images: foundDest.images,
       videos: foundDest.videos,
+      latitude: foundDest.latitude ?? 15.335000,
+      longitude: foundDest.longitude ?? 76.460000,
       isMasterActive: foundDest.isActive,
       isActiveInPlan: true,
     };
+
 
     setPlans(prev =>
       prev.map(p => {
@@ -459,13 +467,26 @@ export default function PlansPage() {
                             <span className="font-bold text-white truncate block">{cp.name}</span>
                             <span className="text-[10px] text-dark-textMuted block truncate">
                               <MapPin className="w-3 h-3 text-brand-500 inline mr-0.5" />
-                              {cp.location} • {cp.images?.length || 0} pics {cp.videos?.length ? `, ${cp.videos.length} video` : ''}
+                              {cp.location} • {cp.latitude?.toFixed(4)}°N, {cp.longitude?.toFixed(4)}°E
                             </span>
                           </div>
                         </div>
 
-                        {/* Toggle Checkpoint ON/OFF inside plan */}
-                        <div className="flex items-center space-x-2">
+                        {/* Toggle Checkpoint ON/OFF inside plan & Map Button */}
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            onClick={() => setActiveMediaPreview({
+                              type: 'map',
+                              url: `https://maps.google.com/maps?q=${cp.latitude || 15.335000},${cp.longitude || 76.460000}&z=14&output=embed`,
+                              title: cp.name
+                            })}
+                            className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-dark-card border border-dark-border text-brand-400 hover:text-white flex items-center space-x-1"
+                            title="View Location Map"
+                          >
+                            <MapIcon className="w-3 h-3 text-brand-500" />
+                            <span>Map</span>
+                          </button>
+
                           <button
                             onClick={() => handleTogglePlanCheckpoint(plan.id, cp.destinationId)}
                             className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
@@ -479,6 +500,7 @@ export default function PlansPage() {
                           </button>
                         </div>
                       </div>
+
                     ))}
                   </div>
                 </div>
@@ -878,6 +900,32 @@ export default function PlansPage() {
           </div>
         </div>
       )}
+
+      {/* MEDIA & MAP PREVIEW MODAL */}
+      {activeMediaPreview && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl relative">
+            <div className="p-4 border-b border-dark-border flex items-center justify-between">
+              <span className="font-bold text-white text-sm flex items-center space-x-2">
+                <MapIcon className="w-4 h-4 text-brand-500" />
+                <span>{activeMediaPreview.title} - Live Interactive Map</span>
+              </span>
+              <button onClick={() => setActiveMediaPreview(null)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-2 bg-black flex items-center justify-center min-h-[350px]">
+              <iframe
+                title="Checkpoint Map View"
+                src={activeMediaPreview.url}
+                className="w-full h-[450px] rounded-lg border-0"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

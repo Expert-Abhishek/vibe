@@ -20,6 +20,8 @@ router.get('/', async (req, res) => {
       description: d.description || '',
       images: Array.isArray(d.images) ? d.images : [],
       videos: Array.isArray(d.videos) ? d.videos : [],
+      latitude: d.latitude ? parseFloat(d.latitude) : 15.335000,
+      longitude: d.longitude ? parseFloat(d.longitude) : 76.460000,
       isActive: d.is_active,
       createdAt: d.created_at,
       updatedAt: d.updated_at
@@ -38,7 +40,7 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { name, location = '', description = '', images = [], videos = [], isActive = true } = req.body;
+    const { name, location = '', description = '', images = [], videos = [], latitude = 15.335000, longitude = 76.460000, isActive = true } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Destination name is required' });
@@ -48,10 +50,10 @@ router.post('/', async (req, res) => {
     const cleanVideos = Array.isArray(videos) ? videos : [];
 
     const result = await db.query(
-      `INSERT INTO destinations (name, location, description, images, videos, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO destinations (name, location, description, images, videos, latitude, longitude, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [name.trim(), location.trim(), description, cleanImages, cleanVideos, isActive]
+      [name.trim(), location.trim(), description, cleanImages, cleanVideos, parseFloat(latitude), parseFloat(longitude), isActive]
     );
 
     const d = result.rows[0];
@@ -65,6 +67,8 @@ router.post('/', async (req, res) => {
         description: d.description || '',
         images: d.images || [],
         videos: d.videos || [],
+        latitude: parseFloat(d.latitude),
+        longitude: parseFloat(d.longitude),
         isActive: d.is_active,
         createdAt: d.created_at,
         updatedAt: d.updated_at
@@ -83,7 +87,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, location, description, images, videos, isActive } = req.body;
+    const { name, location, description, images, videos, latitude, longitude, isActive } = req.body;
 
     const result = await db.query(
       `UPDATE destinations
@@ -92,11 +96,13 @@ router.put('/:id', async (req, res) => {
            description = COALESCE($3, description),
            images = COALESCE($4, images),
            videos = COALESCE($5, videos),
-           is_active = COALESCE($6, is_active),
+           latitude = COALESCE($6, latitude),
+           longitude = COALESCE($7, longitude),
+           is_active = COALESCE($8, is_active),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7
+       WHERE id = $9
        RETURNING *`,
-      [name, location, description, images, videos, isActive, id]
+      [name, location, description, images, videos, latitude, longitude, isActive, id]
     );
 
     if (result.rows.length === 0) {
@@ -114,6 +120,8 @@ router.put('/:id', async (req, res) => {
         description: d.description || '',
         images: d.images || [],
         videos: d.videos || [],
+        latitude: parseFloat(d.latitude),
+        longitude: parseFloat(d.longitude),
         isActive: d.is_active,
         updatedAt: d.updated_at
       }

@@ -268,6 +268,9 @@ async function initTablesOnBoot() {
       ALTER TABLE destinations ADD COLUMN IF NOT EXISTS location VARCHAR(255);
       ALTER TABLE destinations ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}';
       ALTER TABLE destinations ADD COLUMN IF NOT EXISTS videos TEXT[] DEFAULT '{}';
+      ALTER TABLE destinations ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,6) DEFAULT 15.335000;
+      ALTER TABLE destinations ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,6) DEFAULT 76.460000;
+
 
       CREATE TABLE IF NOT EXISTS plans (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

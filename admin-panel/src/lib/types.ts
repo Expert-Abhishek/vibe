@@ -121,6 +121,8 @@ export interface Destination {
   description: string;
   images: string[];
   videos: string[];
+  latitude?: number;
+  longitude?: number;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -134,10 +136,13 @@ export interface PlanCheckpoint {
   description: string;
   images: string[];
   videos: string[];
+  latitude?: number;
+  longitude?: number;
   isMasterActive?: boolean;
   isActiveInPlan: boolean;
   orderIndex?: number;
 }
+
 
 export interface Plan {
   id: string;
