@@ -113,4 +113,25 @@ CREATE TABLE IF NOT EXISTS plan_checkpoints (
     CONSTRAINT unique_plan_destination UNIQUE (plan_id, destination_id)
 );
 
+-- 8. Trips / Bookings Table
+CREATE TABLE IF NOT EXISTS trips (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_type VARCHAR(50) NOT NULL DEFAULT 'custom_trip', -- 'custom_trip', 'plan_package', 'cab', 'guide'
+    title VARCHAR(255) NOT NULL,
+    customer_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    customer_name VARCHAR(255) NOT NULL,
+    driver_or_guide_name VARCHAR(255),
+    plan_id UUID REFERENCES plans(id) ON DELETE SET NULL,
+    destination_ids TEXT[] DEFAULT '{}',
+    amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    payment_mode VARCHAR(50) DEFAULT 'UPI', -- 'UPI', 'Cash', 'Card'
+    status VARCHAR(50) DEFAULT 'Completed', -- 'Pending', 'Active', 'Completed', 'Cancelled'
+    duration_hours NUMERIC(5,2) DEFAULT 8.00,
+    extra_hours NUMERIC(5,2) DEFAULT 0.00,
+    addon_charge NUMERIC(10,2) DEFAULT 0.00,
+    rating INT DEFAULT 5,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+
 

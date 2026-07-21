@@ -13,6 +13,8 @@ import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '../admin-state';
+import { fetchCustomerTripsApi } from '@/constants/api';
+
 
 interface TripRecord {
   id: string;
@@ -113,11 +115,24 @@ const initialTripHistory: TripRecord[] = [
 ];
 
 export default function TripsHistoryScreen() {
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'cab' | 'guide'>('all');
   const [cancelTrigger, setCancelTrigger] = useState(0);
+  const [backendTrips, setBackendTrips] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    async function loadBackendTrips() {
+      const data = await fetchCustomerTripsApi('c1');
+      if (data && data.length > 0) {
+        setBackendTrips(data);
+      }
+    }
+    loadBackendTrips();
+  }, [cancelTrigger]);
+
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',

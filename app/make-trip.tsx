@@ -19,6 +19,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from './admin-state';
+import { fetchDestinationsApi } from '@/constants/api';
+
 
 // Dynamically require react-native-maps to prevent compilation or runtime crashes on Web
 let MapView: any = null;
@@ -155,12 +157,24 @@ export default function MakeTripScreen() {
     return '';
   };
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const [liveDestinations, setLiveDestinations] = useState<any[]>([]);
+
+
+  useEffect(() => {
+    async function loadBackendDestinations() {
+      const data = await fetchDestinationsApi();
+      if (data && data.length > 0) {
+        setLiveDestinations(data);
+      }
+    }
+    loadBackendDestinations();
+  }, []);
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
     { id: 'start', name: 'Bengaluru (Start)', latitude: 12.9716, longitude: 77.5946, address: 'Bengaluru City Center' },
     { id: 'stop-1', name: 'Mysuru Palace', latitude: 12.3053, longitude: 76.6552, address: 'Mysuru, Karnataka' },
   ]);
+
 
   const [searchText, setSearchText] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);

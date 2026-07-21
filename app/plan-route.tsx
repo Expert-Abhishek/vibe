@@ -55,12 +55,16 @@ const packagePlans: TourPackage[] = [
   },
 ];
 
+import { fetchPlansApi } from '@/constants/api';
+
 export default function PlanRouteScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [livePlans, setLivePlans] = useState<any[]>([]);
+  const [loadingLivePlans, setLoadingLivePlans] = useState(true);
 
   const params = useLocalSearchParams();
   const fromVehicle = params.fromVehicle === 'true';
@@ -68,10 +72,23 @@ export default function PlanRouteScreen() {
   const carNameParam = params.carName as string;
 
   useEffect(() => {
+    async function loadBackendPlans() {
+      setLoadingLivePlans(true);
+      const data = await fetchPlansApi();
+      if (data && data.length > 0) {
+        setLivePlans(data);
+      }
+      setLoadingLivePlans(false);
+    }
+    loadBackendPlans();
+  }, []);
+
+  useEffect(() => {
     if (fromVehicle && vehicleTypeParam) {
       setBookingVehicle(vehicleTypeParam);
     }
   }, [fromVehicle, vehicleTypeParam]);
+
 
   // Booking modal state
   const [selectedPlan, setSelectedPlan] = useState<TourPackage | null>(null);

@@ -136,3 +136,83 @@ export async function deleteUser(userId: string): Promise<AuthResponse> {
     return { success: false, message: 'Failed to delete user' };
   }
 }
+
+/**
+ * Fetch live Destinations / Tourist Places from backend
+ */
+export async function fetchDestinationsApi(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/destinations`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchDestinationsApi error:', e);
+  }
+  return [];
+}
+
+/**
+ * Fetch live Tour Package Plans from backend
+ */
+export async function fetchPlansApi(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/plans`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchPlansApi error:', e);
+  }
+  return [];
+}
+
+/**
+ * Create a new Trip / Booking on backend
+ */
+export async function createTripApi(payload: {
+  tripType: string;
+  title: string;
+  customerId?: string;
+  customerName?: string;
+  driverOrGuideName?: string;
+  planId?: string;
+  destinationIds?: string[];
+  amount: number;
+  paymentMode?: string;
+  status?: string;
+  durationHours?: number;
+  extraHours?: number;
+  addonCharge?: number;
+}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('createTripApi error:', e);
+    return { success: false, message: 'Failed to save trip to backend' };
+  }
+}
+
+/**
+ * Fetch Customer Trip History from backend
+ */
+export async function fetchCustomerTripsApi(customerId: string): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/customer/${customerId}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchCustomerTripsApi error:', e);
+  }
+  return [];
+}
+
