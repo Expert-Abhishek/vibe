@@ -995,167 +995,102 @@ export default function MakeTripScreen() {
           </View>
         </View>
 
-        {/* Step 2: Choose Vehicle Category & Driver's Car List */}
-        <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20), marginTop: verticalScale(16) }]}>
-          <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(6) }}>
-            1. Select Vehicle Category
-          </Text>
-          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(12) }}>
-            Select category and tap below to pick your car from Vehicle Fleet Showcase
-          </Text>
+        {/* Step 2: Select Vehicle & Driver from Fleet Showcase */}
+        {selectedDriver === null ? (
+          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20), marginTop: verticalScale(16) }]}>
+            <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(6) }}>
+              2. Select Vehicle for Trip
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(14) }}>
+              Choose a car from our Fleet Showcase to view fare breakdown and complete pre-booking.
+            </Text>
 
-          {/* Vehicle Category Chips */}
-          <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(14) }}>
-            {[
-              { id: '5seater', label: '5 Seater' },
-              { id: '7seater', label: '7 Seater' },
-              { id: '4x4jeep', label: '4*4 Off-Road' },
-              { id: 'auto', label: 'Auto' },
-            ].map((cat) => {
-              const isSelected = selectedRide === cat.id;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={{
-                    flex: 1,
-                    borderWidth: 1.5,
-                    borderRadius: scale(10),
-                    paddingVertical: verticalScale(10),
-                    paddingHorizontal: scale(4),
-                    alignItems: 'center',
-                    borderColor: isSelected ? colors.amber : colors.border,
-                    backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.12)' : 'transparent',
-                  }}
-                  onPress={() => {
-                    setSelectedRide(cat.id);
-                  }}
-                >
-                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: isSelected ? colors.amber : colors.textPrimary }} numberOfLines={1}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.amber,
+                borderRadius: scale(14),
+                paddingVertical: verticalScale(14),
+                paddingHorizontal: scale(16),
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: scale(10),
+              }}
+              onPress={() => {
+                router.push({
+                  pathname: '/cars',
+                  params: { mode: 'custom_trip' }
+                });
+              }}
+            >
+              <MaterialIcons name="directions-car" size={scale(22)} color="#101014" />
+              <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(14) }}>
+                Choose Car / Select Vehicle
+              </Text>
+              <MaterialIcons name="arrow-forward" size={scale(20)} color="#101014" />
+            </TouchableOpacity>
           </View>
+        ) : (
+          <View style={[styles.pendingQuoteCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), borderRadius: scale(20), marginTop: verticalScale(16) }]}>
+            <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(10) }}>
+              2. Selected Vehicle
+            </Text>
 
-          {/* Fleet Showcase Trigger Button */}
-          <TouchableOpacity
-            style={{
-              backgroundColor: colors.amber,
-              borderRadius: scale(12),
-              paddingVertical: verticalScale(12),
-              paddingHorizontal: scale(14),
+            <View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: scale(8),
-              marginBottom: verticalScale(14),
-            }}
-            onPress={() => {
-              router.push({
-                pathname: '/cars',
-                params: { selectedRide: selectedRide, mode: 'custom_trip' }
-              });
-            }}
-          >
-            <MaterialIcons name="directions-car" size={scale(20)} color="#101014" />
-            <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(13) }}>
-              Browse Cars in Vehicle Fleet Showcase
-            </Text>
-            <MaterialIcons name="arrow-forward" size={scale(18)} color="#101014" />
-          </TouchableOpacity>
-
-          {/* Available Cars & Drivers List from Backend */}
-          <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginBottom: verticalScale(8) }}>
-            2. Available Cars ({selectedRide === '5seater' ? '5 Seater' : selectedRide === '7seater' ? '7 Seater' : selectedRide === '4x4jeep' ? '4*4 Off-Road' : 'Auto'})
-          </Text>
-          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginBottom: verticalScale(12) }}>
-            Tap a car card to view total price and proceed with booking
-          </Text>
-
-          {(() => {
-            const categoryDrivers = backendDrivers.filter((d: any) => {
-              const dType = (d.vehicle_type || d.vehicleType || '5seater').toLowerCase().replace(/[^a-z0-9]/g, '');
-              const sel = selectedRide.toLowerCase().replace(/[^a-z0-9]/g, '');
-              return dType === sel || (sel === '4x4jeep' && (dType.includes('4x4') || dType.includes('jeep')));
-            });
-
-            // If category-specific driver not registered yet, show all registered backend drivers or fallback
-            const displayDrivers = categoryDrivers.length > 0
-              ? categoryDrivers
-              : (backendDrivers.length > 0 ? backendDrivers : [
-                  {
-                    id: `demo_${selectedRide}_1`,
-                    name: 'Verified Driver',
-                    vehicle_model: selectedRide === '5seater' ? 'Swift Dzire (AC)' : selectedRide === '7seater' ? 'Toyota Innova Crysta' : selectedRide === '4x4jeep' ? 'Mahindra Thar 4x4' : 'Bajaj RE Auto',
-                    vehicle_number: 'KA-01-EX-1008',
-                    daily_rate: defaultDayRate,
-                    hourly_addon_rate: defaultHourlyRate,
-                    car_front_url: selectedRide === '4x4jeep' ? 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=600&q=80' : 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80',
-                  }
-                ]);
-
-            return (
-              <View style={{ gap: verticalScale(10) }}>
-
-                {displayDrivers.map((driverCard: any) => {
-                  const isSelected = selectedDriver?.id === driverCard.id || (selectedDriver === null && displayDrivers.length === 1 && selectedDriver?.id === driverCard.id);
-                  const frontPic = driverCard.car_front_url || driverCard.photo_url;
-                  const dayRate = driverCard.daily_rate ? Number(driverCard.daily_rate) : defaultDayRate;
-                  const hrRate = driverCard.hourly_addon_rate ? Number(driverCard.hourly_addon_rate) : defaultHourlyRate;
-
-                  return (
-                    <TouchableOpacity
-                      key={driverCard.id}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.08)' : isDark ? '#16161B' : '#F9F9FB',
-                        borderWidth: 1.5,
-                        borderColor: isSelected ? colors.amber : colors.border,
-                        borderRadius: scale(14),
-                        padding: scale(12),
-                      }}
-                      onPress={() => setSelectedDriver(driverCard)}
-                    >
-                      {/* Car Front Photo Thumbnail */}
-                      <View style={{ width: scale(64), height: scale(64), borderRadius: scale(10), backgroundColor: '#212129', overflow: 'hidden', marginRight: scale(12), borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}>
-                        {frontPic && (frontPic.startsWith('http') || frontPic.startsWith('data:image')) ? (
-                          <Image source={{ uri: frontPic }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                        ) : (
-                          <MaterialIcons name="directions-car" size={scale(32)} color={colors.amber} />
-                        )}
-                      </View>
-
-                      {/* Driver & Car Specs */}
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800' }} numberOfLines={1}>
-                          {driverCard.vehicle_model || 'Standard AC Cab'}
-                        </Text>
-                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
-                          Driver: {driverCard.name} ({driverCard.vehicle_number || 'KA-01-EX-0000'})
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(4) }}>
-                          <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '900' }}>
-                            ₹{dayRate}/Day
-                          </Text>
-                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }}>
-                            (+ ₹{hrRate}/hr addon)
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Radio Check Indicator */}
-                      <View style={{ width: scale(22), height: scale(22), borderRadius: scale(11), borderWidth: 2, borderColor: isSelected ? colors.amber : colors.border, justifyContent: 'center', alignItems: 'center', backgroundColor: isSelected ? colors.amber : 'transparent' }}>
-                        {isSelected && <MaterialIcons name="check" size={scale(14)} color="#101014" />}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+              backgroundColor: 'rgba(245, 197, 24, 0.08)',
+              borderWidth: 1.5,
+              borderColor: colors.amber,
+              borderRadius: scale(14),
+              padding: scale(12),
+            }}>
+              <View style={{ width: scale(60), height: scale(60), borderRadius: scale(10), backgroundColor: '#212129', overflow: 'hidden', marginRight: scale(12), borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}>
+                {selectedDriver.car_front_url || selectedDriver.photo_url ? (
+                  <Image source={{ uri: selectedDriver.car_front_url || selectedDriver.photo_url }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+                ) : (
+                  <MaterialIcons name="directions-car" size={scale(32)} color={colors.amber} />
+                )}
               </View>
-            );
-          })()}
-        </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800' }} numberOfLines={1}>
+                  {selectedDriver.vehicle_model || 'Standard AC Cab'}
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
+                  Driver: {selectedDriver.name} ({selectedDriver.vehicle_number || 'KA-01-EX-0000'})
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(4) }}>
+                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '900' }}>
+                    ₹{baseDayRate}/Day
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }}>
+                    (+ ₹{vehicleHourlyRate}/hr addon)
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'rgba(245, 197, 24, 0.2)',
+                  paddingVertical: scale(6),
+                  paddingHorizontal: scale(10),
+                  borderRadius: scale(8),
+                  borderWidth: 1,
+                  borderColor: colors.amber,
+                }}
+                onPress={() => {
+                  router.push({
+                    pathname: '/cars',
+                    params: { mode: 'custom_trip', selectedRide: selectedDriver.vehicle_type || '5seater' }
+                  });
+                }}
+              >
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(10.5), fontWeight: '800' }}>Change</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Step 3: Fare Breakdown & Booking Section (Rendered ONLY after car selection) */}
         {selectedDriver && (
