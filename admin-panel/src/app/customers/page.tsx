@@ -18,15 +18,13 @@ import { initialCustomers, fetchCustomersApi } from '@/lib/api';
 import { Customer } from '@/lib/types';
 
 export default function CustomersPage() {
-  const [customersList, setCustomersList] = useState<Customer[]>(initialCustomers);
+  const [customersList, setCustomersList] = useState<Customer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
     fetchCustomersApi().then((data) => {
-      if (data && data.length > 0) {
-        setCustomersList(data);
-      }
+      setCustomersList(data || []);
     });
   }, []);
 

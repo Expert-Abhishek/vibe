@@ -51,83 +51,7 @@ interface Guide {
   longitude: number;
 }
 
-const mockGuides: Guide[] = [
-  {
-    id: 'g1',
-    name: 'Somanna Gowda',
-    city: 'Hampi',
-    experience: 15,
-    rating: 4.9,
-    languages: ['Kannada', 'English', 'Telugu'],
-    specialty: 'UNESCO Ruins & Architecture',
-    description: 'Born and raised in Hampi, studied the ruins for 15 years. Expert on Virupaksha and Vitthala temple details.',
-    avatarColor: '#E07A5F',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    chargePerHour: 350,
-    latitude: 15.3350,
-    longitude: 76.4600,
-  },
-  {
-    id: 'g2',
-    name: 'Ananya Shastri',
-    city: 'Mysuru',
-    experience: 10,
-    rating: 4.8,
-    languages: ['Kannada', 'English', 'Hindi'],
-    specialty: 'Palace History & Heritage Walks',
-    description: 'Specializes in Wodeyar dynasty history and palace secrets. Guides heritage walks in Mysore.',
-    avatarColor: '#3D405B',
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    chargePerHour: 400,
-    latitude: 12.3053,
-    longitude: 76.6552,
-  },
-  {
-    id: 'g3',
-    name: 'Ramesh Kumar',
-    city: 'Bengaluru',
-    experience: 12,
-    rating: 4.7,
-    languages: ['Kannada', 'English'],
-    specialty: 'City Heritage & Garden Walks',
-    description: 'Explores Tipu summer palace, Lalbagh gardens and colonial-era landmarks of Bangalore.',
-    avatarColor: '#81B29A',
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    chargePerHour: 300,
-    latitude: 12.9982,
-    longitude: 77.5920,
-  },
-  {
-    id: 'g4',
-    name: 'Kavitha Hegde',
-    city: 'Coorg',
-    experience: 8,
-    rating: 4.9,
-    languages: ['Kannada', 'English', 'Kodava'],
-    specialty: 'Coffee Plantation & Forest Treks',
-    description: 'Leads hikes through plantation estate trails and peaks like Mandalpatti.',
-    avatarColor: '#F4F1DE',
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150',
-    chargePerHour: 350,
-    latitude: 12.4385,
-    longitude: 75.7214,
-  },
-  {
-    id: 'g5',
-    name: 'Manjunath Naik',
-    city: 'Gokarna',
-    experience: 6,
-    rating: 4.6,
-    languages: ['Kannada', 'English'],
-    specialty: 'Beach Trekking & Mythological Trails',
-    description: 'Guides along beach cliffs and temple routes. Native of Gokarna coast.',
-    avatarColor: '#E29578',
-    image: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150',
-    chargePerHour: 250,
-    latitude: 14.5262,
-    longitude: 74.3168,
-  },
-];
+const mockGuides: Guide[] = [];
 
 export default function GuidesScreen() {
   const router = useRouter();
@@ -141,7 +65,7 @@ export default function GuidesScreen() {
   const [isInstantBooking, setIsInstantBooking] = useState(initialInstantParam);
 
   // Dynamic guides list state
-  const [guidesList, setGuidesList] = useState<Guide[]>(mockGuides);
+  const [guidesList, setGuidesList] = useState<Guide[]>([]);
   const [loadingGuides, setLoadingGuides] = useState(false);
 
   useEffect(() => {
@@ -150,8 +74,8 @@ export default function GuidesScreen() {
       setLoadingGuides(true);
       try {
         const rawGuides = await fetchGuidesApi();
-        if (rawGuides && rawGuides.length > 0 && isMounted) {
-          const formattedBackendGuides: Guide[] = rawGuides.map((g: any, index: number) => ({
+        if (isMounted) {
+          const formattedBackendGuides: Guide[] = (rawGuides || []).map((g: any, index: number) => ({
             id: g.user_id || g.id || `bg_${index}`,
             name: g.name || 'Certified Local Guide',
             city: g.city || 'Hampi',
@@ -166,15 +90,7 @@ export default function GuidesScreen() {
             latitude: Number(g.latitude) || (15.3350 + (index * 0.005)),
             longitude: Number(g.longitude) || (76.4600 + (index * 0.005)),
           }));
-
-          // Merge backend guides with mockGuides, keeping unique by phone or name
-          const combined = [...formattedBackendGuides];
-          mockGuides.forEach(mg => {
-            if (!combined.some(cg => cg.name.toLowerCase() === mg.name.toLowerCase())) {
-              combined.push(mg);
-            }
-          });
-          setGuidesList(combined);
+          setGuidesList(formattedBackendGuides);
         }
       } catch (err) {
         console.warn('Error loading dynamic guides:', err);

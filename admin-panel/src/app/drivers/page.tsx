@@ -37,16 +37,14 @@ function formatVehicleType(type?: string): string {
 
 
 export default function DriversPage() {
-  const [driversList, setDriversList] = useState<Driver[]>(initialDrivers);
+  const [driversList, setDriversList] = useState<Driver[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
 
   useEffect(() => {
     fetchDriversApi().then((data) => {
-      if (data && data.length > 0) {
-        setDriversList(data);
-      }
+      setDriversList(data || []);
     });
   }, []);
 

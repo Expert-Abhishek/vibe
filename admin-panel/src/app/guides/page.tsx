@@ -25,16 +25,14 @@ function isValidImageUrl(url?: string | null): boolean {
 }
 
 export default function GuidesPage() {
-  const [guidesList, setGuidesList] = useState<Guide[]>(initialGuides);
+  const [guidesList, setGuidesList] = useState<Guide[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
 
   useEffect(() => {
     fetchGuidesApi().then((data) => {
-      if (data && data.length > 0) {
-        setGuidesList(data);
-      }
+      setGuidesList(data || []);
     });
   }, []);
 

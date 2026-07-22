@@ -688,4 +688,25 @@ router.get('/users-list', async (req, res) => {
   }
 });
 
+/**
+ * POST/DELETE /api/auth/clear-all-data
+ * Clear all data from the database for testing fresh
+ */
+const handleClearAllData = async (req, res) => {
+  try {
+    const truncateQuery = `
+      TRUNCATE TABLE trips, plan_checkpoints, plans, destinations, driver_profiles, guide_profiles, users CASCADE;
+    `;
+    await db.query(truncateQuery);
+    return res.json({ success: true, message: 'All database tables truncated successfully.' });
+  } catch (error) {
+    console.error('Error clearing database:', error);
+    return res.status(500).json({ success: false, message: 'Failed to clear database', error: error.message });
+  }
+};
+
+router.post('/clear-all-data', handleClearAllData);
+router.delete('/clear-all-data', handleClearAllData);
+
 module.exports = router;
+

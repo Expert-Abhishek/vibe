@@ -67,7 +67,7 @@ export default function DestinationsPage() {
   const loadDestinations = async () => {
     setLoading(true);
     const data = await fetchDestinationsApi();
-    setDestinations(data.length > 0 ? data : initialDestinations);
+    setDestinations(data || []);
     setLoading(false);
   };
 

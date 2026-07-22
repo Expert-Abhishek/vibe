@@ -21,22 +21,36 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { useState, useEffect } from 'react';
 import {
-  initialCustomers,
-  initialDrivers,
-  initialGuides,
+  fetchCustomersApi,
+  fetchDriversApi,
+  fetchGuidesApi,
   getDashboardStats,
 } from '@/lib/api';
+import { Customer, Driver, Guide } from '@/lib/types';
 
 export default function DashboardPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [guides, setGuides] = useState<Guide[]>([]);
+
+  useEffect(() => {
+    Promise.all([fetchCustomersApi(), fetchDriversApi(), fetchGuidesApi()]).then(([c, d, g]) => {
+      setCustomers(c || []);
+      setDrivers(d || []);
+      setGuides(g || []);
+    });
+  }, []);
+
   const stats = getDashboardStats(
-    initialCustomers.length,
-    initialDrivers.length,
-    initialGuides.length
+    customers.length,
+    drivers.length,
+    guides.length
   );
 
-  const pendingDrivers = initialDrivers.filter((d) => d.status === 'Pending KYC').length;
-  const pendingGuides = initialGuides.filter((g) => g.status === 'Pending KYC').length;
+  const pendingDrivers = drivers.filter((d) => d.status === 'Pending KYC').length;
+  const pendingGuides = guides.filter((g) => g.status === 'Pending KYC').length;
 
   return (
     <div className="space-y-8">

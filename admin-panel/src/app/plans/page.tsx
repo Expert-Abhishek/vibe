@@ -88,8 +88,8 @@ export default function PlansPage() {
       fetchPlansApi(),
       fetchDestinationsApi(),
     ]);
-    setPlans(fetchedPlans.length > 0 ? fetchedPlans : initialPlans);
-    setDestinations(fetchedDests.length > 0 ? fetchedDests : initialDestinations);
+    setPlans(fetchedPlans || []);
+    setDestinations(fetchedDests || []);
     setLoading(false);
   };
 
