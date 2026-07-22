@@ -25,6 +25,17 @@ function isValidImageUrl(url?: string | null): boolean {
   return false;
 }
 
+function formatVehicleType(type?: string): string {
+  if (!type) return '5 Seater';
+  const t = type.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (t === '5seater') return '5 Seater';
+  if (t === '7seater') return '7 Seater';
+  if (t === '4x4jeep' || t === '4x4') return '4x4 Jeep';
+  if (t === 'auto') return 'Auto';
+  return type;
+}
+
+
 export default function DriversPage() {
   const [driversList, setDriversList] = useState<Driver[]>(initialDrivers);
   const [searchTerm, setSearchTerm] = useState('');
@@ -151,9 +162,15 @@ export default function DriversPage() {
 
 
                   <td className="py-4 px-6">
-                    <span className="font-semibold text-gray-200 block">{driver.vehicleModel}</span>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="px-2 py-0.5 rounded bg-brand-500/20 text-brand-400 border border-brand-500/30 text-[10px] font-bold uppercase">
+                        {formatVehicleType(driver.vehicleType)}
+                      </span>
+                    </div>
+                    <span className="font-semibold text-gray-200 block text-xs">{driver.vehicleModel || 'Standard Cab'}</span>
                     <span className="text-[11px] text-brand-500 font-bold uppercase">{driver.vehicleNumber}</span>
                   </td>
+
 
                   <td className="py-4 px-6">
                     <span
@@ -392,7 +409,21 @@ function DriverDetailModal({
           </div>
 
           {/* Quick Info Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Vehicle Type</span>
+              <span className="text-xs font-black text-brand-400 mt-1 block truncate">
+                🚘 {formatVehicleType(driver.vehicleType)}
+              </span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
+              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Vehicle Model</span>
+              <span className="text-xs font-bold text-white mt-1 block truncate">
+                {driver.vehicleModel || 'Standard Cab'}
+              </span>
+            </div>
+
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
               <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Primary Phone</span>
               <span className="text-xs font-bold text-white mt-1 block truncate">
@@ -407,7 +438,6 @@ function DriverDetailModal({
               </span>
             </div>
 
-
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
               <span className="text-[10px] text-dark-textMuted uppercase font-bold block">License No</span>
               <span className="text-xs font-bold text-brand-500 mt-1 block truncate">
@@ -417,19 +447,13 @@ function DriverDetailModal({
 
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
               <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Rating</span>
-              <span className="text-xs font-bold text-yellow-400 mt-1 block flex items-center">
+              <span className="text-xs font-bold text-yellow-400 mt-1 flex items-center">
                 <Star className="w-3 h-3 fill-yellow-400 mr-1" />
                 {driver.rating} / 5.0
               </span>
             </div>
-
-            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Wallet Balance</span>
-              <span className="text-xs font-bold text-white mt-1 block">
-                ₹{driver.walletBalance.toLocaleString('en-IN')}
-              </span>
-            </div>
           </div>
+
 
           {/* KYC Documents Gallery (With Profile Pic & Aadhar Highlighted) */}
           <div>

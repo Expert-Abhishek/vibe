@@ -2,7 +2,8 @@ import { moderateFontScale, scale, verticalScale } from '@/constants/responsive'
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { fetchGuidesApi } from '@/constants/api';
 import {
   ActivityIndicator,
   Alert,
@@ -139,6 +140,52 @@ export default function GuidesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isInstantBooking, setIsInstantBooking] = useState(initialInstantParam);
 
+  // Dynamic guides list state
+  const [guidesList, setGuidesList] = useState<Guide[]>(mockGuides);
+  const [loadingGuides, setLoadingGuides] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDynamicGuides() {
+      setLoadingGuides(true);
+      try {
+        const rawGuides = await fetchGuidesApi();
+        if (rawGuides && rawGuides.length > 0 && isMounted) {
+          const formattedBackendGuides: Guide[] = rawGuides.map((g: any, index: number) => ({
+            id: g.user_id || g.id || `bg_${index}`,
+            name: g.name || 'Certified Local Guide',
+            city: g.city || 'Hampi',
+            experience: Number(g.experience) || 5,
+            rating: Number(g.rating) || 5.0,
+            languages: Array.isArray(g.languages) ? g.languages : ['Kannada', 'English', 'Hindi'],
+            specialty: g.expertise || 'Heritage & Cultural Tours',
+            description: g.bio || 'Government certified tourist guide with extensive local history knowledge.',
+            avatarColor: '#E07A5F',
+            image: g.photo_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+            chargePerHour: Number(g.daily_rate) || 2000,
+            latitude: Number(g.latitude) || (15.3350 + (index * 0.005)),
+            longitude: Number(g.longitude) || (76.4600 + (index * 0.005)),
+          }));
+
+          // Merge backend guides with mockGuides, keeping unique by phone or name
+          const combined = [...formattedBackendGuides];
+          mockGuides.forEach(mg => {
+            if (!combined.some(cg => cg.name.toLowerCase() === mg.name.toLowerCase())) {
+              combined.push(mg);
+            }
+          });
+          setGuidesList(combined);
+        }
+      } catch (err) {
+        console.warn('Error loading dynamic guides:', err);
+      } finally {
+        if (isMounted) setLoadingGuides(false);
+      }
+    }
+    loadDynamicGuides();
+    return () => { isMounted = false; };
+  }, []);
+
   // Booking process states
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [bookingStep, setBookingStep] = useState<'none' | 'loading' | 'map' | 'datetime' | 'accepted'>('none');
@@ -174,12 +221,13 @@ export default function GuidesScreen() {
     danger: '#ef4444',
   };
 
-  const filteredGuides = mockGuides.filter(
+  const filteredGuides = guidesList.filter(
     (g) =>
       g.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
       g.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
       g.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
 
   const startBookingFlow = (guide: Guide) => {
     setSelectedGuide(guide);
@@ -295,7 +343,14 @@ export default function GuidesScreen() {
           {searchQuery.trim() === '' ? 'Highly Recommended Guides' : `Guides matching "${searchQuery}"`}
         </Text>
 
-        {filteredGuides.length === 0 ? (
+        {loadingGuides ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.amber} />
+            <Text style={{ color: colors.textMuted, marginTop: 12, fontSize: moderateFontScale(13) }}>
+              Fetching verified guides from database...
+            </Text>
+          </View>
+        ) : filteredGuides.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
             <MaterialIcons name="explore-off" size={scale(40)} color={colors.textMuted} />
             <Text style={{ color: colors.textMuted, marginTop: scale(8), fontSize: moderateFontScale(13) }}>
@@ -303,6 +358,7 @@ export default function GuidesScreen() {
             </Text>
           </View>
         ) : (
+
           filteredGuides.map((guide) => (
             <View key={guide.id} style={[styles.guideCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
 

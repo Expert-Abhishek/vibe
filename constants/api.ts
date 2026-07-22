@@ -239,5 +239,27 @@ export async function fetchDriversApi(): Promise<any[]> {
   return [];
 }
 
+/**
+ * Fetch live Guides list from backend
+ */
+export async function fetchGuidesApi(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/guides`);
+    const data = await res.json();
+    if (data.success) {
+      if (Array.isArray(data.guides)) {
+        return data.guides;
+      }
+      if (Array.isArray(data.data)) {
+        return data.data;
+      }
+    }
+  } catch (e) {
+    console.warn('fetchGuidesApi error:', e);
+  }
+  return [];
+}
+
+
 
 

@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
 import {
   Alert,
   ActivityIndicator,
@@ -25,6 +26,8 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
 
   // Role specific fields
+  const [vehicleType, setVehicleType] = useState('5seater');
+  const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [licenseId, setLicenseId] = useState('');
 
@@ -77,9 +80,12 @@ export default function RegisterScreen() {
       email: email.trim() || undefined,
       password: password,
       role: mappedRole,
+      vehicle_type: role === 'driver' ? vehicleType : undefined,
+      vehicle_model: role === 'driver' ? (vehicleModel.trim() || 'Standard Cab') : undefined,
       vehicle_number: role === 'driver' ? vehicleNumber : undefined,
       license_id: role === 'guide' ? licenseId : undefined,
     });
+
 
 
     setLoading(false);
@@ -156,15 +162,61 @@ export default function RegisterScreen() {
         {/* Conditional Role Inputs */}
 
         {role === 'driver' && (
-          <TextInput
-            style={styles.input}
-            placeholder="Vehicle Number (e.g. KA-03-MY-7788)"
-            placeholderTextColor="#aaa"
-            value={vehicleNumber}
-            onChangeText={setVehicleNumber}
-            autoCapitalize="characters"
-          />
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#0d1b3e', marginBottom: 8 }}>
+              Vehicle Category / Type *
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+              {[
+                { id: '5seater', label: '5 Seater' },
+                { id: '7seater', label: '7 Seater' },
+                { id: '4x4jeep', label: '4x4 Jeep' },
+                { id: 'auto', label: 'Auto' },
+              ].map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: vehicleType === cat.id ? '#0d1b3e' : '#e0e0e0',
+                    backgroundColor: vehicleType === cat.id ? '#0d1b3e' : '#f5f5f5',
+                  }}
+                  onPress={() => setVehicleType(cat.id)}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '700',
+                      color: vehicleType === cat.id ? '#ffffff' : '#444444',
+                    }}
+                  >
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Vehicle Model (e.g. Swift Dzire, Innova, Thar)"
+              placeholderTextColor="#aaa"
+              value={vehicleModel}
+              onChangeText={setVehicleModel}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Vehicle Number (e.g. KA-03-MY-7788)"
+              placeholderTextColor="#aaa"
+              value={vehicleNumber}
+              onChangeText={setVehicleNumber}
+              autoCapitalize="characters"
+            />
+          </View>
         )}
+
         {role === 'guide' && (
           <TextInput
             style={styles.input}

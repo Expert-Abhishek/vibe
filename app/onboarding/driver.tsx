@@ -170,6 +170,7 @@ export default function DriverRegister() {
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
       if (!formData.aadharNo || formData.aadharNo.length !== 12) stepErrors.aadharNo = 'Enter a valid 12-digit Aadhar number';
     } else if (currentStep === 2) {
+      if (!formData.vehicleModel) stepErrors.vehicleModel = 'Enter your vehicle model name (e.g. Swift Dzire, Innova)';
       if (!formData.rcNo) stepErrors.rcNo = 'Enter your vehicle RC number';
       if (!formData.dlNo) stepErrors.dlNo = 'Enter your driving licence number';
       if (!formData.capacity) {
@@ -180,7 +181,8 @@ export default function DriverRegister() {
           stepErrors.capacity = 'Enter a valid passenger capacity greater than 0';
         }
       }
-    } else if (currentStep === 3) {
+    }
+ else if (currentStep === 3) {
       if (
         !docs.photo || !docs.rc || !docs.dl || !docs.insurance || !docs.aadhar ||
         !docs.carFront || !docs.carLeft || !docs.carRight || !docs.carBack
