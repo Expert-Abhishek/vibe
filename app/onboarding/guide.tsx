@@ -376,7 +376,7 @@ export default function GuideRegister() {
           <View style={styles.loaderBox}>
             <ActivityIndicator size="large" color={colors.amber} />
             <Text style={styles.loaderTitle}>Submitting Guide Application...</Text>
-            <Text style={styles.loaderSub}>Uploading guide profile & documents to backend server</Text>
+            <Text style={styles.loaderSub}>Uploading guide profile </Text>
           </View>
         </View>
       )}
@@ -572,4 +572,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: verticalScale(17),
   },
-});
+});

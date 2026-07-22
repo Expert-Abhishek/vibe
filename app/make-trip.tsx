@@ -177,6 +177,25 @@ export default function MakeTripScreen() {
     loadBackendData();
   }, []);
 
+  // Listen for vehicle selection returned from Fleet Showcase (/cars)
+  useEffect(() => {
+    if (searchParams.fromVehicle === 'true') {
+      if (searchParams.selectedRide) {
+        setSelectedRide(searchParams.selectedRide as string);
+      }
+      if (searchParams.selectedDriverId) {
+        setSelectedDriver({
+          id: searchParams.selectedDriverId,
+          user_id: searchParams.selectedDriverId,
+          name: searchParams.selectedDriverName || 'Verified Driver',
+          vehicle_model: searchParams.selectedCarModel || 'Standard Cab',
+          vehicle_number: searchParams.selectedCarNumber || '',
+          car_front_url: searchParams.selectedCarPhoto || '',
+          daily_rate: searchParams.selectedDriverRate ? Number(searchParams.selectedDriverRate) : 1800,
+        });
+      }
+    }
+  }, [searchParams]);
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
     { id: 'start', name: 'Bengaluru (Start)', latitude: 12.9716, longitude: 77.5946, address: 'Bengaluru City Center' },
@@ -982,11 +1001,11 @@ export default function MakeTripScreen() {
             1. Select Vehicle Category
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(12) }}>
-            Choose car category to see available active drivers and cars set by admin
+            Select category and tap below to pick your car from Vehicle Fleet Showcase
           </Text>
 
           {/* Vehicle Category Chips */}
-          <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(16) }}>
+          <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(14) }}>
             {[
               { id: '5seater', label: '5 Seater' },
               { id: '7seater', label: '7 Seater' },
@@ -1009,7 +1028,6 @@ export default function MakeTripScreen() {
                   }}
                   onPress={() => {
                     setSelectedRide(cat.id);
-                    setSelectedDriver(null); // reset selected car on category change
                   }}
                 >
                   <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: isSelected ? colors.amber : colors.textPrimary }} numberOfLines={1}>
@@ -1019,6 +1037,33 @@ export default function MakeTripScreen() {
               );
             })}
           </View>
+
+          {/* Fleet Showcase Trigger Button */}
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.amber,
+              borderRadius: scale(12),
+              paddingVertical: verticalScale(12),
+              paddingHorizontal: scale(14),
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: scale(8),
+              marginBottom: verticalScale(14),
+            }}
+            onPress={() => {
+              router.push({
+                pathname: '/cars',
+                params: { selectedRide: selectedRide, mode: 'custom_trip' }
+              });
+            }}
+          >
+            <MaterialIcons name="directions-car" size={scale(20)} color="#101014" />
+            <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(13) }}>
+              Browse Cars in Vehicle Fleet Showcase
+            </Text>
+            <MaterialIcons name="arrow-forward" size={scale(18)} color="#101014" />
+          </TouchableOpacity>
 
           {/* Available Cars & Drivers List from Backend */}
           <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginBottom: verticalScale(8) }}>
@@ -1074,7 +1119,7 @@ export default function MakeTripScreen() {
                       onPress={() => setSelectedDriver(driverCard)}
                     >
                       {/* Car Front Photo Thumbnail */}
-                      <View style={{ width: scale(64), height: scale(64), borderRadius: scale(10), backgroundColor: '#212129', overflow: 'hidden', marginRight: scale(12), borderHeight: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}>
+                      <View style={{ width: scale(64), height: scale(64), borderRadius: scale(10), backgroundColor: '#212129', overflow: 'hidden', marginRight: scale(12), borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}>
                         {frontPic && (frontPic.startsWith('http') || frontPic.startsWith('data:image')) ? (
                           <Image source={{ uri: frontPic }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
                         ) : (

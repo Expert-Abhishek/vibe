@@ -92,10 +92,31 @@ export default function PlanRouteScreen() {
 
 
   useEffect(() => {
-    if (fromVehicle && vehicleTypeParam) {
-      setBookingVehicle(vehicleTypeParam);
+    if (params.fromVehicle === 'true') {
+      if (params.selectedRide) {
+        setBookingVehicle(params.selectedRide as any);
+      }
+      if (params.selectedDriverId) {
+        setSelectedDriver({
+          id: params.selectedDriverId,
+          user_id: params.selectedDriverId,
+          name: params.selectedDriverName || 'Verified Driver',
+          vehicle_model: params.selectedCarModel || 'Standard Cab',
+          vehicle_number: params.selectedCarNumber || '',
+          car_front_url: params.selectedCarPhoto || '',
+          daily_rate: params.selectedDriverRate ? Number(params.selectedDriverRate) : 1800,
+          hourly_addon_rate: params.selectedDriverAddonRate ? Number(params.selectedDriverAddonRate) : 150,
+        });
+      }
+      if (params.selectedPlanId && displayPackagePlans) {
+        const match = displayPackagePlans.find((p: any) => p.id === params.selectedPlanId);
+        if (match) {
+          setSelectedPlan(match);
+          setBookingStep('form');
+        }
+      }
     }
-  }, [fromVehicle, vehicleTypeParam]);
+  }, [params]);
 
 
   // Booking modal state
@@ -319,7 +340,7 @@ export default function PlanRouteScreen() {
               date: finalDate,
               time: finalTime,
               price: price,
-              paymentMode: 'Razorpay (Paid)',
+              paymentMode: 'UPI',
               status: 'Upcoming',
               passengerCount: bookingPax,
             });
@@ -527,7 +548,6 @@ export default function PlanRouteScreen() {
                               ]}
                               onPress={() => {
                                 setBookingVehicle(vKey);
-                                setSelectedDriver(null);
                               }}
                             >
                               <Text style={[styles.vehiclePillText, { color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(10.5), fontWeight: '800' }]} numberOfLines={1}>{name}</Text>
@@ -535,6 +555,38 @@ export default function PlanRouteScreen() {
                           );
                         })}
                       </View>
+
+                      {/* Fleet Showcase Trigger Button */}
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: colors.amber,
+                          borderRadius: scale(10),
+                          paddingVertical: verticalScale(10),
+                          paddingHorizontal: scale(12),
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: scale(6),
+                          marginTop: verticalScale(10),
+                          marginBottom: verticalScale(10),
+                        }}
+                        onPress={() => {
+                          router.push({
+                            pathname: '/cars',
+                            params: {
+                              selectedRide: bookingVehicle,
+                              mode: 'plan',
+                              planId: selectedPlan?.id || '',
+                            }
+                          });
+                        }}
+                      >
+                        <MaterialIcons name="directions-car" size={scale(18)} color="#101014" />
+                        <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(12) }}>
+                          Browse Cars in Vehicle Fleet Showcase
+                        </Text>
+                        <MaterialIcons name="arrow-forward" size={scale(16)} color="#101014" />
+                      </TouchableOpacity>
 
                       {/* Real Cars / Drivers List from Backend */}
                       <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginTop: verticalScale(12), marginBottom: verticalScale(6) }]}>2. Select Car & Driver</Text>
@@ -1209,29 +1261,6 @@ const styles = StyleSheet.create({
   rowBookBtnText: {
     color: '#101014',
     fontSize: moderateFontScale(12),
-    fontWeight: '800',
-  },
-  overlayModal: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  mapContainerBox: {
-    borderTopLeftRadius: scale(24),
-    borderTopRightRadius: scale(24),
-    paddingBottom: verticalScale(30),
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: verticalScale(14),
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-  },
-  modalTitle: {
-    fontSize: moderateFontScale(15),
     fontWeight: '800',
   },
 });

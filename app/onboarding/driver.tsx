@@ -182,7 +182,7 @@ export default function DriverRegister() {
         }
       }
     }
- else if (currentStep === 3) {
+    else if (currentStep === 3) {
       if (
         !docs.photo || !docs.rc || !docs.dl || !docs.insurance || !docs.aadhar ||
         !docs.carFront || !docs.carLeft || !docs.carRight || !docs.carBack
@@ -539,7 +539,7 @@ export default function DriverRegister() {
           <View style={styles.loaderBox}>
             <ActivityIndicator size="large" color={colors.amber} />
             <Text style={styles.loaderTitle}>Submitting Application...</Text>
-            <Text style={styles.loaderSub}>Uploading driver profile & documents to backend server</Text>
+            <Text style={styles.loaderSub}>Uploading driver profile </Text>
           </View>
         </View>
       )}
