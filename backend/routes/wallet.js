@@ -11,6 +11,63 @@ const razorpay = new Razorpay({
 });
 
 /**
+ * GET /api/wallet/checkout-page
+ * Renders official Razorpay Checkout Gateway UI HTML Page for Mobile WebBrowser Fallback
+ */
+router.get('/checkout-page', (req, res) => {
+  const amount = req.query.amount || '500';
+  const title = req.query.title || 'Vibe Wallet Top-Up';
+  const keyId = process.env.RAZORPAY_KEY_ID || 'rzp_live_Cqz1hMxOW8QFj3';
+  const amountInPaise = Math.round(parseFloat(amount) * 100);
+
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vibe Razorpay Gateway</title>
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <style>
+          body { background-color: #101014; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+          .loader { border: 4px solid #333; border-top: 4px solid #F5C518; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          h2 { color: #F5C518; font-weight: 700; font-size: 18px; text-align: center; }
+          p { color: #888; font-size: 13px; margin-top: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="loader"></div>
+        <h2>Launching Official Razorpay Gateway...</h2>
+        <p>Please wait, opening PhonePe, Google Pay, UPI & Cards...</p>
+        <script>
+          var options = {
+            key: "${keyId}",
+            amount: ${amountInPaise},
+            currency: "INR",
+            name: "Vibe Tour & Travel",
+            description: "${title}",
+            theme: { color: "#F5C518" },
+            handler: function (response) {
+              window.location.href = "vibe://payment-success?payment_id=" + response.razorpay_payment_id;
+            },
+            modal: {
+              ondismiss: function () {
+                window.location.href = "vibe://payment-cancelled";
+              }
+            }
+          };
+          var rzp = new Razorpay(options);
+          rzp.on('payment.failed', function (resp) {
+            window.location.href = "vibe://payment-cancelled";
+          });
+          rzp.open();
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+/**
  * GET /api/wallet/:userId
  * Fetch user or driver/guide wallet balance and transaction history
  */
@@ -293,7 +350,7 @@ router.post('/withdraw', async (req, res) => {
     );
 
     // Record transaction log
-    await client.query(
+    await db.query(
       'INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, $2, $3, $4)',
       [userId, 'withdrawal', numAmount, `Withdrawal Request to ${upiId || accountNumber || 'Bank'} (Pending Approval)`]
     );

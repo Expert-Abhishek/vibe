@@ -1,3 +1,6 @@
+import { fetchWalletBalanceApi, topupWalletApi, submitWithdrawalApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
+import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -15,9 +18,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { openRazorpayPayment } from '@/constants/razorpay';
-import { topupWalletApi, submitWithdrawalApi, fetchWalletBalanceApi } from '@/constants/api';
-import { getUserSessionSync } from '@/constants/authStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
@@ -36,9 +36,6 @@ export default function ProfileScreen() {
   const [walletBalance, setWalletBalance] = useState(1500);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
 
-  const [addMoneyModalVisible, setAddMoneyModalVisible] = useState(false);
-  const [rechargeAmount, setRechargeAmount] = useState('500');
-
   const session = getUserSessionSync();
   const userId = session?.id || 'c1';
 
@@ -52,10 +49,7 @@ export default function ProfileScreen() {
     }
     loadWalletData();
   }, [userId]);
-  const walletHistory = [
-    { id: '1', type: 'incoming', amount: 500, date: '18 July 2026', title: 'Refund' },
-    { id: '2', type: 'outgoing', amount: 200, date: '15 July 2026', title: 'Cab Booking' },
-  ];
+
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   const colors = {
@@ -87,8 +81,6 @@ export default function ProfileScreen() {
       langTitle: 'Kannada Language',
       langActive: 'ಕನ್ನಡ ಸಕ್ರಿಯವಾಗಿದೆ',
       langInactive: 'English is active',
-      switchDriver: 'Switch to Driver Portal',
-      switchGuide: 'Switch to Guide Portal',
       logout: 'Logout',
     },
     kn: {
@@ -107,106 +99,68 @@ export default function ProfileScreen() {
       langTitle: 'ಕನ್ನಡ ಭಾಷೆ',
       langActive: 'ಕನ್ನಡ ಸಕ್ರಿಯವಾಗಿದೆ',
       langInactive: 'ಇಂಗ್ಲಿಷ್ ಸಕ್ರಿಯವಾಗಿದೆ',
-      switchDriver: 'ಡ್ರೈವರ್ ಪೋರ್ಟಲ್‌ಗೆ ಬದಲಾಯಿಸಿ',
-      switchGuide: 'ಗೈಡ್ ಪೋರ್ಟಲ್‌ಗೆ ಬದಲಾಯಿಸಿ',
-      logout: 'ಲಾಗ್ ಔಟ್',
-    }
+      logout: 'ನಿರ್ಗಮಿಸಿ',
+    },
   }[appLang];
 
   const handleUpdateName = () => {
     if (!name.trim()) {
-      Alert.alert(appLang === 'kn' ? 'ದೋಷ' : 'Error', appLang === 'kn' ? 'ಹೆಸರು ಖಾಲಿ ಇರಬಾರದು' : 'Name cannot be empty');
+      Alert.alert('Error', 'Name cannot be empty.');
       return;
     }
-    Alert.alert(
-      appLang === 'kn' ? 'ಪ್ರೊಫೈಲ್ ನವೀಕರಿಸಲಾಗಿದೆ' : 'Profile Updated',
-      appLang === 'kn' ? `ನಿಮ್ಮ ಹೆಸರನ್ನು "${name}" ಗೆ ನವೀಕರಿಸಲಾಗಿದೆ.` : `Your name has been updated to "${name}".`
-    );
+    Alert.alert('Success', 'Profile updated successfully.');
   };
 
   const handleChangePassword = () => {
     if (!currentPassword || !newPassword) {
-      Alert.alert(
-        appLang === 'kn' ? 'ದೋಷ' : 'Error',
-        appLang === 'kn' ? 'ಪ್ರಸ್ತುತ ಮತ್ತು ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಎರಡನ್ನೂ ನಮೂದಿಸಿ' : 'Please fill in both current and new password fields'
-      );
+      Alert.alert('Error', 'Please fill in all password fields.');
       return;
     }
-    if (newPassword.length < 6) {
-      Alert.alert(
-        appLang === 'kn' ? 'ದೋಷ' : 'Error',
-        appLang === 'kn' ? 'ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಕನಿಷ್ಠ 6 ಅಕ್ಷರಗಳಿರಬೇಕು' : 'New password must be at least 6 characters'
-      );
-      return;
-    }
-    Alert.alert(
-      appLang === 'kn' ? 'ಯಶಸ್ವಿಯಾಗಿದೆ' : 'Success',
-      appLang === 'kn' ? 'ನಿಮ್ಮ ಪಾಸ್‌ವರ್ಡ್ ಯಶಸ್ವಿಯಾಗಿ ಬದಲಾಗಿದೆ.' : 'Your password has been changed successfully.'
-    );
+    Alert.alert('Success', 'Password changed successfully.');
     setCurrentPassword('');
     setNewPassword('');
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      appLang === 'kn' ? 'ಲಾಗ್ ಔಟ್' : 'Logout',
-      appLang === 'kn' ? 'ವಿಬ್ಜ್‌ನಿಂದ ಲಾಗ್ ಔಟ್ ಮಾಡಲು ನೀವು ಖಚಿತವಾಗಿ ಬಯಸುವಿರಾ?' : 'Are you sure you want to log out of Vibzz?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: appLang === 'kn' ? 'ಲಾಗ್ ಔಟ್' : 'Logout',
-          style: 'destructive',
-          onPress: () => router.replace('/(auth)/sign-in'),
-        },
-      ]
-    );
+    Alert.alert('Logout', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: () => router.replace('/(auth)/sign-in') },
+    ]);
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(110) }]} showsVerticalScrollIndicator={false}>
-
-        {/* PROFILE HEADER */}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* HEADER SECTION */}
         <View style={styles.header}>
           <View style={[styles.avatarCircle, { backgroundColor: colors.amber }]}>
-            <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>{name ? name[0].toUpperCase() : 'U'}</Text>
           </View>
-          <Text style={[styles.profileName, { color: colors.textPrimary }]}>{name}</Text>
-          <Text style={[styles.profileRole, { color: colors.textMuted }]}>{trans.profileRole}</Text>
+          <Text style={[styles.userName, { color: colors.textPrimary }]}>{name}</Text>
+          <Text style={[styles.userRole, { color: colors.textMuted }]}>{trans.profileRole}</Text>
         </View>
 
         {/* ACCOUNT INFORMATION SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
           <Text style={[styles.cardTitle, { color: colors.amber }]}>{trans.accountInfo}</Text>
 
-          {/* Full Name */}
           <Text style={[styles.label, { color: colors.textPrimary }]}>{trans.fullName}</Text>
-          <View style={styles.inlineRow}>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.surfaceAlt,
-                  borderColor: colors.line,
-                  color: colors.textPrimary,
-                  flex: 1,
-                  marginRight: scale(10),
-                },
-              ]}
-              value={name}
-              onChangeText={setName}
-              placeholder="Your full name"
-              placeholderTextColor={colors.textMuted}
-            />
-            <TouchableOpacity style={[styles.smallBtn, { backgroundColor: colors.amber }]} onPress={handleUpdateName}>
-              <Text style={styles.smallBtnText}>{trans.updateBtn}</Text>
-            </TouchableOpacity>
-          </View>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+            value={name}
+            onChangeText={setName}
+            placeholder="Enter full name"
+            placeholderTextColor={colors.textMuted}
+          />
 
-          <View style={[styles.divider, { backgroundColor: colors.line }]} />
+          <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.amber }]} onPress={handleUpdateName}>
+            <Text style={styles.primaryButtonText}>{trans.updateBtn}</Text>
+          </TouchableOpacity>
+        </View>
 
-          {/* Password Change */}
-          <Text style={[styles.cardSubTitle, { color: colors.textPrimary }]}>{trans.changePass}</Text>
+        {/* SECURITY / CHANGE PASSWORD SECTION */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+          <Text style={[styles.cardTitle, { color: colors.amber }]}>{trans.changePass}</Text>
 
           <Text style={[styles.label, { color: colors.textPrimary }]}>{trans.currentPass}</Text>
           <TextInput
@@ -218,25 +172,28 @@ export default function ProfileScreen() {
             placeholderTextColor={colors.textMuted}
           />
 
-          <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>{trans.newPass}</Text>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>{trans.newPass}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
             secureTextEntry
             value={newPassword}
             onChangeText={setNewPassword}
-            placeholder="New password"
+            placeholder="••••••••"
             placeholderTextColor={colors.textMuted}
           />
 
-          <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(16) }]} onPress={handleChangePassword}>
-            <Text style={styles.primaryButtonText}>{trans.changePassBtn}</Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.amber }]}
+            onPress={handleChangePassword}
+          >
+            <Text style={[styles.primaryButtonText, { color: colors.amber }]}>{trans.changePassBtn}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* WALLET SECTION */}
+        {/* WALLET CARD SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.cardTitle, { color: colors.amber }]}>Wallet Balance & Payments</Text>
-          <View style={{ marginBottom: verticalScale(16) }}>
+          <Text style={[styles.cardTitle, { color: colors.amber }]}>💳 Vibe Wallet</Text>
+          <View style={{ marginBottom: verticalScale(14) }}>
             <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
             <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
           </View>
@@ -244,7 +201,26 @@ export default function ProfileScreen() {
           <View style={{ flexDirection: 'row', gap: scale(10) }}>
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]}
-              onPress={() => setAddMoneyModalVisible(true)}
+              onPress={() => {
+                openRazorpayPayment({
+                  amount: 500,
+                  title: 'Vibe Wallet Recharge (₹500)',
+                  customerName: name || 'Abhishek',
+                  userId,
+                  onSuccess: async (paymentId) => {
+                    setWalletBalance(prev => prev + 500);
+                    await topupWalletApi({ userId, amount: 500, paymentId, description: 'Vibe Wallet Top-Up via Razorpay' });
+                    Alert.alert('🎉 Top-Up Successful!', `₹500 added to your Vibe Wallet via Razorpay.\nTransaction ID: ${paymentId}`);
+                  },
+                  onCancel: () => {
+                    Alert.alert('Cancelled', 'Razorpay payment was cancelled.');
+                  },
+                  onError: (err: any) => {
+                    const msg = typeof err === 'string' ? err : (err?.message || 'Razorpay Gateway error.');
+                    Alert.alert('Payment Error', msg);
+                  }
+                });
+              }}
             >
               <Text style={styles.primaryButtonText}>💳 Add Money</Text>
             </TouchableOpacity>
@@ -253,12 +229,17 @@ export default function ProfileScreen() {
               style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line }]}
               onPress={() => setWalletModalVisible(true)}
             >
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 Wallet History</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 History</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: 'rgba(255,255,255,0.06)', marginTop: verticalScale(10), borderWidth: 1, borderColor: colors.line }]}
+            onPress={() => setWithdrawModalVisible(true)}
+          >
+            <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>💸 Withdraw Funds</Text>
+          </TouchableOpacity>
         </View>
-
-
 
         {/* PREFERENCES SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
@@ -323,104 +304,99 @@ export default function ProfileScreen() {
                 <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
+
             <FlatList
-              data={walletHistory}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: verticalScale(12), borderBottomWidth: 1, borderBottomColor: colors.line }}>
-                  <View>
-                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14) }}>{item.title}</Text>
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>{item.date}</Text>
+              data={walletTransactions}
+              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+              ListEmptyComponent={
+                <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: verticalScale(30) }}>
+                  No transactions yet
+                </Text>
+              }
+              renderItem={({ item }) => {
+                const isIncoming = item.type === 'topup' || item.type === 'refund';
+                return (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: verticalScale(12), borderBottomWidth: 1, borderBottomColor: colors.line }}>
+                    <View style={{ flex: 1, marginRight: scale(10) }}>
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14) }} numberOfLines={1}>
+                        {item.description || (isIncoming ? 'Wallet Top-Up' : 'Debit')}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                      </Text>
+                    </View>
+                    <Text style={{ color: isIncoming ? '#10B981' : colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold' }}>
+                      {isIncoming ? '+' : '-'}₹{item.amount}
+                    </Text>
                   </View>
-                  <Text style={{ color: item.type === 'incoming' ? '#10B981' : colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold' }}>
-                    {item.type === 'incoming' ? '+' : '-'}₹{item.amount}
-                  </Text>
-                </View>
-              )}
+                );
+              }}
             />
           </View>
         </View>
       </Modal>
 
-      {/* ADD MONEY TO WALLET MODAL */}
-      <Modal visible={addMoneyModalVisible} transparent animationType="slide">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(24), borderTopRightRadius: scale(24), padding: scale(24) }}>
+      {/* Withdraw Funds Modal */}
+      <Modal visible={withdrawModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWithdrawModalVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
-              <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.amber }}>Add Money to Vibe Wallet</Text>
-              <TouchableOpacity onPress={() => setAddMoneyModalVisible(false)}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Withdraw Funds</Text>
+              <TouchableOpacity onPress={() => setWithdrawModalVisible(false)}>
                 <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginBottom: verticalScale(12) }}>
-              Select or enter amount to top up via Razorpay:
-            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(4) }}>Available: ₹{walletBalance}</Text>
 
-            {/* Quick selection chips */}
-            <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(16) }}>
-              {['500', '1000', '2000', '5000'].map(val => (
-                <TouchableOpacity
-                  key={val}
-                  style={{
-                    flex: 1,
-                    paddingVertical: verticalScale(10),
-                    borderRadius: scale(10),
-                    backgroundColor: rechargeAmount === val ? colors.amber : 'rgba(255,255,255,0.06)',
-                    borderWidth: 1,
-                    borderColor: rechargeAmount === val ? colors.amber : colors.line,
-                    alignItems: 'center',
-                  }}
-                  onPress={() => setRechargeAmount(val)}
-                >
-                  <Text style={{ color: rechargeAmount === val ? '#101014' : colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(13) }}>
-                    ₹{val}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12), marginBottom: verticalScale(6) }}>
-              Custom Amount (₹)
-            </Text>
+            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>Amount</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: '700', marginBottom: verticalScale(20) }]}
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
               keyboardType="numeric"
-              value={rechargeAmount}
-              onChangeText={setRechargeAmount}
+              value={withdrawAmount}
+              onChangeText={setWithdrawAmount}
               placeholder="Enter amount"
               placeholderTextColor={colors.textMuted}
             />
 
+            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>UPI ID</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+              value={withdrawUpi}
+              onChangeText={setWithdrawUpi}
+              placeholder="yourname@upi"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+            />
+
             <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.amber }]}
-              onPress={() => {
-                const amt = parseFloat(rechargeAmount);
-                if (isNaN(amt) || amt <= 0) {
-                  Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+              style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
+              onPress={async () => {
+                const amt = parseFloat(withdrawAmount);
+                if (!amt || amt <= 0) {
+                  Alert.alert('Error', 'Please enter a valid amount');
                   return;
                 }
-                setAddMoneyModalVisible(false);
-                openRazorpayPayment({
-                  amount: amt,
-                  title: 'Vibe Wallet Recharge',
-                  customerName: name || 'Abhishek',
-                  onSuccess: async (paymentId) => {
-                    setWalletBalance(prev => prev + amt);
-                    await topupWalletApi({ userId, amount: amt, paymentId, description: 'Vibe Wallet Top-Up via Razorpay' });
-                    Alert.alert('🎉 Payment Successful!', `₹${amt} successfully credited to your Vibe Wallet.\nTransaction ID: ${paymentId}`);
-                  },
-                  onCancel: () => {
-                    Alert.alert('Payment Cancelled', 'Razorpay wallet payment was cancelled.');
-                  },
-                  onError: (err: any) => {
-                    const msg = typeof err === 'string' ? err : (err?.message || 'Razorpay Gateway failed to open.');
-                    Alert.alert('Payment Gateway Error', msg);
-                  }
-                });
+                if (amt > walletBalance) {
+                  Alert.alert('Error', 'Withdrawal amount exceeds wallet balance');
+                  return;
+                }
+                if (!withdrawUpi.trim()) {
+                  Alert.alert('Error', 'Please enter your UPI ID');
+                  return;
+                }
+                const res = await submitWithdrawalApi({ userId, userName: name, amount: amt, upiId: withdrawUpi });
+                if (res.success) {
+                  Alert.alert('Success', res.message || 'Withdrawal request submitted');
+                  setWithdrawModalVisible(false);
+                  setWithdrawAmount('');
+                  setWithdrawUpi('');
+                } else {
+                  Alert.alert('Error', res.message || 'Withdrawal failed');
+                }
               }}
             >
-              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(15) }]}>💳 Pay ₹{rechargeAmount || '0'} via Razorpay</Text>
+              <Text style={styles.primaryButtonText}>Submit Withdrawal Request</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -445,133 +421,88 @@ const styles = StyleSheet.create({
     width: scale(80),
     height: scale(80),
     borderRadius: scale(40),
-    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    justifyContent: 'center',
+    marginBottom: verticalScale(12),
   },
   avatarText: {
+    fontSize: moderateFontScale(32),
+    fontWeight: 'bold',
     color: '#101014',
-    fontSize: moderateFontScale(34),
-    fontWeight: '800',
   },
-  profileName: {
+  userName: {
     fontSize: moderateFontScale(22),
-    fontWeight: '800',
-    marginTop: verticalScale(12),
+    fontWeight: 'bold',
+    marginBottom: verticalScale(4),
   },
-  profileRole: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '600',
-    marginTop: verticalScale(2),
+  userRole: {
+    fontSize: moderateFontScale(14),
   },
   card: {
-    borderRadius: scale(20),
+    padding: scale(16),
+    borderRadius: scale(16),
     borderWidth: 1,
-    padding: scale(18),
-    marginBottom: verticalScale(18),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    marginBottom: verticalScale(20),
   },
   cardTitle: {
     fontSize: moderateFontScale(16),
-    fontWeight: '800',
-    marginBottom: verticalScale(14),
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardSubTitle: {
-    fontSize: moderateFontScale(15),
-    fontWeight: '700',
-    marginBottom: verticalScale(12),
+    fontWeight: 'bold',
+    marginBottom: verticalScale(16),
   },
   label: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '700',
+    fontSize: moderateFontScale(13),
+    fontWeight: '600',
     marginBottom: verticalScale(6),
   },
-  inlineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   input: {
-    paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(10),
+    height: verticalScale(44),
     borderRadius: scale(10),
     borderWidth: 1,
+    paddingHorizontal: scale(12),
     fontSize: moderateFontScale(14),
-  },
-  smallBtn: {
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(11),
-    borderRadius: scale(10),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  smallBtnText: {
-    color: '#101014',
-    fontSize: moderateFontScale(13),
-    fontWeight: '700',
+    marginBottom: verticalScale(14),
   },
   primaryButton: {
-    paddingVertical: verticalScale(12),
+    height: verticalScale(44),
     borderRadius: scale(10),
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: verticalScale(6),
   },
   primaryButtonText: {
-    color: '#101014',
     fontSize: moderateFontScale(14),
-    fontWeight: '700',
-  },
-  divider: {
-    height: 1,
-    marginVertical: verticalScale(16),
+    fontWeight: 'bold',
+    color: '#101014',
   },
   toggleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: verticalScale(4),
   },
   toggleLabel: {
-    fontSize: moderateFontScale(15),
-    fontWeight: '700',
+    fontSize: moderateFontScale(14),
+    fontWeight: '600',
   },
   toggleSubLabel: {
     fontSize: moderateFontScale(12),
     marginTop: verticalScale(2),
   },
+  divider: {
+    height: 1,
+    width: '100%',
+  },
   logoutBtn: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    paddingVertical: verticalScale(14),
+    height: verticalScale(48),
     borderRadius: scale(12),
-    marginTop: verticalScale(8),
-    backgroundColor: 'transparent',
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: verticalScale(30),
   },
   logoutText: {
     fontSize: moderateFontScale(15),
-    fontWeight: '700',
-  },
-  switchPortalBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: scale(12),
-    paddingVertical: verticalScale(14),
-    marginTop: verticalScale(14),
-    marginBottom: verticalScale(6),
-  },
-  switchPortalText: {
-    fontSize: moderateFontScale(15),
-    fontWeight: '700',
+    fontWeight: 'bold',
   },
 });
