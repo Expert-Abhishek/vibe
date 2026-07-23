@@ -149,22 +149,6 @@ export default function DriverDashboardScreen() {
     }
   }[appLang];
 
-  // Online simulator trigger
-  useEffect(() => {
-    let timeout: any;
-    if (isOnline && !activeTrip && !incomingRequest) {
-      timeout = setTimeout(() => {
-        const mockRequest: ActiveRequest = {
-          touristName: 'Abhishek (Tourist)',
-          pickup: 'Bengaluru Palace Entrance Gate',
-          pickupLat: 12.9982,
-          pickupLng: 77.5920,
-          drop: 'Kempegowda Airport Terminal 1',
-          dropLat: 13.1986,
-          dropLng: 77.7066,
-          distanceKm: 32.5,
-          durationMins: 45,
-          estimatedFare: 980,
   // Driver Session & Live Location Updates
   useEffect(() => {
     if (!isOnline) return;

@@ -109,3 +109,5 @@ export const adminState = {
     'auto': 100,
   },
 };
+
+export default adminState;
