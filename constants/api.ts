@@ -436,6 +436,27 @@ export async function verifyRazorpayPaymentApi(payload: {
   }
 }
 
+export async function processCheckoutApi(payload: {
+  userId: string;
+  totalAmount: number;
+  useWallet: boolean;
+  razorpayPaymentId?: string;
+  razorpayOrderId?: string;
+  razorpaySignature?: string;
+}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/checkout/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('processCheckoutApi error:', e);
+    return { success: false, message: 'Checkout processing failed' };
+  }
+}
+
 
 
 

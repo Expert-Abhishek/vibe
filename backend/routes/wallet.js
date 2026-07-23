@@ -36,7 +36,7 @@ router.get('/:userId', async (req, res) => {
     } else {
       // Tourist wallet
       const txSum = await db.query(
-        "SELECT COALESCE(SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
+        "SELECT COALESCE(SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
         [userId]
       );
       balance = parseFloat(txSum.rows[0]?.total || 0);
@@ -141,6 +141,105 @@ router.post('/verify-payment', async (req, res) => {
 });
 
 /**
+ * POST /api/wallet/checkout/process
+ * Handles: 100% Wallet Payment, 100% Razorpay Payment, or Split Payment
+ */
+router.post('/checkout/process', async (req, res) => {
+  const client = await db.connect();
+  try {
+    const { userId, totalAmount, useWallet, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
+
+    if (!userId || !totalAmount || totalAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid userId and totalAmount required' });
+    }
+
+    const numTotal = parseFloat(totalAmount);
+
+    await client.query('BEGIN');
+
+    // Fetch user wallet balance with ROW LOCK
+    let currentBalance = 0;
+    const userRes = await client.query('SELECT role FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length > 0) {
+      const role = userRes.rows[0].role;
+      if (role === 'driver') {
+        const dRes = await client.query('SELECT wallet_balance FROM driver_profiles WHERE user_id = $1 FOR UPDATE', [userId]);
+        currentBalance = parseFloat(dRes.rows[0]?.wallet_balance || 0);
+      } else if (role === 'guide') {
+        const gRes = await client.query('SELECT wallet_balance FROM guide_profiles WHERE user_id = $1 FOR UPDATE', [userId]);
+        currentBalance = parseFloat(gRes.rows[0]?.wallet_balance || 0);
+      } else {
+        const txSum = await client.query(
+          "SELECT COALESCE(SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
+          [userId]
+        );
+        currentBalance = parseFloat(txSum.rows[0]?.total || 0);
+      }
+    }
+
+    let walletDeduction = 0;
+    let razorpayRequired = numTotal;
+
+    if (useWallet && currentBalance > 0) {
+      if (currentBalance >= numTotal) {
+        walletDeduction = numTotal;
+        razorpayRequired = 0;
+      } else {
+        walletDeduction = currentBalance;
+        razorpayRequired = numTotal - currentBalance;
+      }
+    }
+
+    // Verify Razorpay Portion if remaining amount > 0
+    if (razorpayRequired > 0) {
+      if (!razorpayPaymentId) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: `Remaining ₹${razorpayRequired} requires Razorpay payment completion.` });
+      }
+
+      if (razorpaySignature && razorpayOrderId) {
+        const secret = process.env.RAZORPAY_KEY_SECRET || 'J61PkpPzNvE2QJNXet5bKG6D';
+        const expectedSig = crypto
+          .createHmac('sha256', secret)
+          .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+          .digest('hex');
+
+        if (expectedSig !== razorpaySignature) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ success: false, message: 'Razorpay signature verification failed.' });
+        }
+      }
+    }
+
+    // Deduct Wallet Balance if used
+    if (walletDeduction > 0) {
+      await client.query(
+        'INSERT INTO wallet_transactions (user_id, type, amount, payment_id, description) VALUES ($1, $2, $3, $4, $5)',
+        [userId, 'debit', walletDeduction, razorpayPaymentId || `wallet_pay_${Date.now()}`, `Order Split Payment (Wallet ₹${walletDeduction}, Razorpay ₹${razorpayRequired})`]
+      );
+      await client.query('UPDATE driver_profiles SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE user_id = $2', [walletDeduction, userId]);
+      await client.query('UPDATE guide_profiles SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE user_id = $2', [walletDeduction, userId]);
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      message: 'Checkout completed successfully!',
+      paidViaWallet: walletDeduction,
+      paidViaRazorpay: razorpayRequired,
+      paymentId: razorpayPaymentId || `wallet_pay_${Date.now()}`,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error in checkout process:', error);
+    res.status(500).json({ success: false, message: 'Checkout process failed', error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * POST /api/wallet/topup
  * Add money to wallet fallback endpoint
  */
@@ -194,7 +293,7 @@ router.post('/withdraw', async (req, res) => {
     );
 
     // Record transaction log
-    await db.query(
+    await client.query(
       'INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, $2, $3, $4)',
       [userId, 'withdrawal', numAmount, `Withdrawal Request to ${upiId || accountNumber || 'Bank'} (Pending Approval)`]
     );
