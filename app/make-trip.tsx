@@ -20,6 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from './admin-state';
 import { fetchDestinationsApi, fetchDriversApi, createTripApi } from '@/constants/api';
+import { openRazorpayPayment } from '@/constants/razorpay';
 
 
 
@@ -184,18 +185,20 @@ export default function MakeTripScreen() {
         setSelectedRide(searchParams.selectedRide as string);
       }
       if (searchParams.selectedDriverId) {
+        const driverId = searchParams.selectedDriverId as string;
         setSelectedDriver({
-          id: searchParams.selectedDriverId,
-          user_id: searchParams.selectedDriverId,
-          name: searchParams.selectedDriverName || 'Verified Driver',
-          vehicle_model: searchParams.selectedCarModel || 'Standard Cab',
-          vehicle_number: searchParams.selectedCarNumber || '',
-          car_front_url: searchParams.selectedCarPhoto || '',
+          id: driverId,
+          user_id: driverId,
+          name: (searchParams.selectedDriverName as string) || 'Verified Driver',
+          vehicle_model: (searchParams.selectedCarModel as string) || 'Standard Cab',
+          vehicle_number: (searchParams.selectedCarNumber as string) || '',
+          car_front_url: (searchParams.selectedCarPhoto as string) || '',
           daily_rate: searchParams.selectedDriverRate ? Number(searchParams.selectedDriverRate) : 1800,
         });
       }
+      router.setParams({ fromVehicle: undefined });
     }
-  }, [searchParams]);
+  }, [searchParams.fromVehicle, searchParams.selectedDriverId]);
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
     { id: 'start', name: 'Bengaluru (Start)', latitude: 12.9716, longitude: 77.5946, address: 'Bengaluru City Center' },
@@ -634,39 +637,66 @@ export default function MakeTripScreen() {
       time: finalTime,
     });
 
-    // Mock Razorpay Integration
-    Alert.alert(
-      'Razorpay Secure Checkout',
-      `Amount to Pay: ₹${computedTripPrice}\n\nPlease confirm payment to proceed with booking.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Pay Now',
-          onPress: () => {
-            // Proceed to success/matching after payment
-            router.replace({
-              pathname: '/ride-matching' as any,
-              params: {
-                pickupName: pickup.name,
-                pickupLat: pickup.latitude.toString(),
-                pickupLng: pickup.longitude.toString(),
-                dropName: drop.name,
-                dropLat: drop.latitude.toString(),
-                dropLng: drop.longitude.toString(),
-                stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
-                price: computedTripPrice.toString(),
-                type: 'custom_trip',
-                vehicle: selectedRide || '5seater',
-                paymentMode: 'Razorpay (Paid)',
-                passengerCount: passengerCount.toString(),
-                date: finalDate,
-                time: finalTime,
-              }
-            });
+    const totalPrice = computedTripPrice;
+    const advanceAmount = Math.round(totalPrice * 0.30);
+    const remainingAmount = totalPrice - advanceAmount;
+
+    openRazorpayPayment({
+      amount: advanceAmount,
+      title: `Custom Trip: ${pickup.name} → ${drop.name}`,
+      customerName: 'Abhishek (Tourist)',
+      onSuccess: async (paymentId: string) => {
+        const driverName = selectedDriver?.name || 'Verified Cab Driver';
+
+        // Save trip to real backend DB
+        await createTripApi({
+          tripType: 'custom_trip',
+          title: `Trip: ${pickup.name} → ${drop.name}`,
+          customerName: 'Abhishek (Tourist)',
+          driverOrGuideName: driverName,
+          amount: totalPrice,
+          paymentMode: `Razorpay 30% Advance (Paid ₹${advanceAmount}, Bal ₹${remainingAmount} | TXN: ${paymentId})`,
+          status: 'Confirmed',
+          durationHours: totalTripHours,
+          extraHours: extraHoursRounded,
+          addonCharge: extraAddonCharge,
+        });
+
+        Alert.alert(
+          '🎉 Booking & Payment Confirmed!',
+          `Razorpay Transaction ID: ${paymentId}\n\n• 30% Advance Paid: ₹${advanceAmount}\n• 70% Remaining Balance: ₹${remainingAmount} (Payable at trip end)\n• Driver: ${driverName}\n• Date: ${finalDate} at ${finalTime}`
+        );
+
+        router.replace({
+          pathname: '/ride-matching' as any,
+          params: {
+            pickupName: pickup.name,
+            pickupLat: pickup.latitude.toString(),
+            pickupLng: pickup.longitude.toString(),
+            dropName: drop.name,
+            dropLat: drop.latitude.toString(),
+            dropLng: drop.longitude.toString(),
+            stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
+            price: totalPrice.toString(),
+            advanceAmount: advanceAmount.toString(),
+            remainingAmount: remainingAmount.toString(),
+            paymentId: paymentId,
+            type: 'custom_trip',
+            vehicle: selectedRide || '5seater',
+            paymentMode: `Razorpay 30% Advance (Paid ₹${advanceAmount})`,
+            passengerCount: passengerCount.toString(),
+            date: finalDate,
+            time: finalTime,
           }
-        }
-      ]
-    );
+        });
+      },
+      onCancel: () => {
+        Alert.alert('Payment Cancelled', 'Razorpay advance payment was cancelled.');
+      },
+      onError: () => {
+        Alert.alert('Payment Error', 'Razorpay Payment Gateway error. Please check connection.');
+      }
+    });
   };
 
   return (
@@ -1258,24 +1288,40 @@ export default function MakeTripScreen() {
 
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
 
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(6) }}>
-              <View>
-                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }}>ESTIMATED FARE</Text>
-                <Text style={{ fontSize: moderateFontScale(22), fontWeight: '900', color: colors.amber }}>₹{computedTripPrice}</Text>
+            {/* 30% Pre-booking Advance Breakdown Card */}
+            <View style={{
+              backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
+              borderWidth: 1.5,
+              borderColor: colors.amber,
+              borderRadius: scale(12),
+              padding: scale(12),
+              marginTop: verticalScale(6),
+              marginBottom: verticalScale(8),
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Total Estimated Fare</Text>
+                <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>₹{computedTripPrice}</Text>
               </View>
-              <View style={[styles.statusBadgeCompact, { backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingVertical: scale(4), paddingHorizontal: scale(8), borderRadius: scale(8) }]}>
-                <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Day Rate + Addon</Text>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '800' }}>⚡ 30% Pre-Booking Advance (Pay Now)</Text>
+                <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>₹{Math.round(computedTripPrice * 0.30)}</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>70% Remaining (Pay at Trip End)</Text>
+                <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(11) }}>₹{computedTripPrice - Math.round(computedTripPrice * 0.30)}</Text>
               </View>
             </View>
 
             {/* Note about 6 AM - 6 PM policy */}
             <View style={{
-              backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
-              borderColor: 'rgba(245, 197, 24, 0.3)',
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F9F9FB',
+              borderColor: colors.border,
               borderWidth: 1,
               borderRadius: scale(10),
               padding: scale(10),
-              marginTop: verticalScale(12),
+              marginTop: verticalScale(4),
               flexDirection: 'row',
               alignItems: 'flex-start',
               gap: scale(6)
@@ -1291,10 +1337,10 @@ export default function MakeTripScreen() {
               activeOpacity={0.8}
               onPress={handleBookCustomRide}
             >
+              <MaterialIcons name="payment" size={scale(20)} color="#101014" />
               <Text style={styles.confirmBtnText}>
-                {adminState.instantBookingEnabled ? '⚡ Confirm & Book Custom Ride' : 'Confirm & Pre-Book Custom Ride'}
+                Pay 30% Advance (₹{Math.round(computedTripPrice * 0.30)}) via Razorpay
               </Text>
-              <MaterialIcons name="credit-card" size={scale(18)} color="#101010" style={{ marginLeft: scale(6) }} />
             </TouchableOpacity>
           </View>
         )}

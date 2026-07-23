@@ -16,8 +16,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from './admin-state';
+import { openRazorpayPayment } from '@/constants/razorpay';
 
 interface TourPackage {
   id: string;
@@ -69,61 +69,12 @@ export default function PlanRouteScreen() {
   const [backendDrivers, setBackendDrivers] = useState<any[]>([]);
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
 
-  const params = useLocalSearchParams();
-  const fromVehicle = params.fromVehicle === 'true';
-  const vehicleTypeParam = params.vehicleType as '5seater' | '7seater' | '4x4jeep' | 'auto';
-  const carNameParam = params.carName as string;
-
-  useEffect(() => {
-    async function loadBackendData() {
-      setLoadingLivePlans(true);
-      const data = await fetchPlansApi();
-      if (data && data.length > 0) {
-        setLivePlans(data);
-      }
-      const drivers = await fetchDriversApi();
-      if (drivers && drivers.length > 0) {
-        setBackendDrivers(drivers);
-      }
-      setLoadingLivePlans(false);
-    }
-    loadBackendData();
-  }, []);
-
-
-  useEffect(() => {
-    if (params.fromVehicle === 'true') {
-      if (params.selectedRide) {
-        setBookingVehicle(params.selectedRide as any);
-      }
-      if (params.selectedDriverId) {
-        setSelectedDriver({
-          id: params.selectedDriverId,
-          user_id: params.selectedDriverId,
-          name: params.selectedDriverName || 'Verified Driver',
-          vehicle_model: params.selectedCarModel || 'Standard Cab',
-          vehicle_number: params.selectedCarNumber || '',
-          car_front_url: params.selectedCarPhoto || '',
-          daily_rate: params.selectedDriverRate ? Number(params.selectedDriverRate) : 1800,
-          hourly_addon_rate: params.selectedDriverAddonRate ? Number(params.selectedDriverAddonRate) : 150,
-        });
-      }
-      if (params.selectedPlanId && displayPackagePlans) {
-        const match = displayPackagePlans.find((p: any) => p.id === params.selectedPlanId);
-        if (match) {
-          setSelectedPlan(match);
-          setBookingStep('form');
-        }
-      }
-    }
-  }, [params]);
-
-
   // Booking modal state
   const [selectedPlan, setSelectedPlan] = useState<TourPackage | null>(null);
   const [bookingPax, setBookingPax] = useState(1);
   const [bookingVehicle, setBookingVehicle] = useState<'5seater' | '7seater' | '4x4jeep' | 'auto'>('5seater');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
+
   const getInitialTimeParts = () => {
     const d = new Date();
     let h = d.getHours();
@@ -150,6 +101,83 @@ export default function PlanRouteScreen() {
 
   // Vehicle selector modal visibility state
   const [isVehiclePickerVisible, setIsVehiclePickerVisible] = useState(false);
+
+  const params = useLocalSearchParams();
+  const fromVehicle = params.fromVehicle === 'true';
+  const vehicleTypeParam = params.vehicleType as '5seater' | '7seater' | '4x4jeep' | 'auto';
+  const carNameParam = params.carName as string;
+
+  const displayPackagePlans: (TourPackage & { price?: number })[] = livePlans.length > 0
+    ? livePlans.map((p, idx) => ({
+        id: p.id || `p_${idx}`,
+        name: p.name,
+        checkpoints: Array.isArray(p.checkpoints)
+          ? p.checkpoints.map((cp: any) => typeof cp === 'string' ? cp : (cp.name || 'Tourist Place'))
+          : ['Tourist Place'],
+        travelHours: parseFloat(p.duration) || 8,
+        distanceKm: parseFloat(p.km) || 150,
+        price: parseFloat(p.price) || 4999,
+        image: p.checkpoints && p.checkpoints[0]?.images?.[0]
+          ? p.checkpoints[0].images[0]
+          : 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
+      }))
+    : packagePlans;
+
+  useEffect(() => {
+    async function loadBackendData() {
+      setLoadingLivePlans(true);
+      const data = await fetchPlansApi();
+      if (data && data.length > 0) {
+        setLivePlans(data);
+      }
+      const drivers = await fetchDriversApi();
+      if (drivers && drivers.length > 0) {
+        setBackendDrivers(drivers);
+      }
+      setLoadingLivePlans(false);
+    }
+    loadBackendData();
+  }, []);
+
+  useEffect(() => {
+    if (params.fromVehicle === 'true') {
+      if (params.selectedRide) {
+        setBookingVehicle(params.selectedRide as any);
+      }
+      if (params.selectedDriverId) {
+        const driverId = params.selectedDriverId as string;
+        setSelectedDriver({
+          id: driverId,
+          user_id: driverId,
+          name: (params.selectedDriverName as string) || 'Verified Driver',
+          vehicle_model: (params.selectedCarModel as string) || 'Standard Cab',
+          vehicle_number: (params.selectedCarNumber as string) || '',
+          car_front_url: (params.selectedCarPhoto as string) || '',
+          daily_rate: params.selectedDriverRate ? Number(params.selectedDriverRate) : 1800,
+          hourly_addon_rate: params.selectedDriverAddonRate ? Number(params.selectedDriverAddonRate) : 150,
+        });
+      }
+
+      const planId = params.selectedPlanId ? String(params.selectedPlanId) : '';
+      const planName = params.selectedPlanName ? String(params.selectedPlanName) : '';
+
+      if (planId || planName) {
+        const match = displayPackagePlans.find((p: any) =>
+          (planId && String(p.id) === planId) ||
+          (planName && p.name.toLowerCase() === planName.toLowerCase())
+        ) || packagePlans.find((p: any) =>
+          (planId && String(p.id) === planId) ||
+          (planName && p.name.toLowerCase() === planName.toLowerCase())
+        ) || displayPackagePlans[0] || packagePlans[0];
+
+        if (match) {
+          setSelectedPlan(match);
+          setBookingStep('form');
+        }
+      }
+      router.setParams({ fromVehicle: undefined });
+    }
+  }, [params.fromVehicle, params.selectedDriverId, params.selectedPlanId, params.selectedPlanName]);
 
   const jeepCarouselData = [
     {
@@ -249,21 +277,7 @@ export default function PlanRouteScreen() {
     danger: '#EF4444',
   };
 
-  const displayPackagePlans: (TourPackage & { price?: number })[] = livePlans.length > 0
-    ? livePlans.map((p, idx) => ({
-        id: p.id || `p_${idx}`,
-        name: p.name,
-        checkpoints: Array.isArray(p.checkpoints)
-          ? p.checkpoints.map((cp: any) => typeof cp === 'string' ? cp : (cp.name || 'Tourist Place'))
-          : ['Tourist Place'],
-        travelHours: parseFloat(p.duration) || 8,
-        distanceKm: parseFloat(p.km) || 150,
-        price: parseFloat(p.price) || 4999,
-        image: p.checkpoints && p.checkpoints[0]?.images?.[0]
-          ? p.checkpoints[0].images[0]
-          : 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
-      }))
-    : packagePlans;
+
 
   const filteredPackages = displayPackagePlans.filter(
     (p) =>
@@ -315,7 +329,9 @@ export default function PlanRouteScreen() {
     if (!selectedPlan) return;
 
     const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
-    const price = priceInfo.computedPrice;
+    const totalPrice = priceInfo.computedPrice;
+    const advanceAmount = Math.round(totalPrice * 0.30);
+    const remainingAmount = totalPrice - advanceAmount;
     const totalHours = priceInfo.totalTripHours;
 
     const finalDate = adminState.instantBookingEnabled ? 'Today' : bookingDate;
@@ -323,35 +339,59 @@ export default function PlanRouteScreen() {
       ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : bookingTime;
 
-    Alert.alert(
-      'Razorpay Secure Checkout',
-      `Amount to Pay: ₹${price}\n\nPlease confirm payment to proceed with booking.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Pay Now',
-          onPress: () => {
-            adminState.userTrips.push({
-              id: `plan_book_${Date.now()}`,
-              type: 'plan',
-              title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-              route: selectedPlan.checkpoints,
-              driverOrGuideName: 'Suresh Kumar',
-              date: finalDate,
-              time: finalTime,
-              price: price,
-              paymentMode: 'UPI',
-              status: 'Upcoming',
-              passengerCount: bookingPax,
-            });
+    openRazorpayPayment({
+      amount: advanceAmount,
+      title: selectedPlan.name,
+      customerName: 'Abhishek (Tourist)',
+      onSuccess: async (paymentId: string) => {
+        const driverName = selectedDriver?.name || 'Verified Cab Driver';
 
-            setSelectedPlan(null);
-            setBookingStep('details');
-            router.replace('/(tabs)/trips');
-          }
-        }
-      ]
-    );
+        // Save trip to real backend DB
+        await createTripApi({
+          tripType: 'plan',
+          title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+          customerName: 'Abhishek (Tourist)',
+          driverOrGuideName: driverName,
+          planId: selectedPlan.id,
+          amount: totalPrice,
+          paymentMode: `Razorpay 30% Advance (Paid ₹${advanceAmount}, Bal ₹${remainingAmount} | TXN: ${paymentId})`,
+          status: 'Confirmed',
+          durationHours: totalHours,
+          extraHours: priceInfo.extraHoursRounded,
+          addonCharge: priceInfo.extraAddonCharge,
+        });
+
+        // Store in local adminState as well
+        adminState.userTrips.push({
+          id: `plan_book_${Date.now()}`,
+          type: 'plan',
+          title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+          route: selectedPlan.checkpoints,
+          driverOrGuideName: driverName,
+          date: finalDate,
+          time: finalTime,
+          price: totalPrice,
+          paymentMode: `Razorpay 30% Advance (Paid ₹${advanceAmount})`,
+          status: 'Upcoming',
+          passengerCount: bookingPax,
+        });
+
+        Alert.alert(
+          '🎉 Booking & Payment Confirmed!',
+          `Razorpay Transaction ID: ${paymentId}\n\n• 30% Advance Paid: ₹${advanceAmount}\n• 70% Remaining Balance: ₹${remainingAmount} (Payable at trip end)\n• Driver: ${driverName}\n• Date: ${finalDate} at ${finalTime}`
+        );
+
+        setSelectedPlan(null);
+        setBookingStep('details');
+        router.replace('/(tabs)/trips');
+      },
+      onCancel: () => {
+        Alert.alert('Payment Cancelled', 'Razorpay advance payment was cancelled.');
+      },
+      onError: () => {
+        Alert.alert('Payment Error', 'Razorpay Payment Gateway error. Please check connection.');
+      }
+    });
   };
 
   return (
@@ -535,11 +575,15 @@ export default function PlanRouteScreen() {
                           gap: scale(8),
                         }}
                         onPress={() => {
+                          const currentPlanId = selectedPlan?.id || '';
+                          const currentPlanName = selectedPlan?.name || '';
+                          setSelectedPlan(null);
                           router.push({
                             pathname: '/cars',
                             params: {
                               mode: 'plan',
-                              planId: selectedPlan?.id || '',
+                              planId: currentPlanId,
+                              planName: currentPlanName,
                             }
                           });
                         }}
@@ -593,9 +637,16 @@ export default function PlanRouteScreen() {
                           borderColor: colors.amber,
                         }}
                         onPress={() => {
+                          const currentPlanId = selectedPlan?.id || '';
+                          const currentPlanName = selectedPlan?.name || '';
+                          setSelectedPlan(null);
                           router.push({
                             pathname: '/cars',
-                            params: { mode: 'plan', planId: selectedPlan?.id || '' }
+                            params: {
+                              mode: 'plan',
+                              planId: currentPlanId,
+                              planName: currentPlanName,
+                            }
                           });
                         }}
                       >
@@ -719,6 +770,9 @@ export default function PlanRouteScreen() {
                       {(() => {
                         const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
                         const { computedPrice, baseDayRate, extraHoursRounded, extraAddonCharge, vehicleHourlyRate, totalTripHours } = priceInfo;
+                        const advancePayable = Math.round(computedPrice * 0.30);
+                        const remainingBalance = computedPrice - advancePayable;
+
                         return (
                           <>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6), marginTop: verticalScale(10) }}>
@@ -746,24 +800,40 @@ export default function PlanRouteScreen() {
 
                             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
 
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(6) }}>
-                              <View>
-                                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }}>TOTAL PACKAGE FARE</Text>
-                                <Text style={{ fontSize: moderateFontScale(22), fontWeight: '900', color: colors.amber }}>₹{computedPrice}</Text>
+                            {/* 30% Pre-booking Advance Breakdown Card */}
+                            <View style={{
+                              backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
+                              borderWidth: 1.5,
+                              borderColor: colors.amber,
+                              borderRadius: scale(12),
+                              padding: scale(12),
+                              marginTop: verticalScale(6),
+                              marginBottom: verticalScale(8),
+                            }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Total Package Fare</Text>
+                                <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>₹{computedPrice}</Text>
                               </View>
-                              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingVertical: scale(4), paddingHorizontal: scale(8), borderRadius: scale(8) }}>
-                                <Text style={{ fontSize: moderateFontScale(10), color: '#10B981', fontWeight: '800' }}>Vehicle Included</Text>
+
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                                <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '800' }}>⚡ 30% Pre-Booking Advance (Pay Now)</Text>
+                                <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>₹{advancePayable}</Text>
+                              </View>
+
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>70% Remaining (Pay at Trip End)</Text>
+                                <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(11) }}>₹{remainingBalance}</Text>
                               </View>
                             </View>
 
                             {/* Note about 6 AM - 6 PM policy */}
                             <View style={{
-                              backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
-                              borderColor: 'rgba(245, 197, 24, 0.3)',
+                              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F9F9FB',
+                              borderColor: colors.border,
                               borderWidth: 1,
                               borderRadius: scale(10),
                               padding: scale(10),
-                              marginTop: verticalScale(12),
+                              marginTop: verticalScale(4),
                               flexDirection: 'row',
                               alignItems: 'flex-start',
                               gap: scale(6)
@@ -781,8 +851,9 @@ export default function PlanRouteScreen() {
                         activeOpacity={0.8}
                         onPress={handleConfirmBooking}
                       >
+                        <MaterialIcons name="payment" size={scale(20)} color="#101014" />
                         <Text style={styles.confirmBtnText}>
-                          {adminState.instantBookingEnabled ? '⚡ Instant Book Ride' : 'Confirm Pre-Booking'}
+                          Pay 30% Advance (₹{Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.30)}) via Razorpay
                         </Text>
                       </TouchableOpacity>
                     </>

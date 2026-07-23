@@ -11,7 +11,8 @@ import { SocialLogin } from '@/components/auth/social-login';
 import { FooterLink } from '@/components/auth/footer-link';
 import { scale, verticalScale } from '@/constants/responsive';
 import { adminState } from '../admin-state';
-import { loginUser } from '@/constants/api';
+import { loginUserApi, googleAuthApi } from '@/constants/api';
+import { saveUserSession } from '@/constants/authStore';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -24,18 +25,27 @@ export default function SignInScreen() {
 
   const handleLogin = async (phone: string, pass: string) => {
     console.log('Logging in with:', phone, pass);
-    const lowerPhone = phone.toLowerCase();
-    const lowerPass = pass.toLowerCase();
+    const cleanPhone = phone.trim();
 
-    // First attempt backend authentication
     try {
-      const apiRes = await loginUser(phone, pass);
+      const apiRes = await loginUserApi({ identifier: cleanPhone, password: pass });
       if (apiRes.success && apiRes.user) {
+        await saveUserSession({
+          id: apiRes.user.id,
+          name: apiRes.user.name,
+          phone: apiRes.user.phone,
+          email: apiRes.user.email,
+          role: apiRes.user.role,
+          status: apiRes.user.status,
+          token: apiRes.token,
+          profile: apiRes.user.profile,
+        });
+
         // Strict status verification check
         if (apiRes.user.role === 'driver' || apiRes.user.role === 'guide') {
           if (apiRes.user.status !== 'Active') {
             const title = apiRes.user.status === 'Pending KYC' ? 'KYC Pending Verification' : 'Account Restricted';
-            const msg = apiRes.message || `Your account is currently ${apiRes.user.status}. Please wait for admin approval.`;
+            const msg = apiRes.message || `Your account is currently ${apiRes.user.status}. Please wait for admin verification.`;
             Alert.alert(title, msg);
             return;
           }
@@ -51,65 +61,52 @@ export default function SignInScreen() {
           router.replace('/(tabs)');
           return;
         }
-      } else if (apiRes.message && (apiRes.message.includes('pending') || apiRes.message.includes('deactivated') || apiRes.message.includes('declined') || apiRes.message.includes('KYC'))) {
+      } else if (apiRes.message) {
         Alert.alert('Access Restricted', apiRes.message);
         return;
       }
     } catch (e) {
-      console.warn('Backend login attempt failed, using local check:', e);
+      console.warn('Backend login attempt failed:', e);
     }
 
-    // Check registered driver list
-    const driver = adminState.drivers.find(d => d.username === lowerPhone || d.phone === phone);
-    if (driver) {
-      if (driver.status === 'Pending KYC') {
-        Alert.alert('KYC Pending', 'Your driver registration is currently pending admin KYC approval. Please wait for admin verification.');
-        return;
-      }
-      if (driver.status === 'Inactive') {
-        Alert.alert('Account Deactivated', 'Your driver account has been deactivated by the admin.');
-        return;
-      }
-      if (driver.status === 'KYC Declined') {
-        Alert.alert('KYC Declined', 'Your driver registration KYC was declined by the admin.');
-        return;
-      }
-      router.replace('/driver-dashboard');
-      return;
-    }
-
-    // Check registered guide list
-    const guide = adminState.guides.find(g => g.username === lowerPhone || g.phone === phone);
-    if (guide) {
-      if (guide.status === 'Pending KYC') {
-        Alert.alert('KYC Pending', 'Your guide registration is currently pending admin KYC approval. Please wait for admin verification.');
-        return;
-      }
-      if (guide.status === 'Inactive') {
-        Alert.alert('Account Deactivated', 'Your guide account has been deactivated by the admin.');
-        return;
-      }
-      if (guide.status === 'KYC Declined') {
-        Alert.alert('KYC Declined', 'Your guide registration KYC was declined by the admin.');
-        return;
-      }
+    // Fallback role routing if backend is offline
+    const lowerPhone = cleanPhone.toLowerCase();
+    if (lowerPhone.includes('guide')) {
       router.replace('/guide-dashboard');
-      return;
-    }
-
-    // Fallback dynamic login
-    if (lowerPhone.includes('guide') || lowerPass.includes('guide') || pass === '8240') {
-      router.replace('/guide-dashboard');
-    } else if (lowerPhone.includes('driver') || lowerPass.includes('driver')) {
+    } else if (lowerPhone.includes('driver')) {
       router.replace('/driver-dashboard');
     } else {
       router.replace('/(tabs)');
     }
   };
 
-  const handleGoogleLogin = () => {
-    console.log('Google login requested');
-    router.replace('/(tabs)');
+  const handleGoogleLogin = async () => {
+    try {
+      const googleUser = {
+        googleId: `g_${Date.now()}`,
+        email: `user_${Date.now().toString().slice(-4)}@gmail.com`,
+        name: 'Google User',
+        role: 'tourist',
+      };
+      const apiRes = await googleAuthApi(googleUser);
+      if (apiRes.success && apiRes.user) {
+        await saveUserSession({
+          id: apiRes.user.id,
+          name: apiRes.user.name,
+          phone: apiRes.user.phone,
+          email: apiRes.user.email,
+          role: apiRes.user.role,
+          status: apiRes.user.status,
+          token: apiRes.token,
+        });
+        Alert.alert('🎉 Google Sign-In', `Welcome ${apiRes.user.name}!`);
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert('Google Sign-In Failed', apiRes.message || 'Error signing in with Google.');
+      }
+    } catch (err) {
+      Alert.alert('Google Sign-In Error', 'Unable to complete Google authentication.');
+    }
   };
 
   return (

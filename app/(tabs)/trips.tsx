@@ -13,106 +13,7 @@ import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '../admin-state';
-import { fetchCustomerTripsApi } from '@/constants/api';
-
-
-interface TripRecord {
-  id: string;
-  type: 'cab' | 'guide' | 'custom_trip' | 'plan';
-  vehicleType?: string;
-  title: string;
-  route?: string[];
-  driverOrGuideName: string;
-  date: string;
-  time: string;
-  price: number;
-  paymentMode: 'UPI' | 'Cash';
-  status: 'Completed' | 'Upcoming' | 'Cancelled';
-  rating?: number;
-  passengerCount?: number;
-}
-
-const initialTripHistory: TripRecord[] = [
-  {
-    id: 't1',
-    type: 'cab',
-    vehicleType: '5 Seater (Maruti Swift)',
-    title: 'Bengaluru Palace ➔ Indiranagar',
-    route: ['Bengaluru Palace', 'Indiranagar 100 Feet Road'],
-    driverOrGuideName: 'Suresh Kumar',
-    date: 'Today',
-    time: '03:15 PM',
-    price: 340,
-    paymentMode: 'UPI',
-    status: 'Completed',
-    rating: 5,
-  },
-  {
-    id: 't2',
-    type: 'guide',
-    title: 'Mysuru Palace Heritage Tour',
-    driverOrGuideName: 'Ramesh Gowda (Expert)',
-    date: 'Yesterday',
-    time: '10:00 AM',
-    price: 1500,
-    paymentMode: 'Cash',
-    status: 'Completed',
-    rating: 4.8,
-  },
-  {
-    id: 't3',
-    type: 'cab',
-    vehicleType: '7 Seater (Toyota Innova)',
-    title: 'Kempegowda Airport ➔ Bengaluru Palace',
-    route: ['KIAL Airport Terminal', 'Hebbal Flyover', 'Bengaluru Palace'],
-    driverOrGuideName: 'Anil Gowda',
-    date: '12 July 2026',
-    time: '01:30 PM',
-    price: 1250,
-    paymentMode: 'UPI',
-    status: 'Completed',
-    rating: 5,
-  },
-  {
-    id: 't4',
-    type: 'custom_trip',
-    vehicleType: '4*4 Jeep (Mahindra Thar)',
-    title: 'Multi-Checkpoint Western Ghats Tour',
-    route: ['Bengaluru Palace', 'Chikmagalur Peak', 'Abbey Falls Coorg'],
-    driverOrGuideName: 'Darshan Hegde',
-    date: 'Upcoming - 18 July 2026',
-    time: '06:00 AM',
-    price: 4500,
-    paymentMode: 'UPI',
-    status: 'Upcoming',
-  },
-  {
-    id: 't5',
-    type: 'cab',
-    vehicleType: 'Auto (Bajaj RE)',
-    title: 'Majestic Metro ➔ Malleshwaram Temple',
-    route: ['Majestic Station', 'Malleshwaram Temple'],
-    driverOrGuideName: 'Raju Auto',
-    date: '08 July 2026',
-    time: '06:45 PM',
-    price: 90,
-    paymentMode: 'Cash',
-    status: 'Completed',
-    rating: 4.5,
-  },
-  {
-    id: 't6',
-    type: 'guide',
-    title: 'Hampi Architectural Insights Tour',
-    driverOrGuideName: 'Krishna Murthy',
-    date: '04 July 2026',
-    time: '09:00 AM',
-    price: 2500,
-    paymentMode: 'UPI',
-    status: 'Completed',
-    rating: 4.9,
-  },
-];
+import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
 
 export default function TripsHistoryScreen() {
 
@@ -125,7 +26,7 @@ export default function TripsHistoryScreen() {
 
   React.useEffect(() => {
     async function loadBackendTrips() {
-      const data = await fetchCustomerTripsApi('c1');
+      const data = await fetchTripsApi();
       if (data && data.length > 0) {
         setBackendTrips(data);
       }
@@ -143,6 +44,22 @@ export default function TripsHistoryScreen() {
     border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
   };
+
+  // Convert backend database trips
+  const mappedDbTrips = backendTrips.map((bt: any) => ({
+    id: String(bt.id),
+    type: (bt.tripType || 'cab') as any,
+    vehicleType: 'Verified Cab Partner',
+    title: bt.title || 'Tour Booking',
+    route: bt.destinationIds || [],
+    driverOrGuideName: bt.driverOrGuideName || 'Assigned Driver',
+    date: bt.createdAt ? new Date(bt.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'Today',
+    time: bt.createdAt ? new Date(bt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+    price: Number(bt.amount) || 0,
+    paymentMode: (bt.paymentMode && bt.paymentMode.includes('Razorpay') ? 'UPI' : 'UPI') as any,
+    status: (bt.status === 'Confirmed' ? 'Upcoming' : bt.status) as any,
+    passengerCount: 1,
+  }));
 
   // Convert advanceBookings to list items
   const mappedAdvance = adminState.advanceBookings
@@ -163,9 +80,9 @@ export default function TripsHistoryScreen() {
       passengerCount: undefined as number | undefined,
     }));
 
-  const allTrips = [...mappedAdvance, ...adminState.userTrips, ...initialTripHistory].filter(
-    (trip) => trip.status === 'Upcoming'
-  );
+  const allTrips = mappedDbTrips.length > 0
+    ? [...mappedDbTrips, ...adminState.userTrips]
+    : [...mappedAdvance, ...adminState.userTrips, ...initialTripHistory];
 
   const filteredTrips = allTrips.filter((trip) => {
     if (activeFilter === 'all') return true;

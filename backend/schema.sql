@@ -129,13 +129,56 @@ CREATE TABLE IF NOT EXISTS trips (
     destination_ids TEXT[] DEFAULT '{}',
     amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     payment_mode VARCHAR(50) DEFAULT 'UPI', -- 'UPI', 'Cash', 'Card'
-    status VARCHAR(50) DEFAULT 'Completed', -- 'Pending', 'Active', 'Completed', 'Cancelled'
+    status VARCHAR(50) DEFAULT 'Completed', -- 'Pending', 'Active', 'Completed', 'Cancelled', 'Dispatched', 'Accepted'
     duration_hours NUMERIC(5,2) DEFAULT 8.00,
     extra_hours NUMERIC(5,2) DEFAULT 0.00,
     addon_charge NUMERIC(10,2) DEFAULT 0.00,
     rating INT DEFAULT 5,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 9. Add location coordinates to driver_profiles if not exist
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,6) DEFAULT 12.9716;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,6) DEFAULT 77.5946;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- 10. Wallet Transactions Table
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL, -- 'topup', 'trip_earning', 'withdrawal', 'refund'
+    amount NUMERIC(10,2) NOT NULL,
+    payment_id VARCHAR(255),
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. Withdrawals Table
+CREATE TABLE IF NOT EXISTS withdrawals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_name VARCHAR(255),
+    role user_role NOT NULL DEFAULT 'driver',
+    amount NUMERIC(10,2) NOT NULL,
+    upi_id VARCHAR(100),
+    account_number VARCHAR(50),
+    ifsc_code VARCHAR(30),
+    status VARCHAR(50) DEFAULT 'Pending', -- 'Pending', 'Approved', 'Rejected'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 12. Ride Dispatches Table (Driver Accept / Decline)
+CREATE TABLE IF NOT EXISTS ride_dispatches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_id UUID REFERENCES trips(id) ON DELETE CASCADE,
+    driver_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    driver_name VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'Pending', -- 'Pending', 'Accepted', 'Declined'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 
 
 

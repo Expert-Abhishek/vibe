@@ -37,6 +37,7 @@ export default function FleetCatalogScreen() {
   const initialRide = (searchParams.selectedRide as string) || '5seater';
   const mode = (searchParams.mode as string) || 'custom_trip'; // 'custom_trip' | 'plan'
   const planId = (searchParams.planId as string) || '';
+  const planName = (searchParams.planName as string) || '';
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -138,7 +139,7 @@ export default function FleetCatalogScreen() {
     ]
   };
 
-  const displayDrivers = categoryDrivers.length > 0
+  const displayDrivers = driversList.length > 0
     ? categoryDrivers
     : (defaultFallbackFleet[activeTab] || defaultFallbackFleet['5seater']);
 
@@ -165,6 +166,7 @@ export default function FleetCatalogScreen() {
           selectedDriverRate: dayRate,
           selectedDriverAddonRate: hrAddonRate,
           selectedPlanId: planId,
+          selectedPlanName: planName,
         }
       });
     } else {

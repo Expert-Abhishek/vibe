@@ -194,4 +194,64 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/trips/driver-requests/:driverId
+ * Fetch pending ride requests for Driver Dashboard
+ */
+router.get('/driver-requests/:driverId', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+
+    const result = await db.query(
+      "SELECT * FROM trips WHERE status IN ('Confirmed', 'Pending', 'Dispatched') ORDER BY created_at DESC LIMIT 5"
+    );
+
+    const trips = result.rows.map(t => ({
+      id: t.id,
+      pickupName: 'Bengaluru City',
+      dropName: t.title,
+      price: parseFloat(t.amount || 0),
+      passengerCount: 1,
+      customerName: t.customer_name || 'Tourist',
+      type: t.trip_type,
+      status: t.status,
+      date: new Date(t.created_at).toLocaleDateString(),
+      time: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }));
+
+    res.json({ success: true, data: trips });
+  } catch (error) {
+    console.error('Error fetching driver requests:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch driver requests' });
+  }
+});
+
+/**
+ * POST /api/trips/:id/respond
+ * Driver accepts or declines a ride request
+ */
+router.post('/:id/respond', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId, action, driverName } = req.body;
+
+    if (action === 'accept') {
+      await db.query(
+        "UPDATE trips SET status = 'Accepted', driver_or_guide_name = $1 WHERE id = $2",
+        [driverName || 'Verified Partner', id]
+      );
+      return res.json({ success: true, message: 'Ride Accepted successfully!' });
+    } else {
+      await db.query(
+        "UPDATE trips SET status = 'Declined' WHERE id = $1",
+        [id]
+      );
+      return res.json({ success: true, message: 'Ride Declined' });
+    }
+  } catch (error) {
+    console.error('Error responding to trip request:', error);
+    res.status(500).json({ success: false, message: 'Action failed' });
+  }
+});
+
 module.exports = router;

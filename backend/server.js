@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const destinationsRoutes = require('./routes/destinations');
 const plansRoutes = require('./routes/plans');
 const tripsRoutes = require('./routes/trips');
+const walletRoutes = require('./routes/wallet');
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/destinations', destinationsRoutes);
 app.use('/api/plans', plansRoutes);
 app.use('/api/trips', tripsRoutes);
+app.use('/api/wallet', walletRoutes);
 
 
 

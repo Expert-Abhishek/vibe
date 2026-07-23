@@ -19,6 +19,8 @@ import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
+import { clearUserSession, getUserSessionSync } from '@/constants/authStore';
+import { submitWithdrawalApi } from '@/constants/api';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -266,22 +268,56 @@ export default function GuideDashboardScreen() {
     );
   };
 
-  const handleInstantPayout = () => {
+  const handleLogout = async () => {
+    Alert.alert(
+      'Guide Logout',
+      'Are you sure you want to log out of Guide Dashboard?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            await clearUserSession();
+            router.replace('/(auth)/sign-in');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleInstantPayout = async () => {
     if (earningsBalance <= 0) {
       Alert.alert('No Balance', 'Your bank payout balance is empty.');
       return;
     }
+    const session = getUserSessionSync();
     setPayoutLoading(true);
-    setTimeout(() => {
-      setPayoutLoading(false);
+
+    const res = await submitWithdrawalApi({
+      userId: session?.id || 'g1',
+      userName: session?.name || 'Ramesh Gowda',
+      role: 'guide',
+      amount: earningsBalance,
+      upiId: upiId || 'guide@upi',
+    });
+
+    setPayoutLoading(false);
+
+    if (res.success) {
       const paidAmt = earningsBalance;
       setEarningsBalance(0);
       Alert.alert(
-        'Payout Transferred!',
-        `₹${paidAmt} successfully settled to UPI ID: ${upiId}!`
+        '🎉 Withdrawal Request Submitted!',
+        `₹${paidAmt} withdrawal request submitted to UPI: ${upiId}.\nStatus: Pending Admin Approval.`
       );
-    }, 2000);
+    } else {
+      Alert.alert('Error', res.message || 'Failed to submit withdrawal request.');
+    }
   };
+
+  const currentSession = getUserSessionSync();
+  const guideDisplayName = currentSession?.name || 'Ramesh Gowda';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#101014' : '#F5F5F7' }]} edges={['top']}>
@@ -291,13 +327,23 @@ export default function GuideDashboardScreen() {
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View>
           <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ PARTNER</Text>
-          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>Ramesh Gowda</Text>
+          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>{guideDisplayName}</Text>
         </View>
-        
-        <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
-          <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
-          <Text style={styles.switchRoleText}>Tourist App</Text>
-        </TouchableOpacity>
+
+        <View style={{ flexDirection: 'row', gap: scale(8), alignItems: 'center' }}>
+          <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
+            <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
+            <Text style={styles.switchRoleText}>Tourist App</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.switchRoleBtn, { backgroundColor: '#ef4444' }]}
+            onPress={handleLogout}
+          >
+            <MaterialIcons name="logout" size={scale(16)} color="#ffffff" />
+            <Text style={[styles.switchRoleText, { color: '#ffffff' }]}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tab Switchboard Body */}

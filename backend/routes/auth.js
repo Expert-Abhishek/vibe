@@ -708,5 +708,111 @@ const handleClearAllData = async (req, res) => {
 router.post('/clear-all-data', handleClearAllData);
 router.delete('/clear-all-data', handleClearAllData);
 
+/**
+ * POST /api/auth/google
+ * Google Sign-In backend handler
+ */
+router.post('/google', async (req, res) => {
+  try {
+    const { googleId, email, name, photo, role = 'tourist' } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Google Auth requires valid email' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    let userRes = await db.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    let user;
+
+    if (userRes.rows.length === 0) {
+      const dummyPhone = `g_${Date.now().toString().slice(-8)}`;
+      const dummyPassword = await bcrypt.hash(`google_${Date.now()}`, 10);
+      const cleanRole = ['tourist', 'driver', 'guide'].includes(role) ? role : 'tourist';
+
+      const insertRes = await db.query(
+        `INSERT INTO users (name, phone, email, password, role, status)
+         VALUES ($1, $2, $3, $4, $5, 'Active')
+         RETURNING *`,
+        [name || 'Google User', dummyPhone, cleanEmail, dummyPassword, cleanRole]
+      );
+      user = insertRes.rows[0];
+
+      if (cleanRole === 'driver') {
+        await db.query(
+          'INSERT INTO driver_profiles (user_id, vehicle_type, photo_url) VALUES ($1, $2, $3)',
+          [user.id, '5seater', photo || null]
+        );
+      } else if (cleanRole === 'guide') {
+        await db.query(
+          'INSERT INTO guide_profiles (user_id, photo_url) VALUES ($1, $2)',
+          [user.id, photo || null]
+        );
+      }
+    } else {
+      user = userRes.rows[0];
+    }
+
+    let profileData = null;
+    if (user.role === 'driver') {
+      const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1', [user.id]);
+      profileData = dRes.rows[0] || null;
+    } else if (user.role === 'guide') {
+      const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1', [user.id]);
+      profileData = gRes.rows[0] || null;
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, phone: user.phone, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    return res.json({
+      success: true,
+      message: 'Google Sign-In successful!',
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        profile: profileData,
+      },
+    });
+  } catch (error) {
+    console.error('Error in Google auth:', error);
+    return res.status(500).json({ success: false, message: 'Google Auth Error', error: error.message });
+  }
+});
+
+/**
+ * POST /api/auth/driver-location
+ * Update driver's live GPS coordinates & active state
+ */
+router.post('/driver-location', async (req, res) => {
+  try {
+    const { driverId, latitude, longitude, isActive = true } = req.body;
+
+    if (!driverId || latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ success: false, message: 'driverId, latitude, and longitude required' });
+    }
+
+    await db.query(
+      `UPDATE driver_profiles
+       SET latitude = $1, longitude = $2, is_active = $3, last_active_at = CURRENT_TIMESTAMP
+       WHERE user_id = $4 OR id = $4`,
+      [parseFloat(latitude), parseFloat(longitude), isActive, driverId]
+    );
+
+    res.json({ success: true, message: 'Driver location updated' });
+  } catch (error) {
+    console.error('Error updating driver location:', error);
+    res.status(500).json({ success: false, message: 'Failed to update location' });
+  }
+});
+
 module.exports = router;
 

@@ -1,21 +1,23 @@
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
+  FlatList,
+  Modal,
+  ScrollView,
   StyleSheet,
-  View,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  Switch,
-  ScrollView,
-  Alert,
-  Modal,
-  FlatList,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme, toggleAppTheme } from '@/hooks/use-color-scheme';
+import { openRazorpayPayment } from '@/constants/razorpay';
+import { topupWalletApi, submitWithdrawalApi, fetchWalletBalanceApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -25,9 +27,27 @@ export default function ProfileScreen() {
   const [name, setName] = useState('Abhishek');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  
+
   const [walletModalVisible, setWalletModalVisible] = useState(false);
+  const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
+  const [withdrawUpi, setWithdrawUpi] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [walletBalance, setWalletBalance] = useState(1500);
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+
+  const session = getUserSessionSync();
+  const userId = session?.id || 'c1';
+
+  React.useEffect(() => {
+    async function loadWalletData() {
+      const data = await fetchWalletBalanceApi(userId);
+      if (data.success) {
+        if (data.balance !== undefined) setWalletBalance(data.balance);
+        if (data.transactions) setWalletTransactions(data.transactions);
+      }
+    }
+    loadWalletData();
+  }, [userId]);
   const walletHistory = [
     { id: '1', type: 'incoming', amount: 500, date: '18 July 2026', title: 'Refund' },
     { id: '2', type: 'outgoing', amount: 200, date: '15 July 2026', title: 'Cab Booking' },
@@ -95,7 +115,7 @@ export default function ProfileScreen() {
       return;
     }
     Alert.alert(
-      appLang === 'kn' ? 'ಪ್ರೊಫೈಲ್ ನವೀಕರಿಸಲಾಗಿದೆ' : 'Profile Updated', 
+      appLang === 'kn' ? 'ಪ್ರೊಫೈಲ್ ನವೀಕರಿಸಲಾಗಿದೆ' : 'Profile Updated',
       appLang === 'kn' ? `ನಿಮ್ಮ ಹೆಸರನ್ನು "${name}" ಗೆ ನವೀಕರಿಸಲಾಗಿದೆ.` : `Your name has been updated to "${name}".`
     );
   };
@@ -103,20 +123,20 @@ export default function ProfileScreen() {
   const handleChangePassword = () => {
     if (!currentPassword || !newPassword) {
       Alert.alert(
-        appLang === 'kn' ? 'ದೋಷ' : 'Error', 
+        appLang === 'kn' ? 'ದೋಷ' : 'Error',
         appLang === 'kn' ? 'ಪ್ರಸ್ತುತ ಮತ್ತು ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಎರಡನ್ನೂ ನಮೂದಿಸಿ' : 'Please fill in both current and new password fields'
       );
       return;
     }
     if (newPassword.length < 6) {
       Alert.alert(
-        appLang === 'kn' ? 'ದೋಷ' : 'Error', 
+        appLang === 'kn' ? 'ದೋಷ' : 'Error',
         appLang === 'kn' ? 'ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಕನಿಷ್ಠ 6 ಅಕ್ಷರಗಳಿರಬೇಕು' : 'New password must be at least 6 characters'
       );
       return;
     }
     Alert.alert(
-      appLang === 'kn' ? 'ಯಶಸ್ವಿಯಾಗಿದೆ' : 'Success', 
+      appLang === 'kn' ? 'ಯಶಸ್ವಿಯಾಗಿದೆ' : 'Success',
       appLang === 'kn' ? 'ನಿಮ್ಮ ಪಾಸ್‌ವರ್ಡ್ ಯಶಸ್ವಿಯಾಗಿ ಬದಲಾಗಿದೆ.' : 'Your password has been changed successfully.'
     );
     setCurrentPassword('');
@@ -125,8 +145,8 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      appLang === 'kn' ? 'ಲಾಗ್ ಔಟ್' : 'Logout', 
-      appLang === 'kn' ? 'ವಿಬ್ಜ್‌ನಿಂದ ಲಾಗ್ ಔಟ್ ಮಾಡಲು ನೀವು ಖಚಿತವಾಗಿ ಬಯಸುವಿರಾ?' : 'Are you sure you want to log out of Vibzz?', 
+      appLang === 'kn' ? 'ಲಾಗ್ ಔಟ್' : 'Logout',
+      appLang === 'kn' ? 'ವಿಬ್ಜ್‌ನಿಂದ ಲಾಗ್ ಔಟ್ ಮಾಡಲು ನೀವು ಖಚಿತವಾಗಿ ಬಯಸುವಿರಾ?' : 'Are you sure you want to log out of Vibzz?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -141,7 +161,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(110) }]} showsVerticalScrollIndicator={false}>
-        
+
         {/* PROFILE HEADER */}
         <View style={styles.header}>
           <View style={[styles.avatarCircle, { backgroundColor: colors.amber }]}>
@@ -183,7 +203,7 @@ export default function ProfileScreen() {
 
           {/* Password Change */}
           <Text style={[styles.cardSubTitle, { color: colors.textPrimary }]}>{trans.changePass}</Text>
-          
+
           <Text style={[styles.label, { color: colors.textPrimary }]}>{trans.currentPass}</Text>
           <TextInput
             style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
@@ -217,41 +237,71 @@ export default function ProfileScreen() {
             <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: scale(10) }}>
+          <View style={{ flexDirection: 'row', gap: scale(8) }}>
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]}
               onPress={() => {
+                openRazorpayPayment({
+                  amount: 500,
+                  title: 'Vibe Wallet Recharge',
+                  customerName: name || 'Abhishek',
+                  onSuccess: async (paymentId) => {
+                    setWalletBalance(prev => prev + 500);
+                    await topupWalletApi({ userId, amount: 500, paymentId, description: 'Vibe Wallet Top-Up via Razorpay' });
+                    Alert.alert('🎉 Payment Successful!', `₹500 added to your Vibe Wallet via Razorpay.\nTransaction ID: ${paymentId}`);
+                  },
+                  onCancel: () => {
+                    Alert.alert('Cancelled', 'Wallet payment was cancelled.');
+                  }
+                });
+              }}
+            >
+              <Text style={styles.primaryButtonText}>💳 Add Money</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(245, 197, 24, 0.15)', marginTop: 0, borderWidth: 1, borderColor: colors.amber }]}
+              onPress={() => {
                 Alert.prompt(
-                  'Add Money via Razorpay',
-                  'Enter amount to add to your Vibe Wallet (₹):',
+                  'Withdraw Funds to UPI / Bank',
+                  'Enter UPI ID (e.g. name@upi) to withdraw wallet funds:',
                   [
                     { text: 'Cancel', style: 'cancel' },
                     {
-                      text: 'Pay via Razorpay',
-                      onPress: (val) => {
-                        const amt = parseFloat(val || '0');
-                        if (isNaN(amt) || amt <= 0) {
-                          Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+                      text: 'Submit Request',
+                      onPress: async (upi) => {
+                        if (!upi || upi.trim().length < 3) {
+                          Alert.alert('Invalid UPI ID', 'Please enter a valid UPI ID');
                           return;
                         }
-                        setWalletBalance(prev => prev + amt);
-                        Alert.alert('Razorpay Payment Success!', `₹${amt} successfully added to your Vibe Wallet.`);
-                      },
-                    },
+                        const res = await submitWithdrawalApi({
+                          userId,
+                          userName: name || 'Tourist',
+                          role: 'tourist',
+                          amount: walletBalance > 0 ? walletBalance : 500,
+                          upiId: upi.trim(),
+                        });
+                        if (res.success) {
+                          Alert.alert('🎉 Withdrawal Requested!', `Withdrawal request submitted for UPI: ${upi}.\nStatus: Pending Admin Payout.`);
+                        } else {
+                          Alert.alert('Error', res.message || 'Failed to submit withdrawal request.');
+                        }
+                      }
+                    }
                   ],
                   'plain-text',
-                  '500'
+                  'tourist@upi'
                 );
               }}
             >
-              <Text style={styles.primaryButtonText}>💳 Add Money (Razorpay)</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.amber }]}>💸 Withdraw</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line }]}
               onPress={() => setWalletModalVisible(true)}
             >
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 Wallet History</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 History</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -261,7 +311,7 @@ export default function ProfileScreen() {
         {/* PREFERENCES SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
           <Text style={[styles.cardTitle, { color: colors.amber }]}>{trans.pref}</Text>
-          
+
           {/* Dark Theme toggle */}
           <View style={styles.toggleRow}>
             <View>
@@ -304,16 +354,16 @@ export default function ProfileScreen() {
         </View>
 
         {/* SWITCH PORTAL BUTTONS */}
-        <TouchableOpacity 
-          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginBottom: verticalScale(8) }]} 
+        <TouchableOpacity
+          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginBottom: verticalScale(8) }]}
           onPress={() => router.push('/driver-dashboard')}
         >
           <MaterialIcons name="directions-car" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
           <Text style={[styles.switchPortalText, { color: colors.amber }]}>{trans.switchDriver}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginTop: 0 }]} 
+        <TouchableOpacity
+          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginTop: 0 }]}
           onPress={() => router.push('/guide-dashboard')}
         >
           <MaterialIcons name="explore" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />

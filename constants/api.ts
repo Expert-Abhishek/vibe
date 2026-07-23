@@ -219,6 +219,22 @@ export async function fetchCustomerTripsApi(customerId: string): Promise<any[]> 
 }
 
 /**
+ * Fetch all Trips from backend DB
+ */
+export async function fetchTripsApi(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchTripsApi error:', e);
+  }
+  return [];
+}
+
+/**
  * Fetch live Drivers list from backend
  */
 export async function fetchDriversApi(): Promise<any[]> {
@@ -258,6 +274,131 @@ export async function fetchGuidesApi(): Promise<any[]> {
     console.warn('fetchGuidesApi error:', e);
   }
   return [];
+}
+
+/**
+ * Login user (Tourist, Driver, Guide) via phone/email & password
+ */
+export async function loginUserApi(payload: { identifier: string; password: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('loginUserApi error:', e);
+    return { success: false, message: 'Server connection error' };
+  }
+}
+
+/**
+ * Google Sign-In backend auth
+ */
+export async function googleAuthApi(payload: { googleId: string; email: string; name: string; photo?: string; role?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('googleAuthApi error:', e);
+    return { success: false, message: 'Server connection error during Google auth' };
+  }
+}
+
+/**
+ * Driver update real-time GPS location
+ */
+export async function updateDriverLocationApi(driverId: string, latitude: number, longitude: number, isActive: boolean = true): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/driver-location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId, latitude, longitude, isActive }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('updateDriverLocationApi error:', e);
+    return { success: false };
+  }
+}
+
+/**
+ * Fetch pending ride requests for Driver
+ */
+export async function fetchDriverRequestsApi(driverId: string): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/driver-requests/${driverId}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchDriverRequestsApi error:', e);
+  }
+  return [];
+}
+
+/**
+ * Driver Accept or Decline Ride Request
+ */
+export async function respondDriverRequestApi(tripId: string, driverId: string, action: 'accept' | 'decline', driverName?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId, action, driverName }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('respondDriverRequestApi error:', e);
+    return { success: false, message: 'Failed to respond to ride request' };
+  }
+}
+
+/**
+ * Wallet APIs
+ */
+export async function fetchWalletBalanceApi(userId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/${userId}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchWalletBalanceApi error:', e);
+    return { success: false, balance: 0, transactions: [] };
+  }
+}
+
+export async function topupWalletApi(payload: { userId: string; amount: number; paymentId: string; description?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/topup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('topupWalletApi error:', e);
+    return { success: false, message: 'Wallet top-up failed' };
+  }
+}
+
+export async function submitWithdrawalApi(payload: { userId: string; userName?: string; role?: string; amount: number; upiId?: string; accountNumber?: string; ifscCode?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/withdraw`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('submitWithdrawalApi error:', e);
+    return { success: false, message: 'Withdrawal request failed' };
+  }
 }
 
 

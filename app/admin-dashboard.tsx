@@ -17,6 +17,7 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useRouter } from 'expo-router';
 import { adminState, Driver, Guide } from './admin-state';
+import { updateUserStatus } from '@/constants/api';
 
 // Interfaces
 interface Voucher {
@@ -252,30 +253,30 @@ export default function AdminDashboardScreen() {
     });
   };
 
-  const handleDriverKyc = (id: string, action: 'Accept' | 'Decline') => {
+  const handleDriverKyc = async (id: string, action: 'Accept' | 'Decline') => {
+    const nextStatus = action === 'Accept' ? 'Active' : 'KYC Declined';
+    await updateUserStatus(id, nextStatus);
+
     setDrivers(prev => {
       const updated = prev.map(d => {
         if (d.id === id) {
-          if (action === 'Accept') {
-            return { ...d, status: 'Active' as any, kycDone: true };
-          } else {
-            return { ...d, status: 'KYC Declined' as any, kycDone: false };
-          }
+          return { ...d, status: nextStatus as any, kycDone: action === 'Accept' };
         }
         return d;
       });
       adminState.drivers = updated;
       return updated;
     });
-    Alert.alert(`KYC ${action}ed`, `The driver status has been updated successfully.`);
+    Alert.alert(`KYC ${action}ed`, `The driver status has been updated in database.`);
   };
 
   // Guide KYC & Toggle Actions
-  const handleToggleGuideStatus = (id: string) => {
+  const handleToggleGuideStatus = async (id: string) => {
+    let nextStatus = 'Active';
     setGuides(prev => {
       const updated = prev.map(g => {
         if (g.id === id) {
-          const nextStatus = g.status === 'Active' ? 'Inactive' : 'Active';
+          nextStatus = g.status === 'Active' ? 'Inactive' : 'Active';
           return { ...g, status: nextStatus as any };
         }
         return g;
@@ -283,24 +284,24 @@ export default function AdminDashboardScreen() {
       adminState.guides = updated;
       return updated;
     });
+    await updateUserStatus(id, nextStatus);
   };
 
-  const handleGuideKyc = (id: string, action: 'Accept' | 'Decline') => {
+  const handleGuideKyc = async (id: string, action: 'Accept' | 'Decline') => {
+    const nextStatus = action === 'Accept' ? 'Active' : 'KYC Declined';
+    await updateUserStatus(id, nextStatus);
+
     setGuides(prev => {
       const updated = prev.map(g => {
         if (g.id === id) {
-          if (action === 'Accept') {
-            return { ...g, status: 'Active' as any, kycDone: true };
-          } else {
-            return { ...g, status: 'KYC Declined' as any, kycDone: false };
-          }
+          return { ...g, status: nextStatus as any, kycDone: action === 'Accept' };
         }
         return g;
       });
       adminState.guides = updated;
       return updated;
     });
-    Alert.alert(`KYC ${action}ed`, `The guide status has been updated successfully.`);
+    Alert.alert(`KYC ${action}ed`, `The guide status has been updated in database.`);
   };
 
   const handleLogout = () => {

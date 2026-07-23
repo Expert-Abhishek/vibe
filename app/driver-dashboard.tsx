@@ -19,6 +19,14 @@ import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
+import { clearUserSession, getUserSessionSync } from '@/constants/authStore';
+import {
+  updateDriverLocationApi,
+  fetchDriverRequestsApi,
+  respondDriverRequestApi,
+  fetchWalletBalanceApi,
+  submitWithdrawalApi,
+} from '@/constants/api';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -157,15 +165,66 @@ export default function DriverDashboardScreen() {
           distanceKm: 32.5,
           durationMins: 45,
           estimatedFare: 980,
-          otp: '8240',
-        };
-        setIncomingRequest(mockRequest);
-        setTimerSeconds(15);
+  // Driver Session & Live Location Updates
+  useEffect(() => {
+    if (!isOnline) return;
+    const session = getUserSessionSync();
+    const driverId = session?.id || 'd1';
+
+    // Post real-time location coordinates
+    const locationInterval = setInterval(async () => {
+      await updateDriverLocationApi(driverId, 12.9716, 77.5946, true);
+    }, 10000);
+
+    // Poll live ride requests from backend PostgreSQL
+    const pollRequests = async () => {
+      const reqs = await fetchDriverRequestsApi(driverId);
+      if (reqs && reqs.length > 0 && !activeTrip) {
+        const firstReq = reqs[0];
+        setIncomingRequest({
+          touristName: firstReq.customerName || 'Tourist Customer',
+          pickup: firstReq.pickupName || 'Bengaluru City',
+          pickupLat: 12.9716,
+          pickupLng: 77.5946,
+          drop: firstReq.dropName || 'Mysuru Palace',
+          dropLat: 12.3053,
+          dropLng: 76.6552,
+          distanceKm: 140,
+          durationMins: 180,
+          estimatedFare: Number(firstReq.price) || 2500,
+          otp: '1234',
+          tripId: firstReq.id,
+        } as any);
         setRequestVisible(true);
-      }, 5000);
-    }
-    return () => clearTimeout(timeout);
-  }, [isOnline, activeTrip, incomingRequest]);
+      }
+    };
+
+    pollRequests();
+    const requestInterval = setInterval(pollRequests, 7000);
+
+    return () => {
+      clearInterval(locationInterval);
+      clearInterval(requestInterval);
+    };
+  }, [isOnline, activeTrip]);
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Driver Logout',
+      'Are you sure you want to log out of Driver Dashboard?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            await clearUserSession();
+            router.replace('/(auth)/sign-in');
+          }
+        }
+      ]
+    );
+  };
 
   // Request timer
   useEffect(() => {
@@ -185,8 +244,16 @@ export default function DriverDashboardScreen() {
     return () => clearInterval(timer);
   }, [requestVisible, timerSeconds]);
 
-  const handleAcceptRequest = () => {
+  const handleAcceptRequest = async () => {
     if (!incomingRequest) return;
+    const session = getUserSessionSync();
+    const driverId = session?.id || 'd1';
+    const tripId = (incomingRequest as any).tripId;
+
+    if (tripId) {
+      await respondDriverRequestApi(tripId, driverId, 'accept', session?.name || 'Anil Gowda');
+    }
+
     setRequestVisible(false);
     setActiveTrip(incomingRequest);
     setTripPhase('pickup');
@@ -194,12 +261,19 @@ export default function DriverDashboardScreen() {
     setActiveTab('active_trip');
     Alert.alert(
       appLang === 'kn' ? 'ಪ್ರವಾಸ ಒಪ್ಪಿಕೊಳ್ಳಲಾಗಿದೆ!' : 'Ride Accepted!',
-      appLang === 'kn' ? 'ಜಿಪಿಎಸ್ ಮಾರ್ಗಸೂಚಿ ಆರಂಭವಾಗಿದೆ. ಪಿಕಪ್ ಸ್ಥಳಕ್ಕೆ ತೆರಳಿ.' : 'GPS navigation routing started. Proceed to pickup.',
-      [{ text: 'OK' }]
+      appLang === 'kn' ? 'ಜಿಪಿಎಸ್ ಮಾರ್ಗಸೂಚಿ ಆರಂಭವಾಗಿದೆ. ಪಿಕಪ್ ಸ್ಥಳಕ್ಕೆ ತೆರಳಿ.' : 'GPS navigation routing started. Proceed to pickup.'
     );
   };
 
-  const handleRejectRequest = () => {
+  const handleRejectRequest = async () => {
+    const session = getUserSessionSync();
+    const driverId = session?.id || 'd1';
+    const tripId = (incomingRequest as any)?.tripId;
+
+    if (tripId) {
+      await respondDriverRequestApi(tripId, driverId, 'decline');
+    }
+
     setRequestVisible(false);
     setIncomingRequest(null);
     Alert.alert(
@@ -259,21 +333,34 @@ export default function DriverDashboardScreen() {
     );
   };
 
-  const handleInstantPayout = () => {
+  const handleInstantPayout = async () => {
     if (earningsBalance <= 0) {
       Alert.alert('No Balance', 'Your bank payout balance is empty.');
       return;
     }
+    const session = getUserSessionSync();
     setPayoutLoading(true);
-    setTimeout(() => {
-      setPayoutLoading(false);
+
+    const res = await submitWithdrawalApi({
+      userId: session?.id || 'd1',
+      userName: session?.name || 'Anil Gowda',
+      role: 'driver',
+      amount: earningsBalance,
+      upiId: upiId || 'driver@okaxis',
+    });
+
+    setPayoutLoading(false);
+
+    if (res.success) {
       const paidAmt = earningsBalance;
       setEarningsBalance(0);
       Alert.alert(
-        'Payout Transferred!',
-        `₹${paidAmt} successfully dispatched to UPI: ${upiId}!`
+        '🎉 Withdrawal Request Submitted!',
+        `₹${paidAmt} withdrawal request submitted to UPI: ${upiId}.\nStatus: Pending Admin Approval.`
       );
-    }, 2000);
+    } else {
+      Alert.alert('Error', res.message || 'Failed to submit withdrawal request.');
+    }
   };
 
   const handleReportDispute = (issue: string) => {
@@ -285,6 +372,9 @@ export default function DriverDashboardScreen() {
     );
   };
 
+  const currentSession = getUserSessionSync();
+  const driverDisplayName = currentSession?.name || 'Anil Gowda';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#101014' : '#F5F5F7' }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -293,13 +383,23 @@ export default function DriverDashboardScreen() {
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View>
           <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ DRIVER</Text>
-          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>Anil Gowda</Text>
+          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>{driverDisplayName}</Text>
         </View>
-        
-        <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
-          <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
-          <Text style={styles.switchRoleText}>Tourist App</Text>
-        </TouchableOpacity>
+
+        <View style={{ flexDirection: 'row', gap: scale(8), alignItems: 'center' }}>
+          <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
+            <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
+            <Text style={styles.switchRoleText}>Tourist App</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.switchRoleBtn, { backgroundColor: '#ef4444' }]}
+            onPress={handleLogout}
+          >
+            <MaterialIcons name="logout" size={scale(16)} color="#ffffff" />
+            <Text style={[styles.switchRoleText, { color: '#ffffff' }]}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tab Switchboard Body */}
