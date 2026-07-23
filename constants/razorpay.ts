@@ -6,10 +6,13 @@ import { createRazorpayOrderApi, verifyRazorpayPaymentApi } from '@/constants/ap
  * Production Key ID: rzp_live_Cqz1hMxOW8QFj3
  */
 let RazorpayCheckout: any = null;
-try {
-  RazorpayCheckout = require('react-native-razorpay').default || require('react-native-razorpay');
-} catch (e) {
-  // Native module fallback for Web
+if (Platform.OS !== 'web') {
+  try {
+    const RazorpayModule = require('react-native-razorpay');
+    RazorpayCheckout = RazorpayModule.default || RazorpayModule;
+  } catch (e) {
+    console.warn('react-native-razorpay native module not loaded:', e);
+  }
 }
 
 export interface RazorpayPaymentOptions {
@@ -38,7 +41,7 @@ export async function openRazorpayPayment({
   const keyId = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_Cqz1hMxOW8QFj3';
   const amountInPaise = Math.round(amount * 100);
 
-  // Step 1: Create Order on backend server
+  // Step 1: Try creating Order on backend server
   let serverOrderId: string | undefined = undefined;
   try {
     const orderRes = await createRazorpayOrderApi({ amount });
