@@ -1,7 +1,14 @@
 const express = require('express');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
 const db = require('../config/db');
 
 const router = express.Router();
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_live_Cqz1hMxOW8QFj3',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'J61PkpPzNvE2QJNXet5bKG6D',
+});
 
 /**
  * GET /api/wallet/:userId
@@ -27,7 +34,7 @@ router.get('/:userId', async (req, res) => {
       const gRes = await db.query('SELECT wallet_balance FROM guide_profiles WHERE user_id = $1', [userId]);
       balance = parseFloat(gRes.rows[0]?.wallet_balance || 0);
     } else {
-      // Tourist wallet (stored in wallet_transactions sum or default)
+      // Tourist wallet
       const txSum = await db.query(
         "SELECT COALESCE(SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
         [userId]
@@ -58,8 +65,84 @@ router.get('/:userId', async (req, res) => {
 });
 
 /**
+ * POST /api/wallet/create-order
+ * Step 1: Create Razorpay Order ID on server
+ */
+router.post('/create-order', async (req, res) => {
+  try {
+    const { amount, currency = 'INR', receipt } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid amount required' });
+    }
+
+    const options = {
+      amount: Math.round(parseFloat(amount) * 100), // Amount in paise
+      currency,
+      receipt: receipt || `receipt_${Date.now()}`,
+    };
+
+    const order = await razorpay.orders.create(options);
+    res.json({
+      success: true,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      key: process.env.RAZORPAY_KEY_ID || 'rzp_live_Cqz1hMxOW8QFj3',
+    });
+  } catch (error) {
+    console.error('Error creating Razorpay order:', error);
+    res.status(500).json({ success: false, message: 'Order creation failed', error: error.message });
+  }
+});
+
+/**
+ * POST /api/wallet/verify-payment
+ * Step 2: Verify Razorpay Payment Signature on server
+ */
+router.post('/verify-payment', async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, userId, amount, description } = req.body;
+
+    const secret = process.env.RAZORPAY_KEY_SECRET || 'J61PkpPzNvE2QJNXet5bKG6D';
+    const body = (razorpay_order_id || '') + '|' + (razorpay_payment_id || '');
+
+    if (razorpay_signature) {
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(body.toString())
+        .digest('hex');
+
+      const isAuthentic = expectedSignature === razorpay_signature;
+      if (!isAuthentic) {
+        return res.status(400).json({ success: false, message: 'Payment verification failed: invalid signature' });
+      }
+    }
+
+    // Save transaction to DB
+    if (userId && amount) {
+      const numAmount = parseFloat(amount);
+      await db.query(
+        'INSERT INTO wallet_transactions (user_id, type, amount, payment_id, description) VALUES ($1, $2, $3, $4, $5)',
+        [userId, 'topup', numAmount, razorpay_payment_id || `pay_${Date.now()}`, description || 'Vibe Wallet Top-Up via Razorpay']
+      );
+      await db.query('UPDATE driver_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2', [numAmount, userId]);
+      await db.query('UPDATE guide_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2', [numAmount, userId]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment verified successfully!',
+      paymentId: razorpay_payment_id,
+    });
+  } catch (error) {
+    console.error('Error verifying Razorpay payment:', error);
+    res.status(500).json({ success: false, message: 'Payment verification failed', error: error.message });
+  }
+});
+
+/**
  * POST /api/wallet/topup
- * Add money to wallet via Razorpay
+ * Add money to wallet fallback endpoint
  */
 router.post('/topup', async (req, res) => {
   try {
@@ -124,39 +207,6 @@ router.post('/withdraw', async (req, res) => {
   } catch (error) {
     console.error('Error in withdrawal request:', error);
     res.status(500).json({ success: false, message: 'Withdrawal submission failed', error: error.message });
-  }
-});
-
-/**
- * GET /api/wallet/withdrawals (Admin endpoint)
- */
-router.get('/admin/withdrawals', async (req, res) => {
-  try {
-    const result = await db.query('SELECT * FROM withdrawals ORDER BY created_at DESC');
-    res.json({ success: true, data: result.rows });
-  } catch (error) {
-    console.error('Error fetching admin withdrawals:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch withdrawals' });
-  }
-});
-
-/**
- * PATCH /api/wallet/withdrawals/:id/status (Admin endpoint)
- */
-router.patch('/admin/withdrawals/:id/status', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body; // 'Approved', 'Rejected'
-
-    const result = await db.query(
-      'UPDATE withdrawals SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [status, id]
-    );
-
-    res.json({ success: true, message: `Withdrawal ${status}`, data: result.rows[0] });
-  } catch (error) {
-    console.error('Error updating withdrawal status:', error);
-    res.status(500).json({ success: false, message: 'Failed to update withdrawal status' });
   }
 });
 

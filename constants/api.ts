@@ -401,6 +401,41 @@ export async function submitWithdrawalApi(payload: { userId: string; userName?: 
   }
 }
 
+export async function createRazorpayOrderApi(payload: { amount: number; currency?: string; receipt?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/create-order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('createRazorpayOrderApi error:', e);
+    return { success: false, message: 'Order creation failed' };
+  }
+}
+
+export async function verifyRazorpayPaymentApi(payload: {
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  razorpay_signature?: string;
+  userId?: string;
+  amount?: number;
+  description?: string;
+}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/verify-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('verifyRazorpayPaymentApi error:', e);
+    return { success: false, message: 'Payment verification failed' };
+  }
+}
+
 
 
 

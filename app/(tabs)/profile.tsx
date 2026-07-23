@@ -18,6 +18,7 @@ import {
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { topupWalletApi, submitWithdrawalApi, fetchWalletBalanceApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -34,6 +35,9 @@ export default function ProfileScreen() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [walletBalance, setWalletBalance] = useState(1500);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+
+  const [addMoneyModalVisible, setAddMoneyModalVisible] = useState(false);
+  const [rechargeAmount, setRechargeAmount] = useState('500');
 
   const session = getUserSessionSync();
   const userId = session?.id || 'c1';
@@ -237,71 +241,19 @@ export default function ProfileScreen() {
             <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: scale(8) }}>
+          <View style={{ flexDirection: 'row', gap: scale(10) }}>
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]}
-              onPress={() => {
-                openRazorpayPayment({
-                  amount: 500,
-                  title: 'Vibe Wallet Recharge',
-                  customerName: name || 'Abhishek',
-                  onSuccess: async (paymentId) => {
-                    setWalletBalance(prev => prev + 500);
-                    await topupWalletApi({ userId, amount: 500, paymentId, description: 'Vibe Wallet Top-Up via Razorpay' });
-                    Alert.alert('🎉 Payment Successful!', `₹500 added to your Vibe Wallet via Razorpay.\nTransaction ID: ${paymentId}`);
-                  },
-                  onCancel: () => {
-                    Alert.alert('Cancelled', 'Wallet payment was cancelled.');
-                  }
-                });
-              }}
+              onPress={() => setAddMoneyModalVisible(true)}
             >
               <Text style={styles.primaryButtonText}>💳 Add Money</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(245, 197, 24, 0.15)', marginTop: 0, borderWidth: 1, borderColor: colors.amber }]}
-              onPress={() => {
-                Alert.prompt(
-                  'Withdraw Funds to UPI / Bank',
-                  'Enter UPI ID (e.g. name@upi) to withdraw wallet funds:',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Submit Request',
-                      onPress: async (upi) => {
-                        if (!upi || upi.trim().length < 3) {
-                          Alert.alert('Invalid UPI ID', 'Please enter a valid UPI ID');
-                          return;
-                        }
-                        const res = await submitWithdrawalApi({
-                          userId,
-                          userName: name || 'Tourist',
-                          role: 'tourist',
-                          amount: walletBalance > 0 ? walletBalance : 500,
-                          upiId: upi.trim(),
-                        });
-                        if (res.success) {
-                          Alert.alert('🎉 Withdrawal Requested!', `Withdrawal request submitted for UPI: ${upi}.\nStatus: Pending Admin Payout.`);
-                        } else {
-                          Alert.alert('Error', res.message || 'Failed to submit withdrawal request.');
-                        }
-                      }
-                    }
-                  ],
-                  'plain-text',
-                  'tourist@upi'
-                );
-              }}
-            >
-              <Text style={[styles.primaryButtonText, { color: colors.amber }]}>💸 Withdraw</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line }]}
               onPress={() => setWalletModalVisible(true)}
             >
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 History</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 Wallet History</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -353,23 +305,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* SWITCH PORTAL BUTTONS */}
-        <TouchableOpacity
-          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginBottom: verticalScale(8) }]}
-          onPress={() => router.push('/driver-dashboard')}
-        >
-          <MaterialIcons name="directions-car" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
-          <Text style={[styles.switchPortalText, { color: colors.amber }]}>{trans.switchDriver}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.switchPortalBtn, { borderColor: colors.amber, backgroundColor: 'rgba(245,197,24,0.06)', borderWidth: 1.5, marginTop: 0 }]}
-          onPress={() => router.push('/guide-dashboard')}
-        >
-          <MaterialIcons name="explore" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
-          <Text style={[styles.switchPortalText, { color: colors.amber }]}>{trans.switchGuide}</Text>
-        </TouchableOpacity>
-
         {/* LOGOUT BUTTON */}
         <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger }]} onPress={handleLogout}>
           <MaterialIcons name="exit-to-app" size={scale(20)} color={colors.danger} style={{ marginRight: scale(8) }} />
@@ -403,6 +338,90 @@ export default function ProfileScreen() {
                 </View>
               )}
             />
+          </View>
+        </View>
+      </Modal>
+
+      {/* ADD MONEY TO WALLET MODAL */}
+      <Modal visible={addMoneyModalVisible} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(24), borderTopRightRadius: scale(24), padding: scale(24) }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+              <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.amber }}>Add Money to Vibe Wallet</Text>
+              <TouchableOpacity onPress={() => setAddMoneyModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginBottom: verticalScale(12) }}>
+              Select or enter amount to top up via Razorpay:
+            </Text>
+
+            {/* Quick selection chips */}
+            <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(16) }}>
+              {['500', '1000', '2000', '5000'].map(val => (
+                <TouchableOpacity
+                  key={val}
+                  style={{
+                    flex: 1,
+                    paddingVertical: verticalScale(10),
+                    borderRadius: scale(10),
+                    backgroundColor: rechargeAmount === val ? colors.amber : 'rgba(255,255,255,0.06)',
+                    borderWidth: 1,
+                    borderColor: rechargeAmount === val ? colors.amber : colors.line,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setRechargeAmount(val)}
+                >
+                  <Text style={{ color: rechargeAmount === val ? '#101014' : colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(13) }}>
+                    ₹{val}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12), marginBottom: verticalScale(6) }}>
+              Custom Amount (₹)
+            </Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: '700', marginBottom: verticalScale(20) }]}
+              keyboardType="numeric"
+              value={rechargeAmount}
+              onChangeText={setRechargeAmount}
+              placeholder="Enter amount"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.amber }]}
+              onPress={() => {
+                const amt = parseFloat(rechargeAmount);
+                if (isNaN(amt) || amt <= 0) {
+                  Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+                  return;
+                }
+                setAddMoneyModalVisible(false);
+                openRazorpayPayment({
+                  amount: amt,
+                  title: 'Vibe Wallet Recharge',
+                  customerName: name || 'Abhishek',
+                  onSuccess: async (paymentId) => {
+                    setWalletBalance(prev => prev + amt);
+                    await topupWalletApi({ userId, amount: amt, paymentId, description: 'Vibe Wallet Top-Up via Razorpay' });
+                    Alert.alert('🎉 Payment Successful!', `₹${amt} successfully credited to your Vibe Wallet.\nTransaction ID: ${paymentId}`);
+                  },
+                  onCancel: () => {
+                    Alert.alert('Payment Cancelled', 'Razorpay wallet payment was cancelled.');
+                  },
+                  onError: (err: any) => {
+                    const msg = typeof err === 'string' ? err : (err?.message || 'Razorpay Gateway failed to open.');
+                    Alert.alert('Payment Gateway Error', msg);
+                  }
+                });
+              }}
+            >
+              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(15) }]}>💳 Pay ₹{rechargeAmount || '0'} via Razorpay</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
