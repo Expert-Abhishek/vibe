@@ -1,11 +1,13 @@
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -55,6 +57,7 @@ import { registerUser } from '@/constants/api';
 
 export default function DriverRegister() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [kycStatus, setKycStatus] = useState<KYCStatus>('form');
   const [loading, setLoading] = useState(false);
@@ -69,8 +72,13 @@ export default function DriverRegister() {
     capacity: '4',
   });
 
-
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const scrollToInput = (yOffset: number) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: yOffset, animated: true });
+    }, 100);
+  };
 
   const [docs, setDocs] = useState<Record<DocKey, string | null>>({
     photo: null, rc: null, dl: null, insurance: null, aadhar: null,
@@ -297,241 +305,259 @@ export default function DriverRegister() {
     );
   }
 
-
-
   // ---- Form ---------------------------------------------------------------
-
 
   return (
     <SafeAreaView style={styles.mainContainer}>
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
+          showsVerticalScrollIndicator={false}
+        >
 
-        <Text style={styles.eyebrow}>DRIVER PERMIT APPLICATION</Text>
-        <Text style={styles.appIdMono}>{appId}</Text>
+          <Text style={styles.eyebrow}>DRIVER PERMIT APPLICATION</Text>
+          <Text style={styles.appIdMono}>{appId}</Text>
 
-        <Text style={styles.screenHeading}>{"Let's get you on the road"}</Text>
-        <Text style={styles.screenSubheading}>
-          Checkpoint {currentStep} of 3 · {STEP_LABELS[currentStep - 1]}
-        </Text>
+          <Text style={styles.screenHeading}>{"Let's get you on the road"}</Text>
+          <Text style={styles.screenSubheading}>
+            Checkpoint {currentStep} of 3 · {STEP_LABELS[currentStep - 1]}
+          </Text>
 
-        {/* ROUTE PROGRESS — checkpoints connected by a dashed road */}
-        <View style={styles.routeWrapper}>
-          {STEP_LABELS.map((label, index) => {
-            const step = index + 1;
-            const isDone = currentStep > step;
-            const isActive = currentStep === step;
-            const isFilled = isDone || isActive;
-            return (
-              <React.Fragment key={label}>
-                <View style={styles.checkpointCol}>
-                  <View style={[styles.checkpoint, isFilled && styles.checkpointFilled]}>
-                    <Text style={[styles.checkpointText, isFilled && styles.checkpointTextFilled]}>
-                      {isDone ? '✓' : step}
-                    </Text>
-                  </View>
-                  <Text style={[styles.checkpointLabel, isActive && styles.checkpointLabelActive]}>
-                    {label}
-                  </Text>
-                </View>
-                {step < 3 && (
-                  <View style={styles.dashRow}>
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <View key={i} style={[styles.dash, currentStep > step && styles.dashActive]} />
-                    ))}
-                  </View>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </View>
-
-        {/* STEP 1 */}
-        {currentStep === 1 && (
-          <View style={styles.formSection}>
-            <Field
-              label="Full name" required
-              placeholder="As printed on your Aadhar"
-              value={formData.name}
-              onChangeText={(t: string) => setFormData({ ...formData, name: t })}
-              error={errors.name}
-            />
-            <Field
-              label="Phone number" required
-              placeholder="10-digit phone number"
-              keyboardType="phone-pad"
-              maxLength={10}
-              value={formData.phone}
-              onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
-              error={errors.phone}
-            />
-            <Field
-              label="Alternate phone" required
-              placeholder="10-digit backup number"
-              keyboardType="phone-pad"
-              maxLength={10}
-              value={formData.altPhone}
-              onChangeText={(t: string) => setFormData({ ...formData, altPhone: t.replace(/[^0-9]/g, '') })}
-              error={errors.altPhone}
-            />
-
-            <Field
-              label="Password" required
-              placeholder="Min 6 characters"
-              secureTextEntry
-              value={formData.password}
-              onChangeText={(t: string) => setFormData({ ...formData, password: t })}
-              error={errors.password}
-            />
-            <Field
-              label="Aadhar number" required
-              placeholder="12-digit Aadhar number"
-              keyboardType="numeric"
-              maxLength={12}
-              value={formData.aadharNo}
-              onChangeText={(t: string) => setFormData({ ...formData, aadharNo: t.replace(/[^0-9]/g, '') })}
-              error={errors.aadharNo}
-            />
-          </View>
-        )}
-
-        {/* STEP 2 */}
-        {currentStep === 2 && (
-          <View style={styles.formSection}>
-            <View style={{ marginBottom: 16 }}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>Vehicle Category</Text>
-                <View style={styles.requiredDot} />
-              </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
-                {[
-                  { id: '5seater', label: '5 Seater' },
-                  { id: '7seater', label: '7 Seater' },
-                  { id: '4x4jeep', label: '4*4' },
-                  { id: 'auto', label: 'Auto' },
-                ].map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={[
-                      styles.categoryChip,
-                      formData.vehicleType === cat.id && styles.categoryChipSelected,
-                    ]}
-                    onPress={() => setFormData({ ...formData, vehicleType: cat.id })}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        formData.vehicleType === cat.id && styles.categoryChipTextSelected,
-                      ]}
-                    >
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <Field
-              label="Vehicle model" required
-              placeholder="e.g. Swift Dzire, Innova, Thar, Auto"
-              value={formData.vehicleModel}
-              onChangeText={(t: string) => setFormData({ ...formData, vehicleModel: t })}
-              error={errors.vehicleModel}
-            />
-            <Field
-              label="Vehicle RC number" required
-              placeholder="KA-01-EX-0000"
-              autoCapitalize="characters"
-              value={formData.rcNo}
-              onChangeText={(t: string) => setFormData({ ...formData, rcNo: t })}
-              error={errors.rcNo}
-            />
-            <Field
-              label="Driving licence number" required
-              placeholder="DL-XXXXXXXXXXXXX"
-              autoCapitalize="characters"
-              value={formData.dlNo}
-              onChangeText={(t: string) => setFormData({ ...formData, dlNo: t })}
-              error={errors.dlNo}
-            />
-            <Field
-              label="Passenger capacity" required
-              placeholder="e.g. 4"
-              keyboardType="numeric"
-              value={formData.capacity}
-              onChangeText={(t: string) => setFormData({ ...formData, capacity: t.replace(/[^0-9]/g, '') })}
-              error={errors.capacity}
-            />
-          </View>
-        )}
-
-
-        {/* STEP 3 — documents as ticket stubs */}
-        {currentStep === 3 && (
-          <View style={styles.formSection}>
-            <Text style={styles.label}>Upload documents</Text>
-            <Text style={styles.helperText}>Tap each stub to attach the file</Text>
-            {errors.docs && <Text style={styles.errorText}>{errors.docs}</Text>}
-
-            {(Object.keys(docs) as DocKey[]).map((docKey) => {
-              const uri = docs[docKey];
+          {/* ROUTE PROGRESS — checkpoints connected by a dashed road */}
+          <View style={styles.routeWrapper}>
+            {STEP_LABELS.map((label, index) => {
+              const step = index + 1;
+              const isDone = currentStep > step;
+              const isActive = currentStep === step;
+              const isFilled = isDone || isActive;
               return (
-                <View key={docKey} style={[styles.ticketStub, uri && styles.ticketStubDone]}>
-                  <TouchableOpacity
-                    style={styles.ticketTapArea}
-                    onPress={() => pickDocument(docKey)}
-                    activeOpacity={0.75}
-                  >
-                    {uri ? (
-                      <Image source={{ uri }} style={styles.ticketThumb} />
-                    ) : (
-                      <View style={styles.ticketBadge}>
-                        <Text style={styles.ticketBadgeText}>＋</Text>
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.ticketLabel}>{DOC_LABELS[docKey]}</Text>
-                      <Text style={styles.ticketStatus}>
-                        {uri ? 'Uploaded · tap to replace' : 'Not attached yet'}
+                <React.Fragment key={label}>
+                  <View style={styles.checkpointCol}>
+                    <View style={[styles.checkpoint, isFilled && styles.checkpointFilled]}>
+                      <Text style={[styles.checkpointText, isFilled && styles.checkpointTextFilled]}>
+                        {isDone ? '✓' : step}
                       </Text>
                     </View>
-                  </TouchableOpacity>
-
-                  {uri && (
-                    <TouchableOpacity style={styles.ticketRemoveBtn} onPress={() => removeDocument(docKey)}>
-                      <Text style={styles.ticketRemoveText}>✕</Text>
-                    </TouchableOpacity>
+                    <Text style={[styles.checkpointLabel, isActive && styles.checkpointLabelActive]}>
+                      {label}
+                    </Text>
+                  </View>
+                  {step < 3 && (
+                    <View style={styles.dashRow}>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <View key={i} style={[styles.dash, currentStep > step && styles.dashActive]} />
+                      ))}
+                    </View>
                   )}
-                </View>
+                </React.Fragment>
               );
             })}
           </View>
-        )}
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => {
-              if (currentStep > 1) {
-                setCurrentStep(prev => prev - 1);
-              } else {
-                router.back();
-              }
-            }}
-          >
-            <Text style={styles.secondaryButtonText}>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleNext} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color={colors.ink} />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {currentStep === 3 ? 'Submit for verification' : 'Continue'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* STEP 1 */}
+          {currentStep === 1 && (
+            <View style={styles.formSection}>
+              <Field
+                label="Full name" required
+                placeholder="As printed on your Aadhar"
+                value={formData.name}
+                onChangeText={(t: string) => setFormData({ ...formData, name: t })}
+                onFocus={() => scrollToInput(80)}
+                error={errors.name}
+              />
+              <Field
+                label="Phone number" required
+                placeholder="10-digit phone number"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={formData.phone}
+                onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
+                onFocus={() => scrollToInput(150)}
+                error={errors.phone}
+              />
+              <Field
+                label="Alternate phone" required
+                placeholder="10-digit backup number"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={formData.altPhone}
+                onChangeText={(t: string) => setFormData({ ...formData, altPhone: t.replace(/[^0-9]/g, '') })}
+                onFocus={() => scrollToInput(220)}
+                error={errors.altPhone}
+              />
 
-      </ScrollView>
+              <Field
+                label="Password" required
+                placeholder="Min 6 characters"
+                secureTextEntry
+                value={formData.password}
+                onChangeText={(t: string) => setFormData({ ...formData, password: t })}
+                onFocus={() => scrollToInput(290)}
+                error={errors.password}
+              />
+              <Field
+                label="Aadhar number" required
+                placeholder="12-digit Aadhar number"
+                keyboardType="numeric"
+                maxLength={12}
+                value={formData.aadharNo}
+                onChangeText={(t: string) => setFormData({ ...formData, aadharNo: t.replace(/[^0-9]/g, '') })}
+                onFocus={() => scrollToInput(360)}
+                error={errors.aadharNo}
+              />
+            </View>
+          )}
+
+          {/* STEP 2 */}
+          {currentStep === 2 && (
+            <View style={styles.formSection}>
+              <View style={{ marginBottom: 16 }}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Vehicle Category</Text>
+                  <View style={styles.requiredDot} />
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+                  {[
+                    { id: '5seater', label: '5 Seater' },
+                    { id: '7seater', label: '7 Seater' },
+                    { id: '4x4jeep', label: '4*4' },
+                    { id: 'auto', label: 'Auto' },
+                  ].map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[
+                        styles.categoryChip,
+                        formData.vehicleType === cat.id && styles.categoryChipSelected,
+                      ]}
+                      onPress={() => setFormData({ ...formData, vehicleType: cat.id })}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          formData.vehicleType === cat.id && styles.categoryChipTextSelected,
+                        ]}
+                      >
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <Field
+                label="Vehicle model" required
+                placeholder="e.g. Swift Dzire, Innova, Thar, Auto"
+                value={formData.vehicleModel}
+                onChangeText={(t: string) => setFormData({ ...formData, vehicleModel: t })}
+                onFocus={() => scrollToInput(80)}
+                error={errors.vehicleModel}
+              />
+              <Field
+                label="Vehicle RC number" required
+                placeholder="KA-01-EX-0000"
+                autoCapitalize="characters"
+                value={formData.rcNo}
+                onChangeText={(t: string) => setFormData({ ...formData, rcNo: t })}
+                onFocus={() => scrollToInput(150)}
+                error={errors.rcNo}
+              />
+              <Field
+                label="Driving licence number" required
+                placeholder="DL-XXXXXXXXXXXXX"
+                autoCapitalize="characters"
+                value={formData.dlNo}
+                onChangeText={(t: string) => setFormData({ ...formData, dlNo: t })}
+                onFocus={() => scrollToInput(220)}
+                error={errors.dlNo}
+              />
+              <Field
+                label="Passenger capacity" required
+                placeholder="e.g. 4"
+                keyboardType="numeric"
+                value={formData.capacity}
+                onChangeText={(t: string) => setFormData({ ...formData, capacity: t.replace(/[^0-9]/g, '') })}
+                onFocus={() => scrollToInput(290)}
+                error={errors.capacity}
+              />
+            </View>
+          )}
+
+
+          {/* STEP 3 — documents as ticket stubs */}
+          {currentStep === 3 && (
+            <View style={styles.formSection}>
+              <Text style={styles.label}>Upload documents</Text>
+              <Text style={styles.helperText}>Tap each stub to attach the file</Text>
+              {errors.docs && <Text style={styles.errorText}>{errors.docs}</Text>}
+
+              {(Object.keys(docs) as DocKey[]).map((docKey) => {
+                const uri = docs[docKey];
+                return (
+                  <View key={docKey} style={[styles.ticketStub, uri && styles.ticketStubDone]}>
+                    <TouchableOpacity
+                      style={styles.ticketTapArea}
+                      onPress={() => pickDocument(docKey)}
+                      activeOpacity={0.75}
+                    >
+                      {uri ? (
+                        <Image source={{ uri }} style={styles.ticketThumb} />
+                      ) : (
+                        <View style={styles.ticketBadge}>
+                          <Text style={styles.ticketBadgeText}>＋</Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ticketLabel}>{DOC_LABELS[docKey]}</Text>
+                        <Text style={styles.ticketStatus}>
+                          {uri ? 'Uploaded · tap to replace' : 'Not attached yet'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {uri && (
+                      <TouchableOpacity style={styles.ticketRemoveBtn} onPress={() => removeDocument(docKey)}>
+                        <Text style={styles.ticketRemoveText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => {
+                if (currentStep > 1) {
+                  setCurrentStep(prev => prev - 1);
+                } else {
+                  router.back();
+                }
+              }}
+            >
+              <Text style={styles.secondaryButtonText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleNext} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color={colors.ink} />
+              ) : (
+                <Text style={styles.primaryButtonText}>
+                  {currentStep === 3 ? 'Submit for verification' : 'Continue'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Centered Submit Loader Overlay */}
       {loading && (
@@ -551,14 +577,18 @@ export default function DriverRegister() {
 // ---- Small reusable field component --------------------------------------
 
 function Field({
-  label, required, hint, error, ...inputProps
+  label, required, hint, error, secureTextEntry, onFocus, ...inputProps
 }: {
   label: string;
   required?: boolean;
   hint?: string;
   error?: string;
+  secureTextEntry?: boolean;
+  onFocus?: () => void;
   [key: string]: any;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <View style={{ marginBottom: 4 }}>
       <View style={styles.labelRow}>
@@ -566,11 +596,35 @@ function Field({
         {required && <View style={styles.requiredDot} />}
         {hint && <Text style={styles.hintText}>{hint}</Text>}
       </View>
-      <TextInput
-        style={[styles.input, error && styles.inputError]}
-        placeholderTextColor={colors.textFaint}
-        {...inputProps}
-      />
+      {secureTextEntry ? (
+        <View style={[styles.passwordWrapper, error && styles.inputError]}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholderTextColor={colors.textFaint}
+            secureTextEntry={!showPassword}
+            onFocus={onFocus}
+            {...inputProps}
+          />
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={{ padding: scale(8) }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name={showPassword ? 'visibility' : 'visibility-off'}
+              size={scale(20)}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TextInput
+          style={[styles.input, error && styles.inputError]}
+          placeholderTextColor={colors.textFaint}
+          onFocus={onFocus}
+          {...inputProps}
+        />
+      )}
       {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
@@ -633,6 +687,21 @@ const styles = StyleSheet.create({
     padding: scale(15), borderRadius: scale(10),
     borderWidth: 1, borderColor: colors.line,
     fontSize: moderateFontScale(15), color: colors.textPrimary,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: scale(10),
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingRight: scale(8),
+  },
+  passwordInput: {
+    flex: 1,
+    padding: scale(15),
+    fontSize: moderateFontScale(15),
+    color: colors.textPrimary,
   },
   inputError: { borderColor: colors.danger },
   errorText: { color: colors.danger, fontSize: moderateFontScale(12), marginTop: verticalScale(6) },

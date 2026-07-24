@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
     Platform,
     ScrollView,
     StyleSheet,
@@ -31,15 +33,24 @@ const colors = {
 
 export default function RiderRegister() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
   const [errors, setErrors] = useState<{ name?: string; phone?: string; password?: string; api?: string }>({});
+
+  const scrollToInput = (yOffset: number) => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: yOffset, animated: true });
+    }, 100);
+  };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToastMessage(message);
@@ -108,120 +119,148 @@ export default function RiderRegister() {
 
   return (
     <SafeAreaView style={styles.mainContainer}>
-      {toastMessage && (
-        <View style={[styles.toastBanner, toastType === 'error' ? styles.toastError : styles.toastSuccess]}>
-          <Text style={styles.toastBannerText}>{toastMessage}</Text>
-        </View>
-      )}
-
-      <ScrollView contentContainerStyle={{ padding: scale(24), flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
-
-        <Text style={styles.eyebrow}>RIDER PROFILE</Text>
-        <Text style={styles.title}>Welcome aboard</Text>
-        <Text style={styles.subtitle}>Create your profile to start booking rides</Text>
-
-        {/* Route strip — pickup to destination */}
-        <View style={styles.routeStrip}>
-          <View style={styles.routeCol}>
-            <View style={styles.routeDotFilled} />
-            <Text style={styles.routeLabel}>Pickup</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
+        {toastMessage && (
+          <View style={[styles.toastBanner, toastType === 'error' ? styles.toastError : styles.toastSuccess]}>
+            <Text style={styles.toastBannerText}>{toastMessage}</Text>
           </View>
-          <View style={styles.routeDashRow}>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <View key={i} style={styles.routeDash} />
-            ))}
+        )}
+
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={{ padding: scale(24), flexGrow: 1, justifyContent: 'center' }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
+          showsVerticalScrollIndicator={false}
+        >
+
+          <Text style={styles.eyebrow}>RIDER PROFILE</Text>
+          <Text style={styles.title}>Welcome aboard</Text>
+          <Text style={styles.subtitle}>Create your profile to start booking rides</Text>
+
+          {/* Route strip — pickup to destination */}
+          <View style={styles.routeStrip}>
+            <View style={styles.routeCol}>
+              <View style={styles.routeDotFilled} />
+              <Text style={styles.routeLabel}>Pickup</Text>
+            </View>
+            <View style={styles.routeDashRow}>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <View key={i} style={styles.routeDash} />
+              ))}
+            </View>
+            <View style={styles.routeCol}>
+              <View style={styles.routePin} />
+              <Text style={styles.routeLabel}>Destination</Text>
+            </View>
           </View>
-          <View style={styles.routeCol}>
-            <View style={styles.routePin} />
-            <Text style={styles.routeLabel}>Destination</Text>
+
+          {/* Boarding-pass style card holding the profile fields */}
+          <View style={styles.passCard}>
+            <View style={styles.passNotchLeft} />
+            <View style={styles.passNotchRight} />
+
+            {/* Full Name */}
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Full name</Text>
+              <View style={styles.requiredDot} />
+            </View>
+            <TextInput
+              style={[styles.input, errors.name && styles.inputError]}
+              placeholder="As it appears on your ID"
+              placeholderTextColor={colors.textFaint}
+              value={name}
+              onChangeText={(t) => {
+                setName(t);
+                if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
+              }}
+              onFocus={() => scrollToInput(120)}
+            />
+            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+
+            <View style={styles.passDivider} />
+
+            {/* Phone Number */}
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Phone number (10 digits)</Text>
+              <View style={styles.requiredDot} />
+            </View>
+            <TextInput
+              style={[styles.input, errors.phone && styles.inputError]}
+              placeholder="9876543210"
+              keyboardType="phone-pad"
+              maxLength={10}
+              placeholderTextColor={colors.textFaint}
+              value={phone}
+              onChangeText={(t) => {
+                const cleaned = t.replace(/[^0-9]/g, '');
+                setPhone(cleaned);
+                if (errors.phone) setErrors(prev => ({ ...prev, phone: undefined }));
+              }}
+              onFocus={() => scrollToInput(200)}
+            />
+            {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+
+            <View style={styles.passDivider} />
+
+            {/* Password */}
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.requiredDot} />
+            </View>
+            <View style={[styles.passwordWrapper, errors.password && styles.inputError]}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Min. 6 characters"
+                secureTextEntry={!showPassword}
+                placeholderTextColor={colors.textFaint}
+                value={password}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
+                }}
+                onFocus={() => scrollToInput(280)}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={{ padding: scale(8) }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name={showPassword ? 'visibility' : 'visibility-off'}
+                  size={scale(20)}
+                  color={colors.textMuted}
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+
+            {errors.api && <Text style={[styles.errorText, { marginTop: verticalScale(10), textAlign: 'center' }]}>{errors.api}</Text>}
           </View>
-        </View>
 
-        {/* Boarding-pass style card holding the profile fields */}
-        <View style={styles.passCard}>
-          <View style={styles.passNotchLeft} />
-          <View style={styles.passNotchRight} />
-
-          {/* Full Name */}
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Full name</Text>
-            <View style={styles.requiredDot} />
+          <View style={styles.buttonRow}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()} disabled={loading}>
+              <Text style={styles.secondaryButtonText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.primaryButton, loading && styles.buttonDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.ink} />
+              ) : (
+                <Text style={styles.primaryButtonText}>Get started</Text>
+              )}
+            </TouchableOpacity>
           </View>
-          <TextInput
-            style={[styles.input, errors.name && styles.inputError]}
-            placeholder="As it appears on your ID"
-            placeholderTextColor={colors.textFaint}
-            value={name}
-            onChangeText={(t) => {
-              setName(t);
-              if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
-            }}
-          />
-          {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 
-          <View style={styles.passDivider} />
-
-          {/* Phone Number */}
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Phone number (10 digits)</Text>
-            <View style={styles.requiredDot} />
-          </View>
-          <TextInput
-            style={[styles.input, errors.phone && styles.inputError]}
-            placeholder="9876543210"
-            keyboardType="phone-pad"
-            maxLength={10}
-            placeholderTextColor={colors.textFaint}
-            value={phone}
-            onChangeText={(t) => {
-              const cleaned = t.replace(/[^0-9]/g, '');
-              setPhone(cleaned);
-              if (errors.phone) setErrors(prev => ({ ...prev, phone: undefined }));
-            }}
-          />
-          {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
-
-          <View style={styles.passDivider} />
-
-          {/* Password */}
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.requiredDot} />
-          </View>
-          <TextInput
-            style={[styles.input, errors.password && styles.inputError]}
-            placeholder="Min. 6 characters"
-            secureTextEntry
-            placeholderTextColor={colors.textFaint}
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
-            }}
-          />
-          {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
-
-          {errors.api && <Text style={[styles.errorText, { marginTop: verticalScale(10), textAlign: 'center' }]}>{errors.api}</Text>}
-        </View>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()} disabled={loading}>
-            <Text style={styles.secondaryButtonText}>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.primaryButton, loading && styles.buttonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.ink} />
-            ) : (
-              <Text style={styles.primaryButtonText}>Get started</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -317,6 +356,21 @@ const styles = StyleSheet.create({
     padding: scale(15), borderRadius: scale(10),
     borderWidth: 1, borderColor: colors.line,
     fontSize: moderateFontScale(15), color: colors.textPrimary,
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: scale(10),
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingRight: scale(8),
+  },
+  passwordInput: {
+    flex: 1,
+    padding: scale(15),
+    fontSize: moderateFontScale(15),
+    color: colors.textPrimary,
   },
   inputError: { borderColor: colors.danger },
   errorText: { color: colors.danger, fontSize: moderateFontScale(12), marginTop: verticalScale(6) },

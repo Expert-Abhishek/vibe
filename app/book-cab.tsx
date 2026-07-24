@@ -68,7 +68,7 @@ export default function BookCabScreen() {
   const [stops, setStops] = useState<LocationNode[]>([]);
 
   // Search autocomplete overlay states
-  const [searchField, setSearchField] = useState<'pickup' | 'drop' | number | null>(null);
+  const [searchField, setSearchField] = useState<'pickup' | 'drop' | 'newstop' | number | null>(null);
   const [searchText, setSearchText] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
@@ -351,7 +351,7 @@ export default function BookCabScreen() {
     }
   };
 
-  const handleBookCab = () => {
+  const handleBookCab = async () => {
     if (!drop) {
       Alert.alert('Error', 'Please search and select a drop location first.');
       return;
@@ -361,24 +361,82 @@ export default function BookCabScreen() {
     const final = getDiscountedPrice(base);
 
     if (bookingMode === 'advance') {
-      const newAdv = {
-        id: `adv_${Date.now()}`,
-        type: 'cab' as const,
-        title: `${pickup.name} ➔ ${drop.name}`,
-        route: [pickup.name, ...stops.map(s => s.name), drop.name],
-        date: advanceDate,
-        time: advanceTime,
-        price: final,
-        touristName: 'Abhishek (Tourist)',
-        bookingDate: new Date().toISOString().split('T')[0], // e.g. '2026-07-16'
-        status: 'Pending' as const,
-      };
-      adminState.advanceBookings.push(newAdv);
-      Alert.alert(
-        'Advance Booking Scheduled!',
-        `Your ride has been successfully booked for ${advanceDate} at ${advanceTime}.\n\nRefund Rules:\n- Same day of booking: 0% fee (100% refund)\n- 1 day before trip: 30% fee deducted\n- More than 1 day before: 15% fee deducted\n- Day of trip: 100% fee deducted`,
-        [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
-      );
+      const advanceAmount = Math.round(final * 0.20);
+      const remainingAmount = final - advanceAmount;
+
+      if (paymentMethod === 'cash') {
+        await createTripApi({
+          tripType: 'cab',
+          title: `${pickup.name} ➔ ${drop.name}`,
+          customerName: 'Abhishek (Tourist)',
+          amount: final,
+          paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
+          status: 'Pending',
+        });
+
+        const newAdv = {
+          id: `adv_${Date.now()}`,
+          type: 'cab' as const,
+          title: `${pickup.name} ➔ ${drop.name}`,
+          route: [pickup.name, ...stops.map(s => s.name), drop.name],
+          date: advanceDate,
+          time: advanceTime,
+          price: final,
+          touristName: 'Abhishek (Tourist)',
+          bookingDate: new Date().toISOString().split('T')[0],
+          status: 'Pending' as const,
+          paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
+        };
+        adminState.advanceBookings.push(newAdv);
+        Alert.alert(
+          '🎉 Cash Pre-Booking Confirmed!',
+          `Cash Payment Mode Selected!\nPre-Booking Fees: ₹${advanceAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time to Captain)\nDate: ${advanceDate} at ${advanceTime}`,
+          [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
+        );
+        return;
+      }
+
+      openRazorpayPayment({
+        amount: advanceAmount,
+        title: `Pre-Booking: ${pickup.name} ➔ ${drop.name}`,
+        customerName: 'Abhishek (Tourist)',
+        onSuccess: async (paymentId: string) => {
+          await createTripApi({
+            tripType: 'cab',
+            title: `${pickup.name} ➔ ${drop.name}`,
+            customerName: 'Abhishek (Tourist)',
+            amount: final,
+            paymentMode: `UPI Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
+            status: 'Pending',
+          });
+
+          const newAdv = {
+            id: `adv_${Date.now()}`,
+            type: 'cab' as const,
+            title: `${pickup.name} ➔ ${drop.name}`,
+            route: [pickup.name, ...stops.map(s => s.name), drop.name],
+            date: advanceDate,
+            time: advanceTime,
+            price: final,
+            touristName: 'Abhishek (Tourist)',
+            bookingDate: new Date().toISOString().split('T')[0],
+            status: 'Pending' as const,
+            paymentMode: `UPI Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
+          };
+          adminState.advanceBookings.push(newAdv);
+          Alert.alert(
+            '🎉 UPI Pre-Booking Confirmed!',
+            `Pre-Booking Fees Paid: ₹${advanceAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time)\nDate: ${advanceDate} at ${advanceTime}`,
+            [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
+          );
+        },
+        onCancel: () => {
+          Alert.alert('Payment Cancelled', 'Pre-Booking fee payment was cancelled.');
+        },
+        onError: () => {
+          Alert.alert('Payment Error', 'Razorpay Payment Gateway error. Please check connection.');
+        }
+      });
       return;
     }
 
@@ -874,8 +932,12 @@ export default function BookCabScreen() {
               <ActivityIndicator color="#101010" />
             ) : (
               <>
-                <Text style={styles.bookCabText}>Confirm & Book Ride</Text>
-                <MaterialIcons name="local-taxi" size={scale(20)} color="#101010" />
+                <Text style={styles.bookCabText}>
+                  {bookingMode === 'advance'
+                    ? `Pre-Booking Fees: ₹${Math.round(getDiscountedPrice(getBasePrice(rides.find(r => r.key === selectedRide)?.ratePerKm || 15)) * 0.20)}`
+                    : `Confirm & Book Ride`}
+                </Text>
+                <MaterialIcons name={bookingMode === 'advance' ? "schedule" : "local-taxi"} size={scale(20)} color="#101010" />
               </>
             )}
           </TouchableOpacity>

@@ -17,15 +17,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useColorScheme, setAppTheme, toggleAppTheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
-import { clearUserSession, getUserSessionSync } from '@/constants/authStore';
+import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import {
   updateDriverLocationApi,
   fetchDriverRequestsApi,
   respondDriverRequestApi,
   fetchWalletBalanceApi,
   submitWithdrawalApi,
+  updateUserProfileApi,
+  fetchDriverTripsApi,
 } from '@/constants/api';
 
 // Dynamically require maps for web safety
@@ -99,6 +101,66 @@ export default function DriverDashboardScreen() {
 
   // Loading triggers
   const [payoutLoading, setPayoutLoading] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const currentSession = getUserSessionSync();
+  const [driverName, setDriverName] = useState(currentSession?.name || currentSession?.profile?.name || 'Anil Gowda (Captain)');
+  const [driverPhone, setDriverPhone] = useState(currentSession?.phone || currentSession?.profile?.phone || '+91 99000 82400');
+  const [vehicleModel, setVehicleModel] = useState(currentSession?.profile?.vehicle_model || 'Innova Crysta AC');
+  const [vehicleNumber, setVehicleNumber] = useState(currentSession?.profile?.vehicle_number || 'KA-01-EX-8240');
+  const [driverTrips, setDriverTrips] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadDriverBackendData() {
+      const session = getUserSessionSync();
+      const driverId = session?.id || 'd1';
+
+      const walletRes = await fetchWalletBalanceApi(driverId);
+      if (walletRes && walletRes.balance !== undefined) {
+        setEarningsBalance(walletRes.balance);
+      }
+
+      const tripsRes = await fetchDriverTripsApi(driverId);
+      if (tripsRes && tripsRes.length > 0) {
+        setDriverTrips(tripsRes);
+        setTripsCount(tripsRes.length);
+      }
+    }
+    loadDriverBackendData();
+  }, [updateTrigger]);
+
+  const handleSaveProfile = async () => {
+    const session = getUserSessionSync();
+    if (!session?.id) {
+      Alert.alert('Session Error', 'Please sign in to update your profile.');
+      return;
+    }
+    setIsSavingProfile(true);
+    await updateUserProfileApi(session.id, {
+      name: driverName,
+      phone: driverPhone,
+      vehicle_model: vehicleModel,
+      vehicle_number: vehicleNumber,
+      upiId: upiId,
+    });
+    setIsSavingProfile(false);
+
+    const updatedSession = {
+      ...session,
+      name: driverName,
+      phone: driverPhone,
+      profile: {
+        ...(session.profile || {}),
+        name: driverName,
+        phone: driverPhone,
+        vehicle_model: vehicleModel,
+        vehicle_number: vehicleNumber,
+        upiId: upiId,
+      }
+    };
+    await saveUserSession(updatedSession);
+    Alert.alert('🎉 Profile Saved!', 'Your Captain profile details have been saved to the backend database.');
+  };
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -167,24 +229,26 @@ export default function DriverDashboardScreen() {
         const firstReq = reqs[0];
         setIncomingRequest({
           touristName: firstReq.customerName || 'Tourist Customer',
-          pickup: firstReq.pickupName || 'Bengaluru City',
+          pickup: firstReq.pickupName || firstReq.title || 'Bengaluru Pickup',
           pickupLat: 12.9716,
           pickupLng: 77.5946,
-          drop: firstReq.dropName || 'Mysuru Palace',
+          drop: firstReq.dropName || 'Destination Point',
           dropLat: 12.3053,
           dropLng: 76.6552,
-          distanceKm: 140,
-          durationMins: 180,
-          estimatedFare: Number(firstReq.price) || 2500,
+          distanceKm: firstReq.durationHours ? firstReq.durationHours * 30 : 45,
+          durationMins: firstReq.durationHours ? firstReq.durationHours * 60 : 60,
+          estimatedFare: Number(firstReq.amount) || Number(firstReq.price) || 2500,
+          paymentMode: firstReq.paymentMode || 'Cash',
           otp: '1234',
           tripId: firstReq.id,
         } as any);
+        setTimerSeconds(20);
         setRequestVisible(true);
       }
     };
 
     pollRequests();
-    const requestInterval = setInterval(pollRequests, 7000);
+    const requestInterval = setInterval(pollRequests, 3000);
 
     return () => {
       clearInterval(locationInterval);
@@ -356,34 +420,37 @@ export default function DriverDashboardScreen() {
     );
   };
 
-  const currentSession = getUserSessionSync();
-  const driverDisplayName = currentSession?.name || 'Anil Gowda';
+  const driverDisplayName = driverName || currentSession?.name || currentSession?.profile?.name || 'Anil Gowda (Captain)';
+  const vehicleModelName = vehicleModel || currentSession?.profile?.vehicle_model || 'Innova Crysta AC';
+  const vehiclePlateNum = vehicleNumber || currentSession?.profile?.vehicle_number || 'KA-01-EX-8240';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#101014' : '#F5F5F7' }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* Header bar / Role switcher */}
+      {/* Clean Driver Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ DRIVER</Text>
-          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>{driverDisplayName}</Text>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+            <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBE CAPTAIN</Text>
+            <View style={{ backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.1)', borderWidth: 1, borderColor: isOnline ? '#10B981' : colors.border, paddingHorizontal: scale(8), paddingVertical: 2, borderRadius: scale(6) }}>
+              <Text style={{ color: isOnline ? '#10B981' : colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '900' }}>
+                {isOnline ? 'ONLINE' : 'OFFLINE'}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.headerGuideName, { color: colors.textPrimary, marginTop: 2 }]} numberOfLines={1}>
+            {driverDisplayName} <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>({vehicleModelName} • {vehiclePlateNum})</Text>
+          </Text>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: scale(8), alignItems: 'center' }}>
-          <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
-            <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
-            <Text style={styles.switchRoleText}>Tourist App</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.switchRoleBtn, { backgroundColor: '#ef4444' }]}
-            onPress={handleLogout}
-          >
-            <MaterialIcons name="logout" size={scale(16)} color="#ffffff" />
-            <Text style={[styles.switchRoleText, { color: '#ffffff' }]}>Logout</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[styles.switchRoleBtn, { backgroundColor: '#ef4444' }]}
+          onPress={handleLogout}
+        >
+          <MaterialIcons name="logout" size={scale(16)} color="#ffffff" />
+          <Text style={[styles.switchRoleText, { color: '#ffffff' }]}>Logout</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Tab Switchboard Body */}
@@ -637,6 +704,75 @@ export default function DriverDashboardScreen() {
       {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
           
+          {/* Captain Backend Profile Information Card */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Captain Profile Information</Text>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Captain Full Name</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+              <MaterialIcons name="person" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                value={driverName}
+                onChangeText={setDriverName}
+                placeholder="Driver Name"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Phone Number</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+              <MaterialIcons name="phone" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                value={driverPhone}
+                onChangeText={setDriverPhone}
+                placeholder="Phone Number"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Vehicle Model</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+              <FontAwesome5 name="car" size={scale(16)} color={colors.amber} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                value={vehicleModel}
+                onChangeText={setVehicleModel}
+                placeholder="Vehicle Model (e.g. Innova Crysta)"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Vehicle Plate Number</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+              <MaterialIcons name="subtitles" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                value={vehicleNumber}
+                onChangeText={setVehicleNumber}
+                placeholder="KA-01-EX-0000"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+              />
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), backgroundColor: colors.amber, borderColor: colors.amber }]} 
+              onPress={handleSaveProfile}
+              disabled={isSavingProfile}
+            >
+              {isSavingProfile ? (
+                <ActivityIndicator color="#101014" size="small" />
+              ) : (
+                <Text style={[styles.detailedWalletBtnText, { color: '#101014', fontWeight: '900' }]}>
+                  Save Profile to Backend DB
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
           {/* 1. Bank Account & Payout Details */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
@@ -688,15 +824,7 @@ export default function DriverDashboardScreen() {
                 onPress={() => setSelectedVehicle('innova')}
               >
                 <FontAwesome5 name="car" size={scale(12)} color={selectedVehicle === 'innova' ? '#101010' : colors.textPrimary} />
-                <Text style={[styles.vehiclePillText, { color: selectedVehicle === 'innova' ? '#101010' : colors.textPrimary }]}>Innova (KA-03-MD-8240)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.vehiclePill, selectedVehicle === 'swift' && styles.vehiclePillActive, { borderColor: colors.border }]}
-                onPress={() => setSelectedVehicle('swift')}
-              >
-                <FontAwesome5 name="car" size={scale(12)} color={selectedVehicle === 'swift' ? '#101010' : colors.textPrimary} />
-                <Text style={[styles.vehiclePillText, { color: selectedVehicle === 'swift' ? '#101010' : colors.textPrimary }]}>Swift (KA-04-AB-1234)</Text>
+                <Text style={[styles.vehiclePillText, { color: selectedVehicle === 'innova' ? '#101010' : colors.textPrimary }]}>{vehicleModel || 'Innova'}</Text>
               </TouchableOpacity>
             </View>
 
@@ -739,9 +867,29 @@ export default function DriverDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 4. Language & App Settings */}
+          {/* 4. Language, Theme & App Settings */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.lang}</Text>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>App Appearance & Language</Text>
+
+            {/* Theme Mode Selector */}
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>App Display Theme</Text>
+            <View style={[styles.vehiclePillsRow, { marginBottom: verticalScale(14) }]}>
+              <TouchableOpacity
+                style={[styles.langPill, isDark && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppTheme('dark')}
+              >
+                <MaterialIcons name="dark-mode" size={scale(14)} color={isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
+                <Text style={[styles.langPillText, { color: isDark ? '#101010' : colors.textPrimary }]}>Dark Mode 🌙</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.langPill, !isDark && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppTheme('light')}
+              >
+                <MaterialIcons name="light-mode" size={scale(14)} color={!isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
+                <Text style={[styles.langPillText, { color: !isDark ? '#101010' : colors.textPrimary }]}>Light Mode ☀️</Text>
+              </TouchableOpacity>
+            </View>
 
             <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ</Text>
             <View style={styles.vehiclePillsRow}>
@@ -836,6 +984,13 @@ export default function DriverDashboardScreen() {
                 <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Dropoff Location</Text>
                   <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>{incomingRequest.drop}</Text>
+                </View>
+
+                <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Payment Mode</Text>
+                  <Text style={[styles.popupVal, { color: colors.amber, fontWeight: '800' }]} numberOfLines={1}>
+                    {(incomingRequest as any).paymentMode || 'Cash'}
+                  </Text>
                 </View>
 
                 <View style={styles.popupFareStats}>

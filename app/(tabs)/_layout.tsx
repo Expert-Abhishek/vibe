@@ -39,6 +39,7 @@ function TabIconButton({ routeName, isFocused, activeColor, inactiveColor }: any
   const getIconName = (name: string) => {
     if (name === 'index') return 'home';
     if (name === 'trips') return 'navigation';
+    if (name === 'history') return 'history';
     if (name === 'wallet') return 'account-balance-wallet';
     if (name === 'driver-wallet') return 'drive-eta';
     if (name === 'guide-wallet') return 'explore';

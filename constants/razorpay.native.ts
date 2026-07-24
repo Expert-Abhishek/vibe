@@ -3,10 +3,11 @@ import { createRazorpayOrderApi, verifyRazorpayPaymentApi, API_BASE_URL } from '
 
 let RazorpayCheckout: any = null;
 try {
+  // Optional native package if present
   const RazorpayModule = require('react-native-razorpay');
   RazorpayCheckout = RazorpayModule.default || RazorpayModule;
 } catch (e) {
-  console.warn('react-native-razorpay native module fallback:', e);
+  // Gracefully falls back to Expo WebBrowser checkout
 }
 
 export interface RazorpayPaymentOptions {

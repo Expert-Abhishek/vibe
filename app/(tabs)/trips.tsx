@@ -15,6 +15,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '../admin-state';
 import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
 
+const initialTripHistory: any[] = [];
+
 export default function TripsHistoryScreen() {
 
   const colorScheme = useColorScheme();
@@ -56,7 +58,7 @@ export default function TripsHistoryScreen() {
     date: bt.createdAt ? new Date(bt.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'Today',
     time: bt.createdAt ? new Date(bt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
     price: Number(bt.amount) || 0,
-    paymentMode: (bt.paymentMode && bt.paymentMode.includes('Razorpay') ? 'UPI' : 'UPI') as any,
+    paymentMode: (bt.paymentMode || 'Cash') as any,
     status: (bt.status === 'Confirmed' ? 'Upcoming' : bt.status) as any,
     passengerCount: 1,
   }));
@@ -74,7 +76,7 @@ export default function TripsHistoryScreen() {
       date: `Upcoming - ${b.date}`,
       time: b.time,
       price: b.price,
-      paymentMode: 'UPI' as const,
+      paymentMode: (b.paymentMode || 'Cash') as any,
       status: 'Upcoming' as const,
       rawBooking: b,
       passengerCount: undefined as number | undefined,
@@ -272,7 +274,7 @@ export default function TripsHistoryScreen() {
                 {/* Waypoints line visual if it is a cab route */}
                 {isCab && trip.route && (
                   <View style={styles.routeSection}>
-                    {trip.route.map((stop, idx) => {
+                    {trip.route.map((stop: string, idx: number) => {
                       const isLast = idx === trip.route!.length - 1;
                       return (
                         <View key={idx} style={styles.routeNodeItem}>
@@ -315,8 +317,8 @@ export default function TripsHistoryScreen() {
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Expenses</Text>
                     <Text style={styles.detailPrice}>₹{trip.price}</Text>
-                    <Text style={[styles.payMethodVal, { color: colors.textMuted }]}>
-                      Paid via {trip.paymentMode}
+                    <Text style={[styles.payMethodVal, { color: trip.paymentMode && trip.paymentMode.toLowerCase().includes('cash') ? colors.amber : colors.textMuted }]}>
+                      {trip.paymentMode ? (trip.paymentMode.toLowerCase().includes('cash') ? `${trip.paymentMode}` : `Paid via ${trip.paymentMode}`) : 'Cash'}
                     </Text>
                   </View>
                 </View>

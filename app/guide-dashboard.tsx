@@ -209,6 +209,11 @@ export default function GuideDashboardScreen() {
     Alert.alert('Request Accepted!', 'GPS routing started. Navigate to tourist.');
   };
 
+  const handleRejectRequest = () => {
+    setRequestVisible(false);
+    setIncomingRequest(null);
+  };
+
   const handleVerifyOtp = () => {
     if (!activeTour) return;
     if (enteredOtp === activeTour.otp) {
