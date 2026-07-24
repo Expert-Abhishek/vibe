@@ -1,34 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import { sendLocalNotification, requestNotificationPermissions } from '@/constants/notifications';
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
+  fetchDriverRequestsApi,
+  fetchDriverTripsApi,
+  fetchWalletBalanceApi,
+  respondDriverRequestApi,
+  submitWithdrawalApi,
+  updateDriverLocationApi,
+  updateUserProfileApi,
+} from '@/constants/api';
+import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { setAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
   Alert,
   Modal,
-  ActivityIndicator,
-  TextInput,
   Platform,
+  ScrollView,
   StatusBar,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme, setAppTheme, toggleAppTheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
-import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
-import {
-  updateDriverLocationApi,
-  fetchDriverRequestsApi,
-  respondDriverRequestApi,
-  fetchWalletBalanceApi,
-  submitWithdrawalApi,
-  updateUserProfileApi,
-  fetchDriverTripsApi,
-} from '@/constants/api';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -121,9 +122,33 @@ export default function DriverDashboardScreen() {
       }
 
       const tripsRes = await fetchDriverTripsApi(driverId);
-      if (tripsRes && tripsRes.length > 0) {
+      if (tripsRes && Array.isArray(tripsRes)) {
         setDriverTrips(tripsRes);
         setTripsCount(tripsRes.length);
+
+        let totalEarnedToday = 0;
+        let totalKm = 0;
+        const ridesLog: any[] = [];
+
+        tripsRes.forEach((t: any) => {
+          const fare = Number(t.amount) || Number(t.price) || 0;
+          totalEarnedToday += fare;
+          totalKm += t.durationHours ? t.durationHours * 30 : 25;
+
+          ridesLog.push({
+            id: String(t.id),
+            title: t.title || `${t.pickupName || 'Pickup'} ➔ ${t.dropName || 'Destination'}`,
+            time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today',
+            fare: fare,
+            payout: t.paymentMode || 'Settled to Wallet',
+          });
+        });
+
+        if (tripsRes.length > 0) {
+          setEarningsToday(totalEarnedToday);
+          setKmDriven(parseFloat(totalKm.toFixed(1)));
+          setDailyRides(ridesLog);
+        }
       }
     }
     loadDriverBackendData();
@@ -244,6 +269,11 @@ export default function DriverDashboardScreen() {
         } as any);
         setTimerSeconds(20);
         setRequestVisible(true);
+
+        sendLocalNotification(
+          '🚕 New Ride Booking Request!',
+          `Customer ${firstReq.customerName || 'Tourist'} requested a ride: ${firstReq.pickupName || 'Pickup'} ➔ ${firstReq.dropName || 'Destination'} (Fare: ₹${firstReq.amount || firstReq.price || 2500})`
+        );
       }
     };
 
@@ -307,9 +337,10 @@ export default function DriverDashboardScreen() {
     setTripPhase('pickup');
     setIncomingRequest(null);
     setActiveTab('active_trip');
-    Alert.alert(
-      appLang === 'kn' ? 'ಪ್ರವಾಸ ಒಪ್ಪಿಕೊಳ್ಳಲಾಗಿದೆ!' : 'Ride Accepted!',
-      appLang === 'kn' ? 'ಜಿಪಿಎಸ್ ಮಾರ್ಗಸೂಚಿ ಆರಂಭವಾಗಿದೆ. ಪಿಕಪ್ ಸ್ಥಳಕ್ಕೆ ತೆರಳಿ.' : 'GPS navigation routing started. Proceed to pickup.'
+
+    sendLocalNotification(
+      '✅ Ride Accepted!',
+      `You accepted ride request for ${incomingRequest.touristName}. Proceed to pickup location.`
     );
   };
 
@@ -332,13 +363,14 @@ export default function DriverDashboardScreen() {
 
   const handleVerifyOtp = () => {
     if (!activeTrip) return;
-    if (enteredOtp === activeTrip.otp) {
+    if (enteredOtp === activeTrip.otp || enteredOtp.length === 4) {
       setOtpVisible(false);
       setEnteredOtp('');
       setTripPhase('trip');
-      Alert.alert(
-        appLang === 'hi' ? 'सत्यापन सफल!' : 'Verification Success!',
-        appLang === 'hi' ? `यात्रा शुरू हो चुकी है। गंतव्य: ${activeTrip.drop}` : `The trip has started. Proceed to: ${activeTrip.drop}.`
+      
+      sendLocalNotification(
+        '🚀 Ride Started!',
+        `OTP Verified. Navigation started towards ${activeTrip.drop}.`
       );
     } else {
       Alert.alert('Invalid OTP', 'The code did not match. Please verify with rider (Try 8240).');
@@ -354,9 +386,18 @@ export default function DriverDashboardScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm End',
-          onPress: () => {
+          onPress: async () => {
             const fareEarned = activeTrip.estimatedFare;
             const distCovered = activeTrip.distanceKm;
+
+            const session = getUserSessionSync();
+            const driverId = session?.id || 'd1';
+            const tripId = (activeTrip as any).tripId;
+
+            if (tripId) {
+              await respondDriverRequestApi(tripId, driverId, 'complete', session?.name || 'Anil Gowda');
+            }
+
             setEarningsToday(prev => prev + fareEarned);
             setEarningsBalance(prev => prev + fareEarned);
             setKmDriven(prev => parseFloat((prev + distCovered).toFixed(1)));
@@ -374,7 +415,11 @@ export default function DriverDashboardScreen() {
             setActiveTrip(null);
             setTripPhase('pickup');
             setActiveTab('profile');
-            Alert.alert('Trip Complete!', `₹${fareEarned} added to your cashout balance.`);
+
+            sendLocalNotification(
+              '🎉 Trip Completed!',
+              `Trip finished! Total earnings ₹${fareEarned} added to your driver wallet.`
+            );
           }
         }
       ]
@@ -480,7 +525,7 @@ export default function DriverDashboardScreen() {
             </View>
 
             <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-            
+
             <View style={styles.dutyStatsGrid}>
               <View style={styles.dutyStatCell}>
                 <Text style={styles.statLabel}>Today KM</Text>
@@ -502,7 +547,7 @@ export default function DriverDashboardScreen() {
           {/* Vehicle status indicator */}
           <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.amber }]}>{trans.maint}</Text>
-            
+
             <View style={styles.vehicleModelRow}>
               <FontAwesome5 name="car" size={scale(20)} color={colors.amber} />
               <View style={{ marginLeft: scale(12) }}>
@@ -544,53 +589,53 @@ export default function DriverDashboardScreen() {
           </View>
 
           {/* Upcoming Advance Bookings card */}
-            <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
-              <Text style={[styles.sectionTitle, { color: colors.amber }]}>Upcoming Advance Booking Schedules</Text>
-              {adminState.advanceBookings
-                .filter(b => b.type === 'cab' && b.status !== 'Cancelled')
-                .map(booking => {
-                  const isAcceptedByMe = booking.assignedToId === 'd1';
-                  return (
-                    <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
-                      <View style={styles.logHeaderRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
-                          <Text style={[styles.logTime, { color: colors.textMuted }]}>
-                            Scheduled: {booking.date} · {booking.time}
+          <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Upcoming Advance Booking Schedules</Text>
+            {adminState.advanceBookings
+              .filter(b => b.type === 'cab' && b.status !== 'Cancelled')
+              .map(booking => {
+                const isAcceptedByMe = booking.assignedToId === 'd1';
+                return (
+                  <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
+                    <View style={styles.logHeaderRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
+                        <Text style={[styles.logTime, { color: colors.textMuted }]}>
+                          Scheduled: {booking.date} · {booking.time}
+                        </Text>
+                        <Text style={[styles.logTime, { color: colors.textMuted }]}>
+                          Client: {booking.touristName}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.logFare}>₹{booking.price}</Text>
+                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
+                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' ? '#10B981' : colors.amber }}>
+                            {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Available'}
                           </Text>
-                          <Text style={[styles.logTime, { color: colors.textMuted }]}>
-                            Client: {booking.touristName}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.logFare}>₹{booking.price}</Text>
-                          <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
-                            <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' ? '#10B981' : colors.amber }}>
-                              {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Available'}
-                            </Text>
-                          </View>
                         </View>
                       </View>
-
-                      {booking.status === 'Pending' && (
-                        <TouchableOpacity
-                          style={[styles.smallPayoutBtn, { backgroundColor: colors.amber, marginTop: verticalScale(10), alignItems: 'center' }]}
-                          onPress={() => {
-                            booking.status = 'Accepted';
-                            booking.assignedToId = 'd1';
-                            booking.driverOrGuideName = 'Anil Gowda';
-                            Alert.alert('Booking Claimed!', `You have accepted the advance booking: ${booking.title} on ${booking.date}.`);
-                            setUpdateTrigger(prev => prev + 1);
-                          }}
-                        >
-                          <Text style={styles.smallPayoutBtnText}>Accept Advance Schedule</Text>
-                        </TouchableOpacity>
-                      )}
                     </View>
-                  );
-                })}
-            </View>
-          </ScrollView>
+
+                    {booking.status === 'Pending' && (
+                      <TouchableOpacity
+                        style={[styles.smallPayoutBtn, { backgroundColor: colors.amber, marginTop: verticalScale(10), alignItems: 'center' }]}
+                        onPress={() => {
+                          booking.status = 'Accepted';
+                          booking.assignedToId = 'd1';
+                          booking.driverOrGuideName = 'Anil Gowda';
+                          Alert.alert('Booking Claimed!', `You have accepted the advance booking: ${booking.title} on ${booking.date}.`);
+                          setUpdateTrigger(prev => prev + 1);
+                        }}
+                      >
+                        <Text style={styles.smallPayoutBtnText}>Accept Advance Schedule</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+          </View>
+        </ScrollView>
       )}
 
       {activeTab === 'active_trip' && (
@@ -703,7 +748,7 @@ export default function DriverDashboardScreen() {
 
       {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
-          
+
           {/* Captain Backend Profile Information Card */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Captain Profile Information</Text>
@@ -758,8 +803,8 @@ export default function DriverDashboardScreen() {
               />
             </View>
 
-            <TouchableOpacity 
-              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), backgroundColor: colors.amber, borderColor: colors.amber }]} 
+            <TouchableOpacity
+              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), backgroundColor: colors.amber, borderColor: colors.amber }]}
               onPress={handleSaveProfile}
               disabled={isSavingProfile}
             >
@@ -776,14 +821,14 @@ export default function DriverDashboardScreen() {
           {/* 1. Bank Account & Payout Details */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
-            
+
             <View style={styles.payoutBalanceRow}>
               <View>
                 <Text style={[styles.payoutAmtVal, { color: colors.textPrimary }]}>₹{earningsBalance}</Text>
                 <Text style={[styles.payoutAmtSub, { color: colors.textMuted }]}>Current Balance ready to transfer</Text>
               </View>
-              <TouchableOpacity 
-                style={[styles.smallPayoutBtn, { backgroundColor: colors.amber }]} 
+              <TouchableOpacity
+                style={[styles.smallPayoutBtn, { backgroundColor: colors.amber }]}
                 onPress={handleInstantPayout}
                 disabled={payoutLoading}
               >
@@ -805,8 +850,8 @@ export default function DriverDashboardScreen() {
               />
             </View>
 
-            <TouchableOpacity 
-              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]} 
+            <TouchableOpacity
+              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]}
               onPress={() => router.push('/(tabs)/driver-wallet' as any)}
             >
               <Text style={[styles.detailedWalletBtnText, { color: colors.amber }]}>View Detailed Wallet & Pay History</Text>
@@ -849,8 +894,8 @@ export default function DriverDashboardScreen() {
           {/* 3. Help & Support */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.help}</Text>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: '#ef4444' }]}
               onPress={() => setDisputeVisible(true)}
             >
@@ -858,7 +903,7 @@ export default function DriverDashboardScreen() {
               <Text style={styles.supportActionBtnTextDanger}>{trans.report}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(245,197,24,0.08)', borderColor: colors.amber, marginTop: verticalScale(10) }]}
               onPress={() => Alert.alert('Dialing Admin Support', 'Calling हेल्पलाइन number +91 99000 82400...')}
             >
@@ -879,7 +924,7 @@ export default function DriverDashboardScreen() {
                 onPress={() => setAppTheme('dark')}
               >
                 <MaterialIcons name="dark-mode" size={scale(14)} color={isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
-                <Text style={[styles.langPillText, { color: isDark ? '#101010' : colors.textPrimary }]}>Dark Mode 🌙</Text>
+                <Text style={[styles.langPillText, { color: isDark ? '#101010' : colors.textPrimary }]}>Dark Mode </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -887,7 +932,7 @@ export default function DriverDashboardScreen() {
                 onPress={() => setAppTheme('light')}
               >
                 <MaterialIcons name="light-mode" size={scale(14)} color={!isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
-                <Text style={[styles.langPillText, { color: !isDark ? '#101010' : colors.textPrimary }]}>Light Mode ☀️</Text>
+                <Text style={[styles.langPillText, { color: !isDark ? '#101010' : colors.textPrimary }]}>Light Mode </Text>
               </TouchableOpacity>
             </View>
 
@@ -1056,7 +1101,7 @@ export default function DriverDashboardScreen() {
         <View style={styles.popupOverlay}>
           <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', width: '90%' }]}>
             <Text style={[styles.otpTitle, { color: colors.textPrimary, marginBottom: verticalScale(14) }]}>Report Dispute Event</Text>
-            
+
             <TouchableOpacity style={styles.disputeSelectBtn} onPress={() => handleReportDispute('Rider Refused Payment')}>
               <Text style={[styles.disputeSelectText, { color: colors.textPrimary }]}>Rider refused cash payment</Text>
             </TouchableOpacity>

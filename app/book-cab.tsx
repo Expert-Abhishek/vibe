@@ -17,6 +17,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
+import { sendLocalNotification } from '@/constants/notifications';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -388,6 +389,10 @@ export default function BookCabScreen() {
           paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
         };
         adminState.advanceBookings.push(newAdv);
+        sendLocalNotification(
+          '🚕 Ride Booking Submitted!',
+          `Your booking (${pickup.name} ➔ ${drop.name}) is registered in backend. Nearby drivers notified.`
+        );
         Alert.alert(
           '🎉 Cash Pre-Booking Confirmed!',
           `Cash Payment Mode Selected!\nPre-Booking Fees: ₹${advanceAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time to Captain)\nDate: ${advanceDate} at ${advanceTime}`,
@@ -424,6 +429,10 @@ export default function BookCabScreen() {
             paymentMode: `UPI Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
           };
           adminState.advanceBookings.push(newAdv);
+          sendLocalNotification(
+            '🎉 Pre-Booking Paid via UPI!',
+            `Pre-Booking fees paid: ₹${advanceAmount}. Captain assigned.`
+          );
           Alert.alert(
             '🎉 UPI Pre-Booking Confirmed!',
             `Pre-Booking Fees Paid: ₹${advanceAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time)\nDate: ${advanceDate} at ${advanceTime}`,

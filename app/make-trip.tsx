@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from './admin-state';
 import { fetchDestinationsApi, fetchDriversApi, createTripApi } from '@/constants/api';
 import { openRazorpayPayment } from '@/constants/razorpay';
+import { sendLocalNotification } from '@/constants/notifications';
 
 
 
@@ -661,6 +662,11 @@ export default function MakeTripScreen() {
         extraHours: extraHoursRounded,
         addonCharge: extraAddonCharge,
       });
+
+      sendLocalNotification(
+        '🗺️ Custom Trip Booking Submitted!',
+        `Your trip from ${pickup.name} to ${drop.name} is booked! Assigned driver: ${driverName}.`
+      );
 
       Alert.alert(
         '🎉 Cash Booking Confirmed!',
