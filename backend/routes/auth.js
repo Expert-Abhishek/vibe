@@ -967,5 +967,57 @@ router.put('/users/:id/profile', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/update-password
+ * Update user password after verifying current password
+ */
+router.post('/update-password', async (req, res) => {
+  try {
+    const { userId, currentPassword, newPassword } = req.body;
+
+    if (!userId || !currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId, currentPassword, and newPassword are required fields.',
+      });
+    }
+
+    // Retrieve user and their current password hash
+    const userRes = await db.query('SELECT password FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    const storedHash = userRes.rows[0].password;
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, storedHash);
+    if (!isPasswordValid) {
+      return res.status(401).json({ success: false, message: 'Invalid current password.' });
+    }
+
+    // Hash new password and update user
+    const saltRounds = 10;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    await db.query(
+      'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newPasswordHash, userId]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Password updated successfully!',
+    });
+  } catch (error) {
+    console.error('Error updating password:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update password.',
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;
 

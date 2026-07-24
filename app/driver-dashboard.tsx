@@ -1,13 +1,13 @@
 import {
   fetchDriverRequestsApi,
+  fetchDriverStatsApi,
   fetchDriverTripsApi,
   fetchWalletBalanceApi,
   respondDriverRequestApi,
   submitWithdrawalApi,
   updateDriverLocationApi,
-  updateUserProfileApi,
-  fetchDriverStatsApi,
-  fetchDriverAdvanceSchedulesApi,
+  updatePasswordApi,
+  updateUserProfileApi
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -111,6 +111,10 @@ export default function DriverDashboardScreen() {
   const [driverPhone, setDriverPhone] = useState(currentSession?.phone || currentSession?.profile?.phone || '+91 99000 82400');
   const [vehicleModel, setVehicleModel] = useState(currentSession?.profile?.vehicle_model || 'Innova Crysta AC');
   const [vehicleNumber, setVehicleNumber] = useState(currentSession?.profile?.vehicle_number || 'KA-01-EX-8240');
+  const [photoUrl, setPhotoUrl] = useState(currentSession?.profile?.photo_url || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [driverTrips, setDriverTrips] = useState<any[]>([]);
 
   useEffect(() => {
@@ -179,6 +183,7 @@ export default function DriverDashboardScreen() {
       phone: driverPhone,
       vehicle_model: vehicleModel,
       vehicle_number: vehicleNumber,
+      photo_url: photoUrl,
       upiId: upiId,
     });
     setIsSavingProfile(false);
@@ -193,11 +198,39 @@ export default function DriverDashboardScreen() {
         phone: driverPhone,
         vehicle_model: vehicleModel,
         vehicle_number: vehicleNumber,
+        photo_url: photoUrl,
         upiId: upiId,
       }
     };
     await saveUserSession(updatedSession);
     Alert.alert('🎉 Profile Saved!', 'Your Captain profile details have been saved to the backend database.');
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      Alert.alert('Error', 'Please fill in all password fields.');
+      return;
+    }
+    const session = getUserSessionSync();
+    if (!session?.id) {
+      Alert.alert('Session Error', 'Please sign in to change password.');
+      return;
+    }
+    setIsChangingPassword(true);
+    const res = await updatePasswordApi({
+      userId: session.id,
+      currentPassword,
+      newPassword,
+    });
+    setIsChangingPassword(false);
+
+    if (res && res.success) {
+      Alert.alert('🎉 Success', 'Your password has been updated in the database.');
+      setCurrentPassword('');
+      setNewPassword('');
+    } else {
+      Alert.alert('Error', res?.message || 'Failed to update password.');
+    }
   };
 
   const colors = {
@@ -734,6 +767,18 @@ export default function DriverDashboardScreen() {
               />
             </View>
 
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Profile Pic (URL)</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+              <MaterialIcons name="image" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                value={photoUrl}
+                onChangeText={setPhotoUrl}
+                placeholder="https://example.com/avatar.jpg"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
             <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Phone Number</Text>
             <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
               <MaterialIcons name="phone" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
@@ -781,7 +826,52 @@ export default function DriverDashboardScreen() {
                 <ActivityIndicator color="#101014" size="small" />
               ) : (
                 <Text style={[styles.detailedWalletBtnText, { color: '#101014', fontWeight: '900' }]}>
-                  Save Profile to Backend DB
+                  Save Profile
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* SECURITY / CHANGE PASSWORD SECTION */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Change Password</Text>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Current Password</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+              <MaterialIcons name="lock" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                secureTextEntry
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>New Password</Text>
+            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+              <MaterialIcons name="lock-open" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+              <TextInput
+                style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                secureTextEntry
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]}
+              onPress={handleChangePassword}
+              disabled={isChangingPassword}
+            >
+              {isChangingPassword ? (
+                <ActivityIndicator color={colors.amber} size="small" />
+              ) : (
+                <Text style={[styles.detailedWalletBtnText, { color: colors.amber }]}>
+                  Change Password
                 </Text>
               )}
             </TouchableOpacity>
@@ -827,59 +917,6 @@ export default function DriverDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 2. Duty Settings & Vehicle Toggle */}
-          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.vehicle}</Text>
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Choose Active Vehicle</Text>
-            <View style={styles.vehiclePillsRow}>
-              <TouchableOpacity
-                style={[styles.vehiclePill, selectedVehicle === 'innova' && styles.vehiclePillActive, { borderColor: colors.border }]}
-                onPress={() => setSelectedVehicle('innova')}
-              >
-                <FontAwesome5 name="car" size={scale(12)} color={selectedVehicle === 'innova' ? '#101010' : colors.textPrimary} />
-                <Text style={[styles.vehiclePillText, { color: selectedVehicle === 'innova' ? '#101010' : colors.textPrimary }]}>{vehicleModel || 'Innova'}</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-            <View style={styles.toggleSettingItem}>
-              <View>
-                <Text style={[styles.toggleSettingLabel, { color: colors.textPrimary }]}>{trans.nav}</Text>
-                <Text style={[styles.toggleSettingSub, { color: colors.textMuted }]}>
-                  {navPreference === 'inapp' ? 'In-App GPS Screen' : 'Redirect to Google Maps App'}
-                </Text>
-              </View>
-              <Switch
-                value={navPreference === 'inapp'}
-                onValueChange={(val) => setNavPreference(val ? 'inapp' : 'google')}
-                trackColor={{ false: '#2C2C34', true: colors.amber }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-          </View>
-
-          {/* 3. Help & Support */}
-          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.help}</Text>
-
-            <TouchableOpacity
-              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: '#ef4444' }]}
-              onPress={() => setDisputeVisible(true)}
-            >
-              <MaterialIcons name="report-problem" size={scale(18)} color="#ef4444" />
-              <Text style={styles.supportActionBtnTextDanger}>{trans.report}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(245,197,24,0.08)', borderColor: colors.amber, marginTop: verticalScale(10) }]}
-              onPress={() => Alert.alert('Dialing Admin Support', 'Calling हेल्पलाइन number +91 99000 82400...')}
-            >
-              <MaterialIcons name="call" size={scale(18)} color={colors.amber} />
-              <Text style={[styles.supportActionBtnTextAmber, { color: colors.textPrimary }]}>{trans.call}</Text>
-            </TouchableOpacity>
-          </View>
 
           {/* 4. Language, Theme & App Settings */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>

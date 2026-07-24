@@ -549,6 +549,25 @@ export async function fetchUserProfileApi(userId: string): Promise<any> {
   }
 }
 
+/**
+ * Update user password after verifying current password
+ */
+export async function updatePasswordApi(payload: { userId: string; currentPassword?: string; current_password?: string; newPassword?: string; new_password?: string }): Promise<any> {
+  try {
+    const currentPassword = payload.currentPassword || payload.current_password;
+    const newPassword = payload.newPassword || payload.new_password;
+    const res = await fetch(`${API_BASE_URL}/api/auth/update-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: payload.userId, currentPassword, newPassword }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('updatePasswordApi error:', e);
+    return { success: false, message: 'Password update connection failed' };
+  }
+}
+
 
 
 
