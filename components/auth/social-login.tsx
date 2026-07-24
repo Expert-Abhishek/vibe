@@ -1,29 +1,7 @@
 import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { ThemedText } from '@/components/themed-text';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
-interface SocialLoginProps {
-  onGoogleLogin: () => void;
-}
-
-export function SocialLogin({ onGoogleLogin }: SocialLoginProps) {
-  return (
-    <View style={styles.container}>
-      <View style={styles.dividerRow}>
-        <View style={styles.line} />
-        <ThemedText style={styles.dividerText}>OR CONTINUE WITH</ThemedText>
-        <View style={styles.line} />
-      </View>
-
-      <TouchableOpacity style={styles.googleButton} onPress={onGoogleLogin} activeOpacity={0.85}>
-        <View style={styles.circle}>
-          <FontAwesome name="google" size={scale(22)} color="#ffffff" />
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
+export function SocialLogin({ onGoogleLogin }: { onGoogleLogin?: () => void }) {
+  return null;
 }
 
 const styles = StyleSheet.create({

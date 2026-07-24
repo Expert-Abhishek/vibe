@@ -6,6 +6,8 @@ import {
   submitWithdrawalApi,
   updateDriverLocationApi,
   updateUserProfileApi,
+  fetchDriverStatsApi,
+  fetchDriverAdvanceSchedulesApi,
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -121,10 +123,19 @@ export default function DriverDashboardScreen() {
         setEarningsBalance(walletRes.balance);
       }
 
+      const statsRes = await fetchDriverStatsApi(driverId);
+      if (statsRes && statsRes.success && statsRes.data) {
+        if (statsRes.data.todayKm !== undefined) setKmDriven(statsRes.data.todayKm);
+        if (statsRes.data.tripsCount !== undefined) setTripsCount(statsRes.data.tripsCount);
+        if (statsRes.data.todayEarnings !== undefined) setEarningsToday(statsRes.data.todayEarnings);
+      }
+
       const tripsRes = await fetchDriverTripsApi(driverId);
       if (tripsRes && Array.isArray(tripsRes)) {
         setDriverTrips(tripsRes);
-        setTripsCount(tripsRes.length);
+        if (!statsRes?.success) {
+          setTripsCount(tripsRes.length);
+        }
 
         let totalEarnedToday = 0;
         let totalKm = 0;
@@ -145,8 +156,10 @@ export default function DriverDashboardScreen() {
         });
 
         if (tripsRes.length > 0) {
-          setEarningsToday(totalEarnedToday);
-          setKmDriven(parseFloat(totalKm.toFixed(1)));
+          if (!statsRes?.success) {
+            setEarningsToday(totalEarnedToday);
+            setKmDriven(parseFloat(totalKm.toFixed(1)));
+          }
           setDailyRides(ridesLog);
         }
       }
@@ -540,50 +553,6 @@ export default function DriverDashboardScreen() {
               <View style={styles.dutyStatCell}>
                 <Text style={styles.statLabel}>Today Earnings</Text>
                 <Text style={[styles.statValNum, { color: colors.amber }]}>₹{earningsToday}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Vehicle status indicator */}
-          <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.amber }]}>{trans.maint}</Text>
-
-            <View style={styles.vehicleModelRow}>
-              <FontAwesome5 name="car" size={scale(20)} color={colors.amber} />
-              <View style={{ marginLeft: scale(12) }}>
-                <Text style={[styles.vehicleModelName, { color: colors.textPrimary }]}>
-                  {selectedVehicle === 'innova' ? 'Toyota Innova Crysta' : 'Maruti Suzuki Swift'}
-                </Text>
-                <Text style={[styles.vehicleMetaSub, { color: colors.textMuted }]}>
-                  {selectedVehicle === 'innova' ? '7 Seater · KA-03-MD-8240' : '5 Seater · KA-04-AB-1234'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-            <View style={styles.statusProgressBlock}>
-              <View style={styles.progressLabelRow}>
-                <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>{trans.fuel}</Text>
-                <Text style={[styles.progressValueText, { color: colors.amber }]}>78% Remaining</Text>
-              </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: '78%', backgroundColor: colors.amber }]} />
-              </View>
-            </View>
-
-            <View style={styles.maintenanceStatsRow}>
-              <View style={styles.maintenanceCell}>
-                <MaterialIcons name="check-circle" size={scale(16)} color="#10B981" />
-                <Text style={[styles.maintValText, { color: colors.textPrimary }]}>Engine OK</Text>
-              </View>
-              <View style={styles.maintenanceCell}>
-                <MaterialIcons name="check-circle" size={scale(16)} color="#10B981" />
-                <Text style={[styles.maintValText, { color: colors.textPrimary }]}>Tires OK</Text>
-              </View>
-              <View style={styles.maintenanceCell}>
-                <MaterialIcons name="error-outline" size={scale(16)} color={colors.amber} />
-                <Text style={[styles.maintValText, { color: colors.textPrimary }]}>Service soon</Text>
               </View>
             </View>
           </View>

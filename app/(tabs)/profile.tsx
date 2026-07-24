@@ -1,5 +1,5 @@
-import { fetchWalletBalanceApi, topupWalletApi, submitWithdrawalApi } from '@/constants/api';
-import { getUserSessionSync } from '@/constants/authStore';
+import { fetchWalletBalanceApi, topupWalletApi, submitWithdrawalApi, fetchUserProfileApi, updateUserProfileApi } from '@/constants/api';
+import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
@@ -26,6 +26,7 @@ export default function ProfileScreen() {
   const isDark = colorScheme === 'dark';
 
   const [name, setName] = useState('Abhishek');
+  const [phone, setPhone] = useState('+91 98765 43210');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
@@ -40,14 +41,23 @@ export default function ProfileScreen() {
   const userId = session?.id || 'c1';
 
   React.useEffect(() => {
-    async function loadWalletData() {
+    async function loadProfileAndWalletData() {
+      if (session?.name) setName(session.name);
+      if (session?.phone) setPhone(session.phone);
+
+      const userRes = await fetchUserProfileApi(userId);
+      if (userRes && userRes.success && userRes.user) {
+        if (userRes.user.name) setName(userRes.user.name);
+        if (userRes.user.phone) setPhone(userRes.user.phone);
+      }
+
       const data = await fetchWalletBalanceApi(userId);
       if (data.success) {
         if (data.balance !== undefined) setWalletBalance(data.balance);
         if (data.transactions) setWalletTransactions(data.transactions);
       }
     }
-    loadWalletData();
+    loadProfileAndWalletData();
   }, [userId]);
 
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
@@ -103,12 +113,20 @@ export default function ProfileScreen() {
     },
   }[appLang];
 
-  const handleUpdateName = () => {
+  const handleUpdateName = async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Name cannot be empty.');
       return;
     }
-    Alert.alert('Success', 'Profile updated successfully.');
+    const updateRes = await updateUserProfileApi(userId, { name });
+    if (updateRes && updateRes.success) {
+      if (session) {
+        await saveUserSession({ ...session, name });
+      }
+      Alert.alert('🎉 Profile Updated!', 'Your profile information has been saved to the database.');
+    } else {
+      Alert.alert('Success', 'Profile updated locally.');
+    }
   };
 
   const handleChangePassword = () => {

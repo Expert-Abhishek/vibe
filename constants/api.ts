@@ -507,6 +507,48 @@ export async function savePushTokenApi(userId: string, pushToken: string): Promi
   }
 }
 
+/**
+ * Fetch Driver Statistics (Today KM, Trips Count, Today Earnings)
+ */
+export async function fetchDriverStatsApi(driverId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/driver-stats/${driverId}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchDriverStatsApi error:', e);
+    return { success: false, data: { todayKm: 0, tripsCount: 0, todayEarnings: 0 } };
+  }
+}
+
+/**
+ * Fetch Driver Advance Schedules from backend DB
+ */
+export async function fetchDriverAdvanceSchedulesApi(driverId: string): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/driver-advance-schedules/${driverId}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchDriverAdvanceSchedulesApi error:', e);
+  }
+  return [];
+}
+
+/**
+ * Fetch User Profile (Tourist, Driver, or Guide) from backend DB
+ */
+export async function fetchUserProfileApi(userId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/users/${userId}/profile`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchUserProfileApi error:', e);
+    return { success: false, user: null };
+  }
+}
+
 
 
 

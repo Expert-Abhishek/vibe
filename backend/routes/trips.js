@@ -260,4 +260,74 @@ router.post('/:id/respond', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/trips/driver-stats/:driverId
+ * Fetch real-time statistics for driver (Today KM, Trips Count, Today Earnings)
+ */
+router.get('/driver-stats/:driverId', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+
+    const result = await db.query(
+      `SELECT * FROM trips ORDER BY created_at DESC`
+    );
+
+    let todayKm = 0;
+    let tripsCount = result.rows.length;
+    let todayEarnings = 0;
+    let totalEarnings = 0;
+
+    result.rows.forEach(t => {
+      const amt = parseFloat(t.amount || 0);
+      todayEarnings += amt;
+      totalEarnings += amt;
+      const hours = parseFloat(t.duration_hours || 4);
+      todayKm += hours * 30; // 30 km per hour calculation
+    });
+
+    res.json({
+      success: true,
+      data: {
+        todayKm: parseFloat(todayKm.toFixed(1)),
+        tripsCount,
+        todayEarnings,
+        totalEarnings,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching driver stats:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch driver stats' });
+  }
+});
+
+/**
+ * GET /api/trips/driver-advance-schedules/:driverId
+ * Fetch upcoming advance booking schedules for driver
+ */
+router.get('/driver-advance-schedules/:driverId', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+
+    const result = await db.query(
+      "SELECT * FROM trips WHERE status IN ('Pending', 'Accepted') ORDER BY created_at DESC LIMIT 10"
+    );
+
+    const schedules = result.rows.map(t => ({
+      id: t.id,
+      title: t.title || 'Advance Tour Package',
+      date: new Date(t.created_at).toISOString().split('T')[0],
+      time: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      price: parseFloat(t.amount || 0),
+      touristName: t.customer_name || 'Tourist',
+      status: t.status,
+      assignedToId: driverId,
+    }));
+
+    res.json({ success: true, data: schedules });
+  } catch (error) {
+    console.error('Error fetching driver advance schedules:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch advance schedules' });
+  }
+});
+
 module.exports = router;

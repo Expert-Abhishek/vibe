@@ -839,5 +839,133 @@ router.post('/driver-location', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/auth/users/:id/profile
+ * Fetch complete user & role profile (Tourist, Driver, or Guide)
+ */
+router.get('/users/:id/profile', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const uRes = await db.query('SELECT id, name, phone, alternate_phone, email, role, status, created_at FROM users WHERE id = $1', [id]);
+
+    if (uRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const user = uRes.rows[0];
+    let profileData = null;
+
+    if (user.role === 'driver') {
+      const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1 OR id = $1', [id]);
+      profileData = dRes.rows[0] || null;
+    } else if (user.role === 'guide') {
+      const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1 OR id = $1', [id]);
+      profileData = gRes.rows[0] || null;
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        ...user,
+        profile: profileData,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch user profile', error: error.message });
+  }
+});
+
+/**
+ * PUT /api/auth/users/:id/profile
+ * Update user & role profile (Tourist, Driver, Captain, or Guide)
+ */
+router.put('/users/:id/profile', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      phone,
+      alternate_phone,
+      alt_phone,
+      email,
+      vehicle_model,
+      vehicle_number,
+      upiId,
+      upi_id,
+      expertise,
+      bio,
+    } = req.body;
+
+    const altPhone = (alternate_phone || alt_phone || '').trim();
+    const upi = upiId || upi_id || '';
+
+    // Update users main table
+    if (name || phone || email || altPhone) {
+      await db.query(
+        `UPDATE users
+         SET name = COALESCE($1, name),
+             phone = COALESCE($2, phone),
+             alternate_phone = COALESCE($3, alternate_phone),
+             email = COALESCE($4, email),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $5`,
+        [name || null, phone || null, altPhone || null, email || null, id]
+      );
+    }
+
+    // Check role
+    const uRes = await db.query('SELECT role FROM users WHERE id = $1', [id]);
+    const role = uRes.rows[0]?.role || 'tourist';
+
+    if (role === 'driver') {
+      await db.query(
+        `UPDATE driver_profiles
+         SET vehicle_model = COALESCE($1, vehicle_model),
+             vehicle_number = COALESCE($2, vehicle_number),
+             upi_id = COALESCE($3, upi_id),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $4 OR id = $4`,
+        [vehicle_model || null, vehicle_number || null, upi || null, id]
+      );
+    } else if (role === 'guide') {
+      await db.query(
+        `UPDATE guide_profiles
+         SET expertise = COALESCE($1, expertise),
+             bio = COALESCE($2, bio),
+             upi_id = COALESCE($3, upi_id),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $4 OR id = $4`,
+        [expertise || null, bio || null, upi || null, id]
+      );
+    }
+
+    // Fetch updated user & profile
+    const updatedUserRes = await db.query('SELECT id, name, phone, alternate_phone, email, role, status FROM users WHERE id = $1', [id]);
+    const updatedUser = updatedUserRes.rows[0];
+
+    let profileData = null;
+    if (role === 'driver') {
+      const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1 OR id = $1', [id]);
+      profileData = dRes.rows[0] || null;
+    } else if (role === 'guide') {
+      const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1 OR id = $1', [id]);
+      profileData = gRes.rows[0] || null;
+    }
+
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully!',
+      user: {
+        ...updatedUser,
+        profile: profileData,
+      }
+    });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update user profile', error: error.message });
+  }
+});
+
 module.exports = router;
 
