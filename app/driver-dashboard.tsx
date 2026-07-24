@@ -174,12 +174,15 @@ export default function DriverDashboardScreen() {
             const result = await ImagePicker.launchCameraAsync({
               allowsEditing: true,
               aspect: [1, 1],
-              quality: 0.6,
+              quality: 0.3,
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+              let uri = asset.uri;
+              if (asset.base64) {
+                uri = asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`;
+              }
               setPhotoUrl(uri);
             }
           },
@@ -196,12 +199,15 @@ export default function DriverDashboardScreen() {
               mediaTypes: ['images'],
               allowsEditing: true,
               aspect: [1, 1],
-              quality: 0.6,
+              quality: 0.3,
               base64: true,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
               const asset = result.assets[0];
-              const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+              let uri = asset.uri;
+              if (asset.base64) {
+                uri = asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`;
+              }
               setPhotoUrl(uri);
             }
           },
