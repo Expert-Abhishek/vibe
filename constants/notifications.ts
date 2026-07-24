@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Platform, Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 // Configure notification behavior when app is in foreground
 Notifications.setNotificationHandler({
@@ -7,7 +7,7 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
-  }),
+  } as any),
 });
 
 export async function requestNotificationPermissions(): Promise<boolean> {
@@ -23,6 +23,27 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   } catch (e) {
     console.warn('Failed to request notification permission:', e);
     return false;
+  }
+}
+
+export async function getExpoPushToken(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return null;
+
+    // Dynamically require Constants to avoid dependency issues on startup
+    const Constants = require('expo-constants').default;
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      ...(projectId ? { projectId } : {}),
+    });
+    return tokenData.data;
+  } catch (e) {
+    console.warn('getExpoPushToken error:', e);
+    return null;
   }
 }
 

@@ -379,7 +379,7 @@ export async function fetchDriverRequestsApi(driverId: string): Promise<any[]> {
 /**
  * Driver Accept or Decline Ride Request
  */
-export async function respondDriverRequestApi(tripId: string, driverId: string, action: 'accept' | 'decline', driverName?: string): Promise<any> {
+export async function respondDriverRequestApi(tripId: string, driverId: string, action: 'accept' | 'decline' | 'complete', driverName?: string): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/respond`, {
       method: 'POST',
@@ -487,6 +487,23 @@ export async function processCheckoutApi(payload: {
   } catch (e) {
     console.warn('processCheckoutApi error:', e);
     return { success: false, message: 'Checkout processing failed' };
+  }
+}
+
+/**
+ * Save user push notification token to backend PostgreSQL
+ */
+export async function savePushTokenApi(userId: string, pushToken: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/push-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, pushToken }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('savePushTokenApi error:', e);
+    return { success: false, message: 'Failed to upload push token' };
   }
 }
 

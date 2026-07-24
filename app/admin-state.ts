@@ -28,7 +28,7 @@ export interface TripRecord {
   date: string;
   time: string;
   price: number;
-  paymentMode: 'UPI' | 'Cash';
+  paymentMode: 'UPI' | 'Cash' | string;
   status: 'Completed' | 'Upcoming' | 'Cancelled';
   rating?: number;
   passengerCount?: number;
@@ -59,6 +59,7 @@ export interface AdvanceBooking {
   touristName: string;
   bookingDate: string;
   status: 'Pending' | 'Accepted' | 'Cancelled';
+  paymentMode?: string;
 }
 
 export const adminState = {

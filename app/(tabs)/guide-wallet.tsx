@@ -1,21 +1,22 @@
-import React, { useState } from 'react';
+import { fetchWalletBalanceApi, submitWithdrawalApi, updateUserProfileApi } from '@/constants/api';
+import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  Alert,
-  Modal,
-  ActivityIndicator,
-  StatusBar,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useRouter } from 'expo-router';
 
 interface EarningItem {
   id: string;
@@ -35,18 +36,52 @@ export default function GuideWalletScreen() {
   const [editingUpi, setEditingUpi] = useState(false);
   const [tempUpi, setTempUpi] = useState('ramesh.guide@okaxis');
 
-  const [todayEarnings, setTodayEarnings] = useState(3250);
-  const [totalEarnings, setTotalEarnings] = useState(18900);
-  
-  const [history, setHistory] = useState<EarningItem[]>([
-    { id: '1', tour: 'Bengaluru Palace Heritage Walk', time: 'Today, 10:15 AM', amount: 950, rating: 5, status: 'Settled' },
-    { id: '2', tour: 'Lalbagh Botanical Gardens Walk', time: 'Today, 01:00 PM', amount: 800, rating: 4.8, status: 'Settled' },
-    { id: '3', tour: 'Tipu Sultan Summer Palace Tour', time: 'Today, 04:00 PM', amount: 1500, rating: 5, status: 'Settled' },
-    { id: '4', tour: 'Hampi Ruins Expert Audio Guide', time: 'Yesterday, 09:30 AM', amount: 2500, rating: 4.9, status: 'Settled' },
-    { id: '5', tour: 'Gokarna Beach Sunset Trek Guidance', time: '11 July 2026, 05:00 PM', amount: 1200, rating: 4.7, status: 'Settled' },
-  ]);
+  const [todayEarnings, setTodayEarnings] = useState(0);
+  const [totalEarnings, setTotalEarnings] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  const [history, setHistory] = useState<EarningItem[]>([]);
   const [cashingOut, setCashingOut] = useState(false);
+
+  useEffect(() => {
+    async function loadWalletData() {
+      const session = getUserSessionSync();
+      const userId = session?.id || 'g1';
+
+      const sessionUpi = session?.profile?.upiId || session?.profile?.upi_id || 'ramesh.guide@okaxis';
+      setUpiId(sessionUpi);
+      setTempUpi(sessionUpi);
+
+      setLoading(true);
+      const res = await fetchWalletBalanceApi(userId);
+      setLoading(false);
+
+      if (res && res.success) {
+        setTodayEarnings(res.balance || 0);
+
+        const mappedHistory: EarningItem[] = (res.transactions || []).map((t: any) => {
+          return {
+            id: t.id,
+            tour: t.description || 'Tour Guide Earning',
+            time: t.created_at ? new Date(t.created_at).toLocaleString() : 'Recent',
+            amount: parseFloat(t.amount || 0),
+            rating: 5,
+            status: t.type === 'withdrawal' ? 'Pending' : 'Settled',
+          };
+        });
+
+        setHistory(mappedHistory);
+
+        // Sum approved/completed withdrawals
+        const settledWithdrawals = (res.withdrawals || [])
+          .filter((w: any) => w.status === 'Approved' || w.status === 'Completed')
+          .reduce((sum: number, w: any) => sum + parseFloat(w.amount || 0), 0);
+        setTotalEarnings(settledWithdrawals);
+      }
+    }
+    loadWalletData();
+  }, [refreshTrigger]);
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -59,12 +94,32 @@ export default function GuideWalletScreen() {
     success: '#10B981',
   };
 
-  const handleUpdateUpi = () => {
+  const handleUpdateUpi = async () => {
     const trimmed = tempUpi.trim();
     if (!trimmed || !trimmed.includes('@')) {
       Alert.alert('Invalid UPI ID', 'Please enter a valid UPI ID (e.g. username@bank).');
       return;
     }
+
+    const session = getUserSessionSync();
+    if (session?.id) {
+      setLoading(true);
+      await updateUserProfileApi(session.id, {
+        ...(session.profile || {}),
+        upiId: trimmed,
+      });
+      setLoading(false);
+
+      const updatedSession = {
+        ...session,
+        profile: {
+          ...(session.profile || {}),
+          upiId: trimmed,
+        },
+      };
+      await saveUserSession(updatedSession);
+    }
+
     setUpiId(trimmed);
     setEditingUpi(false);
     Alert.alert('UPI Updated', 'Your UPI ID has been updated successfully for receiving payouts.');
@@ -72,10 +127,10 @@ export default function GuideWalletScreen() {
 
   const handleCashout = () => {
     if (todayEarnings <= 0) {
-      Alert.alert('No Balance', 'Today\'s tour earnings have already been settled to your bank.');
+      Alert.alert('No Balance', "Today's tour earnings have already been settled to your bank.");
       return;
     }
-    
+
     Alert.alert(
       'Confirm Cashout',
       `Would you like to instantly transfer ₹${todayEarnings} to your registered UPI account (${upiId})?`,
@@ -83,20 +138,31 @@ export default function GuideWalletScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Transfer Now',
-          onPress: () => {
+          onPress: async () => {
             setCashingOut(true);
-            setTimeout(() => {
-              setCashingOut(false);
+            const session = getUserSessionSync();
+            const res = await submitWithdrawalApi({
+              userId: session?.id || 'g1',
+              userName: session?.name || 'Partner',
+              role: 'guide',
+              amount: todayEarnings,
+              upiId: upiId || 'guide@okaxis',
+            });
+            setCashingOut(false);
+
+            if (res && res.success) {
               const transferAmount = todayEarnings;
-              setTotalEarnings(prev => prev + transferAmount);
               setTodayEarnings(0);
               Alert.alert(
                 'Success!',
-                `₹${transferAmount} has been instantly settled to your bank account via UPI.`
+                `₹${transferAmount} withdrawal request submitted successfully! Admin will approve and settle it shortly.`,
+                [{ text: 'OK', onPress: () => setRefreshTrigger(prev => prev + 1) }]
               );
-            }, 2000);
-          }
-        }
+            } else {
+              Alert.alert('Error', res?.message || 'Failed to submit withdrawal request.');
+            }
+          },
+        },
       ]
     );
   };
@@ -117,137 +183,149 @@ export default function GuideWalletScreen() {
         <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage tour guide earnings and bank cashouts</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* Earnings Dashboard Box */}
-        <View style={[styles.dashboardCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.earningsGrid}>
-            <View style={styles.earningBox}>
-              <Text style={[styles.earningLabel, { color: colors.textMuted }]}>TODAY'S TOUR REVENUE</Text>
-              <Text style={[styles.earningValue, { color: colors.amber }]}>₹{todayEarnings.toLocaleString('en-IN')}</Text>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.amber} />
+          <Text style={{ color: colors.textMuted, marginTop: 10 }}>Loading Wallet...</Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Earnings Dashboard Box */}
+          <View style={[styles.dashboardCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.earningsGrid}>
+              <View style={styles.earningBox}>
+                <Text style={[styles.earningLabel, { color: colors.textMuted }]}>TODAY'S TOUR REVENUE</Text>
+                <Text style={[styles.earningValue, { color: colors.amber }]}>₹{todayEarnings.toLocaleString('en-IN')}</Text>
+              </View>
+              <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.earningBox}>
+                <Text style={[styles.earningLabel, { color: colors.textMuted }]}>TOTAL PAID OUT</Text>
+                <Text style={[styles.earningValue, { color: colors.success }]}>₹{totalEarnings.toLocaleString('en-IN')}</Text>
+              </View>
             </View>
-            <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.earningBox}>
-              <Text style={[styles.earningLabel, { color: colors.textMuted }]}>TOTAL PAID OUT</Text>
-              <Text style={[styles.earningValue, { color: colors.success }]}>₹{totalEarnings.toLocaleString('en-IN')}</Text>
-            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.cashoutBtn,
+                { backgroundColor: todayEarnings > 0 ? colors.amber : '#2C2C34' },
+              ]}
+              onPress={handleCashout}
+              disabled={todayEarnings === 0 || cashingOut}
+            >
+              {cashingOut ? (
+                <ActivityIndicator color="#101010" size="small" />
+              ) : (
+                <>
+                  <MaterialIcons name="account-balance" size={scale(18)} color={todayEarnings > 0 ? '#101010' : '#8D8D97'} style={{ marginRight: scale(6) }} />
+                  <Text style={[styles.cashoutBtnText, { color: todayEarnings > 0 ? '#101010' : '#8D8D97' }]}>
+                    {todayEarnings > 0 ? 'Instant Bank Settlement' : 'Nothing to Settle'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
-            style={[
-              styles.cashoutBtn, 
-              { backgroundColor: todayEarnings > 0 ? colors.amber : '#2C2C34' }
-            ]}
-            onPress={handleCashout}
-            disabled={todayEarnings === 0 || cashingOut}
-          >
-            {cashingOut ? (
-              <ActivityIndicator color="#101010" size="small" />
-            ) : (
-              <>
-                <MaterialIcons name="account-balance" size={scale(18)} color={todayEarnings > 0 ? '#101010' : '#8D8D97'} style={{ marginRight: scale(6) }} />
-                <Text style={[styles.cashoutBtnText, { color: todayEarnings > 0 ? '#101010' : '#8D8D97' }]}>
-                  {todayEarnings > 0 ? 'Instant Bank Settlement' : 'Nothing to Settle'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* UPI Configuration Panel */}
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Settlement Account (UPI)</Text>
 
-        {/* UPI Configuration Panel */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.amber }]}>Settlement Account (UPI)</Text>
-          
-          {editingUpi ? (
-            <View style={styles.upiInputRow}>
-              <TextInput
-                style={[styles.upiInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}
-                value={tempUpi}
-                onChangeText={setTempUpi}
-                placeholder="UPI ID (e.g. guide@bank)"
-                placeholderTextColor="rgba(255,255,255,0.2)"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <View style={styles.upiActionButtons}>
-                <TouchableOpacity 
-                  style={[styles.upiSubBtn, { backgroundColor: colors.success }]} 
-                  onPress={handleUpdateUpi}
-                >
-                  <MaterialIcons name="check" size={scale(18)} color="#FFFFFF" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.upiSubBtn, { backgroundColor: '#ef4444' }]} 
+            {editingUpi ? (
+              <View style={styles.upiInputRow}>
+                <TextInput
+                  style={[styles.upiInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}
+                  value={tempUpi}
+                  onChangeText={setTempUpi}
+                  placeholder="UPI ID (e.g. guide@bank)"
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <View style={styles.upiActionButtons}>
+                  <TouchableOpacity
+                    style={[styles.upiSubBtn, { backgroundColor: colors.success }]}
+                    onPress={handleUpdateUpi}
+                  >
+                    <MaterialIcons name="check" size={scale(18)} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.upiSubBtn, { backgroundColor: '#ef4444' }]}
+                    onPress={() => {
+                      setTempUpi(upiId);
+                      setEditingUpi(false);
+                    }}
+                  >
+                    <MaterialIcons name="close" size={scale(18)} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.upiDisplayRow}>
+                <View style={styles.upiDisplayLeft}>
+                  <FontAwesome5 name="wallet" size={scale(16)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
+                  <Text style={[styles.upiText, { color: colors.textPrimary }]}>{upiId}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.editBtn, { borderColor: colors.amber }]}
                   onPress={() => {
                     setTempUpi(upiId);
-                    setEditingUpi(false);
+                    setEditingUpi(true);
                   }}
                 >
-                  <MaterialIcons name="close" size={scale(18)} color="#FFFFFF" />
+                  <Text style={[styles.editBtnText, { color: colors.amber }]}>Change UPI</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          ) : (
-            <View style={styles.upiDisplayRow}>
-              <View style={styles.upiDisplayLeft}>
-                <FontAwesome5 name="wallet" size={scale(16)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
-                <Text style={[styles.upiText, { color: colors.textPrimary }]}>{upiId}</Text>
-              </View>
-              <TouchableOpacity 
-                style={[styles.editBtn, { borderColor: colors.amber }]} 
-                onPress={() => {
-                  setTempUpi(upiId);
-                  setEditingUpi(true);
-                }}
-              >
-                <Text style={[styles.editBtnText, { color: colors.amber }]}>Change UPI</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          <Text style={[styles.upiNote, { color: colors.textMuted }]}>
-            All guide booking earnings are credited to this UPI ID upon tapping "Instant Bank Settlement".
-          </Text>
-        </View>
+            )}
+            <Text style={[styles.upiNote, { color: colors.textMuted }]}>
+              All guide booking earnings are credited to this UPI ID upon tapping "Instant Bank Settlement".
+            </Text>
+          </View>
 
-        {/* Earning History */}
-        <View style={styles.historySection}>
-          <Text style={[styles.sectionTitle, { color: colors.amber }]}>Tour Guide Earnings History</Text>
-          
-          {history.map((item) => (
-            <View key={item.id} style={[styles.historyItem, { borderBottomColor: colors.border }]}>
-              <View style={[styles.itemIconBox, { backgroundColor: 'rgba(245,197,24,0.08)' }]}>
-                <MaterialIcons name="hiking" size={scale(18)} color={colors.amber} />
-              </View>
-              <View style={styles.itemMain}>
-                <Text style={[styles.itemTripText, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {item.tour}
-                </Text>
-                <View style={styles.ratingRow}>
-                  <Text style={[styles.itemTimeText, { color: colors.textMuted, marginRight: scale(8) }]}>
-                    {item.time}
-                  </Text>
-                  <View style={styles.starBadge}>
-                    <MaterialIcons name="star" size={scale(10)} color={colors.amber} style={{ marginRight: scale(2) }} />
-                    <Text style={styles.starText}>{item.rating}</Text>
+          {/* Earning History */}
+          <View style={styles.historySection}>
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Tour Guide Earnings History</Text>
+
+            {history.length === 0 ? (
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginVertical: scale(20) }}>
+                No transaction logs recorded yet.
+              </Text>
+            ) : (
+              history.map((item) => (
+                <View key={item.id} style={[styles.historyItem, { borderBottomColor: colors.border }]}>
+                  <View style={[styles.itemIconBox, { backgroundColor: 'rgba(245,197,24,0.08)' }]}>
+                    <MaterialIcons name="hiking" size={scale(18)} color={colors.amber} />
+                  </View>
+                  <View style={styles.itemMain}>
+                    <Text style={[styles.itemTripText, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {item.tour}
+                    </Text>
+                    <View style={styles.ratingRow}>
+                      <Text style={[styles.itemTimeText, { color: colors.textMuted, marginRight: scale(8) }]}>
+                        {item.time}
+                      </Text>
+                      <View style={styles.starBadge}>
+                        <MaterialIcons name="star" size={scale(10)} color={colors.amber} style={{ marginRight: scale(2) }} />
+                        <Text style={styles.starText}>{item.rating}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.itemRight}>
+                    <Text style={[styles.itemAmountText, { color: colors.textPrimary }]}>
+                      +₹{item.amount}
+                    </Text>
+                    <View style={[styles.statusBadge, { backgroundColor: item.status === 'Pending' ? 'rgba(245,197,24,0.1)' : 'rgba(16,185,129,0.1)' }]}>
+                      <Text style={[styles.statusText, { color: item.status === 'Pending' ? colors.amber : colors.success }]}>
+                        {item.status}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-              <View style={styles.itemRight}>
-                <Text style={[styles.itemAmountText, { color: colors.textPrimary }]}>
-                  +₹{item.amount}
-                </Text>
-                <View style={[styles.statusBadge, { backgroundColor: 'rgba(16,185,129,0.1)' }]}>
-                  <Text style={[styles.statusText, { color: colors.success }]}>
-                    {item.status}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
+              ))
+            )}
+          </View>
 
-        <View style={{ height: verticalScale(100) }} />
-      </ScrollView>
+          <View style={{ height: verticalScale(100) }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

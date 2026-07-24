@@ -403,22 +403,23 @@ router.delete('/users/:id', async (req, res) => {
 
 /**
  * PATCH /api/auth/drivers/:id/rate
- * Admin API: Update Driver daily_rate and hourly_addon_rate
+ * Admin API: Update Driver daily_rate, hourly_addon_rate and platform_fee
  */
 router.patch('/drivers/:id/rate', async (req, res) => {
   try {
     const { id } = req.params;
-    const { daily_rate, hourly_addon_rate } = req.body;
+    const { daily_rate, hourly_addon_rate, platform_fee } = req.body;
 
     const daily = parseFloat(daily_rate) || 2500;
     const hourly = parseFloat(hourly_addon_rate) || 200;
+    const fee = platform_fee !== undefined ? parseFloat(platform_fee) : 10.0;
 
     const result = await db.query(
       `UPDATE driver_profiles 
-       SET daily_rate = $1, hourly_addon_rate = $2, updated_at = CURRENT_TIMESTAMP 
-       WHERE user_id = $3 
+       SET daily_rate = $1, hourly_addon_rate = $2, platform_fee = $3, updated_at = CURRENT_TIMESTAMP 
+       WHERE user_id = $4 
        RETURNING *`,
-      [daily, hourly, id]
+      [daily, hourly, fee, id]
     );
 
     if (result.rows.length === 0) {
@@ -785,6 +786,30 @@ router.post('/google', async (req, res) => {
   } catch (error) {
     console.error('Error in Google auth:', error);
     return res.status(500).json({ success: false, message: 'Google Auth Error', error: error.message });
+  }
+});
+
+/**
+ * POST /api/auth/push-token
+ * Register/Update push token for the user
+ */
+router.post('/push-token', async (req, res) => {
+  try {
+    const { userId, pushToken } = req.body;
+
+    if (!userId || !pushToken) {
+      return res.status(400).json({ success: false, message: 'userId and pushToken are required' });
+    }
+
+    await db.query(
+      'UPDATE users SET push_token = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [pushToken, userId]
+    );
+
+    res.json({ success: true, message: 'Push token updated successfully' });
+  } catch (error) {
+    console.error('Error updating push token:', error);
+    res.status(500).json({ success: false, message: 'Failed to update push token', error: error.message });
   }
 });
 

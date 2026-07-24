@@ -1,13 +1,12 @@
 import {
   Customer,
-  Driver,
-  Guide,
-  DriverRateConfig,
-  GuideRateConfig,
   DashboardStats,
   Destination,
-  Plan,
-  PlanCheckpoint,
+  Driver,
+  DriverRateConfig,
+  Guide,
+  GuideRateConfig,
+  Plan
 } from './types';
 
 
@@ -92,6 +91,7 @@ export async function fetchDriversApi(): Promise<Driver[]> {
         dateRegistered: d.created_at ? new Date(d.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         dailyRate: Number(d.daily_rate) || 2500,
         hourlyAddonRate: Number(d.hourly_addon_rate) || 200,
+        platformFee: d.platform_fee !== undefined ? Number(d.platform_fee) : 10,
         docs: {
           photo: d.photo_url || null,
           rc: d.rc_url || null,
@@ -160,12 +160,12 @@ export async function updateUserStatusApi(userId: string, status: string): Promi
   }
 }
 
-export async function updateDriverRateApi(userId: string, dailyRate: number, hourlyAddonRate: number): Promise<boolean> {
+export async function updateDriverRateApi(userId: string, dailyRate: number, hourlyAddonRate: number, platformFee: number): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/drivers/${userId}/rate`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ daily_rate: dailyRate, hourly_addon_rate: hourlyAddonRate }),
+      body: JSON.stringify({ daily_rate: dailyRate, hourly_addon_rate: hourlyAddonRate, platform_fee: platformFee }),
     });
     const data = await res.json();
     return data.success;

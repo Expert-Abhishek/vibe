@@ -1,23 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import { createTripApi } from '@/constants/api';
+import { sendLocalNotification } from '@/constants/notifications';
+import { openRazorpayPayment } from '@/constants/razorpay';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  StatusBar,
-  Alert,
-  ActivityIndicator,
-  Platform,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
-import { sendLocalNotification } from '@/constants/notifications';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -144,7 +146,7 @@ export default function BookCabScreen() {
       const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
         query
       )}&key=${GOOGLE_MAPS_KEY}&location=12.9716,77.5946&radius=100000`;
-      
+
       const response = await fetch(url);
       const data = await response.json();
       if (data.predictions) {
@@ -215,7 +217,7 @@ export default function BookCabScreen() {
         }
 
         const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsQuery}&key=${GOOGLE_MAPS_KEY}`;
-        
+
         const response = await fetch(url);
         const data = await response.json();
 
@@ -256,16 +258,16 @@ export default function BookCabScreen() {
       let totalDistance = 0;
       for (let i = 0; i < fullPath.length - 1; i++) {
         const nodeA = fullPath[i];
-        const nodeB = fullPath[i+1];
+        const nodeB = fullPath[i + 1];
         const R = 6371;
         const dLat = ((nodeB.latitude - nodeA.latitude) * Math.PI) / 180;
         const dLon = ((nodeB.longitude - nodeA.longitude) * Math.PI) / 180;
         const a =
           Math.sin(dLat / 2) * Math.sin(dLat / 2) +
           Math.cos((nodeA.latitude * Math.PI) / 180) *
-            Math.cos((nodeB.latitude * Math.PI) / 180) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
+          Math.cos((nodeB.latitude * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         totalDistance += R * c;
       }
@@ -512,7 +514,7 @@ export default function BookCabScreen() {
           <View style={styles.inputsColumn}>
             {/* Pickup Node */}
             <View style={styles.nodeItemRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.addressNodeTap, { flex: 1 }]}
                 onPress={() => {
                   setSearchField('pickup');
@@ -534,7 +536,7 @@ export default function BookCabScreen() {
               <View key={index}>
                 <View style={[styles.nodeLinkLine, { backgroundColor: colors.border }]} />
                 <View style={styles.nodeItemRow}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.addressNodeTap, { flex: 1, borderColor: colors.amber }]}
                     onPress={() => {
                       setSearchField(index);
@@ -549,7 +551,7 @@ export default function BookCabScreen() {
                     </View>
                     <MaterialIcons name="edit" size={scale(15)} color={colors.textMuted} />
                   </TouchableOpacity>
-                  
+
                   {/* Reorder and Delete controls */}
                   <View style={styles.stopActionControls}>
                     <TouchableOpacity onPress={() => handleMoveStopUp(index)} disabled={index === 0} style={styles.reorderBtn}>
@@ -570,7 +572,7 @@ export default function BookCabScreen() {
 
             {/* Drop Node */}
             <View style={styles.nodeItemRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.addressNodeTap, { flex: 1 }]}
                 onPress={() => {
                   setSearchField('drop');
@@ -792,7 +794,7 @@ export default function BookCabScreen() {
               const base = getBasePrice(ride.ratePerKm);
               const discounted = getDiscountedPrice(base);
               const showDiscount = discounted !== base;
-              
+
               return (
                 <TouchableOpacity
                   key={ride.key}
@@ -814,7 +816,7 @@ export default function BookCabScreen() {
                     )}
                   </View>
                   <Text style={[styles.optionName, { color: colors.textPrimary }]}>{ride.name}</Text>
-                  
+
                   {/* Highlight Slashed price if coupon active */}
                   <View style={styles.priceColumn}>
                     {showDiscount && (
@@ -840,8 +842,8 @@ export default function BookCabScreen() {
             onChangeText={setVoucherText}
             autoCapitalize="characters"
           />
-          <TouchableOpacity 
-            style={[styles.voucherApplyBtn, { backgroundColor: colors.amber }]} 
+          <TouchableOpacity
+            style={[styles.voucherApplyBtn, { backgroundColor: colors.amber }]}
             onPress={handleApplyVoucher}
           >
             <Text style={styles.voucherApplyBtnText}>Apply</Text>

@@ -1,21 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { deleteUserApi, fetchDriversApi, updateDriverRateApi, updateUserStatusApi } from '@/lib/api';
+import { Driver, KYCStatus } from '@/lib/types';
 import {
+  Camera,
   Car,
-  Search,
-  Eye,
   CheckCircle,
-  XCircle,
+  Eye,
+  FileText,
+  Search,
   ShieldAlert,
+  Star,
   Trash2,
   X,
-  FileText,
-  Camera,
-  Star,
+  XCircle,
 } from 'lucide-react';
-import { initialDrivers, fetchDriversApi, updateUserStatusApi, updateDriverRateApi, deleteUserApi } from '@/lib/api';
-import { Driver, KYCStatus } from '@/lib/types';
+import { useEffect, useState } from 'react';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -128,6 +128,7 @@ export default function DriversPage() {
                 <th className="py-4 px-6">Status</th>
                 <th className="py-4 px-6">Daily Rate (/day)</th>
                 <th className="py-4 px-6">Addon (/hr)</th>
+                <th className="py-4 px-6">Platform Fee</th>
                 <th className="py-4 px-6">Wallet Balance</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
@@ -172,15 +173,14 @@ export default function DriversPage() {
 
                   <td className="py-4 px-6">
                     <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                        driver.status === 'Active'
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${driver.status === 'Active'
                           ? 'bg-green-500/10 text-green-400 border border-green-500/30'
                           : driver.status === 'Pending KYC'
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse'
-                          : driver.status === 'KYC Declined'
-                          ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-                          : 'bg-gray-500/10 text-gray-400 border border-gray-500/30'
-                      }`}
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse'
+                            : driver.status === 'KYC Declined'
+                              ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                              : 'bg-gray-500/10 text-gray-400 border border-gray-500/30'
+                        }`}
                     >
                       {driver.status === 'Active' ? (
                         <CheckCircle className="w-3 h-3 mr-1" />
@@ -199,6 +199,10 @@ export default function DriversPage() {
 
                   <td className="py-4 px-6 font-bold text-emerald-400 text-sm">
                     +₹{driver.hourlyAddonRate ? driver.hourlyAddonRate.toLocaleString('en-IN') : '200'} <span className="text-[10px] font-normal text-dark-textMuted">/hr</span>
+                  </td>
+
+                  <td className="py-4 px-6 font-black text-amber-500 text-sm">
+                    {driver.platformFee !== undefined ? driver.platformFee : '10'}%
                   </td>
 
                   <td className="py-4 px-6 font-bold text-white">
@@ -245,7 +249,7 @@ export default function DriversPage() {
               ))}
               {filteredDrivers.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-dark-textMuted">
+                  <td colSpan={8} className="py-8 text-center text-dark-textMuted">
                     No driver records match the selected filter.
                   </td>
                 </tr>
@@ -261,12 +265,12 @@ export default function DriversPage() {
           driver={selectedDriver}
           onClose={() => setSelectedDriver(null)}
           onUpdateStatus={handleUpdateStatus}
-          onSaveRates={async (daily, addon) => {
+          onSaveRates={async (daily, addon, fee) => {
             setDriversList((prev) =>
-              prev.map((d) => (d.id === selectedDriver.id ? { ...d, dailyRate: daily, hourlyAddonRate: addon } : d))
+              prev.map((d) => (d.id === selectedDriver.id ? { ...d, dailyRate: daily, hourlyAddonRate: addon, platformFee: fee } : d))
             );
-            setSelectedDriver((prev) => (prev ? { ...prev, dailyRate: daily, hourlyAddonRate: addon } : null));
-            await updateDriverRateApi(selectedDriver.id, daily, addon);
+            setSelectedDriver((prev) => (prev ? { ...prev, dailyRate: daily, hourlyAddonRate: addon, platformFee: fee } : null));
+            await updateDriverRateApi(selectedDriver.id, daily, addon, fee);
           }}
         />
       )}
@@ -283,14 +287,15 @@ function DriverDetailModal({
   driver: Driver;
   onClose: () => void;
   onUpdateStatus: (id: string, status: KYCStatus) => void;
-  onSaveRates: (dailyRate: number, hourlyAddonRate: number) => void;
+  onSaveRates: (dailyRate: number, hourlyAddonRate: number, platformFee: number) => void;
 }) {
   const [dailyRate, setDailyRate] = useState<number>(driver.dailyRate || 2500);
   const [hourlyAddonRate, setHourlyAddonRate] = useState<number>(driver.hourlyAddonRate || 200);
+  const [platformFee, setPlatformFee] = useState<number>(driver.platformFee !== undefined ? driver.platformFee : 10);
   const [rateSavedMsg, setRateSavedMsg] = useState(false);
 
   const handleSave = () => {
-    onSaveRates(Number(dailyRate), Number(hourlyAddonRate));
+    onSaveRates(Number(dailyRate), Number(hourlyAddonRate), Number(platformFee));
     setRateSavedMsg(true);
     setTimeout(() => setRateSavedMsg(false), 2500);
   };
@@ -317,13 +322,12 @@ function DriverDetailModal({
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-bold text-white">{driver.name}</h2>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    driver.status === 'Active'
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${driver.status === 'Active'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                       : driver.status === 'Pending KYC'
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                  }`}
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    }`}
                 >
                   {driver.status}
                 </span>
@@ -362,7 +366,7 @@ function DriverDetailModal({
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
               <div>
                 <label className="text-[11px] font-bold text-dark-textMuted uppercase block mb-1">
                   Daily Charge (₹/day)
@@ -391,6 +395,22 @@ function DriverDetailModal({
                     onChange={(e) => setHourlyAddonRate(Number(e.target.value))}
                     className="w-full pl-8 pr-4 py-2.5 bg-dark-card border border-dark-border rounded-xl text-sm font-bold text-white focus:outline-none focus:border-emerald-400"
                     placeholder="200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-dark-textMuted uppercase block mb-1">
+                  Platform Fee (%)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-bold text-sm">%</span>
+                  <input
+                    type="number"
+                    value={platformFee}
+                    onChange={(e) => setPlatformFee(Number(e.target.value))}
+                    className="w-full pl-8 pr-4 py-2.5 bg-dark-card border border-dark-border rounded-xl text-sm font-bold text-white focus:outline-none focus:border-amber-400"
+                    placeholder="10"
                   />
                 </div>
               </div>
@@ -511,31 +531,28 @@ function DriverDetailModal({
             <span className="text-xs text-dark-textMuted">Change Status:</span>
             <button
               onClick={() => onUpdateStatus(driver.id, 'Active')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                driver.status === 'Active'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${driver.status === 'Active'
                   ? 'bg-green-500 text-black'
                   : 'bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black'
-              } transition-colors`}
+                } transition-colors`}
             >
               Approve / Set Active
             </button>
             <button
               onClick={() => onUpdateStatus(driver.id, 'KYC Declined')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                driver.status === 'KYC Declined'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${driver.status === 'KYC Declined'
                   ? 'bg-red-500 text-white'
                   : 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
-              } transition-colors`}
+                } transition-colors`}
             >
               Decline KYC
             </button>
             <button
               onClick={() => onUpdateStatus(driver.id, 'Inactive')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                driver.status === 'Inactive'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${driver.status === 'Inactive'
                   ? 'bg-gray-600 text-white'
                   : 'bg-dark-hover text-gray-400 hover:text-white'
-              } transition-colors`}
+                } transition-colors`}
             >
               Deactivate
             </button>

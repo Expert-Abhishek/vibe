@@ -1,4 +1,3 @@
-import { sendLocalNotification, requestNotificationPermissions } from '@/constants/notifications';
 import {
   fetchDriverRequestsApi,
   fetchDriverTripsApi,
@@ -9,6 +8,7 @@ import {
   updateUserProfileApi,
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
+import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { setAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
@@ -367,7 +367,7 @@ export default function DriverDashboardScreen() {
       setOtpVisible(false);
       setEnteredOtp('');
       setTripPhase('trip');
-      
+
       sendLocalNotification(
         '🚀 Ride Started!',
         `OTP Verified. Navigation started towards ${activeTrip.drop}.`
@@ -380,8 +380,8 @@ export default function DriverDashboardScreen() {
   const handleEndTrip = () => {
     if (!activeTrip) return;
     Alert.alert(
-      appLang === 'hi' ? 'यात्रा समाप्त करें' : 'Complete Trip',
-      appLang === 'hi' ? 'क्या आप इस यात्रा को समाप्त करना चाहते हैं?' : 'Are you sure you want to end this trip and collect payment?',
+      appLang === 'kn' ? 'ಟ್ರಿಪ್ ಪೂರ್ಣಗೊಳಿಸಿ' : 'Complete Trip',
+      appLang === 'kn' ? 'ಈ ಟ್ರಿಪ್ ಪೂರ್ಣಗೊಳಿಸಲು ಮತ್ತು ಪಾವತಿ ಪಡೆಯಲು ನೀವು ಬಯಸುತ್ತೀರಾ?' : 'Are you sure you want to end this trip and collect payment?',
       [
         { text: 'Cancel', style: 'cancel' },
         {

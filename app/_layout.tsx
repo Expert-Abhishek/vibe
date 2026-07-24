@@ -1,9 +1,13 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { savePushTokenApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
+import { getExpoPushToken } from '@/constants/notifications';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
@@ -12,6 +16,25 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    async function configurePushNotifications() {
+      try {
+        const token = await getExpoPushToken();
+        if (token) {
+          console.log('🎉 Expo Push Token:', token);
+          const session = getUserSessionSync();
+          if (session?.id) {
+            await savePushTokenApi(session.id, token);
+            console.log('✅ Push Token registered to backend DB.');
+          }
+        }
+      } catch (err) {
+        console.warn('configurePushNotifications error:', err);
+      }
+    }
+    configurePushNotifications();
+  }, []);
 
   return (
     <SafeAreaProvider>

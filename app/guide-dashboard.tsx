@@ -1,26 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import { submitWithdrawalApi } from '@/constants/api';
+import { clearUserSession, getUserSessionSync } from '@/constants/authStore';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
+  ActivityIndicator,
   Alert,
   Modal,
-  ActivityIndicator,
-  TextInput,
   Platform,
+  ScrollView,
   StatusBar,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from './admin-state';
-import { clearUserSession, getUserSessionSync } from '@/constants/authStore';
-import { submitWithdrawalApi } from '@/constants/api';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -75,7 +75,7 @@ export default function GuideDashboardScreen() {
 
   // Profile configurations
   const [upiId, setUpiId] = useState('ramesh.guide@okaxis');
-  
+
   // Guide-specific work settings
   const [spokenLangs, setSpokenLangs] = useState({ en: true, hi: true, kn: true, te: false });
   const [expertise, setExpertise] = useState({ history: true, food: false, shopping: true, adventure: false });
@@ -596,18 +596,18 @@ export default function GuideDashboardScreen() {
 
       {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
-          
+
           {/* 1. Bank Account & Wallet (Paisa Section) */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
-            
+
             <View style={styles.payoutBalanceRow}>
               <View>
                 <Text style={[styles.payoutAmtVal, { color: colors.textPrimary }]}>₹{earningsBalance}</Text>
                 <Text style={[styles.payoutAmtSub, { color: colors.textMuted }]}>Available balance to settle</Text>
               </View>
-              <TouchableOpacity 
-                style={[styles.smallPayoutBtn, { backgroundColor: colors.amber }]} 
+              <TouchableOpacity
+                style={[styles.smallPayoutBtn, { backgroundColor: colors.amber }]}
                 onPress={handleInstantPayout}
                 disabled={payoutLoading}
               >
@@ -629,8 +629,8 @@ export default function GuideDashboardScreen() {
               />
             </View>
 
-            <TouchableOpacity 
-              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]} 
+            <TouchableOpacity
+              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]}
               onPress={() => router.push('/(tabs)/guide-wallet' as any)}
             >
               <Text style={[styles.detailedWalletBtnText, { color: colors.amber }]}>View Detailed Wallet & Pay History</Text>
@@ -685,8 +685,8 @@ export default function GuideDashboardScreen() {
           {/* 3. Audio Guide & Toolkit Controls */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.toolkit}</Text>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(245,197,24,0.06)', borderColor: colors.amber }]}
               onPress={() => setQrVisible(true)}
             >
@@ -694,7 +694,7 @@ export default function GuideDashboardScreen() {
               <Text style={[styles.supportActionBtnTextAmber, { color: colors.textPrimary }]}>{trans.tickets}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: '#ef4444', marginTop: verticalScale(10) }]}
               onPress={() => Alert.alert('Helpline Sync Dial', 'Emergency lines: Local Police (100) or Admin support (+91 99000 82400) called.')}
             >
@@ -908,7 +908,7 @@ export default function GuideDashboardScreen() {
           <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', width: '90%' }]}>
             <Text style={[styles.otpTitle, { color: colors.textPrimary, marginBottom: scale(6) }]}>Monument Entry Passes</Text>
             <Text style={[styles.otpSub, { color: colors.textMuted, marginBottom: scale(14) }]}>QR Codes synced from customer bookings</Text>
-            
+
             <View style={styles.qrCodeDrawBox}>
               {/* Symmetrical QR representation */}
               <FontAwesome5 name="qrcode" size={scale(180)} color={colors.textPrimary} style={{ marginVertical: verticalScale(14) }} />
@@ -1596,6 +1596,33 @@ const styles = StyleSheet.create({
   statusBadgeCompact: {
     paddingHorizontal: scale(6),
     paddingVertical: verticalScale(2),
+    borderRadius: scale(4),
+  },
+  statusProgressBlock: {
+    marginBottom: verticalScale(16),
+  },
+  progressLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(6),
+  },
+  progressLabel: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '700',
+  },
+  progressValueText: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+  },
+  progressBarBg: {
+    height: scale(8),
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: scale(4),
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
     borderRadius: scale(4),
   },
 });

@@ -241,6 +241,12 @@ router.post('/:id/respond', async (req, res) => {
         [driverName || 'Verified Partner', id]
       );
       return res.json({ success: true, message: 'Ride Accepted successfully!' });
+    } else if (action === 'complete') {
+      await db.query(
+        "UPDATE trips SET status = 'Completed' WHERE id = $1",
+        [id]
+      );
+      return res.json({ success: true, message: 'Ride Completed successfully!' });
     } else {
       await db.query(
         "UPDATE trips SET status = 'Declined' WHERE id = $1",

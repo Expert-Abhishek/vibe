@@ -1,17 +1,17 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { MaterialIcons } from '@expo/vector-icons';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   Animated,
   Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

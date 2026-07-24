@@ -57,6 +57,7 @@ export interface Driver {
   dateRegistered: string;
   dailyRate?: number;
   hourlyAddonRate?: number;
+  platformFee?: number;
   docs: DriverDocs;
   carPhotos: CarPhotos;
 }

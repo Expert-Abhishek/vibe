@@ -244,6 +244,7 @@ async function initTablesOnBoot() {
     // Auto-migrate missing columns for existing PostgreSQL tables
     await db.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token VARCHAR(255);
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS rc_url TEXT;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS dl_url TEXT;
@@ -255,6 +256,7 @@ async function initTablesOnBoot() {
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS car_back_url TEXT;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2) DEFAULT 2500.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00;
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(10,2) DEFAULT 10.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
 
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
