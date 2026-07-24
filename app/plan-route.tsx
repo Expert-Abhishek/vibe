@@ -342,7 +342,8 @@ export default function PlanRouteScreen() {
       ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : bookingTime;
 
-    const driverName = selectedDriver?.name || 'Verified Cab Driver';
+    const driverName = selectedDriver?.name || 'Anil Gowda (Captain)';
+    const driverId = selectedDriver?.id || 'd1';
 
     if (paymentMethod === 'cash') {
       const paymentLabel = isPreBooking
@@ -354,10 +355,11 @@ export default function PlanRouteScreen() {
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
         customerName: 'Abhishek (Tourist)',
         driverOrGuideName: driverName,
+        driverId: driverId,
         planId: selectedPlan.id,
         amount: totalPrice,
         paymentMode: paymentLabel,
-        status: 'Confirmed',
+        status: 'Pending',
         durationHours: totalHours,
         extraHours: priceInfo.extraHoursRounded,
         addonCharge: priceInfo.extraAddonCharge,

@@ -72,7 +72,7 @@ export default function TripsHistoryScreen() {
       vehicleType: undefined as string | undefined,
       title: b.title,
       route: b.route,
-      driverOrGuideName: b.driverOrGuideName || 'Searching for Captain...',
+      driverOrGuideName: b.driverOrGuideName || 'Anil Gowda (Captain)',
       date: `Upcoming - ${b.date}`,
       time: b.time,
       price: b.price,

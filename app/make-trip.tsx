@@ -643,7 +643,8 @@ export default function MakeTripScreen() {
     const isPreBooking = !adminState.instantBookingEnabled;
     const paymentAmount = isPreBooking ? Math.round(totalPrice * 0.20) : totalPrice;
     const remainingAmount = isPreBooking ? totalPrice - paymentAmount : 0;
-    const driverName = selectedDriver?.name || 'Verified Cab Driver';
+    const driverName = selectedDriver?.name || 'Anil Gowda (Captain)';
+    const driverId = selectedDriver?.id || 'd1';
 
     if (paymentMethod === 'cash') {
       const paymentLabel = isPreBooking
@@ -655,9 +656,10 @@ export default function MakeTripScreen() {
         title: `Trip: ${pickup.name} → ${drop.name}`,
         customerName: 'Abhishek (Tourist)',
         driverOrGuideName: driverName,
+        driverId: driverId,
         amount: totalPrice,
         paymentMode: paymentLabel,
-        status: 'Confirmed',
+        status: 'Pending',
         durationHours: totalTripHours,
         extraHours: extraHoursRounded,
         addonCharge: extraAddonCharge,

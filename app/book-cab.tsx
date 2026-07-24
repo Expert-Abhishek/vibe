@@ -372,6 +372,8 @@ export default function BookCabScreen() {
           tripType: 'cab',
           title: `${pickup.name} ➔ ${drop.name}`,
           customerName: 'Abhishek (Tourist)',
+          driverOrGuideName: 'Anil Gowda (Captain)',
+          driverId: 'd1',
           amount: final,
           paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
           status: 'Pending',
@@ -386,6 +388,8 @@ export default function BookCabScreen() {
           time: advanceTime,
           price: final,
           touristName: 'Abhishek (Tourist)',
+          driverOrGuideName: 'Anil Gowda (Captain)',
+          assignedToId: 'd1',
           bookingDate: new Date().toISOString().split('T')[0],
           status: 'Pending' as const,
           paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
@@ -393,7 +397,7 @@ export default function BookCabScreen() {
         adminState.advanceBookings.push(newAdv);
         sendLocalNotification(
           '🚕 Ride Booking Submitted!',
-          `Your booking (${pickup.name} ➔ ${drop.name}) is registered in backend. Nearby drivers notified.`
+          `Your booking (${pickup.name} ➔ ${drop.name}) is registered in backend. Assigned Captain: Anil Gowda.`
         );
         Alert.alert(
           '🎉 Cash Pre-Booking Confirmed!',
@@ -412,6 +416,8 @@ export default function BookCabScreen() {
             tripType: 'cab',
             title: `${pickup.name} ➔ ${drop.name}`,
             customerName: 'Abhishek (Tourist)',
+            driverOrGuideName: 'Anil Gowda (Captain)',
+            driverId: 'd1',
             amount: final,
             paymentMode: `UPI Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
             status: 'Pending',
@@ -426,6 +432,8 @@ export default function BookCabScreen() {
             time: advanceTime,
             price: final,
             touristName: 'Abhishek (Tourist)',
+            driverOrGuideName: 'Anil Gowda (Captain)',
+            assignedToId: 'd1',
             bookingDate: new Date().toISOString().split('T')[0],
             status: 'Pending' as const,
             paymentMode: `UPI Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
