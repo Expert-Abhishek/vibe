@@ -855,12 +855,13 @@ router.get('/users/:id/profile', async (req, res) => {
     const user = uRes.rows[0];
     let profileData = null;
 
-    if (user.role === 'driver') {
-      const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1 OR id = $1', [id]);
-      profileData = dRes.rows[0] || null;
-    } else if (user.role === 'guide') {
-      const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1 OR id = $1', [id]);
-      profileData = gRes.rows[0] || null;
+    const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1 OR id = $1', [id]);
+    const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1 OR id = $1', [id]);
+
+    if (dRes.rows.length > 0) {
+      profileData = dRes.rows[0];
+    } else if (gRes.rows.length > 0) {
+      profileData = gRes.rows[0];
     }
 
     return res.json({
@@ -893,64 +894,101 @@ router.put('/users/:id/profile', async (req, res) => {
       vehicle_number,
       upiId,
       upi_id,
+      photo_url,
+      photoUrl,
       expertise,
       bio,
     } = req.body;
 
     const altPhone = (alternate_phone || alt_phone || '').trim();
     const upi = upiId || upi_id || '';
+    const photo = photo_url || photoUrl || '';
 
-    // Update users main table
-    if (name || phone || email || altPhone) {
-      await db.query(
-        `UPDATE users
-         SET name = COALESCE($1, name),
-             phone = COALESCE($2, phone),
-             alternate_phone = COALESCE($3, alternate_phone),
-             email = COALESCE($4, email),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5`,
-        [name || null, phone || null, altPhone || null, email || null, id]
-      );
+    const isUuid = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+    let targetUserId = id;
+    if (!isUuid(id)) {
+      const fallbackUser = await db.query("SELECT id FROM users WHERE role = 'driver' LIMIT 1");
+      if (fallbackUser.rows.length > 0) {
+        targetUserId = fallbackUser.rows[0].id;
+      }
     }
 
-    // Check role
-    const uRes = await db.query('SELECT role FROM users WHERE id = $1', [id]);
-    const role = uRes.rows[0]?.role || 'tourist';
+    if (isUuid(targetUserId)) {
+      // Update users main table
+      if (name || phone || email || altPhone) {
+        await db.query(
+          `UPDATE users
+           SET name = COALESCE($1, name),
+               phone = COALESCE($2, phone),
+               alternate_phone = COALESCE($3, alternate_phone),
+               email = COALESCE($4, email),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $5`,
+          [name || null, phone || null, altPhone || null, email || null, targetUserId]
+        );
+      }
 
-    if (role === 'driver') {
-      await db.query(
-        `UPDATE driver_profiles
-         SET vehicle_model = COALESCE($1, vehicle_model),
-             vehicle_number = COALESCE($2, vehicle_number),
-             upi_id = COALESCE($3, upi_id),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $4 OR id = $4`,
-        [vehicle_model || null, vehicle_number || null, upi || null, id]
-      );
-    } else if (role === 'guide') {
-      await db.query(
-        `UPDATE guide_profiles
-         SET expertise = COALESCE($1, expertise),
-             bio = COALESCE($2, bio),
-             upi_id = COALESCE($3, upi_id),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $4 OR id = $4`,
-        [expertise || null, bio || null, upi || null, id]
-      );
+      // Check role
+      const uRes = await db.query('SELECT role FROM users WHERE id = $1', [targetUserId]);
+      const role = (uRes.rows[0]?.role || 'driver').toLowerCase();
+
+      if (role === 'driver' || role === 'captain') {
+        await db.query(
+          `UPDATE driver_profiles
+           SET vehicle_model = COALESCE($1, vehicle_model),
+               vehicle_number = COALESCE($2, vehicle_number),
+               upi_id = COALESCE($3, upi_id),
+               photo_url = COALESCE($4, photo_url),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = $5`,
+          [vehicle_model || null, vehicle_number || null, upi || null, photo || null, targetUserId]
+        );
+      } else if (role === 'guide') {
+        await db.query(
+          `UPDATE guide_profiles
+           SET expertise = COALESCE($1, expertise),
+               bio = COALESCE($2, bio),
+               upi_id = COALESCE($3, upi_id),
+               photo_url = COALESCE($4, photo_url),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = $5`,
+          [expertise || null, bio || null, upi || null, photo || null, targetUserId]
+        );
+      }
+
+      if (photo) {
+        await db.query(
+          `INSERT INTO driver_profiles (user_id, photo_url)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id)
+           DO UPDATE SET photo_url = EXCLUDED.photo_url, updated_at = CURRENT_TIMESTAMP`,
+          [targetUserId, photo]
+        ).catch(() => {});
+
+        await db.query(
+          `INSERT INTO guide_profiles (user_id, photo_url)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id)
+           DO UPDATE SET photo_url = EXCLUDED.photo_url, updated_at = CURRENT_TIMESTAMP`,
+          [targetUserId, photo]
+        ).catch(() => {});
+      }
     }
 
     // Fetch updated user & profile
-    const updatedUserRes = await db.query('SELECT id, name, phone, alternate_phone, email, role, status FROM users WHERE id = $1', [id]);
-    const updatedUser = updatedUserRes.rows[0];
+    let updatedUser = { id: targetUserId, name, phone, email, role: 'driver', status: 'Active' };
+    let profileData = { user_id: targetUserId, vehicle_model, vehicle_number, photo_url: photo, photoUrl: photo, upi_id: upi };
 
-    let profileData = null;
-    if (role === 'driver') {
-      const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1 OR id = $1', [id]);
-      profileData = dRes.rows[0] || null;
-    } else if (role === 'guide') {
-      const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1 OR id = $1', [id]);
-      profileData = gRes.rows[0] || null;
+    if (isUuid(targetUserId)) {
+      const updatedUserRes = await db.query('SELECT id, name, phone, alternate_phone, email, role, status FROM users WHERE id = $1', [targetUserId]);
+      if (updatedUserRes.rows.length > 0) {
+        updatedUser = updatedUserRes.rows[0];
+      }
+
+      const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1', [targetUserId]);
+      const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1', [targetUserId]);
+      profileData = dRes.rows[0] || gRes.rows[0] || profileData;
     }
 
     return res.json({

@@ -2,6 +2,7 @@ import {
   fetchDriverRequestsApi,
   fetchDriverStatsApi,
   fetchDriverTripsApi,
+  fetchUserProfileApi,
   fetchWalletBalanceApi,
   respondDriverRequestApi,
   submitWithdrawalApi,
@@ -14,11 +15,13 @@ import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { setAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -67,18 +70,16 @@ export default function DriverDashboardScreen() {
   const isDark = colorScheme === 'dark';
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'profile'>('duty');
-  const [updateTrigger, setUpdateTrigger] = useState(0);
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
-  // Daily statistics
+  // Stats state
   const [kmDriven, setKmDriven] = useState(142.5);
-  const [tripsCount, setTripsCount] = useState(5);
+  const [tripsCount, setTripsCount] = useState(8);
   const [earningsToday, setEarningsToday] = useState(2800);
-  const [earningsBalance, setEarningsBalance] = useState(1200);
+  const [earningsBalance, setEarningsBalance] = useState(4500);
 
-  // Settings states
-  const [upiId, setUpiId] = useState('ka03md8240@okaxis');
+  // Settings & Toggles
   const [selectedVehicle, setSelectedVehicle] = useState<'innova' | 'swift'>('innova');
   const [navPreference, setNavPreference] = useState<'inapp' | 'google'>('inapp');
 
@@ -96,12 +97,6 @@ export default function DriverDashboardScreen() {
   const [otpVisible, setOtpVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
 
-  // Completed rides log
-  const [dailyRides, setDailyRides] = useState<any[]>([
-    { id: '1', title: 'Majestic Metro ➔ Indiranagar 100ft Rd', time: '11:00 AM', fare: 340, payout: 'Settled to Wallet' },
-    { id: '2', title: 'Hebbal Flyover ➔ Kempegowda Airport', time: '02:15 PM', fare: 850, payout: 'Settled to Wallet' },
-  ]);
-
   // Loading triggers
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -111,16 +106,34 @@ export default function DriverDashboardScreen() {
   const [driverPhone, setDriverPhone] = useState(currentSession?.phone || currentSession?.profile?.phone || '+91 99000 82400');
   const [vehicleModel, setVehicleModel] = useState(currentSession?.profile?.vehicle_model || 'Innova Crysta AC');
   const [vehicleNumber, setVehicleNumber] = useState(currentSession?.profile?.vehicle_number || 'KA-01-EX-8240');
+  const [vehicleType, setVehicleType] = useState(currentSession?.profile?.vehicle_type || '7 Seater Cab');
   const [photoUrl, setPhotoUrl] = useState(currentSession?.profile?.photo_url || '');
+  const [upiId, setUpiId] = useState(currentSession?.profile?.upi_id || currentSession?.profile?.upiId || 'ka03md8240@okaxis');
+
+  // Unified Edit Mode & Password toggle
+  const [isEditMode, setIsEditMode] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
   const [driverTrips, setDriverTrips] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadDriverBackendData() {
       const session = getUserSessionSync();
       const driverId = session?.id || 'd1';
+
+      const userRes = await fetchUserProfileApi(driverId);
+      if (userRes && userRes.success && userRes.user) {
+        const u = userRes.user;
+        const p = u.profile || {};
+        if (u.name) setDriverName(u.name);
+        if (u.phone) setDriverPhone(u.phone);
+        if (p.vehicle_model) setVehicleModel(p.vehicle_model);
+        if (p.vehicle_number) setVehicleNumber(p.vehicle_number);
+        if (p.photo_url) setPhotoUrl(p.photo_url);
+        if (p.upi_id || p.upiId) setUpiId(p.upi_id || p.upiId);
+      }
 
       const walletRes = await fetchWalletBalanceApi(driverId);
       if (walletRes && walletRes.balance !== undefined) {
@@ -140,97 +153,128 @@ export default function DriverDashboardScreen() {
         if (!statsRes?.success) {
           setTripsCount(tripsRes.length);
         }
-
-        let totalEarnedToday = 0;
-        let totalKm = 0;
-        const ridesLog: any[] = [];
-
-        tripsRes.forEach((t: any) => {
-          const fare = Number(t.amount) || Number(t.price) || 0;
-          totalEarnedToday += fare;
-          totalKm += t.durationHours ? t.durationHours * 30 : 25;
-
-          ridesLog.push({
-            id: String(t.id),
-            title: t.title || `${t.pickupName || 'Pickup'} ➔ ${t.dropName || 'Destination'}`,
-            time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today',
-            fare: fare,
-            payout: t.paymentMode || 'Settled to Wallet',
-          });
-        });
-
-        if (tripsRes.length > 0) {
-          if (!statsRes?.success) {
-            setEarningsToday(totalEarnedToday);
-            setKmDriven(parseFloat(totalKm.toFixed(1)));
-          }
-          setDailyRides(ridesLog);
-        }
       }
     }
     loadDriverBackendData();
-  }, [updateTrigger]);
+  }, []);
 
-  const handleSaveProfile = async () => {
+  const handlePickImage = async () => {
+    Alert.alert(
+      'Profile Picture',
+      'Choose an option to upload your photo:',
+      [
+        {
+          text: '📸 Take Photo (Camera)',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Camera access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.6,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+              setPhotoUrl(uri);
+            }
+          },
+        },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Gallery access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.6,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+              setPhotoUrl(uri);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleSaveUnifiedProfile = async () => {
     const session = getUserSessionSync();
-    if (!session?.id) {
-      Alert.alert('Session Error', 'Please sign in to update your profile.');
-      return;
-    }
+    const userId = session?.id || session?.profile?.user_id || 'd1';
+
     setIsSavingProfile(true);
-    await updateUserProfileApi(session.id, {
+
+    // 1. Update Profile (Name, Phone, Photo, Vehicle details)
+    const apiRes = await updateUserProfileApi(userId, {
       name: driverName,
       phone: driverPhone,
       vehicle_model: vehicleModel,
       vehicle_number: vehicleNumber,
       photo_url: photoUrl,
+      photoUrl: photoUrl,
       upiId: upiId,
     });
+
+    // 2. Update Password if entered
+    let passwordUpdated = false;
+    if (newPassword.trim().length > 0) {
+      if (!currentPassword.trim()) {
+        setIsSavingProfile(false);
+        Alert.alert('🔐 Current Password Required', 'Please enter your current password to update your password.');
+        return;
+      }
+      const passRes = await updatePasswordApi({
+        userId: userId,
+        currentPassword,
+        newPassword,
+      });
+
+      if (passRes && passRes.success) {
+        passwordUpdated = true;
+        setCurrentPassword('');
+        setNewPassword('');
+      } else {
+        setIsSavingProfile(false);
+        Alert.alert('🔐 Password Error', passRes?.message || 'Current password invalid. Failed to update password.');
+        return;
+      }
+    }
+
     setIsSavingProfile(false);
 
     const updatedSession = {
-      ...session,
+      ...(session || { id: userId, role: 'driver', status: 'Active' }),
       name: driverName,
       phone: driverPhone,
       profile: {
-        ...(session.profile || {}),
+        ...(session?.profile || {}),
+        ...(apiRes?.user?.profile || {}),
         name: driverName,
         phone: driverPhone,
         vehicle_model: vehicleModel,
         vehicle_number: vehicleNumber,
         photo_url: photoUrl,
+        photoUrl: photoUrl,
         upiId: upiId,
       }
     };
-    await saveUserSession(updatedSession);
-    Alert.alert('🎉 Profile Saved!', 'Your Captain profile details have been saved to the backend database.');
-  };
+    await saveUserSession(updatedSession as any);
+    setIsEditMode(false);
 
-  const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword) {
-      Alert.alert('Error', 'Please fill in all password fields.');
-      return;
-    }
-    const session = getUserSessionSync();
-    if (!session?.id) {
-      Alert.alert('Session Error', 'Please sign in to change password.');
-      return;
-    }
-    setIsChangingPassword(true);
-    const res = await updatePasswordApi({
-      userId: session.id,
-      currentPassword,
-      newPassword,
-    });
-    setIsChangingPassword(false);
-
-    if (res && res.success) {
-      Alert.alert('🎉 Success', 'Your password has been updated in the database.');
-      setCurrentPassword('');
-      setNewPassword('');
-    } else {
-      Alert.alert('Error', res?.message || 'Failed to update password.');
-    }
+    Alert.alert('Profile SuccessFully Update');
   };
 
   const colors = {
@@ -534,14 +578,6 @@ export default function DriverDashboardScreen() {
             {driverDisplayName} <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>({vehicleModelName} • {vehiclePlateNum})</Text>
           </Text>
         </View>
-
-        <TouchableOpacity
-          style={[styles.switchRoleBtn, { backgroundColor: '#ef4444' }]}
-          onPress={handleLogout}
-        >
-          <MaterialIcons name="logout" size={scale(16)} color="#ffffff" />
-          <Text style={[styles.switchRoleText, { color: '#ffffff' }]}>Logout</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Tab Switchboard Body */}
@@ -751,136 +787,180 @@ export default function DriverDashboardScreen() {
       {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* Captain Backend Profile Information Card */}
-          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Captain Profile Information</Text>
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Captain Full Name</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
-              <MaterialIcons name="person" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                value={driverName}
-                onChangeText={setDriverName}
-                placeholder="Driver Name"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Profile Pic (URL)</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
-              <MaterialIcons name="image" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                value={photoUrl}
-                onChangeText={setPhotoUrl}
-                placeholder="https://example.com/avatar.jpg"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Phone Number</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
-              <MaterialIcons name="phone" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                value={driverPhone}
-                onChangeText={setDriverPhone}
-                placeholder="Phone Number"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Vehicle Model</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
-              <FontAwesome5 name="car" size={scale(16)} color={colors.amber} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                value={vehicleModel}
-                onChangeText={setVehicleModel}
-                placeholder="Vehicle Model (e.g. Innova Crysta)"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Vehicle Plate Number</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
-              <MaterialIcons name="subtitles" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                value={vehicleNumber}
-                onChangeText={setVehicleNumber}
-                placeholder="KA-01-EX-0000"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="characters"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), backgroundColor: colors.amber, borderColor: colors.amber }]}
-              onPress={handleSaveProfile}
-              disabled={isSavingProfile}
-            >
-              {isSavingProfile ? (
-                <ActivityIndicator color="#101014" size="small" />
-              ) : (
-                <Text style={[styles.detailedWalletBtnText, { color: '#101014', fontWeight: '900' }]}>
-                  Save Profile
-                </Text>
+          {/* Captain Main Summary Card */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, alignItems: 'center' }]}>
+            {/* Avatar Circle with Camera Upload Action */}
+            <TouchableOpacity onPress={isEditMode ? handlePickImage : undefined} activeOpacity={isEditMode ? 0.7 : 1} style={{ position: 'relative', marginBottom: verticalScale(10) }}>
+              <View style={{
+                width: scale(74),
+                height: scale(74),
+                borderRadius: scale(37),
+                backgroundColor: colors.amber,
+                justifyContent: 'center',
+                alignItems: 'center',
+                overflow: 'hidden',
+                borderWidth: 2,
+                borderColor: colors.amber,
+              }}>
+                {photoUrl ? (
+                  <Image source={{ uri: photoUrl }} style={{ width: '100%', height: '100%' }} />
+                ) : (
+                  <Text style={{ fontSize: moderateFontScale(28), fontWeight: '900', color: '#101010' }}>
+                    {driverDisplayName ? driverDisplayName[0].toUpperCase() : 'C'}
+                  </Text>
+                )}
+              </View>
+              {isEditMode && (
+                <View style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  backgroundColor: '#101010',
+                  padding: scale(6),
+                  borderRadius: scale(14),
+                  borderWidth: 1,
+                  borderColor: colors.amber,
+                }}>
+                  <MaterialIcons name="photo-camera" size={scale(14)} color={colors.amber} />
+                </View>
               )}
+            </TouchableOpacity>
+
+            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: '900' }}>
+              {driverDisplayName}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: 2 }}>
+              {driverPhone}
+            </Text>
+
+            {/* Vehicle Detail Badges */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), justifyContent: 'center', marginTop: verticalScale(12) }}>
+              <View style={{ backgroundColor: 'rgba(245, 197, 24, 0.12)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8), borderWidth: 1, borderColor: colors.amber, flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+                <FontAwesome5 name="car" size={scale(12)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>{vehicleModelName}</Text>
+              </View>
+
+              <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8), borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+                <MaterialIcons name="subtitles" size={scale(14)} color={colors.textMuted} />
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>{vehiclePlateNum}</Text>
+              </View>
+
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8), borderWidth: 1, borderColor: '#10B981', flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+                <MaterialIcons name="verified" size={scale(14)} color="#10B981" />
+                <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '700' }}>{vehicleType}</Text>
+              </View>
+            </View>
+
+            {/* Toggle Edit Mode Button */}
+            <TouchableOpacity
+              style={{
+                marginTop: verticalScale(16),
+                paddingVertical: verticalScale(8),
+                paddingHorizontal: scale(16),
+                borderRadius: scale(10),
+                borderWidth: 1.5,
+                borderColor: colors.amber,
+                backgroundColor: isEditMode ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: scale(6),
+              }}
+              onPress={() => setIsEditMode(!isEditMode)}
+            >
+              <MaterialIcons name={isEditMode ? 'visibility' : 'edit'} size={scale(16)} color={colors.amber} />
+              <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                {isEditMode ? 'Cancel Edit / View Profile' : 'Edit Profile & Password'}
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* SECURITY / CHANGE PASSWORD SECTION */}
-          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Change Password</Text>
+          {/* Unified Edit Card (When Edit Mode Active) */}
+          {isEditMode && (
+            <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.amber, borderWidth: 1.5 }]}>
+              <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Edit Captain Details</Text>
 
-            <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Current Password</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
-              <MaterialIcons name="lock" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                secureTextEntry
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                placeholder="••••••••"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>New Password</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
-              <MaterialIcons name="lock-open" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                secureTextEntry
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="••••••••"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]}
-              onPress={handleChangePassword}
-              disabled={isChangingPassword}
-            >
-              {isChangingPassword ? (
-                <ActivityIndicator color={colors.amber} size="small" />
-              ) : (
-                <Text style={[styles.detailedWalletBtnText, { color: colors.amber }]}>
-                  Change Password
+              {/* Photo Pick Action Button */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'rgba(245, 197, 24, 0.1)',
+                  borderColor: colors.amber,
+                  borderWidth: 1,
+                  borderRadius: scale(10),
+                  paddingVertical: verticalScale(10),
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: scale(8),
+                  marginBottom: verticalScale(12),
+                }}
+                onPress={handlePickImage}
+              >
+                <MaterialIcons name="add-a-photo" size={scale(18)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                  Upload Profile Pic (Gallery / Camera)
                 </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
 
-          {/* 1. Bank Account & Payout Details */}
+              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Full Name</Text>
+              <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+                <MaterialIcons name="person" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+                <TextInput
+                  style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                  value={driverName}
+                  onChangeText={setDriverName}
+                  placeholder="Driver Full Name"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+
+              <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Current Password (Required to change password)</Text>
+              <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+                <MaterialIcons name="lock" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+                <TextInput
+                  style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                  secureTextEntry={!showPassword}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+
+              <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>New Password</Text>
+              <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+                <MaterialIcons name="lock-open" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+                <TextInput
+                  style={[styles.textInputStyle, { color: colors.textPrimary, flex: 1 }]}
+                  secureTextEntry={!showPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Enter new password"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: scale(4) }}>
+                  <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={scale(18)} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.detailedWalletBtn, { marginTop: verticalScale(16), backgroundColor: colors.amber, borderColor: colors.amber }]}
+                onPress={handleSaveUnifiedProfile}
+                disabled={isSavingProfile}
+              >
+                {isSavingProfile ? (
+                  <ActivityIndicator color="#101014" size="small" />
+                ) : (
+                  <Text style={[styles.detailedWalletBtnText, { color: '#101014', fontWeight: '900' }]}>
+                    Save Changes
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Wallet & Payout Card */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
-
             <View style={styles.payoutBalanceRow}>
               <View>
                 <Text style={[styles.payoutAmtVal, { color: colors.textPrimary }]}>₹{earningsBalance}</Text>
@@ -894,9 +974,7 @@ export default function DriverDashboardScreen() {
                 {payoutLoading ? <ActivityIndicator size="small" color="#101010" /> : <Text style={styles.smallPayoutBtnText}>Cashout</Text>}
               </TouchableOpacity>
             </View>
-
             <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
             <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Settlement UPI ID</Text>
             <View style={[styles.inputFieldBox, { borderColor: colors.border }]}>
               <MaterialIcons name="payment" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(8) }} />
@@ -908,7 +986,6 @@ export default function DriverDashboardScreen() {
                 placeholderTextColor="rgba(255,255,255,0.2)"
               />
             </View>
-
             <TouchableOpacity
               style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]}
               onPress={() => router.push('/(tabs)/driver-wallet' as any)}
@@ -917,12 +994,10 @@ export default function DriverDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-
-          {/* 4. Language, Theme & App Settings */}
+          {/* App Appearance & Language */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>App Appearance & Language</Text>
 
-            {/* Theme Mode Selector */}
             <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>App Display Theme</Text>
             <View style={[styles.vehiclePillsRow, { marginBottom: verticalScale(14) }]}>
               <TouchableOpacity
@@ -960,21 +1035,28 @@ export default function DriverDashboardScreen() {
             </View>
           </View>
 
-          {/* Completed trips list */}
-          <Text style={[styles.sectionTitle, { color: colors.amber, marginTop: scale(4) }]}>Today Completed Rides Log</Text>
-          {dailyRides.map((item) => (
-            <View key={item.id} style={[styles.dailyTripLogItem, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-              <View style={styles.logHeaderRow}>
-                <View>
-                  <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{item.title}</Text>
-                  <Text style={[styles.logTime, { color: colors.textMuted }]}>{item.time} · {item.payout}</Text>
-                </View>
-                <Text style={styles.logFare}>+₹{item.fare}</Text>
-              </View>
-            </View>
-          ))}
+          {/* Big Logout Button at the Bottom */}
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#ef4444',
+              borderRadius: scale(14),
+              paddingVertical: verticalScale(14),
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: scale(8),
+              marginTop: verticalScale(10),
+              marginBottom: verticalScale(20),
+            }}
+            onPress={handleLogout}
+          >
+            <MaterialIcons name="logout" size={scale(20)} color="#ffffff" />
+            <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: moderateFontScale(14) }}>
+              Logout from Account
+            </Text>
+          </TouchableOpacity>
 
-          <View style={{ height: verticalScale(100) }} />
+          <View style={{ height: verticalScale(80) }} />
         </ScrollView>
       )}
 
