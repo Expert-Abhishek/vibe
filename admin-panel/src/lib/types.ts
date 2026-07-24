@@ -76,6 +76,7 @@ export interface Guide {
   walletBalance: number;
   dateRegistered: string;
   dailyRate?: number;
+  platformFee?: number;
   documents: {
     photo: string | null;
     licenseCert: string | null;

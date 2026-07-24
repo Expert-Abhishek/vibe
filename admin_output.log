@@ -1,0 +1,17 @@
+
+> vibe-admin-panel@1.0.0 dev
+> next dev
+
+   ▲ Next.js 15.5.20
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.2:3000
+
+ ✓ Starting...
+ ✓ Ready in 2.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 12s (1695 modules)
+ HEAD / 200 in 13709ms
+ ✓ Compiled in 2.1s (784 modules)
+ ○ Compiling /guides ...
+ ✓ Compiled /guides in 1808ms (1704 modules)
+ GET /guides 200 in 2347ms

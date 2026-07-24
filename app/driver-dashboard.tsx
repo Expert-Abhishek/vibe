@@ -117,6 +117,7 @@ export default function DriverDashboardScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [driverTrips, setDriverTrips] = useState<any[]>([]);
+  const [updateTrigger, setUpdateTrigger] = useState(0);
 
   useEffect(() => {
     async function loadDriverBackendData() {
@@ -498,7 +499,7 @@ export default function DriverDashboardScreen() {
             setEarningsBalance(prev => prev + fareEarned);
             setKmDriven(prev => parseFloat((prev + distCovered).toFixed(1)));
             setTripsCount(prev => prev + 1);
-            setDailyRides([
+            setDriverTrips([
               {
                 id: `ride_${Date.now()}`,
                 title: `${activeTrip.pickup.split(' ')[0]} ➔ ${activeTrip.drop.split(' ')[0]}`,
@@ -506,7 +507,7 @@ export default function DriverDashboardScreen() {
                 fare: fareEarned,
                 payout: 'Settled to Wallet'
               },
-              ...dailyRides
+              ...driverTrips
             ]);
             setActiveTrip(null);
             setTripPhase('pickup');

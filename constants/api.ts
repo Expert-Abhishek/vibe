@@ -212,6 +212,8 @@ export async function createTripApi(payload: {
   title: string;
   customerId?: string;
   customerName?: string;
+  driverId?: string;
+  guideId?: string;
   driverOrGuideName?: string;
   planId?: string;
   destinationIds?: string[];

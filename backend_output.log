@@ -1,0 +1,11 @@
+
+> vibe-backend@1.0.0 start
+> node server.js
+
+===================================================
+🚀 Vibe Registration Backend running on port 5000
+👉 Health check: http://localhost:5000/health
+👉 Live DB Viewer in Chrome: http://localhost:5000/view-db
+👉 Register API: http://localhost:5000/api/auth/register
+===================================================
+⚠️ Database schema boot status:
