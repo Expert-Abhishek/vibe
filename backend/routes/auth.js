@@ -933,41 +933,55 @@ router.put('/users/:id/profile', async (req, res) => {
 
     // 1. Update main users table
     if (isUuid(targetUserId)) {
-      if (name || phone || email || altPhone) {
+      if (name || phone || email || altPhone || photo) {
         await db.query(
           `UPDATE users
            SET name = COALESCE($1, name),
                phone = COALESCE($2, phone),
                alternate_phone = COALESCE($3, alternate_phone),
                email = COALESCE($4, email),
+               photo_url = COALESCE($5, photo_url),
                updated_at = CURRENT_TIMESTAMP
-           WHERE id = $5`,
-          [name || null, phone || null, altPhone || null, email || null, targetUserId]
-        );
+           WHERE id = $6`,
+          [name || null, phone || null, altPhone || null, email || null, photo || null, targetUserId]
+        ).catch(e => console.warn('Users photo update warning:', e.message));
       }
     }
 
-    // 2. UPSERT driver_profiles with photo_url, vehicle_model, vehicle_number
+    // 2. Safe UPDATE driver_profiles (with INSERT fallback if profile row does not exist)
     if (isUuid(targetUserId)) {
-      await db.query(
-        `INSERT INTO driver_profiles (user_id, photo_url, vehicle_model, vehicle_number, upi_id)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (user_id)
-         DO UPDATE SET
-           photo_url = COALESCE(EXCLUDED.photo_url, driver_profiles.photo_url),
-           vehicle_model = COALESCE(EXCLUDED.vehicle_model, driver_profiles.vehicle_model),
-           vehicle_number = COALESCE(EXCLUDED.vehicle_number, driver_profiles.vehicle_number),
-           upi_id = COALESCE(EXCLUDED.upi_id, driver_profiles.upi_id),
-           updated_at = CURRENT_TIMESTAMP`,
-        [targetUserId, photo || null, vehicle_model || null, vehicle_number || null, upi || null]
-      ).catch(e => console.warn('UPSERT driver_profile error:', e.message));
+      const updateRes = await db.query(
+        `UPDATE driver_profiles
+         SET photo_url = COALESCE($1, photo_url),
+             vehicle_model = COALESCE($2, vehicle_model),
+             vehicle_number = COALESCE($3, vehicle_number),
+             upi_id = COALESCE($4, upi_id),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $5 OR id = $5`,
+        [photo || null, vehicle_model || null, vehicle_number || null, upi || null, targetUserId]
+      ).catch(e => console.warn('Driver profile update warning:', e.message));
+
+      if (!updateRes || updateRes.rowCount === 0) {
+        await db.query(
+          `INSERT INTO driver_profiles (user_id, photo_url, vehicle_model, vehicle_number, upi_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [targetUserId, photo || null, vehicle_model || null, vehicle_number || null, upi || null]
+        ).catch(e => console.warn('Insert driver_profile warning:', e.message));
+      }
     }
 
-    // 3. Universal photo update across driver_profiles & guide_profiles so profile photo is ALWAYS updated!
-    if (photo) {
-      await db.query(`UPDATE driver_profiles SET photo_url = $1`, [photo]).catch(() => {});
-      await db.query(`UPDATE guide_profiles SET photo_url = $1`, [photo]).catch(() => {});
+    // 3. Update guide_profiles if guide
+    if (isUuid(targetUserId)) {
+      await db.query(
+        `UPDATE guide_profiles
+         SET photo_url = COALESCE($1, photo_url),
+             upi_id = COALESCE($2, upi_id),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $3 OR id = $3`,
+        [photo || null, upi || null, targetUserId]
+      ).catch(() => {});
     }
+
 
     // 4. Fetch updated user and driver profile
     let updatedUserRes = null;

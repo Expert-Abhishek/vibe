@@ -152,7 +152,7 @@ export async function updateUserProfileApi(userId: string, profileData: any): Pr
     return await res.json();
   } catch (e) {
     console.warn('updateUserProfileApi error:', e);
-    return { success: false, message: 'Failed to update profile on backend' };
+    return { success: false, message: 'Network or server error' };
   }
 }
 

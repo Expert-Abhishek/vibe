@@ -234,7 +234,11 @@ export default function DriverDashboardScreen() {
       photoUrl: photoUrl,
       upiId: upiId,
     });
-
+    // ADD THIS:
+    if (!apiRes?.success) {
+      Alert.alert('Update Failed', apiRes?.message || 'Could not save your profile. Please try again.');
+      return;
+    }
     // 2. Update Password if entered
     let passwordUpdated = false;
     if (newPassword.trim().length > 0) {
@@ -281,7 +285,7 @@ export default function DriverDashboardScreen() {
     await saveUserSession(updatedSession as any);
     setIsEditMode(false);
 
-    Alert.alert('Profile SuccessFully Update');
+    Alert.alert('Profile updated successfully!');
   };
 
   const colors = {
