@@ -132,6 +132,7 @@ export async function fetchGuidesApi(): Promise<Guide[]> {
         walletBalance: Number(g.wallet_balance) || 0,
         dateRegistered: g.created_at ? new Date(g.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         dailyRate: Number(g.daily_rate) || 2000,
+        platformFee: g.platform_fee !== undefined ? Number(g.platform_fee) : 10,
         documents: {
           photo: g.photo_url || null,
           licenseCert: g.license_cert_url || null,
@@ -175,12 +176,12 @@ export async function updateDriverRateApi(userId: string, dailyRate: number, hou
   }
 }
 
-export async function updateGuideRateApi(userId: string, dailyRate: number): Promise<boolean> {
+export async function updateGuideRateApi(userId: string, dailyRate: number, platformFee: number): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/guides/${userId}/rate`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ daily_rate: dailyRate }),
+      body: JSON.stringify({ daily_rate: dailyRate, platform_fee: platformFee }),
     });
     const data = await res.json();
     return data.success;

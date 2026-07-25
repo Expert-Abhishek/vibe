@@ -1,20 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { deleteUserApi, fetchGuidesApi, updateGuideRateApi, updateUserStatusApi } from '@/lib/api';
+import { Guide, KYCStatus } from '@/lib/types';
 import {
-  Compass,
-  Search,
-  Eye,
   CheckCircle,
-  XCircle,
+  Compass,
+  Eye,
+  FileText,
+  Search,
   ShieldAlert,
+  Star,
   Trash2,
   X,
-  FileText,
-  Star,
+  XCircle,
 } from 'lucide-react';
-import { initialGuides, fetchGuidesApi, updateUserStatusApi, updateGuideRateApi, deleteUserApi } from '@/lib/api';
-import { Guide, KYCStatus } from '@/lib/types';
+import { useEffect, useState } from 'react';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -116,6 +116,7 @@ export default function GuidesPage() {
                 <th className="py-4 px-6">License ID</th>
                 <th className="py-4 px-6">Status</th>
                 <th className="py-4 px-6">Daily Rate (/day)</th>
+                <th className="py-4 px-6 text-center">Platform Fee (%)</th>
                 <th className="py-4 px-6">Wallet Balance</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
@@ -159,15 +160,14 @@ export default function GuidesPage() {
 
                   <td className="py-4 px-6">
                     <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                        guide.status === 'Active'
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${guide.status === 'Active'
                           ? 'bg-green-500/10 text-green-400 border border-green-500/30'
                           : guide.status === 'Pending KYC'
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse'
-                          : guide.status === 'KYC Declined'
-                          ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-                          : 'bg-gray-500/10 text-gray-400 border border-gray-500/30'
-                      }`}
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse'
+                            : guide.status === 'KYC Declined'
+                              ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                              : 'bg-gray-500/10 text-gray-400 border border-gray-500/30'
+                        }`}
                     >
                       {guide.status === 'Active' ? (
                         <CheckCircle className="w-3 h-3 mr-1" />
@@ -182,6 +182,10 @@ export default function GuidesPage() {
 
                   <td className="py-4 px-6 font-black text-emerald-400 text-sm">
                     ₹{guide.dailyRate ? guide.dailyRate.toLocaleString('en-IN') : '2,000'} <span className="text-[10px] font-normal text-dark-textMuted">/day</span>
+                  </td>
+
+                  <td className="py-4 px-6 text-center font-bold text-amber-500 text-sm">
+                    {guide.platformFee !== undefined ? guide.platformFee : '10'}%
                   </td>
 
                   <td className="py-4 px-6 font-bold text-white">
@@ -244,12 +248,12 @@ export default function GuidesPage() {
           guide={selectedGuide}
           onClose={() => setSelectedGuide(null)}
           onUpdateStatus={handleUpdateStatus}
-          onSaveRate={async (daily) => {
+          onSaveRate={async (daily, fee) => {
             setGuidesList((prev) =>
-              prev.map((g) => (g.id === selectedGuide.id ? { ...g, dailyRate: daily } : g))
+              prev.map((g) => (g.id === selectedGuide.id ? { ...g, dailyRate: daily, platformFee: fee } : g))
             );
-            setSelectedGuide((prev) => (prev ? { ...prev, dailyRate: daily } : null));
-            await updateGuideRateApi(selectedGuide.id, daily);
+            setSelectedGuide((prev) => (prev ? { ...prev, dailyRate: daily, platformFee: fee } : null));
+            await updateGuideRateApi(selectedGuide.id, daily, fee);
           }}
         />
       )}
@@ -266,13 +270,14 @@ function GuideDetailModal({
   guide: Guide;
   onClose: () => void;
   onUpdateStatus: (id: string, status: KYCStatus) => void;
-  onSaveRate: (dailyRate: number) => void;
+  onSaveRate: (dailyRate: number, platformFee: number) => void;
 }) {
   const [dailyRate, setDailyRate] = useState<number>(guide.dailyRate || 2000);
+  const [platformFee, setPlatformFee] = useState<number>(guide.platformFee !== undefined ? guide.platformFee : 10);
   const [rateSavedMsg, setRateSavedMsg] = useState(false);
 
   const handleSave = () => {
-    onSaveRate(Number(dailyRate));
+    onSaveRate(Number(dailyRate), Number(platformFee));
     setRateSavedMsg(true);
     setTimeout(() => setRateSavedMsg(false), 2500);
   };
@@ -299,13 +304,12 @@ function GuideDetailModal({
               <div className="flex items-center space-x-2">
                 <h2 className="text-lg font-bold text-white">{guide.name}</h2>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    guide.status === 'Active'
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${guide.status === 'Active'
                       ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                       : guide.status === 'Pending KYC'
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                  }`}
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    }`}
                 >
                   {guide.status}
                 </span>
@@ -331,20 +335,20 @@ function GuideDetailModal({
               <div>
                 <h3 className="text-sm font-black text-white flex items-center gap-2">
                   <Compass className="w-4 h-4 text-emerald-400" />
-                  <span>Guide Per-Day Rate Setup</span>
+                  <span>Guide Per-Day Rate & Platform Fee Setup</span>
                 </h3>
                 <p className="text-[11px] text-dark-textMuted">
-                  Set daily charge for this certified tour guide (no hourly addon).
+                  Set daily charge and individual platform fee for this certified tour guide.
                 </p>
               </div>
               {rateSavedMsg && (
                 <span className="text-xs font-bold text-green-400 bg-green-500/20 px-3 py-1 rounded-lg border border-green-500/30 animate-pulse">
-                  ✓ Daily Rate Saved!
+                  ✓ Rates Saved!
                 </span>
               )}
             </div>
 
-            <div className="pt-2 flex items-center space-x-3">
+            <div className="pt-2 flex items-end space-x-3">
               <div className="flex-1">
                 <label className="text-[11px] font-bold text-dark-textMuted uppercase block mb-1">
                   Daily Charge (₹/day)
@@ -361,11 +365,27 @@ function GuideDetailModal({
                 </div>
               </div>
 
+              <div className="flex-1">
+                <label className="text-[11px] font-bold text-dark-textMuted uppercase block mb-1">
+                  Platform Fee (%)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-bold text-sm">%</span>
+                  <input
+                    type="number"
+                    value={platformFee}
+                    onChange={(e) => setPlatformFee(Number(e.target.value))}
+                    className="w-full pl-8 pr-4 py-2.5 bg-dark-card border border-dark-border rounded-xl text-sm font-bold text-white focus:outline-none focus:border-amber-400"
+                    placeholder="10"
+                  />
+                </div>
+              </div>
+
               <button
                 onClick={handleSave}
-                className="mt-5 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs rounded-xl shadow-lg transition-transform active:scale-95"
+                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-xs rounded-xl shadow-lg transition-transform active:scale-95"
               >
-                Save Guide Rate
+                Save Guide Rates
               </button>
             </div>
           </div>
@@ -452,31 +472,28 @@ function GuideDetailModal({
             <span className="text-xs text-dark-textMuted">Change Status:</span>
             <button
               onClick={() => onUpdateStatus(guide.id, 'Active')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                guide.status === 'Active'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${guide.status === 'Active'
                   ? 'bg-green-500 text-black'
                   : 'bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black'
-              } transition-colors`}
+                } transition-colors`}
             >
               Approve / Set Active
             </button>
             <button
               onClick={() => onUpdateStatus(guide.id, 'KYC Declined')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                guide.status === 'KYC Declined'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${guide.status === 'KYC Declined'
                   ? 'bg-red-500 text-white'
                   : 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
-              } transition-colors`}
+                } transition-colors`}
             >
               Decline KYC
             </button>
             <button
               onClick={() => onUpdateStatus(guide.id, 'Inactive')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                guide.status === 'Inactive'
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold ${guide.status === 'Inactive'
                   ? 'bg-gray-600 text-white'
                   : 'bg-dark-hover text-gray-400 hover:text-white'
-              } transition-colors`}
+                } transition-colors`}
             >
               Deactivate
             </button>
