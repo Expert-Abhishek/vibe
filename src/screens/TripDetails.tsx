@@ -19,7 +19,7 @@ import {
   validatePreBookedDispatch,
   formatScheduledDateTime,
 } from '../services/fareCalculator';
-import { useModal } from '../context/ModalContext';
+import { useAppModal } from '../context/ModalContext';
 
 interface TripDetailsProps {
   tripId?: string;
@@ -56,7 +56,7 @@ export default function TripDetails({
 }: TripDetailsProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const modal = useModal();
+  const { showModal } = useAppModal();
 
   // Compute Fare Breakdown
   const fareBreakdown = calculateTripFare({
@@ -87,17 +87,26 @@ export default function TripDetails({
   const handleStartTripPress = () => {
     // Time-gate safety guard
     if (!canStart) {
-      modal.showWarning(
-        'Dispatch Locked',
-        `Pre-booked trip cannot be started yet. ${unlockBadgeText}`
-      );
+      showModal({
+        title: 'Dispatch Locked',
+        description: `Pre-booked trip cannot be started yet. ${unlockBadgeText}`,
+        variant: 'warning',
+        primaryButtonText: 'Understood',
+        onPrimaryAction: () => {},
+      });
       return;
     }
 
     if (onStartTrip) {
       onStartTrip();
     } else {
-      modal.showSuccess('Ride Started', `Trip ${tripId} has been successfully activated.`);
+      showModal({
+        title: 'Ride Started',
+        description: `Trip ${tripId} has been successfully activated.`,
+        variant: 'success',
+        primaryButtonText: 'Great!',
+        onPrimaryAction: () => {},
+      });
     }
   };
 

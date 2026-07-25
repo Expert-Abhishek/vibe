@@ -1,5 +1,6 @@
 import NotificationModal from '@/components/NotificationModal';
 import { rideStateService } from '@src/services/rideStateService';
+import { useAppModal } from '@src/context/ModalContext';
 import {
   acceptTripApi,
   driverArrivedApi,
@@ -917,16 +918,25 @@ export default function DriverDashboardScreen() {
 
                           // Safety guard check: must be STARTED to transition to ARRIVED
                           if (currStatus !== 'STARTED' && currStatus !== 'TRIP_STARTED') {
-                            Alert.alert(
-                              '📍 Arrived Guard',
-                              'Arrived action is locked until trip state transitions to STARTED.'
-                            );
+                            triggerGlobalModal({
+                              title: '📍 Arrived Guard',
+                              description: 'Arrived action is locked until trip state transitions to STARTED.',
+                              variant: 'warning',
+                              primaryButtonText: 'Understood',
+                              onPrimaryAction: () => {},
+                            });
                             return;
                           }
 
                           await rideStateService.transitionRideState(tripId, 'ARRIVED', driverName);
                           sendLocalNotification('📍 Arrived at Location!', 'Rider notified that you have arrived.');
-                          Alert.alert('📍 Arrived at Location', 'Notification sent to tourist!');
+                          triggerGlobalModal({
+                            title: '📍 Arrived at Location',
+                            description: 'Notification sent to tourist!',
+                            variant: 'info',
+                            primaryButtonText: 'OK',
+                            onPrimaryAction: () => {},
+                          });
                         }}
                       >
                         <Text style={styles.navActionTextCancel}>Arrived</Text>

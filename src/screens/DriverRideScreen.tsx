@@ -17,7 +17,9 @@ import {
   rideStateService,
   useRideState,
 } from '../services/rideStateService';
-import { useModal } from '@src/context/ModalContext';
+import { useAppModal } from '@src/context/ModalContext';
+import { BookingType, validatePreBookedDispatch } from '../services/fareCalculator';
+import CashCollectionModal from '../components/modals/CashCollectionModal';
 
 interface DriverRideScreenProps {
   tripId?: string;
@@ -26,6 +28,8 @@ interface DriverRideScreenProps {
   pickupAddress?: string;
   dropAddress?: string;
   fareAmount?: number;
+  bookingType?: BookingType;
+  scheduledTime?: string | Date;
   onBack?: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -37,12 +41,15 @@ export default function DriverRideScreen({
   pickupAddress = 'MG Road, Bangalore',
   dropAddress = 'Kempegowda Int. Airport, Terminal 1',
   fareAmount = 850,
+  bookingType = 'PRE_BOOKED',
+  scheduledTime,
   onBack,
   style,
 }: DriverRideScreenProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const modal = useModal();
+  const { showModal } = useAppModal();
+  const [cashModalVisible, setCashModalVisible] = useState(false);
 
   const currentRideStatus = useRideState(tripId);
 
@@ -57,7 +64,13 @@ export default function DriverRideScreen({
   // 1. Transition to EN_ROUTE_TO_PICKUP
   const handleHeadToPickup = async () => {
     if (!rideStateService.canTransition(currentRideStatus, 'EN_ROUTE_TO_PICKUP')) {
-      modal.showWarning('Invalid Transition', 'Cannot transition to En Route from current state.');
+      showModal({
+        title: 'Invalid Transition',
+        description: 'Cannot transition to En Route from current state.',
+        variant: 'warning',
+        primaryButtonText: 'Understood',
+        onPrimaryAction: () => {},
+      });
       return;
     }
     await rideStateService.transitionRideState(tripId, 'EN_ROUTE_TO_PICKUP', driverName);
@@ -66,7 +79,13 @@ export default function DriverRideScreen({
   // 2. Transition to STARTED
   const handleStartRide = async () => {
     if (!rideStateService.canTransition(currentRideStatus, 'STARTED')) {
-      modal.showWarning('Invalid Transition', 'Cannot start trip before heading to pickup.');
+      showModal({
+        title: 'Invalid Transition',
+        description: 'Cannot start trip before heading to pickup.',
+        variant: 'warning',
+        primaryButtonText: 'Understood',
+        onPrimaryAction: () => {},
+      });
       return;
     }
     await rideStateService.transitionRideState(tripId, 'STARTED', driverName);
@@ -81,17 +100,50 @@ export default function DriverRideScreen({
     }
 
     await rideStateService.transitionRideState(tripId, 'ARRIVED', driverName);
-    modal.showInfo('📍 Arrived', 'Passenger has been notified of your arrival.');
+    showModal({
+      title: '📍 Arrived at Location',
+      description: 'Passenger has been notified of your arrival.',
+      variant: 'info',
+      primaryButtonText: 'OK',
+      onPrimaryAction: () => {},
+    });
   };
 
-  // 4. Transition to COMPLETED
+  // Calculate cash settlement amounts
+  const isPreBooked = bookingType === 'PRE_BOOKED';
+  const advanceDepositPaid = isPreBooked ? Math.round(fareAmount * 0.20) : 0;
+  const remainingCashBalance = isPreBooked ? fareAmount - advanceDepositPaid : fareAmount;
+
+  // 4. Transition to COMPLETED with Cash Settlement Modal
   const handleCompleteTrip = async () => {
     if (!rideStateService.canTransition(currentRideStatus, 'COMPLETED')) {
-      modal.showWarning('Invalid Transition', 'Cannot complete trip before marking arrival.');
+      showModal({
+        title: 'Invalid Transition',
+        description: 'Cannot complete trip before marking arrival.',
+        variant: 'warning',
+        primaryButtonText: 'Understood',
+        onPrimaryAction: () => {},
+      });
       return;
     }
-    await rideStateService.transitionRideState(tripId, 'COMPLETED', driverName);
-    modal.showSuccess('🎉 Trip Completed', `Fare amount ₹${fareAmount} added to wallet.`);
+
+    setCashModalVisible(true);
+  };
+
+  const handleConfirmCashCollection = async () => {
+    setCashModalVisible(false);
+    const result = await rideStateService.transitionRideState(tripId, 'COMPLETED', driverName);
+    if (result.success) {
+      showModal({
+        title: '🎉 Trip Completed',
+        description: isPreBooked
+          ? `Collected ₹${remainingCashBalance} cash. (₹${advanceDepositPaid} 20% deposit online).`
+          : `Collected full cash ₹${fareAmount}.`,
+        variant: 'success',
+        primaryButtonText: 'Done',
+        onPrimaryAction: () => {},
+      });
+    }
   };
 
   const colors = {
@@ -307,6 +359,16 @@ export default function DriverRideScreen({
           )}
         </View>
       </ScrollView>
+
+      <CashCollectionModal
+        visible={cashModalVisible}
+        bookingType={bookingType}
+        totalFare={fareAmount}
+        advanceDepositPaid={advanceDepositPaid}
+        remainingCashBalance={remainingCashBalance}
+        onConfirmCollection={handleConfirmCashCollection}
+        onClose={() => setCashModalVisible(false)}
+      />
     </SafeAreaView>
   );
 }

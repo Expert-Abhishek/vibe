@@ -137,6 +137,10 @@ CREATE TABLE IF NOT EXISTS trips (
     extra_hours NUMERIC(5,2) DEFAULT 0.00,
     addon_charge NUMERIC(10,2) DEFAULT 0.00,
     rating INT DEFAULT 5,
+    booking_type VARCHAR(20) DEFAULT 'INSTANT', -- 'INSTANT', 'PRE_BOOKED'
+    scheduled_time TIMESTAMP WITH TIME ZONE,
+    advance_deposit_paid NUMERIC(10,2) DEFAULT 0.00,
+    remaining_cash_balance NUMERIC(10,2) DEFAULT 0.00,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

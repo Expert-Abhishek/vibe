@@ -118,14 +118,30 @@ export const rideStateService = {
 
     // Trigger external API call where appropriate
     try {
+      let res: Response;
       if (nextStatus === 'ARRIVED') {
-        await driverArrivedApi(tripId, driverName);
+        res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/arrive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ driverName }),
+        });
       } else {
-        await fetch(`${API_BASE_URL}/api/trips/${tripId}/status`, {
+        res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: nextStatus, driverName }),
         });
+      }
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        if (json?.code === 'PREBOOKING_LOCKED') {
+          return {
+            success: false,
+            status: currentStatus,
+            message: json.message || 'Trip is locked until 15 minutes prior to scheduled time.',
+          };
+        }
       }
     } catch (e) {
       console.warn(`API call for status transition to ${nextStatus} encountered error:`, e);

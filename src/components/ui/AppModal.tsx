@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
   StyleProp,
   ViewStyle,
 } from 'react-native';
@@ -21,7 +22,7 @@ export interface AppModalProps {
   variant?: ModalVariant;
   confirmText?: string;
   cancelText?: string;
-  onConfirm?: () => void;
+  onConfirm?: () => void | Promise<void>;
   onCancel?: () => void;
   onClose?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -41,6 +42,7 @@ export default function AppModal({
 }: AppModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!visible) return null;
 
@@ -77,19 +79,31 @@ export default function AppModal({
     cancelBg: isDark ? 'rgba(255,255,255,0.08)' : '#F3F4F6',
   };
 
-  const handleConfirm = () => {
-    if (onConfirm) onConfirm();
-    if (onClose) onClose();
+  // Single-click execution protection handler
+  const handleConfirm = async () => {
+    if (isSubmitting) return; // Prevent duplicate rapid taps
+    setIsSubmitting(true);
+    try {
+      if (onConfirm) {
+        await onConfirm();
+      }
+    } catch (e) {
+      console.warn('AppModal onConfirm error:', e);
+    } finally {
+      setIsSubmitting(false);
+      if (onClose) onClose();
+    }
   };
 
   const handleCancel = () => {
+    if (isSubmitting) return;
     if (onCancel) onCancel();
     if (onClose) onClose();
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={styles.overlay} pointerEvents="auto">
         <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>
           {/* Icon Badge */}
           <View style={[styles.iconContainer, { backgroundColor: config.bgColor }]}>
@@ -102,12 +116,13 @@ export default function AppModal({
             <Text style={[styles.description, { color: colors.textMuted }]}>{description}</Text>
           ) : null}
 
-          {/* Buttons Row */}
+          {/* Action Buttons Row */}
           <View style={styles.buttonRow}>
             {cancelText ? (
               <TouchableOpacity
                 style={[styles.btn, { backgroundColor: colors.cancelBg, flex: 1 }]}
                 onPress={handleCancel}
+                disabled={isSubmitting}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.btnText, { color: colors.textPrimary }]}>{cancelText}</Text>
@@ -115,11 +130,19 @@ export default function AppModal({
             ) : null}
 
             <TouchableOpacity
-              style={[styles.btn, { backgroundColor: config.color, flex: 1 }]}
+              style={[
+                styles.btn,
+                { backgroundColor: config.color, flex: 1, opacity: isSubmitting ? 0.7 : 1.0 },
+              ]}
               onPress={handleConfirm}
+              disabled={isSubmitting}
               activeOpacity={0.8}
             >
-              <Text style={[styles.btnText, { color: '#FFFFFF' }]}>{confirmText}</Text>
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.btnText, { color: '#FFFFFF' }]}>{confirmText}</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

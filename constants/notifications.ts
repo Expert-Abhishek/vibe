@@ -88,10 +88,16 @@ export async function getExpoPushToken(): Promise<string | null> {
   }
 }
 
+import { notificationStore } from '@src/store/notificationStore';
+
 export async function sendLocalNotification(title: string, body: string, data?: any): Promise<void> {
   try {
-    // Show visual Banner Alert fallback for instant UI response on all platforms
-    Alert.alert(`🔔 ${title}`, body);
+    // Add to notificationStore for clean UI badge rendering & drawer storage
+    notificationStore.addNotification({
+      title: `🔔 ${title}`,
+      body,
+      isRead: false,
+    });
 
     if (Platform.OS !== 'web') {
       const Notifications = getNotificationsModule();

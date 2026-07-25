@@ -195,6 +195,135 @@ router.get('/live-location/:tripId', async (req, res) => {
 });
 
 /**
+ * Helper: Pre-Booking Time-Gate Validation Guard
+ * Enforces that pre-booked rides can only be started within 15 minutes prior to scheduled time.
+ */
+function canDriverStartTrip(scheduledTime, bookingType = 'INSTANT') {
+  if (bookingType === 'INSTANT' || !scheduledTime) {
+    return { allowed: true };
+  }
+
+  const scheduledDate = new Date(scheduledTime);
+  const now = new Date();
+  if (isNaN(scheduledDate.getTime())) {
+    return { allowed: true };
+  }
+
+  const windowMs = 15 * 60 * 1000; // 15 minutes window
+  const allowedStart = new Date(scheduledDate.getTime() - windowMs);
+
+  if (now < allowedStart) {
+    const formatted = scheduledDate.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return {
+      allowed: false,
+      unlocksAt: formatted,
+      message: `Trip unlocks 15 minutes prior to scheduled time: ${formatted}`,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * POST /api/trips/:id/status
+ * Updates trip status with strict pre-booking time-gate validation
+ */
+router.post('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, driverName = 'Captain' } = req.body;
+
+    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    if (tripRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    const trip = tripRes.rows[0];
+
+    // API Level Lock: Validate pre-booking 15-minute time-gate guard for activation states
+    if (['STARTED', 'EN_ROUTE_TO_PICKUP', 'ARRIVED', 'TRIP_STARTED'].includes(status)) {
+      const guardCheck = canDriverStartTrip(trip.scheduled_time, trip.booking_type);
+      if (!guardCheck.allowed) {
+        return res.status(400).json({
+          success: false,
+          code: 'PREBOOKING_LOCKED',
+          message: guardCheck.message,
+          unlocksAt: guardCheck.unlocksAt,
+        });
+      }
+    }
+
+    const updateRes = await db.query(
+      `UPDATE trips SET status = $1, driver_or_guide_name = COALESCE($2, driver_or_guide_name) WHERE id = $3 RETURNING *`,
+      [status, driverName, id]
+    );
+
+    res.json({
+      success: true,
+      message: `Status updated to ${status}`,
+      data: updateRes.rows[0],
+    });
+  } catch (error) {
+    console.error('Error updating status:', error);
+    res.status(500).json({ success: false, message: 'Failed to update trip status' });
+  }
+});
+
+/**
+ * POST /api/trips/:id/complete
+ * Completes trip and computes cash settlement details (deposit vs remaining balance)
+ */
+router.post('/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverName = 'Captain' } = req.body;
+
+    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    if (tripRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    const trip = tripRes.rows[0];
+    const totalFare = parseFloat(trip.amount || 0);
+    const bookingType = trip.booking_type || 'INSTANT';
+
+    // Settlement computation
+    const isPreBooked = bookingType === 'PRE_BOOKED';
+    const advanceDepositPaid = isPreBooked ? parseFloat(trip.advance_deposit_paid || (totalFare * 0.20)) : 0;
+    const remainingCashBalance = isPreBooked ? totalFare - advanceDepositPaid : totalFare;
+
+    const updateRes = await db.query(
+      `UPDATE trips SET status = 'Completed', driver_or_guide_name = COALESCE($1, driver_or_guide_name) WHERE id = $2 RETURNING *`,
+      [driverName, id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Trip completed successfully',
+      settlement: {
+        bookingType,
+        totalFare,
+        advanceDepositPaid,
+        remainingCashBalance,
+        cashToCollect: remainingCashBalance,
+        isDepositDeducted: isPreBooked,
+      },
+      data: updateRes.rows[0],
+    });
+  } catch (error) {
+    console.error('Error completing trip:', error);
+    res.status(500).json({ success: false, message: 'Failed to complete trip' });
+  }
+});
+
+/**
  * POST /api/trips/:id/arrive
  * Driver taps "Arrived at Pickup"
  */
@@ -202,6 +331,20 @@ router.post('/:id/arrive', async (req, res) => {
   try {
     const { id } = req.params;
     const { driverName = 'Captain' } = req.body;
+
+    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    if (tripRes.rows.length > 0) {
+      const trip = tripRes.rows[0];
+      const guardCheck = canDriverStartTrip(trip.scheduled_time, trip.booking_type);
+      if (!guardCheck.allowed) {
+        return res.status(400).json({
+          success: false,
+          code: 'PREBOOKING_LOCKED',
+          message: guardCheck.message,
+          unlocksAt: guardCheck.unlocksAt,
+        });
+      }
+    }
 
     const result = await db.query(
       "UPDATE trips SET status = 'Arrived' WHERE id = $1 RETURNING *",
