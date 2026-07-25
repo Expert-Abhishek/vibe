@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     role user_role NOT NULL DEFAULT 'tourist',
     status kyc_status NOT NULL DEFAULT 'Active',
+    photo_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS driver_profiles (
     car_left_url TEXT,
     car_right_url TEXT,
     car_back_url TEXT,
+    upi_id VARCHAR(100),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -73,6 +75,7 @@ CREATE TABLE IF NOT EXISTS guide_profiles (
     photo_url TEXT,
     license_cert_url TEXT,
     id_proof_url TEXT,
+    upi_id VARCHAR(100),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
