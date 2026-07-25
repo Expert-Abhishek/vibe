@@ -510,6 +510,23 @@ export async function savePushTokenApi(userId: string, pushToken: string): Promi
 }
 
 /**
+ * Admin broadcast notification to drivers/guides
+ */
+export async function sendAdminNotificationApi(payload: { userId?: string; role?: string; title: string; body: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/admin-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('sendAdminNotificationApi error:', e);
+    return { success: false, message: 'Admin notification failed' };
+  }
+}
+
+/**
  * Fetch Driver Statistics (Today KM, Trips Count, Today Earnings)
  */
 export async function fetchDriverStatsApi(driverId: string): Promise<any> {

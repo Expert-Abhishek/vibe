@@ -37,22 +37,13 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
     const session = getUserSessionSync();
     const userId = session?.id || 'guest';
     const list = await fetchNotificationsApi(userId, role);
+
     if (Array.isArray(list) && list.length > 0) {
       setNotifications(list);
-      setUnreadCount(list.filter(n => !n.isRead).length || list.length);
+      setUnreadCount(list.filter(n => !n.isRead).length);
     } else {
-      // Fallback default system welcome log if database has 0 records
-      const defaultLogs = [
-        {
-          id: 'def_1',
-          title: role === 'driver' ? '🚖 Driver Dashboard Active' : (role === 'guide' ? '🚩 Guide System Online' : '🎉 Welcome to VIBE!'),
-          body: 'Your account is connected to real-time dispatch server. Activity updates will appear here.',
-          createdAt: new Date().toISOString(),
-          isRead: false,
-        }
-      ];
-      setNotifications(defaultLogs);
-      setUnreadCount(1);
+      setNotifications([]);
+      setUnreadCount(0);
     }
   };
 
@@ -63,6 +54,7 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
   }, [role]);
 
   const handleOpen = () => {
+    loadNotifications();
     setVisible(true);
     setUnreadCount(0);
   };
@@ -96,24 +88,33 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
             </View>
 
             <ScrollView style={{ maxHeight: verticalScale(480) }} showsVerticalScrollIndicator={false}>
-              {notifications.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.notificationCard,
-                    {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#FAF9F5',
-                      borderColor: colors.border,
-                    }
-                  ]}
-                >
-                  <Text style={[styles.cardTitle, { color: colors.amber }]}>{item.title}</Text>
-                  <Text style={[styles.cardBody, { color: colors.textPrimary }]}>{item.body}</Text>
-                  <Text style={[styles.cardTime, { color: colors.textMuted }]}>
-                    {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {notifications.length === 0 ? (
+                <View style={{ padding: scale(30), alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="notifications-none" size={scale(36)} color={colors.textMuted} />
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(8), textAlign: 'center' }}>
+                    No activity notifications yet.
                   </Text>
                 </View>
-              ))}
+              ) : (
+                notifications.map((item) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.notificationCard,
+                      {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#FAF9F5',
+                        borderColor: colors.border,
+                      }
+                    ]}
+                  >
+                    <Text style={[styles.cardTitle, { color: colors.amber }]}>{item.title}</Text>
+                    <Text style={[styles.cardBody, { color: colors.textPrimary }]}>{item.body}</Text>
+                    <Text style={[styles.cardTime, { color: colors.textMuted }]}>
+                      {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>

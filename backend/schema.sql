@@ -171,16 +171,18 @@ CREATE TABLE IF NOT EXISTS withdrawals (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 12. Ride Dispatches Table (Driver Accept / Decline)
-CREATE TABLE IF NOT EXISTS ride_dispatches (
+-- 13. Activity Notifications Table
+CREATE TABLE IF NOT EXISTS activity_notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    trip_id UUID REFERENCES trips(id) ON DELETE CASCADE,
-    driver_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    driver_name VARCHAR(255),
-    status VARCHAR(50) DEFAULT 'Pending', -- 'Pending', 'Accepted', 'Declined'
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    user_id UUID,
+    role VARCHAR(20) DEFAULT 'tourist',
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    trip_id UUID,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_activity_notifications_user_role ON activity_notifications(user_id, role);
 
 
 

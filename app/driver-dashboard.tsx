@@ -18,7 +18,7 @@ import {
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
-import { setAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
+import { setAppTheme, toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -79,10 +79,10 @@ export default function DriverDashboardScreen() {
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   // Stats state
-  const [kmDriven, setKmDriven] = useState(142.5);
-  const [tripsCount, setTripsCount] = useState(8);
-  const [earningsToday, setEarningsToday] = useState(2800);
-  const [earningsBalance, setEarningsBalance] = useState(4500);
+  const [kmDriven, setKmDriven] = useState(0);
+  const [tripsCount, setTripsCount] = useState(0);
+  const [earningsToday, setEarningsToday] = useState(0);
+  const [earningsBalance, setEarningsBalance] = useState(0);
 
   // Settings & Toggles
   const [selectedVehicle, setSelectedVehicle] = useState<'innova' | 'swift'>('innova');
@@ -90,6 +90,11 @@ export default function DriverDashboardScreen() {
 
   // Modal support state
   const [disputeVisible, setDisputeVisible] = useState(false);
+  const [confirmEndModalVisible, setConfirmEndModalVisible] = useState(false);
+  const [completedModalVisible, setCompletedModalVisible] = useState(false);
+  const [lastCompletedTrip, setLastCompletedTrip] = useState<any>(null);
+  const [acceptedModalVisible, setAcceptedModalVisible] = useState(false);
+  const [acceptedTripDetails, setAcceptedTripDetails] = useState<any>(null);
 
   // Incoming Request Simulation
   const [incomingRequest, setIncomingRequest] = useState<ActiveRequest | null>(null);
@@ -127,7 +132,16 @@ export default function DriverDashboardScreen() {
   useEffect(() => {
     async function loadDriverBackendData() {
       const session = getUserSessionSync();
-      const driverId = session?.id || 'd1';
+      const driverId = session?.id;
+
+      if (!driverId) {
+        setKmDriven(0);
+        setTripsCount(0);
+        setEarningsToday(0);
+        setEarningsBalance(0);
+        setDriverTrips([]);
+        return;
+      }
 
       const userRes = await fetchUserProfileApi(driverId);
       if (userRes && userRes.success && userRes.user) {
@@ -144,21 +158,26 @@ export default function DriverDashboardScreen() {
       const walletRes = await fetchWalletBalanceApi(driverId);
       if (walletRes && walletRes.balance !== undefined) {
         setEarningsBalance(walletRes.balance);
+      } else {
+        setEarningsBalance(0);
       }
 
       const statsRes = await fetchDriverStatsApi(driverId);
       if (statsRes && statsRes.success && statsRes.data) {
-        if (statsRes.data.todayKm !== undefined) setKmDriven(statsRes.data.todayKm);
-        if (statsRes.data.tripsCount !== undefined) setTripsCount(statsRes.data.tripsCount);
-        if (statsRes.data.todayEarnings !== undefined) setEarningsToday(statsRes.data.todayEarnings);
+        setKmDriven(statsRes.data.todayKm || 0);
+        setTripsCount(statsRes.data.tripsCount || 0);
+        setEarningsToday(statsRes.data.todayEarnings || 0);
+      } else {
+        setKmDriven(0);
+        setTripsCount(0);
+        setEarningsToday(0);
       }
 
       const tripsRes = await fetchDriverTripsApi(driverId);
       if (tripsRes && Array.isArray(tripsRes)) {
         setDriverTrips(tripsRes);
-        if (!statsRes?.success) {
-          setTripsCount(tripsRes.length);
-        }
+      } else {
+        setDriverTrips([]);
       }
     }
     loadDriverBackendData();
@@ -347,17 +366,18 @@ export default function DriverDashboardScreen() {
   useEffect(() => {
     if (!isOnline) return;
     const session = getUserSessionSync();
-    const driverId = session?.id || 'd1';
+    const driverId = session?.id;
+    if (!driverId) return;
 
     // Post real-time location coordinates
     const locationInterval = setInterval(async () => {
       await updateDriverLocationApi(driverId, 12.9716, 77.5946, true);
     }, 10000);
 
-    // Poll live ride requests from backend PostgreSQL
+    // Poll live pending ride requests from backend
     const pollRequests = async () => {
       const reqs = await fetchDriverRequestsApi(driverId);
-      if (reqs && reqs.length > 0 && !activeTrip) {
+      if (reqs && reqs.length > 0 && !activeTrip && !requestVisible && !acceptedModalVisible) {
         const firstReq = reqs[0];
         setIncomingRequest({
           touristName: firstReq.customerName || 'Tourist Customer',
@@ -369,50 +389,71 @@ export default function DriverDashboardScreen() {
           dropLng: 76.6552,
           distanceKm: firstReq.durationHours ? firstReq.durationHours * 30 : 45,
           durationMins: firstReq.durationHours ? firstReq.durationHours * 60 : 60,
-          estimatedFare: Number(firstReq.amount) || Number(firstReq.price) || 2500,
+          estimatedFare: Number(firstReq.price || firstReq.amount || 2500),
           paymentMode: firstReq.paymentMode || 'Cash',
-          otp: '1234',
+          otp: firstReq.otp || '8240',
           tripId: firstReq.id,
         } as any);
-        setTimerSeconds(20);
+        setTimerSeconds(25);
         setRequestVisible(true);
-
-        sendLocalNotification(
-          '🚕 New Ride Booking Request!',
-          `Customer ${firstReq.customerName || 'Tourist'} requested a ride: ${firstReq.pickupName || 'Pickup'} ➔ ${firstReq.dropName || 'Destination'} (Fare: ₹${firstReq.amount || firstReq.price || 2500})`
-        );
       }
     };
 
     pollRequests();
-    const requestInterval = setInterval(pollRequests, 3000);
+    const requestInterval = setInterval(pollRequests, 4000);
 
     return () => {
       clearInterval(locationInterval);
       clearInterval(requestInterval);
     };
-  }, [isOnline, activeTrip]);
+  }, [isOnline, activeTrip, requestVisible, acceptedModalVisible]);
+
+  // Request timer countdown for popup modal
+  useEffect(() => {
+    let timer: any;
+    if (requestVisible && timerSeconds > 0) {
+      timer = setInterval(() => {
+        setTimerSeconds(prev => {
+          if (prev <= 1) {
+            setRequestVisible(false);
+            setIncomingRequest(null);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [requestVisible, timerSeconds]);
 
   // Fetch real-time driver schedules & pending queries from PostgreSQL database
   useEffect(() => {
     const loadDriverData = async () => {
       const session = getUserSessionSync();
-      const dId = session?.id || 'd1';
+      const dId = session?.id;
+      if (!dId) return;
+
       const schedules = await fetchDriverAdvanceSchedulesApi(dId);
       if (Array.isArray(schedules)) {
         setDriverTrips(schedules);
+      } else {
+        setDriverTrips([]);
       }
 
       // Fetch driver stats
       const statsRes = await fetchDriverStatsApi(dId);
       if (statsRes && statsRes.success && statsRes.data) {
-        setKmDriven(statsRes.data.todayKm || 142.5);
-        setTripsCount(statsRes.data.tripsCount || 8);
-        setEarningsToday(statsRes.data.todayEarnings || 2800);
+        setKmDriven(statsRes.data.todayKm || 0);
+        setTripsCount(statsRes.data.tripsCount || 0);
+        setEarningsToday(statsRes.data.todayEarnings || 0);
+      } else {
+        setKmDriven(0);
+        setTripsCount(0);
+        setEarningsToday(0);
       }
     };
     loadDriverData();
-    const interval = setInterval(loadDriverData, 3000);
+    const interval = setInterval(loadDriverData, 5000);
     return () => clearInterval(interval);
   }, [updateTrigger]);
 
@@ -434,66 +475,47 @@ export default function DriverDashboardScreen() {
     );
   };
 
-  // Request timer
-  useEffect(() => {
-    let timer: any;
-    if (requestVisible && timerSeconds > 0) {
-      timer = setInterval(() => {
-        setTimerSeconds(prev => {
-          if (prev <= 1) {
-            setRequestVisible(false);
-            setIncomingRequest(null);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [requestVisible, timerSeconds]);
-
   const handleAcceptRequest = async () => {
     if (!incomingRequest) return;
     const session = getUserSessionSync();
-    const driverId = session?.id || 'd1';
+    const driverId = session?.id;
     const tripId = (incomingRequest as any).tripId;
 
-    if (tripId) {
-      await respondDriverRequestApi(tripId, driverId, 'accept', session?.name || 'Anil Gowda');
+    if (tripId && driverId) {
+      await respondDriverRequestApi(tripId, driverId, 'accept', session?.name || driverName);
     }
 
+    const acceptedObj = { ...incomingRequest };
+
     setRequestVisible(false);
-    setActiveTrip(incomingRequest);
+    setActiveTrip(acceptedObj);
+    setAcceptedTripDetails(acceptedObj);
     setTripPhase('pickup');
     setIncomingRequest(null);
-    setActiveTab('active_trip');
 
-    sendLocalNotification(
-      '✅ Ride Accepted!',
-      `You accepted ride request for ${incomingRequest.touristName}. Proceed to pickup location.`
-    );
+    // Trigger custom themed Ride Accepted celebration popup modal!
+    setAcceptedModalVisible(true);
   };
 
   const handleRejectRequest = async () => {
     const session = getUserSessionSync();
-    const driverId = session?.id || 'd1';
+    const driverId = session?.id;
     const tripId = (incomingRequest as any)?.tripId;
 
-    if (tripId) {
+    if (tripId && driverId) {
       await respondDriverRequestApi(tripId, driverId, 'decline');
     }
 
     setRequestVisible(false);
     setIncomingRequest(null);
-    Alert.alert(
-      appLang === 'kn' ? 'ಪ್ರವಾಸ ನಿರಾಕರಿಸಲಾಗಿದೆ' : 'Ride Rejected',
-      appLang === 'kn' ? 'ಶೀಘ್ರದಲ್ಲೇ ನಿಮಗೆ ಮತ್ತೊಂದು ಟ್ರಿಪ್ ವಿನಂತಿ ಸಿಗಲಿದೆ.' : 'You will receive another booking shortly.'
-    );
+    setActiveTrip(null);
+    setUpdateTrigger(prev => prev + 1);
   };
 
   const handleVerifyOtp = () => {
     if (!activeTrip) return;
-    if (enteredOtp === activeTrip.otp || enteredOtp.length === 4) {
+    const expectedOtp = String(activeTrip.otp || '8240').trim();
+    if (enteredOtp.trim() === expectedOtp) {
       setOtpVisible(false);
       setEnteredOtp('');
       setTripPhase('trip');
@@ -503,56 +525,63 @@ export default function DriverDashboardScreen() {
         `OTP Verified. Navigation started towards ${activeTrip.drop}.`
       );
     } else {
-      Alert.alert('Invalid OTP', 'The code did not match. Please verify with rider (Try 8240).');
+      Alert.alert('Incorrect OTP ❌', `The entered OTP "${enteredOtp}" is incorrect. Please ask the customer for the correct booking OTP.`);
     }
   };
 
   const handleEndTrip = () => {
     if (!activeTrip) return;
-    Alert.alert(
-      appLang === 'kn' ? 'ಟ್ರಿಪ್ ಪೂರ್ಣಗೊಳಿಸಿ' : 'Complete Trip',
-      appLang === 'kn' ? 'ಈ ಟ್ರಿಪ್ ಪೂರ್ಣಗೊಳಿಸಲು ಮತ್ತು ಪಾವತಿ ಪಡೆಯಲು ನೀವು ಬಯಸುತ್ತೀರಾ?' : 'Are you sure you want to end this trip and collect payment?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm End',
-          onPress: async () => {
-            const fareEarned = activeTrip.estimatedFare;
-            const distCovered = activeTrip.distanceKm;
+    setConfirmEndModalVisible(true);
+  };
 
-            const session = getUserSessionSync();
-            const driverId = session?.id || 'd1';
-            const tripId = (activeTrip as any).tripId;
+  const executeCompleteTrip = async () => {
+    if (!activeTrip) return;
+    setConfirmEndModalVisible(false);
 
-            if (tripId) {
-              await respondDriverRequestApi(tripId, driverId, 'complete', session?.name || 'Anil Gowda');
-            }
+    const fareEarned = activeTrip.estimatedFare;
+    const distCovered = activeTrip.distanceKm;
 
-            setEarningsToday(prev => prev + fareEarned);
-            setEarningsBalance(prev => prev + fareEarned);
-            setKmDriven(prev => parseFloat((prev + distCovered).toFixed(1)));
-            setTripsCount(prev => prev + 1);
-            setDriverTrips([
-              {
-                id: `ride_${Date.now()}`,
-                title: `${activeTrip.pickup.split(' ')[0]} ➔ ${activeTrip.drop.split(' ')[0]}`,
-                time: 'Just Now',
-                fare: fareEarned,
-                payout: 'Settled to Wallet'
-              },
-              ...driverTrips
-            ]);
-            setActiveTrip(null);
-            setTripPhase('pickup');
-            setActiveTab('profile');
+    const session = getUserSessionSync();
+    const driverId = session?.id;
+    const tripId = (activeTrip as any).tripId;
 
-            sendLocalNotification(
-              '🎉 Trip Completed!',
-              `Trip finished! Total earnings ₹${fareEarned} added to your driver wallet.`
-            );
-          }
-        }
-      ]
+    if (tripId && driverId) {
+      await respondDriverRequestApi(tripId, driverId, 'complete', session?.name || driverName);
+    }
+
+    setEarningsToday(prev => prev + fareEarned);
+    setEarningsBalance(prev => prev + fareEarned);
+    setKmDriven(prev => parseFloat((prev + distCovered).toFixed(1)));
+    setTripsCount(prev => prev + 1);
+
+    const summary = {
+      title: `${activeTrip.pickup.split(' ')[0]} ➔ ${activeTrip.drop.split(' ')[0]}`,
+      pickup: activeTrip.pickup,
+      drop: activeTrip.drop,
+      fare: fareEarned,
+      dist: distCovered,
+      tourist: activeTrip.touristName || 'Passenger',
+    };
+
+    setLastCompletedTrip(summary);
+    setDriverTrips(prev => [
+      {
+        id: `ride_${Date.now()}`,
+        title: summary.title,
+        time: 'Just Now',
+        fare: fareEarned,
+        payout: 'Settled to Wallet'
+      },
+      ...prev
+    ]);
+
+    setActiveTrip(null);
+    setTripPhase('pickup');
+    setCompletedModalVisible(true);
+
+    sendLocalNotification(
+      '🎉 Trip Completed!',
+      `Trip finished! Total earnings ₹${fareEarned} added to your driver wallet.`
     );
   };
 
@@ -807,6 +836,7 @@ export default function DriverDashboardScreen() {
               });
             })()}
           </View>
+
         </ScrollView>
       )}
 
@@ -1138,52 +1168,51 @@ export default function DriverDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* App Appearance & Language */}
+          {/* PREFERENCES SECTION */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>App Appearance & Language</Text>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Preferences</Text>
 
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>App Display Theme</Text>
-            <View style={[styles.vehiclePillsRow, { marginBottom: verticalScale(14) }]}>
-              <TouchableOpacity
-                style={[styles.langPill, isDark && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppTheme('dark')}
-              >
-                <MaterialIcons name="dark-mode" size={scale(14)} color={isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
-                <Text style={[styles.langPillText, { color: isDark ? '#101010' : colors.textPrimary }]}>Dark Mode </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.langPill, !isDark && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppTheme('light')}
-              >
-                <MaterialIcons name="light-mode" size={scale(14)} color={!isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
-                <Text style={[styles.langPillText, { color: !isDark ? '#101010' : colors.textPrimary }]}>Light Mode </Text>
-              </TouchableOpacity>
+            {/* Dark Theme toggle */}
+            <View style={styles.toggleRow}>
+              <View>
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Dark Theme</Text>
+                <Text style={[styles.toggleSubLabel, { color: colors.textMuted }]}>
+                  {isDark ? 'Dark mode active' : 'Light mode active'}
+                </Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleAppTheme}
+                trackColor={{ false: '#767577', true: colors.amber }}
+                thumbColor={isDark ? '#FFFFFF' : '#f4f3f4'}
+              />
             </View>
 
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ</Text>
-            <View style={styles.vehiclePillsRow}>
-              <TouchableOpacity
-                style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => {
-                  setAppLang('en');
-                  const session = getUserSessionSync();
-                  if (session?.id) saveUserSettingsApi(session.id, { language: 'en' });
-                }}
-              >
-                <Text style={[styles.langPillText, { color: appLang === 'en' ? '#101010' : colors.textPrimary }]}>English</Text>
-              </TouchableOpacity>
+            <View style={[styles.statsDivider, { backgroundColor: colors.border, marginVertical: verticalScale(10) }]} />
 
-              <TouchableOpacity
-                style={[styles.langPill, appLang === 'kn' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => {
-                  setAppLang('kn');
+            {/* Kannada Language toggle switch */}
+            <View style={styles.toggleRow}>
+              <View>
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Kannada Language</Text>
+                <Text style={[styles.toggleSubLabel, { color: colors.textMuted }]}>
+                  {appLang === 'kn' ? 'ಕನ್ನಡ ಸಕ್ರಿಯವಾಗಿದೆ' : 'English is active'}
+                </Text>
+              </View>
+              <Switch
+                value={appLang === 'kn'}
+                onValueChange={(val) => {
+                  const newLang = val ? 'kn' : 'en';
+                  setAppLang(newLang);
                   const session = getUserSessionSync();
-                  if (session?.id) saveUserSettingsApi(session.id, { language: 'kn' });
+                  if (session?.id) saveUserSettingsApi(session.id, { language: newLang });
+                  Alert.alert(
+                    val ? 'ಭಾಷೆ ಬದಲಾಗಿದೆ' : 'Language Changed',
+                    val ? 'ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.' : 'Language has been changed to English.'
+                  );
                 }}
-              >
-                <Text style={[styles.langPillText, { color: appLang === 'kn' ? '#101010' : colors.textPrimary }]}>ಕನ್ನಡ (Kannada)</Text>
-              </TouchableOpacity>
+                trackColor={{ false: '#767577', true: colors.amber }}
+                thumbColor={appLang === 'kn' ? '#FFFFFF' : '#f4f3f4'}
+              />
             </View>
           </View>
 
@@ -1304,6 +1333,62 @@ export default function DriverDashboardScreen() {
         )}
       </Modal>
 
+      {/* Ride Accepted Celebration Modal Pop-up */}
+      <Modal visible={acceptedModalVisible} transparent={true} animationType="slide">
+        {acceptedTripDetails && (
+          <View style={styles.popupOverlay}>
+            <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', alignItems: 'center', padding: scale(22), borderWidth: 1.5, borderColor: '#10B981' }]}>
+              {/* Checkmark Badge */}
+              <View style={{ width: scale(64), height: scale(64), borderRadius: scale(32), backgroundColor: 'rgba(16, 185, 129, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14) }}>
+                <MaterialIcons name="check-circle" size={scale(40)} color="#10B981" />
+              </View>
+
+              <Text style={{ color: '#10B981', fontSize: moderateFontScale(18), fontWeight: '900', marginBottom: verticalScale(4), textAlign: 'center' }}>
+                {appLang === 'kn' ? '✅ ಪ್ರವಾಸ ಸ್ವೀಕರಿಸಲಾಗಿದೆ!' : '✅ Ride Accepted!'}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(16) }}>
+                Booking request from {acceptedTripDetails.touristName} accepted successfully.
+              </Text>
+
+              {/* Trip Summary Card */}
+              <View style={{ width: '100%', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', borderRadius: scale(14), padding: scale(14), borderWidth: 1, borderColor: colors.border, marginBottom: verticalScale(18) }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(6) }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>ESTIMATED FARE</Text>
+                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(16), fontWeight: '900' }}>
+                    ₹{acceptedTripDetails.estimatedFare}
+                  </Text>
+                </View>
+
+                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(6) }} />
+
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: verticalScale(2) }}>PICKUP LOCATION</Text>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginTop: verticalScale(2) }} numberOfLines={1}>
+                  {acceptedTripDetails.pickup}
+                </Text>
+
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: verticalScale(8) }}>DESTINATION</Text>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginTop: verticalScale(2) }} numberOfLines={1}>
+                  {acceptedTripDetails.drop}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={{ width: '100%', height: verticalScale(46), borderRadius: scale(14), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => {
+                  setAcceptedModalVisible(false);
+                  setAcceptedTripDetails(null);
+                  setActiveTab('active_trip');
+                }}
+              >
+                <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(13) }}>
+                  Start Pickup Navigation 🚀
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </Modal>
+
       {/* Start Trip OTP Entry Modal Pop-up */}
       <Modal visible={otpVisible} transparent={true} animationType="fade">
         {activeTrip && (
@@ -1334,6 +1419,105 @@ export default function DriverDashboardScreen() {
             </View>
           </View>
         )}
+      </Modal>
+
+      {/* 1. Confirm End Trip Modal */}
+      <Modal visible={confirmEndModalVisible} transparent={true} animationType="fade">
+        <View style={styles.popupOverlay}>
+          <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', width: '88%', alignItems: 'center', padding: scale(22) }]}>
+            <View style={{ width: scale(56), height: scale(56), borderRadius: scale(28), backgroundColor: 'rgba(245, 197, 24, 0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(12) }}>
+              <MaterialIcons name="flag" size={scale(30)} color="#F5C518" />
+            </View>
+            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(16), fontWeight: '800', marginBottom: verticalScale(6), textAlign: 'center' }}>
+              {appLang === 'kn' ? 'ಟ್ರಿಪ್ ಪೂರ್ಣಗೊಳಿಸಿ?' : 'Complete This Trip?'}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', lineHeight: moderateFontScale(18), marginBottom: verticalScale(18) }}>
+              {appLang === 'kn' ? 'ಈ ಟ್ರಿಪ್ ಪೂರ್ಣಗೊಳಿಸಲು ಮತ್ತು ಪಾವತಿಯನ್ನು ಚಾಲಕ ವಾಲೆಟ್‌ಗೆ ಸೇರಿಸಲು ನೀವು ಬಯಸುತ್ತೀರಾ?' : 'Are you sure you want to end this trip and collect payment from passenger?'}
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: scale(10), width: '100%' }}>
+              <TouchableOpacity
+                style={{ flex: 1, height: verticalScale(42), borderRadius: scale(12), borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => setConfirmEndModalVisible(false)}
+              >
+                <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, height: verticalScale(42), borderRadius: scale(12), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
+                onPress={executeCompleteTrip}
+              >
+                <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(12) }}>Confirm End</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 2. Celebration "Trip Completed!" Success Summary Modal */}
+      <Modal visible={completedModalVisible} transparent={true} animationType="slide">
+        <View style={styles.popupOverlay}>
+          <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', alignItems: 'center', padding: scale(22), borderWidth: 1.5, borderColor: '#F5C518' }]}>
+            {/* Celebration Badge */}
+            <View style={{ width: scale(64), height: scale(64), borderRadius: scale(32), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14), elevation: 6 }}>
+              <MaterialIcons name="check-circle" size={scale(38)} color="#101010" />
+            </View>
+
+            <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900', marginBottom: verticalScale(4), textAlign: 'center' }}>
+              🎉 Trip Completed!
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(16) }}>
+              Payment collected & added to your Driver Wallet
+            </Text>
+
+            {/* Trip Details Card */}
+            {lastCompletedTrip && (
+              <View style={{ width: '100%', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', borderRadius: scale(14), padding: scale(14), borderWidth: 1, borderColor: colors.border, marginBottom: verticalScale(18) }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(10) }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>TOTAL FARE EARNED</Text>
+                  <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900' }}>
+                    ₹{lastCompletedTrip.fare}
+                  </Text>
+                </View>
+
+                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(6) }} />
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginTop: verticalScale(4) }}>
+                  <MaterialIcons name="navigation" size={scale(16)} color="#F5C518" />
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                    {lastCompletedTrip.title}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(8) }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Distance Covered:</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>
+                    {lastCompletedTrip.dist} km
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(4) }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Payout Status:</Text>
+                  <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '800' }}>
+                    Settled to Wallet ✅
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={{ width: '100%', height: verticalScale(46), borderRadius: scale(14), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => {
+                setCompletedModalVisible(false);
+                setLastCompletedTrip(null);
+                setActiveTab('duty');
+              }}
+            >
+              <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(13) }}>
+                Done & Return to Duty
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Dispute Reporter Modal popup */}
@@ -1651,6 +1835,20 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(16),
     fontWeight: '800',
   },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: verticalScale(4),
+  },
+  toggleLabel: {
+    fontSize: moderateFontScale(13.5),
+    fontWeight: '700',
+  },
+  toggleSubLabel: {
+    fontSize: moderateFontScale(11),
+    marginTop: verticalScale(2),
+  },
   noActiveSub: {
     fontSize: moderateFontScale(12.5),
     lineHeight: moderateFontScale(18),
@@ -1681,9 +1879,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   tabIconWrapper: {
-    width: scale(48),
-    height: verticalScale(28),
-    borderRadius: scale(14),
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
     alignItems: 'center',
     justifyContent: 'center',
   },

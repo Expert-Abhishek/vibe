@@ -76,32 +76,7 @@ export const adminState = {
   ],
   userTrips: [] as TripRecord[],
   customTripRequests: [] as CustomTripRequest[],
-  advanceBookings: [
-    {
-      id: 'adv1',
-      type: 'cab',
-      title: 'Majestic ➔ Bengaluru Palace',
-      route: ['Majestic Station', 'Bengaluru Palace'],
-      date: '2026-07-25',
-      time: '10:00 AM',
-      price: 450,
-      touristName: 'Nikitha (Tourist)',
-      bookingDate: '2026-07-16',
-      status: 'Pending',
-    },
-    {
-      id: 'adv2',
-      type: 'guide',
-      title: 'Hampi Virupaksha Heritage Guided Tour',
-      route: ['Hampi Virupaksha Temple'],
-      date: '2026-07-28',
-      time: '09:00 AM',
-      price: 2500,
-      touristName: 'John Doe',
-      bookingDate: '2026-07-15',
-      status: 'Pending',
-    }
-  ] as AdvanceBooking[],
+  advanceBookings: [] as AdvanceBooking[],
   instantBookingEnabled: false,
   vehicleRatesPerHour: {
     '5seater': 150,

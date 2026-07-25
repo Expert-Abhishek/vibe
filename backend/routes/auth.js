@@ -402,6 +402,17 @@ router.patch('/users/:id/status', async (req, res) => {
       await db.query('UPDATE guide_profiles SET is_active = $1 WHERE user_id = $2', [status === 'Active', id]);
     }
 
+    // Insert real notification into activity_notifications
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '🔔 Account Status Update', $3, CURRENT_TIMESTAMP)`,
+        [id, updatedUser.role || 'driver', `Your account status has been updated to: ${status}`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to log status notification:', nErr);
+    }
+
     return res.json({
       success: true,
       message: `User status updated to ${status}`,
@@ -454,6 +465,30 @@ router.patch('/drivers/:id/rate', async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Driver profile not found' });
+    }
+
+    // Insert real activity notification into database for driver
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS activity_notifications (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID,
+          role VARCHAR(20) DEFAULT 'tourist',
+          title VARCHAR(255) NOT NULL,
+          body TEXT NOT NULL,
+          trip_id UUID,
+          is_read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, 'driver', '📢 Admin Updated Your Pricing Rates!', $2, CURRENT_TIMESTAMP)`,
+        [id, `Daily Rate: ₹${daily}/day | Hourly Addon: ₹${hourly}/hr | Platform Fee: ${fee}%`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to log rate update notification:', nErr);
     }
 
     return res.json({

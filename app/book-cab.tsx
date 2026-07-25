@@ -1,4 +1,4 @@
-import { bookTripApi, createTripApi } from '@/constants/api';
+import { bookTripApi, createTripApi, fetchDestinationsApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { openRazorpayPayment } from '@/constants/razorpay';
@@ -46,14 +46,6 @@ interface LocationNode {
   longitude: number;
   address?: string;
 }
-
-const presetDestinations = [
-  { name: 'Kempegowda International Airport (BLR)', latitude: 13.1986, longitude: 77.7066, address: 'KIAL Road, Devanahalli, Bengaluru' },
-  { name: 'Majestic Railway Station', latitude: 12.9784, longitude: 77.5694, address: 'Subhash Nagar, Bengaluru' },
-  { name: 'Indiranagar 100 Feet Road', latitude: 12.9629, longitude: 77.6377, address: 'Indiranagar, Bengaluru' },
-  { name: 'Bannerghatta National Park', latitude: 12.7854, longitude: 77.5905, address: 'Bannerghatta, Bengaluru' },
-  { name: 'Nandi Hills Peak', latitude: 13.3702, longitude: 77.6835, address: 'Chikkaballapur, Karnataka' },
-];
 
 export default function BookCabScreen() {
   const router = useRouter();
@@ -112,6 +104,18 @@ export default function BookCabScreen() {
     { key: 'auto', name: 'Auto', ratePerKm: 8, minsAway: 1, icon: 'electric-rickshaw', desc: 'Quick local commuter' },
     { key: '4x4jeep', name: '4*4 Jeep', ratePerKm: 25, minsAway: 5, icon: 'truck-monster', desc: 'Offroad explorer' },
   ];
+
+  const [liveDestinations, setLiveDestinations] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadBackendDestinations() {
+      const data = await fetchDestinationsApi();
+      if (data && data.length > 0) {
+        setLiveDestinations(data);
+      }
+    }
+    loadBackendDestinations();
+  }, []);
 
   // Preload Destination from router params
   useEffect(() => {
@@ -646,36 +650,44 @@ export default function BookCabScreen() {
               </TouchableOpacity>
             ))}
 
-            {/* Presets list */}
-            {suggestions.length === 0 && (
+            {/* Presets list from backend */}
+            {suggestions.length === 0 && liveDestinations.length > 0 && (
               <View style={styles.presetsListContainer}>
-                <Text style={[styles.presetsTitle, { color: colors.amber }]}>Famous destinations near Bengaluru:</Text>
-                {presetDestinations.map((preset, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[styles.presetRowItem, { borderBottomColor: colors.border }]}
-                    onPress={() => {
-                      if (searchField === 'pickup') {
-                        setPickup(preset);
-                      } else if (searchField === 'drop') {
-                        setDrop(preset);
-                      } else if (typeof searchField === 'number') {
-                        const updated = [...stops];
-                        updated[searchField] = preset;
-                        setStops(updated);
-                      } else if (searchField === 'newstop') {
-                        setStops([...stops, preset]);
-                      }
-                      setSearchField(null);
-                    }}
-                  >
-                    <MaterialIcons name="history" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
-                    <View>
-                      <Text style={[styles.presetRowName, { color: colors.textPrimary }]}>{preset.name}</Text>
-                      <Text style={[styles.presetRowAddress, { color: colors.textMuted }]}>{preset.address}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
+                <Text style={[styles.presetsTitle, { color: colors.amber }]}>Curated destinations from Admin:</Text>
+                {liveDestinations.map((dest, idx) => {
+                  const node: LocationNode = {
+                    name: dest.name,
+                    latitude: Number(dest.latitude) || 12.9716,
+                    longitude: Number(dest.longitude) || 77.5946,
+                    address: dest.location || dest.description || '',
+                  };
+                  return (
+                    <TouchableOpacity
+                      key={dest.id || idx}
+                      style={[styles.presetRowItem, { borderBottomColor: colors.border }]}
+                      onPress={() => {
+                        if (searchField === 'pickup') {
+                          setPickup(node);
+                        } else if (searchField === 'drop') {
+                          setDrop(node);
+                        } else if (typeof searchField === 'number') {
+                          const updated = [...stops];
+                          updated[searchField] = node;
+                          setStops(updated);
+                        } else if (searchField === 'newstop') {
+                          setStops([...stops, node]);
+                        }
+                        setSearchField(null);
+                      }}
+                    >
+                      <MaterialIcons name="place" size={scale(18)} color={colors.amber} style={{ marginRight: scale(10) }} />
+                      <View>
+                        <Text style={[styles.presetRowName, { color: colors.textPrimary }]}>{dest.name}</Text>
+                        <Text style={[styles.presetRowAddress, { color: colors.textMuted }]}>{dest.location || dest.description || ''}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
           </ScrollView>

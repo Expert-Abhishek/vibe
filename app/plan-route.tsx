@@ -29,35 +29,7 @@ interface TourPackage {
   image: string;
 }
 
-const packagePlans: TourPackage[] = [
-  {
-    id: 'p1',
-    name: 'Mysuru Royal Heritage Tour',
-    checkpoints: ['Bengaluru Palace', 'Srirangapatna Fort', 'Mysuru Palace', 'Chamundi Hills'],
-    travelHours: 6.5,
-    distanceKm: 290,
-    image: 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?auto=format&fit=crop&q=80&w=600',
-  },
-  {
-    id: 'p2',
-    name: 'Hampi Ruins Explorer',
-    checkpoints: ['Hampi Virupaksha Temple', 'Vitthala Stone Chariot', 'Lotus Mahal', 'Anjanadri Hill'],
-    travelHours: 8,
-    distanceKm: 340,
-    image: 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
-  },
-  {
-    id: 'p3',
-    name: 'Coorg Coffee & Mist Escape',
-    checkpoints: ['Abbey Falls Coorg', 'Mandalpatti Peak View', 'Golden Temple Bylakuppe'],
-    travelHours: 5.5,
-    distanceKm: 250,
-    image: 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&q=80&w=600',
-  },
-];
-
 import { fetchPlansApi, fetchDriversApi, createTripApi } from '@/constants/api';
-
 
 export default function PlanRouteScreen() {
   const router = useRouter();
@@ -109,21 +81,19 @@ export default function PlanRouteScreen() {
   const vehicleTypeParam = params.vehicleType as '5seater' | '7seater' | '4x4jeep' | 'auto';
   const carNameParam = params.carName as string;
 
-  const displayPackagePlans: (TourPackage & { price?: number })[] = livePlans.length > 0
-    ? livePlans.map((p, idx) => ({
-        id: p.id || `p_${idx}`,
-        name: p.name,
-        checkpoints: Array.isArray(p.checkpoints)
-          ? p.checkpoints.map((cp: any) => typeof cp === 'string' ? cp : (cp.name || 'Tourist Place'))
-          : ['Tourist Place'],
-        travelHours: parseFloat(p.duration) || 8,
-        distanceKm: parseFloat(p.km) || 150,
-        price: parseFloat(p.price) || 4999,
-        image: p.checkpoints && p.checkpoints[0]?.images?.[0]
-          ? p.checkpoints[0].images[0]
-          : 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
-      }))
-    : packagePlans;
+  const displayPackagePlans: (TourPackage & { price?: number })[] = livePlans.map((p, idx) => ({
+    id: p.id || `p_${idx}`,
+    name: p.name,
+    checkpoints: Array.isArray(p.checkpoints)
+      ? p.checkpoints.map((cp: any) => typeof cp === 'string' ? cp : (cp.name || 'Tourist Place'))
+      : ['Tourist Place'],
+    travelHours: parseFloat(p.duration) || 8,
+    distanceKm: parseFloat(p.km) || 150,
+    price: parseFloat(p.price) || 4999,
+    image: p.checkpoints && p.checkpoints[0]?.images?.[0]
+      ? p.checkpoints[0].images[0]
+      : 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
+  }));
 
   useEffect(() => {
     async function loadBackendData() {
@@ -167,10 +137,7 @@ export default function PlanRouteScreen() {
         const match = displayPackagePlans.find((p: any) =>
           (planId && String(p.id) === planId) ||
           (planName && p.name.toLowerCase() === planName.toLowerCase())
-        ) || packagePlans.find((p: any) =>
-          (planId && String(p.id) === planId) ||
-          (planName && p.name.toLowerCase() === planName.toLowerCase())
-        ) || displayPackagePlans[0] || packagePlans[0];
+        ) || displayPackagePlans[0];
 
         if (match) {
           setSelectedPlan(match);

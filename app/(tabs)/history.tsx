@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,12 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '@/constants/admin-state';
+import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 
 interface HistoryRecord {
   id: string;
@@ -27,84 +30,55 @@ interface HistoryRecord {
   passengerCount?: number;
 }
 
-const defaultHistory: HistoryRecord[] = [
-  {
-    id: 'h1',
-    type: 'cab',
-    title: 'Bengaluru Palace ➔ Indiranagar',
-    route: ['Bengaluru Palace', 'Indiranagar 100 Feet Road'],
-    driverOrGuideName: 'Suresh Kumar',
-    date: 'Today',
-    time: '03:15 PM',
-    price: 340,
-    status: 'Completed',
-    rating: 5,
-  },
-  {
-    id: 'h2',
-    type: 'guide',
-    title: 'Mysuru Palace Heritage Tour',
-    driverOrGuideName: 'Ramesh Gowda',
-    date: 'Yesterday',
-    time: '10:00 AM',
-    price: 1500,
-    status: 'Completed',
-    rating: 5,
-  },
-  {
-    id: 'h3',
-    type: 'cab',
-    title: 'Kempegowda Airport ➔ Bengaluru Palace',
-    route: ['KIAL Airport Terminal', 'Bengaluru Palace'],
-    driverOrGuideName: 'Anil Gowda',
-    date: '12 July 2026',
-    time: '01:30 PM',
-    price: 1250,
-    status: 'Completed',
-    rating: 4,
-  },
-  {
-    id: 'h4',
-    type: 'plan',
-    title: 'Western Ghats Nature Escape',
-    route: ['Chikmagalur Peak', 'Abbey Falls Coorg'],
-    date: '08 July 2026',
-    time: '07:00 AM',
-    price: 4800,
-    status: 'Completed',
-    rating: 5,
-    passengerCount: 4,
-  },
-  {
-    id: 'h5',
-    type: 'cab',
-    title: 'Majestic Metro ➔ Malleshwaram',
-    route: ['Majestic Station', 'Malleshwaram Temple'],
-    driverOrGuideName: 'Raju Auto',
-    date: '05 July 2026',
-    time: '06:45 PM',
-    price: 90,
-    status: 'Completed',
-    rating: 3,
-  },
-  {
-    id: 'h6',
-    type: 'guide',
-    title: 'Hampi Architectural Tour',
-    driverOrGuideName: 'Krishna Murthy',
-    date: '04 July 2026',
-    time: '09:00 AM',
-    price: 2500,
-    status: 'Completed',
-    rating: 5,
-  },
-];
-
 export default function HistoryScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'cab' | 'guide' | 'plan'>('all');
+  const [dbHistory, setDbHistory] = useState<HistoryRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const session = getUserSessionSync();
+  const userId = session?.id;
+
+  useEffect(() => {
+    async function loadRealHistory() {
+      setLoading(true);
+      try {
+        if (!userId) {
+          setDbHistory([]);
+          return;
+        }
+        const tripsData = await fetchCustomerTripsApi(userId);
+        if (Array.isArray(tripsData) && tripsData.length > 0) {
+          const mapped: HistoryRecord[] = tripsData
+            .filter((t: any) => !t.customerId || String(t.customerId) === String(userId))
+            .map((t: any) => ({
+              id: String(t.id),
+              type: (t.tripType || 'cab') as any,
+              title: t.title || (t.pickupName && t.dropName ? `${t.pickupName} ➔ ${t.dropName}` : 'Tour Booking'),
+              route: Array.isArray(t.destinationIds) && t.destinationIds.length > 0 ? t.destinationIds : (t.pickupName && t.dropName ? [t.pickupName, t.dropName] : undefined),
+              driverOrGuideName: t.driverOrGuideName || undefined,
+              date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today',
+              time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+              price: Number(t.amount) || 0,
+              status: t.status === 'Cancelled' ? 'Cancelled' : 'Completed',
+              rating: Number(t.rating) || 5,
+              passengerCount: t.passengerCount || 1,
+            }));
+          setDbHistory(mapped);
+        } else {
+          setDbHistory([]);
+        }
+      } catch (e) {
+        console.warn('Error fetching history trips:', e);
+        setDbHistory([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadRealHistory();
+  }, [userId]);
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -119,7 +93,7 @@ export default function HistoryScreen() {
   };
 
   const localUserTrips = adminState.userTrips
-    .filter(t => t.status === 'Completed')
+    .filter(t => (t.status === 'Completed' || t.status === 'Cancelled') && (userId ? String(t.customerId) === String(userId) : false))
     .map(t => ({
       id: t.id,
       type: t.type,
@@ -129,13 +103,13 @@ export default function HistoryScreen() {
       date: t.date,
       time: t.time,
       price: t.price,
-      status: 'Completed' as const,
+      status: (t.status === 'Cancelled' ? 'Cancelled' : 'Completed') as const,
       rating: t.rating || 5,
       passengerCount: t.passengerCount,
     }));
 
   const localCancelledBookings = adminState.advanceBookings
-    .filter(b => b.status === 'Cancelled')
+    .filter(b => b.status === 'Cancelled' && (userId ? (String(b.assignedToId) === String(userId) || b.touristName?.includes(session?.name || '')) : false))
     .map(b => ({
       id: b.id,
       type: b.type,
@@ -150,7 +124,10 @@ export default function HistoryScreen() {
       passengerCount: undefined,
     }));
 
-  const fullHistory: HistoryRecord[] = [...localUserTrips, ...localCancelledBookings, ...defaultHistory];
+  const rawFullHistory: HistoryRecord[] = [...dbHistory, ...localUserTrips, ...localCancelledBookings];
+  const fullHistory: HistoryRecord[] = rawFullHistory.filter(
+    (item, index, self) => index === self.findIndex(t => t.id === item.id)
+  );
 
   const filteredHistory = fullHistory.filter(item => {
     if (activeFilter === 'all') return true;

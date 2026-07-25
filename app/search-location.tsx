@@ -16,6 +16,8 @@ import { useRouter } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+import { fetchDestinationsApi } from '@/constants/api';
+
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
 interface PresetDestination {
@@ -25,15 +27,6 @@ interface PresetDestination {
   longitude: number;
 }
 
-const popularLocations: PresetDestination[] = [
-  { name: 'Kempegowda International Airport (BLR)', address: 'KIAL Road, Devanahalli, Bengaluru, Karnataka', latitude: 13.1986, longitude: 77.7066 },
-  { name: 'Majestic Railway Station', address: 'Subhash Nagar, Bengaluru, Karnataka', latitude: 12.9784, longitude: 77.5694 },
-  { name: 'Indiranagar 100 Feet Road', address: 'Indiranagar, Bengaluru, Karnataka', latitude: 12.9629, longitude: 77.6377 },
-  { name: 'Bannerghatta Biological Park', address: 'Bannerghatta, Bengaluru, Karnataka', latitude: 12.7854, longitude: 77.5905 },
-  { name: 'Nandi Hills', address: 'Chikkaballapur, Karnataka', latitude: 13.3702, longitude: 77.6835 },
-  { name: 'Mysuru Palace', address: 'Mysuru, Karnataka', latitude: 12.3053, longitude: 76.6552 },
-];
-
 export default function SearchLocationScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -42,6 +35,17 @@ export default function SearchLocationScreen() {
   const [searchText, setSearchText] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [liveDestinations, setLiveDestinations] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadBackendDestinations() {
+      const data = await fetchDestinationsApi();
+      if (data && data.length > 0) {
+        setLiveDestinations(data);
+      }
+    }
+    loadBackendDestinations();
+  }, []);
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -187,26 +191,34 @@ export default function SearchLocationScreen() {
         )}
 
         {/* Popular Locations Presets */}
-        {suggestions.length === 0 && (
+        {suggestions.length === 0 && liveDestinations.length > 0 && (
           <View style={styles.popularSection}>
-            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Popular Karnataka Destinations</Text>
-            {popularLocations.map((loc, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={[styles.presetRow, { borderBottomColor: colors.border }]}
-                onPress={() => navigateToBooking(loc)}
-              >
-                <View style={[styles.presetIconBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
-                  <MaterialIcons name="star" size={scale(16)} color={colors.amber} />
-                </View>
-                <View style={styles.presetDetails}>
-                  <Text style={[styles.presetName, { color: colors.textPrimary }]}>{loc.name}</Text>
-                  <Text style={[styles.presetAddress, { color: colors.textMuted }]} numberOfLines={1}>
-                    {loc.address}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Admin Curated Destinations</Text>
+            {liveDestinations.map((dest, idx) => {
+              const loc: PresetDestination = {
+                name: dest.name,
+                address: dest.location || dest.description || '',
+                latitude: Number(dest.latitude) || 12.9716,
+                longitude: Number(dest.longitude) || 77.5946,
+              };
+              return (
+                <TouchableOpacity
+                  key={dest.id || idx}
+                  style={[styles.presetRow, { borderBottomColor: colors.border }]}
+                  onPress={() => navigateToBooking(loc)}
+                >
+                  <View style={[styles.presetIconBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
+                    <MaterialIcons name="place" size={scale(16)} color={colors.amber} />
+                  </View>
+                  <View style={styles.presetDetails}>
+                    <Text style={[styles.presetName, { color: colors.textPrimary }]}>{loc.name}</Text>
+                    <Text style={[styles.presetAddress, { color: colors.textMuted }]} numberOfLines={1}>
+                      {loc.address}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 

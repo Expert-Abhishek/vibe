@@ -51,26 +51,6 @@ interface Checkpoint {
   address?: string;
 }
 
-// Preset popular destinations in Karnataka for quick selection/offline fallback
-const presetDestinations: Checkpoint[] = [
-  { id: 'p1', name: 'Bengaluru Palace', latitude: 12.9982, longitude: 77.5920, address: 'Bengaluru, Karnataka' },
-  { id: 'p2', name: 'Mysuru Palace', latitude: 12.3053, longitude: 76.6552, address: 'Mysuru, Karnataka' },
-  { id: 'p3', name: 'Hampi Virupaksha', latitude: 15.3350, longitude: 76.4600, address: 'Hampi, Bellary, Karnataka' },
-  { id: 'p4', name: 'Abbey Falls Coorg', latitude: 12.4385, longitude: 75.7214, address: 'Madikeri, Coorg, Karnataka' },
-  { id: 'p5', name: 'Gokarna Om Beach', latitude: 14.5262, longitude: 74.3168, address: 'Gokarna, Uttara Kannada, Karnataka' },
-  { id: 'p6', name: 'Bandipur National Park', latitude: 11.6667, longitude: 76.6333, address: 'Bandipur National Park, Chamarajanagar' },
-  { id: 'p7', name: 'Jog Falls', latitude: 14.2272, longitude: 74.8114, address: 'Sagara, Shivamogga, Karnataka' },
-  { id: 'p8', name: 'Mullayanagiri Peak', latitude: 13.4216, longitude: 75.7645, address: 'Chikmagalur, Karnataka' },
-  { id: 'p9', name: 'Nandi Hills', latitude: 13.3702, longitude: 77.6835, address: 'Chikkaballapur, Karnataka' },
-  { id: 'p10', name: 'Bannerghatta Zoo', latitude: 12.7854, longitude: 77.5905, address: 'Bannerghatta, Bengaluru' },
-  { id: 'p11', name: 'Murudeshwar Temple', latitude: 14.0942, longitude: 74.4849, address: 'Bhatkal, Uttara Kannada' },
-  { id: 'p12', name: 'Udupi Krishna Temple', latitude: 13.3409, longitude: 74.7421, address: 'Udupi, Karnataka' },
-  { id: 'p13', name: 'Badami Caves', latitude: 15.9189, longitude: 75.6797, address: 'Bagalkot, Karnataka' },
-  { id: 'p14', name: 'Gol Gumbaz', latitude: 16.8282, longitude: 75.7170, address: 'Vijayapura, Karnataka' },
-  { id: 'p15', name: 'Coorg Golden Temple', latitude: 12.4294, longitude: 75.9678, address: 'Bylakuppe, Coorg' },
-  { id: 'p16', name: 'Chitradurga Fort', latitude: 14.2227, longitude: 76.3989, address: 'Chitradurga, Karnataka' },
-];
-
 export default function MakeTripScreen() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
@@ -260,13 +240,19 @@ export default function MakeTripScreen() {
   const searchGooglePlaces = async (query: string) => {
     setLoadingSearch(true);
     const queryLower = query.toLowerCase();
-    const localMatches = presetDestinations
-      .filter(p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower))
+    const localMatches = liveDestinations
+      .filter(p => p.name.toLowerCase().includes(queryLower) || (p.location || p.description || '').toLowerCase().includes(queryLower))
       .map(p => ({
         place_id: `local_${p.id}`,
-        description: `${p.name}, ${p.address || ''}`,
+        description: `${p.name}, ${p.location || ''}`,
         isLocal: true,
-        presetData: p,
+        presetData: {
+          id: p.id,
+          name: p.name,
+          latitude: Number(p.latitude) || 12.9716,
+          longitude: Number(p.longitude) || 77.5946,
+          address: p.location || p.description || '',
+        },
       }));
     setSuggestions(localMatches);
     setLoadingSearch(false);
@@ -275,12 +261,18 @@ export default function MakeTripScreen() {
   const triggerSearchAndAddFirst = async (query: string) => {
     setLoadingSearch(true);
     const queryLower = query.toLowerCase();
-    const localMatch = presetDestinations.find(
-      p => p.name.toLowerCase().includes(queryLower) || (p.address || '').toLowerCase().includes(queryLower)
+    const localMatch = liveDestinations.find(
+      p => p.name.toLowerCase().includes(queryLower) || (p.location || p.description || '').toLowerCase().includes(queryLower)
     );
 
     if (localMatch) {
-      handleSelectPreset(localMatch);
+      handleSelectPreset({
+        id: localMatch.id,
+        name: localMatch.name,
+        latitude: Number(localMatch.latitude) || 12.9716,
+        longitude: Number(localMatch.longitude) || 77.5946,
+        address: localMatch.location || localMatch.description || '',
+      });
     } else {
       Alert.alert(
         'Location Restricted',

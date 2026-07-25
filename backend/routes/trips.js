@@ -39,6 +39,19 @@ async function sendExpoPushNotification(pushToken, title, body, data = {}) {
  */
 async function logActivityNotification(userId, role, title, body, tripId = null) {
   try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS activity_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        role VARCHAR(20) DEFAULT 'tourist',
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        trip_id UUID,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     await db.query(
       `INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
@@ -65,10 +78,24 @@ router.get('/notifications/:userId', async (req, res) => {
     const { userId } = req.params;
     const { role = 'tourist' } = req.query;
 
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS activity_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        role VARCHAR(20) DEFAULT 'tourist',
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        trip_id UUID,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     const result = await db.query(
       `SELECT * FROM activity_notifications 
-       WHERE (user_id = $1 OR user_id IS NULL) AND (role = $2 OR role = 'all')
-       ORDER BY created_at DESC LIMIT 20`,
+       WHERE (user_id = $1 OR user_id IS NULL) 
+         AND (role = $2 OR role = 'all')
+       ORDER BY created_at DESC LIMIT 50`,
       [userId, role]
     );
 
@@ -85,6 +112,21 @@ router.get('/notifications/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching notifications:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch notifications' });
+  }
+});
+
+/**
+ * POST /api/trips/admin-notify
+ * Admin sends broadcast or target notification for pricing/status updates
+ */
+router.post('/admin-notify', async (req, res) => {
+  try {
+    const { userId, role = 'driver', title, body } = req.body;
+    await logActivityNotification(userId || null, role, title, body, null);
+    res.json({ success: true, message: 'Notification broadcasted successfully' });
+  } catch (error) {
+    console.error('Error in admin-notify endpoint:', error);
+    res.status(500).json({ success: false, message: 'Failed to broadcast notification' });
   }
 });
 
@@ -710,8 +752,8 @@ router.post('/:id/respond', async (req, res) => {
 
     if (action === 'accept') {
       await db.query(
-        "UPDATE trips SET status = 'Accepted', driver_or_guide_name = $1 WHERE id = $2",
-        [driverName || 'Verified Partner', id]
+        "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id = $3",
+        [driverId, driverName || 'Verified Partner', id]
       );
       return res.json({ success: true, message: 'Ride Accepted successfully!' });
     } else if (action === 'complete') {
@@ -722,7 +764,7 @@ router.post('/:id/respond', async (req, res) => {
       return res.json({ success: true, message: 'Ride Completed successfully!' });
     } else {
       await db.query(
-        "UPDATE trips SET status = 'Declined' WHERE id = $1",
+        "UPDATE trips SET status = 'Declined', driver_id = NULL, driver_or_guide_name = NULL WHERE id = $1",
         [id]
       );
       return res.json({ success: true, message: 'Ride Declined' });
@@ -741,23 +783,20 @@ router.get('/driver-stats/:driverId', async (req, res) => {
   try {
     const { driverId } = req.params;
 
-    // Fetch user profile name to match driver_or_guide_name as well
-    const userRes = await db.query('SELECT name FROM users WHERE id = $1', [driverId]);
-    const driverName = userRes.rows.length > 0 ? userRes.rows[0].name : '';
-
     const result = await db.query(
-      `SELECT * FROM trips WHERE driver_id = $1 OR (driver_or_guide_name IS NOT NULL AND driver_or_guide_name != '' AND LOWER(driver_or_guide_name) LIKE LOWER($2)) ORDER BY created_at DESC`,
-      [driverId, `%${driverName || 'driver'}%`]
+      `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Completed', 'Accepted', 'Active') ORDER BY created_at DESC`,
+      [driverId]
     );
 
     let todayKm = 0;
-    let tripsCount = result.rows.length;
+    let tripsCount = 0;
     let todayEarnings = 0;
     let totalEarnings = 0;
 
     result.rows.forEach(t => {
       const amt = parseFloat(t.amount || 0);
       if (t.status === 'Completed' || t.status === 'Accepted' || t.status === 'Active') {
+        tripsCount += 1;
         todayEarnings += amt;
         totalEarnings += amt;
         const hours = parseFloat(t.duration_hours || 4);
@@ -796,9 +835,21 @@ router.get('/driver-advance-schedules/:driverId', async (req, res) => {
   try {
     const { driverId } = req.params;
 
-    const result = await db.query(
-      "SELECT * FROM trips WHERE status IN ('Pending', 'Accepted', 'Confirmed', 'Dispatched') ORDER BY created_at DESC LIMIT 20"
-    );
+    const userRes = await db.query('SELECT name FROM users WHERE id = $1', [driverId]);
+    const driverName = userRes.rows.length > 0 ? userRes.rows[0].name : '';
+
+    let result;
+    if (driverName && driverName.trim().length > 2) {
+      result = await db.query(
+        `SELECT * FROM trips WHERE (driver_id = $1 OR LOWER(driver_or_guide_name) = LOWER($2)) AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        [driverId, driverName.trim()]
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        [driverId]
+      );
+    }
 
     const schedules = result.rows.map(t => ({
       id: t.id,

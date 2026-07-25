@@ -1,23 +1,21 @@
+import { adminState, Driver, Guide } from '@/constants/admin-state';
+import { updateUserStatus, sendAdminNotificationApi } from '@/constants/api';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  Alert,
-  StatusBar,
-  ActivityIndicator,
-  Modal,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useRouter } from 'expo-router';
-import { adminState, Driver, Guide } from '@/constants/admin-state';
-import { updateUserStatus } from '@/constants/api';
 
 // Interfaces
 interface Voucher {
@@ -43,6 +41,11 @@ export default function AdminDashboardScreen() {
 
   // Current Admin Tab: 'dashboard' | 'plan' | 'voucher' | 'driver' | 'guide'
   const [activeTab, setActiveTab] = useState<'dashboard' | 'plan' | 'voucher' | 'driver' | 'guide'>('dashboard');
+
+  // Tariff charges state
+  const [dailyCharge, setDailyCharge] = useState('2500');
+  const [addonCharge, setAddonCharge] = useState('150');
+  const [platformFee, setPlatformFee] = useState('10');
 
   // Vouchers state
   const [vouchers, setVouchers] = useState<Voucher[]>([
@@ -219,6 +222,25 @@ export default function AdminDashboardScreen() {
     });
   };
 
+  const handleSaveTariffSettings = async () => {
+    const dailyVal = parseFloat(dailyCharge);
+    const addonVal = parseFloat(addonCharge);
+    const feeVal = parseFloat(platformFee);
+
+    if (isNaN(dailyVal) || isNaN(addonVal) || isNaN(feeVal)) {
+      Alert.alert('Invalid Inputs', 'Please enter valid numeric values for Daily Charge, Addon Charge, and Platform Fee.');
+      return;
+    }
+
+    const title = '📢 Admin Tariff Update!';
+    const body = `Daily Charge set to ₹${dailyVal}/day, Addon Charge set to ₹${addonVal}/hr, Platform Fee set to ${feeVal}%.`;
+
+    await sendAdminNotificationApi({ role: 'driver', title, body });
+    await sendAdminNotificationApi({ role: 'guide', title, body });
+
+    Alert.alert('Tariff Settings Saved 🎉', 'Pricing updates have been saved and broadcasted to all Partner notification drawers.');
+  };
+
   const handleSendQuote = (requestId: string) => {
     const priceStr = quoteInputs[requestId];
     const priceVal = parseFloat(priceStr);
@@ -239,17 +261,27 @@ export default function AdminDashboardScreen() {
   };
 
   // Driver KYC & Toggle Actions
-  const handleToggleDriverStatus = (id: string) => {
+  const handleToggleDriverStatus = async (id: string) => {
+    let nextStatus = 'Active';
     setDrivers(prev => {
       const updated = prev.map(d => {
         if (d.id === id) {
-          const nextStatus = d.status === 'Active' ? 'Inactive' : 'Active';
+          nextStatus = d.status === 'Active' ? 'Inactive' : 'Active';
           return { ...d, status: nextStatus as any };
         }
         return d;
       });
       adminState.drivers = updated;
       return updated;
+    });
+
+    await updateUserStatus(id, nextStatus);
+
+    await sendAdminNotificationApi({
+      userId: id,
+      role: 'driver',
+      title: '🔔 Driver Account Status Update',
+      body: `Admin has updated your Driver account status to: ${nextStatus}.`,
     });
   };
 
@@ -267,7 +299,15 @@ export default function AdminDashboardScreen() {
       adminState.drivers = updated;
       return updated;
     });
-    Alert.alert(`KYC ${action}ed`, `The driver status has been updated in database.`);
+
+    await sendAdminNotificationApi({
+      userId: id,
+      role: 'driver',
+      title: '🔔 Driver KYC Verification Update',
+      body: `Admin ${action === 'Accept' ? 'approved' : 'declined'} your Driver KYC document submission. Account status is now: ${nextStatus}.`,
+    });
+
+    Alert.alert(`KYC ${action}ed`, `The driver status has been updated in database and notified.`);
   };
 
   // Guide KYC & Toggle Actions
@@ -284,7 +324,15 @@ export default function AdminDashboardScreen() {
       adminState.guides = updated;
       return updated;
     });
+
     await updateUserStatus(id, nextStatus);
+
+    await sendAdminNotificationApi({
+      userId: id,
+      role: 'guide',
+      title: '🔔 Guide Account Status Update',
+      body: `Admin has updated your Guide account status to: ${nextStatus}.`,
+    });
   };
 
   const handleGuideKyc = async (id: string, action: 'Accept' | 'Decline') => {
@@ -301,7 +349,15 @@ export default function AdminDashboardScreen() {
       adminState.guides = updated;
       return updated;
     });
-    Alert.alert(`KYC ${action}ed`, `The guide status has been updated in database.`);
+
+    await sendAdminNotificationApi({
+      userId: id,
+      role: 'guide',
+      title: '🔔 Guide KYC Verification Update',
+      body: `Admin ${action === 'Accept' ? 'approved' : 'declined'} your Guide KYC document submission. Account status is now: ${nextStatus}.`,
+    });
+
+    Alert.alert(`KYC ${action}ed`, `The guide status has been updated in database and notified.`);
   };
 
   const handleLogout = () => {
@@ -327,7 +383,7 @@ export default function AdminDashboardScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
         {/* Render Tab Content */}
 
         {/* 1. DASHBOARD TAB */}
@@ -413,7 +469,7 @@ export default function AdminDashboardScreen() {
             <Text style={[styles.tabHeading, { color: colors.amber }]}>Vehicle Per-Hour Pricing rates</Text>
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Set Charge Rates per hour</Text>
-              
+
               {/* pricing inputs */}
               <View style={styles.priceItemRow}>
                 <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>5 Seater Premium (₹/hour)</Text>
@@ -456,12 +512,57 @@ export default function AdminDashboardScreen() {
               </View>
             </View>
 
-            <Text style={[styles.tabHeading, { color: colors.amber }]}>Itinerary Checkpoints</Text>
+            {/* Tariff & Platform Charges Card */}
+            <Text style={[styles.tabHeading, { color: colors.amber, marginTop: verticalScale(14) }]}>Global Tariff & Commission Charges</Text>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Driver Tariff Settings</Text>
+
+              <View style={styles.priceItemRow}>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>Daily Charge (₹/day)</Text>
+                <TextInput
+                  style={[styles.priceInput, { color: colors.textPrimary, borderColor: colors.line }]}
+                  keyboardType="numeric"
+                  value={dailyCharge}
+                  onChangeText={setDailyCharge}
+                />
+              </View>
+
+              <View style={styles.priceItemRow}>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>Addon Charge (₹/hr)</Text>
+                <TextInput
+                  style={[styles.priceInput, { color: colors.textPrimary, borderColor: colors.line }]}
+                  keyboardType="numeric"
+                  value={addonCharge}
+                  onChangeText={setAddonCharge}
+                />
+              </View>
+
+              <View style={styles.priceItemRow}>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>Platform Fee (%)</Text>
+                <TextInput
+                  style={[styles.priceInput, { color: colors.textPrimary, borderColor: colors.line }]}
+                  keyboardType="numeric"
+                  value={platformFee}
+                  onChangeText={setPlatformFee}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={{ width: '100%', height: verticalScale(42), borderRadius: scale(10), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center', marginTop: verticalScale(12) }}
+                onPress={handleSaveTariffSettings}
+              >
+                <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(12) }}>
+                  Save & Broadcast Tariff Update 📢
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.tabHeading, { color: colors.amber, marginTop: verticalScale(14) }]}>Itinerary Checkpoints</Text>
 
             {/* create checkpoint */}
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Create New Checkpoint</Text>
-              
+
               <TextInput
                 style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.line }]}
                 placeholder="Checkpoint Name (e.g. Abbey Falls)"
@@ -528,7 +629,7 @@ export default function AdminDashboardScreen() {
               <Text style={[styles.listHeader, { color: colors.textMuted }]}>
                 PENDING CUSTOM TRIP REQUESTS
               </Text>
-              
+
               {adminState.customTripRequests.filter(r => r.status === 'Pending').length === 0 ? (
                 <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line, padding: scale(16), alignItems: 'center' }]}>
                   <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
@@ -640,8 +741,8 @@ export default function AdminDashboardScreen() {
 
               <View style={styles.voucherActionRow}>
                 {editingVoucherId && (
-                  <TouchableOpacity 
-                    style={[styles.cancelEditBtn, { borderColor: colors.line }]} 
+                  <TouchableOpacity
+                    style={[styles.cancelEditBtn, { borderColor: colors.line }]}
                     onPress={() => {
                       setEditingVoucherId(null);
                       setNewVoucherCode('');
@@ -676,7 +777,7 @@ export default function AdminDashboardScreen() {
                   </View>
                   <Text style={[styles.voucherDescText, { color: colors.textMuted }]}>{v.desc}</Text>
                 </View>
-                
+
                 <View style={styles.listActionButtons}>
                   <TouchableOpacity style={styles.actionBtnIcon} onPress={() => handleEditVoucherClick(v)}>
                     <MaterialIcons name="edit" size={scale(18)} color={colors.amber} />
@@ -707,22 +808,22 @@ export default function AdminDashboardScreen() {
                       <Text style={[styles.partnerName, { color: colors.textPrimary }]}>{d.name}</Text>
                       <View style={[
                         styles.statusBadge,
-                        { 
-                          backgroundColor: isActive 
-                            ? 'rgba(16,185,129,0.1)' 
-                            : pendingKyc 
-                            ? 'rgba(245,197,24,0.1)' 
-                            : 'rgba(239,68,68,0.1)' 
+                        {
+                          backgroundColor: isActive
+                            ? 'rgba(16,185,129,0.1)'
+                            : pendingKyc
+                              ? 'rgba(245,197,24,0.1)'
+                              : 'rgba(239,68,68,0.1)'
                         }
                       ]}>
                         <Text style={[
                           styles.statusBadgeText,
-                          { 
-                            color: isActive 
-                              ? colors.success 
-                              : pendingKyc 
-                              ? colors.amber 
-                              : colors.danger 
+                          {
+                            color: isActive
+                              ? colors.success
+                              : pendingKyc
+                                ? colors.amber
+                                : colors.danger
                           }
                         ]}>
                           {d.status}
@@ -738,30 +839,30 @@ export default function AdminDashboardScreen() {
                   <View style={styles.partnerActions}>
                     {pendingKyc ? (
                       <View style={styles.kycControls}>
-                        <TouchableOpacity 
-                          style={[styles.kycBtn, { backgroundColor: colors.success }]} 
+                        <TouchableOpacity
+                          style={[styles.kycBtn, { backgroundColor: colors.success }]}
                           onPress={() => handleDriverKyc(d.id, 'Accept')}
                         >
                           <Text style={styles.kycBtnText}>Accept</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.kycBtn, { backgroundColor: colors.danger }]} 
+                        <TouchableOpacity
+                          style={[styles.kycBtn, { backgroundColor: colors.danger }]}
                           onPress={() => handleDriverKyc(d.id, 'Decline')}
                         >
                           <Text style={styles.kycBtnText}>Decline</Text>
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[
-                          styles.statusToggleBtn, 
+                          styles.statusToggleBtn,
                           { borderColor: isActive ? colors.danger : colors.success }
                         ]}
                         onPress={() => handleToggleDriverStatus(d.id)}
                         disabled={isDeclined}
                       >
                         <Text style={[
-                          styles.statusToggleText, 
+                          styles.statusToggleText,
                           { color: isActive ? colors.danger : colors.success }
                         ]}>
                           {isActive ? 'Deactivate' : 'Activate'}
@@ -792,22 +893,22 @@ export default function AdminDashboardScreen() {
                       <Text style={[styles.partnerName, { color: colors.textPrimary }]}>{g.name}</Text>
                       <View style={[
                         styles.statusBadge,
-                        { 
-                          backgroundColor: isActive 
-                            ? 'rgba(16,185,129,0.1)' 
-                            : pendingKyc 
-                            ? 'rgba(245,197,24,0.1)' 
-                            : 'rgba(239,68,68,0.1)' 
+                        {
+                          backgroundColor: isActive
+                            ? 'rgba(16,185,129,0.1)'
+                            : pendingKyc
+                              ? 'rgba(245,197,24,0.1)'
+                              : 'rgba(239,68,68,0.1)'
                         }
                       ]}>
                         <Text style={[
                           styles.statusBadgeText,
-                          { 
-                            color: isActive 
-                              ? colors.success 
-                              : pendingKyc 
-                              ? colors.amber 
-                              : colors.danger 
+                          {
+                            color: isActive
+                              ? colors.success
+                              : pendingKyc
+                                ? colors.amber
+                                : colors.danger
                           }
                         ]}>
                           {g.status}
@@ -823,30 +924,30 @@ export default function AdminDashboardScreen() {
                   <View style={styles.partnerActions}>
                     {pendingKyc ? (
                       <View style={styles.kycControls}>
-                        <TouchableOpacity 
-                          style={[styles.kycBtn, { backgroundColor: colors.success }]} 
+                        <TouchableOpacity
+                          style={[styles.kycBtn, { backgroundColor: colors.success }]}
                           onPress={() => handleGuideKyc(g.id, 'Accept')}
                         >
                           <Text style={styles.kycBtnText}>Accept</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.kycBtn, { backgroundColor: colors.danger }]} 
+                        <TouchableOpacity
+                          style={[styles.kycBtn, { backgroundColor: colors.danger }]}
                           onPress={() => handleGuideKyc(g.id, 'Decline')}
                         >
                           <Text style={styles.kycBtnText}>Decline</Text>
                         </TouchableOpacity>
                       </View>
                     ) : (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[
-                          styles.statusToggleBtn, 
+                          styles.statusToggleBtn,
                           { borderColor: isActive ? colors.danger : colors.success }
                         ]}
                         onPress={() => handleToggleGuideStatus(g.id)}
                         disabled={isDeclined}
                       >
                         <Text style={[
-                          styles.statusToggleText, 
+                          styles.statusToggleText,
                           { color: isActive ? colors.danger : colors.success }
                         ]}>
                           {isActive ? 'Deactivate' : 'Activate'}

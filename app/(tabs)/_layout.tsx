@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   waterDrop: {
     position: 'absolute',
     height: verticalScale(48),
-    borderRadius: scale(24),
+    borderRadius: 999,
   },
   tabButton: {
     flex: 1,

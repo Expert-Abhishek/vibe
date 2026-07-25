@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  Modal,
   StatusBar,
   ScrollView,
 } from 'react-native';
@@ -48,6 +49,7 @@ export default function RideMatchingScreen() {
   // State: 'searching' | 'matched' | 'started' | 'completed'
   const [status, setStatus] = useState<'searching' | 'matched' | 'started' | 'completed'>('searching');
   const [progressIndex, setProgressIndex] = useState(0);
+  const [completedModalVisible, setCompletedModalVisible] = useState(false);
 
   // Parse location nodes passed via search params
   const pickupName = (params.pickupName as string) || 'Bengaluru Palace';
@@ -228,9 +230,7 @@ export default function RideMatchingScreen() {
 
     // Append to global state
     adminState.userTrips.push(newRecord);
-    Alert.alert('Trip Completed!', 'Thank you for riding with Vibe. Your trip details have been saved to your Trips History.', [
-      { text: 'Okay', onPress: () => router.replace('/(tabs)/trips') }
-    ]);
+    setCompletedModalVisible(true);
   };
 
   // Get current active vehicle marker position
@@ -487,6 +487,61 @@ export default function RideMatchingScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+      {/* Custom Celebration "Trip Completed!" Modal */}
+      <Modal visible={completedModalVisible} transparent={true} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: scale(18) }}>
+          <View style={{ backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', borderRadius: scale(24), padding: scale(22), alignItems: 'center', borderWidth: 1.5, borderColor: '#F5C518' }}>
+            <View style={{ width: scale(64), height: scale(64), borderRadius: scale(32), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14), elevation: 6 }}>
+              <MaterialIcons name="check-circle" size={scale(38)} color="#101010" />
+            </View>
+
+            <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900', marginBottom: verticalScale(4), textAlign: 'center' }}>
+              🎉 Trip Completed!
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(16) }}>
+              Thank you for riding with VIBE! Your trip details have been saved to your Trips History.
+            </Text>
+
+            <View style={{ width: '100%', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', borderRadius: scale(14), padding: scale(14), borderWidth: 1, borderColor: colors.border, marginBottom: verticalScale(18) }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(8) }}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>AMOUNT PAID</Text>
+                <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900' }}>
+                  ₹{price}
+                </Text>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(6) }} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginTop: verticalScale(4) }}>
+                <MaterialIcons name="navigation" size={scale(16)} color="#F5C518" />
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                  {pickupName} ➔ {dropName}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(8) }}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Payment Mode:</Text>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>
+                  {paymentMode}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={{ width: '100%', height: verticalScale(46), borderRadius: scale(14), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => {
+                setCompletedModalVisible(false);
+                router.replace('/(tabs)/trips');
+              }}
+            >
+              <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(13) }}>
+                View Trips History
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       </View>
     </SafeAreaView>

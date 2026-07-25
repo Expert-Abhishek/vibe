@@ -1510,9 +1510,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   tabIconWrapper: {
-    width: scale(40),
-    height: scale(32),
-    borderRadius: scale(16),
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
     alignItems: 'center',
     justifyContent: 'center',
   },

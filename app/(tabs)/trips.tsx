@@ -14,10 +14,9 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '@/constants/admin-state';
 import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 
 import NotificationModal from '@/components/NotificationModal';
-
-const initialTripHistory: any[] = [];
 
 export default function TripsHistoryScreen() {
 
@@ -28,15 +27,25 @@ export default function TripsHistoryScreen() {
   const [cancelTrigger, setCancelTrigger] = useState(0);
   const [backendTrips, setBackendTrips] = useState<any[]>([]);
 
+  const session = getUserSessionSync();
+  const userId = session?.id;
+
   React.useEffect(() => {
     async function loadBackendTrips() {
-      const data = await fetchTripsApi();
-      if (data && data.length > 0) {
-        setBackendTrips(data);
+      if (!userId) {
+        setBackendTrips([]);
+        return;
+      }
+      const data = await fetchCustomerTripsApi(userId);
+      if (Array.isArray(data) && data.length > 0) {
+        const filtered = data.filter((bt: any) => !bt.customerId || String(bt.customerId) === String(userId));
+        setBackendTrips(filtered);
+      } else {
+        setBackendTrips([]);
       }
     }
     loadBackendTrips();
-  }, [cancelTrigger]);
+  }, [cancelTrigger, userId]);
 
 
   const colors = {
@@ -67,14 +76,14 @@ export default function TripsHistoryScreen() {
 
   // Convert advanceBookings to list items
   const mappedAdvance = adminState.advanceBookings
-    .filter(b => b.status !== 'Cancelled')
+    .filter(b => b.status !== 'Cancelled' && (userId ? (String(b.assignedToId) === String(userId) || b.touristName?.includes(session?.name || '')) : false))
     .map(b => ({
       id: b.id,
       type: b.type === 'guide' ? 'guide' as const : 'cab' as const,
       vehicleType: undefined as string | undefined,
       title: b.title,
       route: b.route,
-      driverOrGuideName: b.driverOrGuideName || 'Anil Gowda (Captain)',
+      driverOrGuideName: b.driverOrGuideName || 'Captain',
       date: `Upcoming - ${b.date}`,
       time: b.time,
       price: b.price,
@@ -84,9 +93,12 @@ export default function TripsHistoryScreen() {
       passengerCount: undefined as number | undefined,
     }));
 
-  const allTrips = mappedDbTrips.length > 0
-    ? [...mappedDbTrips, ...adminState.userTrips]
-    : [...mappedAdvance, ...adminState.userTrips, ...initialTripHistory];
+  const filteredUserTrips = adminState.userTrips.filter(t => userId ? String(t.customerId) === String(userId) : false);
+
+  const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips];
+  const allTrips = rawAllTrips.filter(
+    (item, index, self) => index === self.findIndex(t => t.id === item.id)
+  );
 
   const filteredTrips = allTrips.filter((trip) => {
     if (activeFilter === 'all') return true;
