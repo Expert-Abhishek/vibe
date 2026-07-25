@@ -570,6 +570,162 @@ export async function updatePasswordApi(payload: { userId: string; currentPasswo
   }
 }
 
+/**
+ * Create a new Cab / Guide booking and dispatch push notifications
+ */
+export async function bookTripApi(payload: {
+  tripType?: string;
+  title?: string;
+  customerId?: string;
+  customerName?: string;
+  pickupName?: string;
+  dropName?: string;
+  pickupLat?: number;
+  pickupLng?: number;
+  dropLat?: number;
+  dropLng?: number;
+  amount?: number;
+  paymentMode?: string;
+}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/book`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('bookTripApi error:', e);
+    return { success: false, message: 'Booking failed. Check network connection.' };
+  }
+}
 
+/**
+ * Fetch Pending trip requests for Driver or Guide dashboard
+ */
+export async function fetchPendingRequestsApi(role: string = 'driver'): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/pending-requests?role=${role}`);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+  } catch (e) {
+    console.warn('fetchPendingRequestsApi error:', e);
+  }
+  return [];
+}
 
+/**
+ * Driver / Guide accepts trip booking
+ */
+export async function acceptTripApi(tripId: string, driverId: string, driverName?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId, driverName }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('acceptTripApi error:', e);
+    return { success: false, message: 'Failed to accept trip' };
+  }
+}
 
+/**
+ * Verify 4-digit OTP code to start trip
+ */
+export async function verifyTripOtpApi(tripId: string, otp: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otp }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('verifyTripOtpApi error:', e);
+    return { success: false, message: 'Failed to verify OTP' };
+  }
+}
+
+/**
+ * Complete trip & settle earnings to wallet
+ */
+export async function completeTripApi(tripId: string, driverId?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('completeTripApi error:', e);
+    return { success: false, message: 'Failed to complete trip' };
+  }
+}
+
+/**
+ * Driver taps "Arrived at Pickup"
+ */
+export async function driverArrivedApi(tripId: string, driverName?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/arrive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverName }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('driverArrivedApi error:', e);
+    return { success: false, message: 'Failed to update arrive status' };
+  }
+}
+
+/**
+ * Fetch Activity Notifications for Bell Icon drawer
+ */
+export async function fetchNotificationsApi(userId: string, role: string = 'tourist'): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/notifications/${userId}?role=${role}`);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+  } catch (e) {
+    console.warn('fetchNotificationsApi error:', e);
+  }
+  return [];
+}
+
+/**
+ * Fetch Live Driver Location & Status for Tourist Map Tracking
+ */
+export async function fetchLiveLocationApi(tripId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/live-location/${tripId}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchLiveLocationApi error:', e);
+    return { success: false, data: null };
+  }
+}
+
+/**
+ * Save user theme & language preferences to database
+ */
+export async function saveUserSettingsApi(userId: string, settings: { theme?: 'light' | 'dark'; language?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, ...settings }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('saveUserSettingsApi error:', e);
+    return { success: false, message: 'Failed to save settings to server' };
+  }
+}

@@ -1,4 +1,4 @@
-import { fetchWalletBalanceApi, topupWalletApi, submitWithdrawalApi, fetchUserProfileApi, updateUserProfileApi } from '@/constants/api';
+import { fetchWalletBalanceApi, topupWalletApi, submitWithdrawalApi, fetchUserProfileApi, updateUserProfileApi, saveUserSettingsApi } from '@/constants/api';
 import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -292,7 +292,9 @@ export default function ProfileScreen() {
             <Switch
               value={appLang === 'kn'}
               onValueChange={(val) => {
-                setAppLang(val ? 'kn' : 'en');
+                const newLang = val ? 'kn' : 'en';
+                setAppLang(newLang);
+                if (userId) saveUserSettingsApi(userId, { language: newLang });
                 Alert.alert(
                   val ? 'ಭಾಷೆ ಬದಲಾಗಿದೆ' : 'Language Changed',
                   val ? 'ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.' : 'Language has been changed to English.'

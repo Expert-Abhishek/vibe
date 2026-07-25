@@ -250,7 +250,7 @@ router.post('/login', async (req, res) => {
 
     // Search user by phone or email
     const userQuery = `
-      SELECT id, name, phone, email, password, role, status
+      SELECT id, name, phone, email, password, role, status, theme, language
       FROM users
       WHERE phone = $1 OR LOWER(email) = LOWER($1)
     `;
@@ -338,6 +338,8 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role,
         status: user.status,
+        theme: user.theme || 'dark',
+        language: user.language || 'en',
         profile: profileData,
       },
     });
@@ -348,6 +350,31 @@ router.post('/login', async (req, res) => {
       message: 'Server error during login',
       error: error.message,
     });
+  }
+});
+
+/**
+ * POST /api/auth/settings
+ * Save user theme & language preferences to database
+ */
+router.post('/settings', async (req, res) => {
+  try {
+    const { userId, theme, language } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    if (theme) {
+      await db.query('UPDATE users SET theme = $1 WHERE id = $2', [theme, userId]);
+    }
+    if (language) {
+      await db.query('UPDATE users SET language = $1 WHERE id = $2', [language, userId]);
+    }
+
+    res.json({ success: true, message: 'User settings saved to database!' });
+  } catch (error) {
+    console.error('Error updating user settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to save settings' });
   }
 });
 

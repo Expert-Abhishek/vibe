@@ -14,7 +14,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from '../admin-state';
+import NotificationModal from '@/components/NotificationModal';
 
 const rides = [
   { key: '5seater', name: '5 Seater', desc: 'Comfort & Style', image: require('@/assets/images/sedan.png') },
@@ -71,7 +71,8 @@ export default function HomeScreen() {
             <Text style={[styles.brandName, { color: colors.textPrimary }]}>Vibzz</Text>
           </View>
 
-
+          {/* Activity Bell Notification Icon */}
+          <NotificationModal role="tourist" />
         </View>
 
         {/* TOP BAR: Search Bar (100%) */}

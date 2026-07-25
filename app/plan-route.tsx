@@ -365,6 +365,23 @@ export default function PlanRouteScreen() {
         addonCharge: priceInfo.extraAddonCharge,
       });
 
+      const newAdvBooking = {
+        id: `plan_adv_${Date.now()}`,
+        type: 'cab' as const,
+        title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+        route: selectedPlan.checkpoints,
+        date: finalDate,
+        time: finalTime,
+        price: totalPrice,
+        touristName: 'Abhishek (Tourist)',
+        driverOrGuideName: driverName,
+        assignedToId: driverId,
+        bookingDate: new Date().toISOString().split('T')[0],
+        status: 'Pending' as const,
+        paymentMode: paymentLabel,
+      };
+      adminState.advanceBookings.push(newAdvBooking);
+
       adminState.userTrips.push({
         id: `plan_book_${Date.now()}`,
         type: 'plan',

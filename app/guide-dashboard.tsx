@@ -1,13 +1,17 @@
-import { submitWithdrawalApi } from '@/constants/api';
-import { clearUserSession, getUserSessionSync } from '@/constants/authStore';
+import NotificationModal from '@/components/NotificationModal';
+import { acceptTripApi, fetchPendingRequestsApi, fetchUserProfileApi, saveUserSettingsApi, submitWithdrawalApi, updatePasswordApi, updateUserProfileApi } from '@/constants/api';
+import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
+import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -60,7 +64,8 @@ interface ActiveRequest {
 export default function GuideDashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const [appTheme, setAppTheme] = useState<'dark' | 'light'>(colorScheme === 'light' ? 'light' : 'dark');
+  const isDark = appTheme === 'dark';
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_tour' | 'profile'>('duty');
   const [updateTrigger, setUpdateTrigger] = useState(0);
@@ -73,8 +78,163 @@ export default function GuideDashboardScreen() {
   const [earningsToday, setEarningsToday] = useState(3250);
   const [earningsBalance, setEarningsBalance] = useState(1750);
 
-  // Profile configurations
-  const [upiId, setUpiId] = useState('ramesh.guide@okaxis');
+  // Profile & Unified Edit state
+  const currentSession = getUserSessionSync();
+  const [guideName, setGuideName] = useState(currentSession?.name || currentSession?.profile?.name || 'Ramesh Gowda');
+  const [guidePhone, setGuidePhone] = useState(currentSession?.phone || currentSession?.profile?.phone || '+91 98800 12345');
+  const [photoUrl, setPhotoUrl] = useState(currentSession?.profile?.photo_url || currentSession?.profile?.photoUrl || '');
+  const [upiId, setUpiId] = useState(currentSession?.profile?.upi_id || currentSession?.profile?.upiId || 'ramesh.guide@okaxis');
+
+  // Unified Edit Mode & Password toggle
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  useEffect(() => {
+    async function loadGuideBackendData() {
+      const session = getUserSessionSync();
+      const guideId = session?.id || 'g1';
+
+      const userRes = await fetchUserProfileApi(guideId);
+      if (userRes && userRes.success && userRes.user) {
+        const u = userRes.user;
+        const p = u.profile || {};
+        if (u.name) setGuideName(u.name);
+        if (u.phone) setGuidePhone(u.phone);
+        if (p.photo_url || p.photoUrl) setPhotoUrl(p.photo_url || p.photoUrl);
+        if (p.upi_id || p.upiId) setUpiId(p.upi_id || p.upiId);
+      }
+    }
+    loadGuideBackendData();
+  }, []);
+
+  const handlePickImage = async () => {
+    Alert.alert(
+      'Profile Picture',
+      'Choose an option to upload your photo:',
+      [
+        {
+          text: '📸 Take Photo (Camera)',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Camera access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.3,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              let uri = asset.uri;
+              if (asset.base64) {
+                uri = asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`;
+              }
+              setPhotoUrl(uri);
+            }
+          },
+        },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Gallery access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.3,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              let uri = asset.uri;
+              if (asset.base64) {
+                uri = asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`;
+              }
+              setPhotoUrl(uri);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleSaveUnifiedProfile = async () => {
+    const session = getUserSessionSync();
+    const userId = session?.id || session?.profile?.user_id || 'g1';
+
+    setIsSavingProfile(true);
+
+    // 1. Update Profile
+    const apiRes = await updateUserProfileApi(userId, {
+      name: guideName,
+      phone: guidePhone,
+      photo_url: photoUrl,
+      photoUrl: photoUrl,
+      upiId: upiId,
+      role: 'guide',
+    });
+
+    if (!apiRes?.success) {
+      setIsSavingProfile(false);
+      Alert.alert('Update Failed', apiRes?.message || 'Could not save your profile. Please try again.');
+      return;
+    }
+
+    // 2. Update Password if entered
+    if (newPassword.trim().length > 0) {
+      if (!currentPassword.trim()) {
+        setIsSavingProfile(false);
+        Alert.alert('🔐 Current Password Required', 'Please enter your current password to update your password.');
+        return;
+      }
+      const passRes = await updatePasswordApi({
+        userId: userId,
+        currentPassword,
+        newPassword,
+      });
+
+      if (!passRes || !passRes.success) {
+        setIsSavingProfile(false);
+        Alert.alert('🔐 Password Error', passRes?.message || 'Current password invalid. Failed to update password.');
+        return;
+      }
+      setCurrentPassword('');
+      setNewPassword('');
+    }
+
+    setIsSavingProfile(false);
+
+    const updatedSession = {
+      ...(session || { id: userId, role: 'guide', status: 'Active' }),
+      id: apiRes?.user?.id || session?.id || userId,
+      name: guideName,
+      phone: guidePhone,
+      profile: {
+        ...(session?.profile || {}),
+        ...(apiRes?.user?.profile || {}),
+        name: guideName,
+        phone: guidePhone,
+        photo_url: photoUrl,
+        photoUrl: photoUrl,
+        upiId: upiId,
+      }
+    };
+    await saveUserSession(updatedSession as any);
+    setIsEditMode(false);
+
+    Alert.alert('Profile updated successfully!');
+  };
 
   // Guide-specific work settings
   const [spokenLangs, setSpokenLangs] = useState({ en: true, hi: true, kn: true, te: false });
@@ -151,33 +311,43 @@ export default function GuideDashboardScreen() {
     }
   }[appLang];
 
-  // Online simulator
+  // Online Live Pending Requests Polling
   useEffect(() => {
-    let timeout: any;
-    if (isOnline && !activeTour && !incomingRequest) {
-      timeout = setTimeout(() => {
-        const mockRequest: ActiveRequest = {
-          touristName: 'Abhishek (Tourist)',
-          pickup: 'Bengaluru Palace Entrance Gate',
-          pickupLat: 12.9982,
-          pickupLng: 77.5920,
+    if (!isOnline || activeTour) return;
+    const pollGuideRequests = async () => {
+      const pendingList = await fetchPendingRequestsApi('guide');
+      if (pendingList && pendingList.length > 0 && !activeTour && !incomingRequest) {
+        const req = pendingList[0];
+        const guideReq: ActiveRequest = {
+          touristName: req.touristName || 'Tourist Client',
+          pickup: req.pickup || 'Heritage City Pickup',
+          pickupLat: req.pickupLat || 12.9982,
+          pickupLng: req.pickupLng || 77.5920,
           spots: [
-            { name: 'Bengaluru Palace Grounds', lat: 12.9982, lng: 77.5920 },
-            { name: 'National Gallery of Modern Art', lat: 12.9912, lng: 77.5890 },
-            { name: 'Vidhana Soudha Landmark', lat: 12.9796, lng: 77.5908 }
+            { name: req.drop || 'Guided Sightseeing Spot', lat: req.dropLat || 12.9982, lng: req.dropLng || 77.5920 },
+            { name: 'Heritage Palace Landmark', lat: 12.9912, lng: 77.5890 },
           ],
-          durationHrs: 4,
-          estimatedFare: 1800,
-          language: 'English & Hindi',
-          groupSize: 3,
-          otp: '8240',
+          durationHrs: req.durationHrs || 4,
+          estimatedFare: req.estimatedFare || 1800,
+          language: 'English & Kannada',
+          groupSize: 2,
+          otp: req.otp || '8240',
         };
-        setIncomingRequest(mockRequest);
+        (guideReq as any).tripId = req.id;
+        setIncomingRequest(guideReq);
         setTimerSeconds(30);
         setRequestVisible(true);
-      }, 5000);
-    }
-    return () => clearTimeout(timeout);
+
+        sendLocalNotification(
+          '🚩 New Guide Tour Request!',
+          `Tourist ${req.touristName || 'Client'} requested a guided tour: ${req.pickup} (Fare: ₹${req.estimatedFare || 1800})`
+        );
+      }
+    };
+
+    pollGuideRequests();
+    const interval = setInterval(pollGuideRequests, 3000);
+    return () => clearInterval(interval);
   }, [isOnline, activeTour, incomingRequest]);
 
   // Request countdown timer
@@ -198,15 +368,27 @@ export default function GuideDashboardScreen() {
     return () => clearInterval(timer);
   }, [requestVisible, timerSeconds]);
 
-  const handleAcceptRequest = () => {
+  const handleAcceptRequest = async () => {
     if (!incomingRequest) return;
+    const session = getUserSessionSync();
+    const guideId = session?.id || 'g1';
+    const tripId = (incomingRequest as any).tripId;
+
+    if (tripId) {
+      await acceptTripApi(tripId, guideId, guideName);
+    }
+
     setRequestVisible(false);
     setActiveTour(incomingRequest);
     setTourPhase('pickup');
     setCurrentSpotIndex(0);
     setIncomingRequest(null);
     setActiveTab('active_tour');
-    Alert.alert('Request Accepted!', 'GPS routing started. Navigate to tourist.');
+
+    sendLocalNotification(
+      '🚩 Tour Accepted!',
+      `You accepted the guide booking for ${incomingRequest.touristName}. Proceed to pickup spot.`
+    );
   };
 
   const handleRejectRequest = () => {
@@ -320,34 +502,30 @@ export default function GuideDashboardScreen() {
       Alert.alert('Error', res.message || 'Failed to submit withdrawal request.');
     }
   };
-
-  const currentSession = getUserSessionSync();
-  const guideDisplayName = currentSession?.name || 'Ramesh Gowda';
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#101014' : '#F5F5F7' }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* Header bar / Role switcher */}
+      {/* Header bar */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ PARTNER</Text>
-          <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>{guideDisplayName}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10) }}>
+          <View style={styles.partnerBadgeIcon}>
+            <MaterialIcons name="verified-user" size={scale(20)} color={colors.amber} />
+          </View>
+          <View>
+            <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ PARTNER</Text>
+            <Text style={[styles.headerGuideName, { color: colors.textPrimary }]}>{guideName}</Text>
+          </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: scale(8), alignItems: 'center' }}>
-          <TouchableOpacity style={styles.switchRoleBtn} onPress={() => router.replace('/(tabs)')}>
-            <MaterialIcons name="swap-horiz" size={scale(16)} color="#101010" />
-            <Text style={styles.switchRoleText}>Tourist App</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.switchRoleBtn, { backgroundColor: '#ef4444' }]}
-            onPress={handleLogout}
-          >
-            <MaterialIcons name="logout" size={scale(16)} color="#ffffff" />
-            <Text style={[styles.switchRoleText, { color: '#ffffff' }]}>Logout</Text>
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+          <View style={styles.onlineHeaderPill}>
+            <View style={[styles.onlineDot, { backgroundColor: isOnline ? '#10B981' : '#EF4444' }]} />
+            <Text style={[styles.onlinePillText, { color: isOnline ? '#10B981' : '#EF4444' }]}>
+              {isOnline ? 'ONLINE' : 'OFFLINE'}
+            </Text>
+          </View>
+          <NotificationModal role="guide" />
         </View>
       </View>
 
@@ -597,6 +775,180 @@ export default function GuideDashboardScreen() {
       {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
 
+          {/* Captain / Guide Main Summary Card */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, alignItems: 'center' }]}>
+            {/* Avatar Circle with Camera Upload Action */}
+            <TouchableOpacity onPress={isEditMode ? handlePickImage : undefined} activeOpacity={isEditMode ? 0.7 : 1} style={{ position: 'relative', marginBottom: verticalScale(10) }}>
+              <View style={{
+                width: scale(74),
+                height: scale(74),
+                borderRadius: scale(37),
+                backgroundColor: colors.amber,
+                justifyContent: 'center',
+                alignItems: 'center',
+                overflow: 'hidden',
+                borderWidth: 2,
+                borderColor: colors.amber,
+              }}>
+                {photoUrl ? (
+                  <Image source={{ uri: photoUrl }} style={{ width: '100%', height: '100%' }} />
+                ) : (
+                  <Text style={{ fontSize: moderateFontScale(28), fontWeight: '900', color: '#101010' }}>
+                    {guideName ? guideName[0].toUpperCase() : 'G'}
+                  </Text>
+                )}
+              </View>
+              {isEditMode && (
+                <View style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  backgroundColor: '#101010',
+                  padding: scale(6),
+                  borderRadius: scale(14),
+                  borderWidth: 1,
+                  borderColor: colors.amber,
+                }}>
+                  <MaterialIcons name="photo-camera" size={scale(14)} color={colors.amber} />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: '900' }}>
+              {guideName}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: 2 }}>
+              {guidePhone}
+            </Text>
+
+            {/* Badges */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), justifyContent: 'center', marginTop: verticalScale(12) }}>
+              <View style={{ backgroundColor: 'rgba(245, 197, 24, 0.12)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8), borderWidth: 1, borderColor: colors.amber, flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+                <MaterialIcons name="verified" size={scale(14)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>Certified Tour Guide</Text>
+              </View>
+
+              <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8), borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+                <MaterialIcons name="translate" size={scale(14)} color={colors.textMuted} />
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>EN / HI / KN</Text>
+              </View>
+
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8), borderWidth: 1, borderColor: '#10B981', flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+                <MaterialIcons name="star" size={scale(14)} color="#10B981" />
+                <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '700' }}>4.9 ★ Rating</Text>
+              </View>
+            </View>
+
+            {/* Toggle Edit Mode Button */}
+            <TouchableOpacity
+              style={{
+                marginTop: verticalScale(16),
+                paddingVertical: verticalScale(8),
+                paddingHorizontal: scale(16),
+                borderRadius: scale(10),
+                borderWidth: 1.5,
+                borderColor: colors.amber,
+                backgroundColor: isEditMode ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: scale(6),
+              }}
+              onPress={() => setIsEditMode(!isEditMode)}
+            >
+              <MaterialIcons name={isEditMode ? 'visibility' : 'edit'} size={scale(16)} color={colors.amber} />
+              <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                {isEditMode ? 'Cancel Edit / View Profile' : 'Edit Profile & Password'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Unified Edit Card (When Edit Mode Active) */}
+          {isEditMode && (
+            <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.amber, borderWidth: 1.5 }]}>
+              <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Edit Guide Details</Text>
+
+              {/* Photo Pick Action Button */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'rgba(245, 197, 24, 0.1)',
+                  borderColor: colors.amber,
+                  borderWidth: 1,
+                  borderRadius: scale(10),
+                  paddingVertical: verticalScale(10),
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: scale(8),
+                  marginBottom: verticalScale(12),
+                }}
+                onPress={handlePickImage}
+              >
+                <MaterialIcons name="add-a-photo" size={scale(18)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                  Upload Profile Pic (Gallery / Camera)
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Full Name</Text>
+              <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+                <MaterialIcons name="person" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+                <TextInput
+                  style={[styles.textInputStyle, { color: colors.textPrimary }]}
+                  value={guideName}
+                  onChangeText={setGuideName}
+                  placeholder="Guide Full Name"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+
+              <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Current Password (Required to change password)</Text>
+              <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+                <MaterialIcons name="lock" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+                <TextInput
+                  style={[styles.textInputStyle, { color: colors.textPrimary, flex: 1 }]}
+                  secureTextEntry={!showPassword}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: scale(4) }}>
+                  <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={scale(18)} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>New Password</Text>
+              <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
+                <MaterialIcons name="lock-open" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
+                <TextInput
+                  style={[styles.textInputStyle, { color: colors.textPrimary, flex: 1 }]}
+                  secureTextEntry={!showPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Enter new password"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: scale(4) }}>
+                  <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={scale(18)} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.detailedWalletBtn, { marginTop: verticalScale(16), backgroundColor: colors.amber, borderColor: colors.amber }]}
+                onPress={handleSaveUnifiedProfile}
+                disabled={isSavingProfile}
+              >
+                {isSavingProfile ? (
+                  <ActivityIndicator color="#101014" size="small" />
+                ) : (
+                  <Text style={[styles.detailedWalletBtnText, { color: '#101014', fontWeight: '900' }]}>
+                    Save Changes
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* 1. Bank Account & Wallet (Paisa Section) */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
@@ -637,149 +989,77 @@ export default function GuideDashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 2. Guide-Specific Work Settings */}
+          {/* App Appearance & Language (Matching Driver Profile) */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.workSettings}</Text>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>App Appearance & Language</Text>
 
-            {/* Language checklist */}
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select Languages Spoken</Text>
-            <View style={styles.checkboxWrapperRow}>
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setSpokenLangs(prev => ({ ...prev, en: !prev.en }))}>
-                <MaterialIcons name={spokenLangs.en ? 'check-box' : 'check-box-outline-blank'} size={scale(18)} color={spokenLangs.en ? colors.amber : colors.textMuted} />
-                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>English</Text>
+            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>App Display Theme</Text>
+            <View style={[styles.vehiclePillsRow, { marginBottom: verticalScale(14) }]}>
+              <TouchableOpacity
+                style={[styles.langPill, isDark && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppTheme('dark')}
+              >
+                <MaterialIcons name="dark-mode" size={scale(14)} color={isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
+                <Text style={[styles.langPillText, { color: isDark ? '#101010' : colors.textPrimary }]}>Dark Mode </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setSpokenLangs(prev => ({ ...prev, hi: !prev.hi }))}>
-                <MaterialIcons name={spokenLangs.hi ? 'check-box' : 'check-box-outline-blank'} size={scale(18)} color={spokenLangs.hi ? colors.amber : colors.textMuted} />
-                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Hindi</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setSpokenLangs(prev => ({ ...prev, kn: !prev.kn }))}>
-                <MaterialIcons name={spokenLangs.kn ? 'check-box' : 'check-box-outline-blank'} size={scale(18)} color={spokenLangs.kn ? colors.amber : colors.textMuted} />
-                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Kannada</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-            {/* Expertise / Category Selection */}
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select Tour Specialties</Text>
-            <View style={styles.checkboxWrapperRow}>
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setExpertise(prev => ({ ...prev, history: !prev.history }))}>
-                <MaterialIcons name={expertise.history ? 'radio-button-checked' : 'radio-button-unchecked'} size={scale(18)} color={expertise.history ? colors.amber : colors.textMuted} />
-                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>History</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setExpertise(prev => ({ ...prev, food: !prev.food }))}>
-                <MaterialIcons name={expertise.food ? 'radio-button-checked' : 'radio-button-unchecked'} size={scale(18)} color={expertise.food ? colors.amber : colors.textMuted} />
-                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Food Walk</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.checkboxRow} onPress={() => setExpertise(prev => ({ ...prev, shopping: !prev.shopping }))}>
-                <MaterialIcons name={expertise.shopping ? 'radio-button-checked' : 'radio-button-unchecked'} size={scale(18)} color={expertise.shopping ? colors.amber : colors.textMuted} />
-                <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Shopping</Text>
+              <TouchableOpacity
+                style={[styles.langPill, !isDark && styles.langPillActive, { borderColor: colors.border }]}
+                onPress={() => setAppTheme('light')}
+              >
+                <MaterialIcons name="light-mode" size={scale(14)} color={!isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
+                <Text style={[styles.langPillText, { color: !isDark ? '#101010' : colors.textPrimary }]}>Light Mode </Text>
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* 3. Audio Guide & Toolkit Controls */}
-          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.toolkit}</Text>
-
-            <TouchableOpacity
-              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(245,197,24,0.06)', borderColor: colors.amber }]}
-              onPress={() => setQrVisible(true)}
-            >
-              <MaterialIcons name="qr-code-2" size={scale(18)} color={colors.amber} />
-              <Text style={[styles.supportActionBtnTextAmber, { color: colors.textPrimary }]}>{trans.tickets}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.supportActionRowBtn, { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: '#ef4444', marginTop: verticalScale(10) }]}
-              onPress={() => Alert.alert('Helpline Sync Dial', 'Emergency lines: Local Police (100) or Admin support (+91 99000 82400) called.')}
-            >
-              <MaterialIcons name="local-police" size={scale(18)} color="#ef4444" />
-              <Text style={styles.supportActionBtnTextDanger}>{trans.emergency}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 4. Notification & App Preferences */}
-          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.pref}</Text>
-
-            <View style={styles.toggleSettingItem}>
-              <View>
-                <Text style={[styles.toggleSettingLabel, { color: colors.textPrimary }]}>{trans.ringtone}</Text>
-                <Text style={[styles.toggleSettingSub, { color: colors.textMuted }]}>
-                  Current Tone: {selectedRingtone.toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.ringtonePillsRow}>
-                <TouchableOpacity style={[styles.ringTonePill, selectedRingtone === 'loud' && styles.ringTonePillActive]} onPress={() => setSelectedRingtone('loud')}>
-                  <Text style={[styles.ringPillText, selectedRingtone === 'loud' && { color: '#101010' }]}>Loud</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.ringTonePill, selectedRingtone === 'pulse' && styles.ringTonePillActive]} onPress={() => setSelectedRingtone('pulse')}>
-                  <Text style={[styles.ringPillText, selectedRingtone === 'pulse' && { color: '#101010' }]}>Pulse</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-            <View style={styles.statusProgressBlock}>
-              <View style={styles.progressLabelRow}>
-                <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>{trans.vol}</Text>
-                <Text style={[styles.progressValueText, { color: colors.amber }]}>{alertVolume}%</Text>
-              </View>
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${alertVolume}%`, backgroundColor: colors.amber }]} />
-              </View>
-              <View style={styles.volumeAdjustBtns}>
-                <TouchableOpacity style={styles.volStepBtn} onPress={() => setAlertVolume(v => Math.max(0, v - 20))}>
-                  <Text style={styles.volStepText}>-</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.volStepBtn} onPress={() => setAlertVolume(v => Math.min(100, v + 20))}>
-                  <Text style={styles.volStepText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-            {/* Language Switcher */}
             <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ</Text>
             <View style={styles.vehiclePillsRow}>
               <TouchableOpacity
                 style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppLang('en')}
+                onPress={() => {
+                  setAppLang('en');
+                  const session = getUserSessionSync();
+                  if (session?.id) saveUserSettingsApi(session.id, { language: 'en' });
+                }}
               >
                 <Text style={[styles.langPillText, { color: appLang === 'en' ? '#101010' : colors.textPrimary }]}>English</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.langPill, appLang === 'kn' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppLang('kn')}
+                onPress={() => {
+                  setAppLang('kn');
+                  const session = getUserSessionSync();
+                  if (session?.id) saveUserSettingsApi(session.id, { language: 'kn' });
+                }}
               >
                 <Text style={[styles.langPillText, { color: appLang === 'kn' ? '#101010' : colors.textPrimary }]}>ಕನ್ನಡ (Kannada)</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Completed Tours Logs */}
-          <Text style={[styles.sectionTitle, { color: colors.amber, marginTop: scale(4) }]}>Today Completed Trips Activity</Text>
-          {dailyTours.map((item) => (
-            <View key={item.id} style={[styles.dailyTripLogItem, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-              <View style={styles.logHeaderRow}>
-                <View>
-                  <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{item.title}</Text>
-                  <Text style={[styles.logTime, { color: colors.textMuted }]}>{item.time} · {item.payout}</Text>
-                </View>
-                <Text style={styles.logFare}>+₹{item.fare}</Text>
-              </View>
-            </View>
-          ))}
+          {/* Big Logout Button at the Bottom (Matching Driver Profile) */}
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#ef4444',
+              borderRadius: scale(14),
+              paddingVertical: verticalScale(14),
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: scale(8),
+              marginTop: verticalScale(10),
+              marginBottom: verticalScale(20),
+            }}
+            onPress={handleLogout}
+          >
+            <MaterialIcons name="logout" size={scale(20)} color="#ffffff" />
+            <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: moderateFontScale(14) }}>
+              Logout from Account
+            </Text>
+          </TouchableOpacity>
 
-          <View style={{ height: verticalScale(100) }} />
+          <View style={{ height: verticalScale(80) }} />
         </ScrollView>
       )}
 
@@ -1624,5 +1904,190 @@ const styles = StyleSheet.create({
   progressBarFill: {
     height: '100%',
     borderRadius: scale(4),
+  },
+  partnerBadgeIcon: {
+    width: scale(32),
+    height: scale(32),
+    borderRadius: scale(16),
+    backgroundColor: 'rgba(245,197,24,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineHeaderPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(5),
+    borderRadius: scale(20),
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  onlineDot: {
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
+  },
+  onlinePillText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  captainHeaderCard: {
+    padding: scale(16),
+    borderRadius: scale(16),
+    borderWidth: 1,
+    alignItems: 'center',
+    marginBottom: verticalScale(14),
+  },
+  captainAvatarContainer: {
+    position: 'relative',
+    marginBottom: verticalScale(10),
+  },
+  captainAvatarImg: {
+    width: scale(84),
+    height: scale(84),
+    borderRadius: scale(42),
+    borderWidth: 2,
+    borderColor: '#F5C518',
+  },
+  captainAvatarPlaceholder: {
+    width: scale(84),
+    height: scale(84),
+    borderRadius: scale(42),
+    backgroundColor: 'rgba(245,197,24,0.12)',
+    borderWidth: 2,
+    borderColor: '#F5C518',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraBadgeBtn: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#F5C518',
+    width: scale(28),
+    height: scale(28),
+    borderRadius: scale(14),
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+  },
+  captainNameText: {
+    fontSize: moderateFontScale(20),
+    fontWeight: '900',
+    marginBottom: verticalScale(2),
+  },
+  captainPhoneText: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '600',
+    marginBottom: verticalScale(10),
+  },
+  vehicleBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: scale(6),
+    justifyContent: 'center',
+    marginBottom: verticalScale(14),
+  },
+  badgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(4),
+    backgroundColor: 'rgba(245,197,24,0.1)',
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(5),
+    borderRadius: scale(20),
+    borderWidth: 1,
+    borderColor: 'rgba(245,197,24,0.25)',
+  },
+  badgePillText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
+    color: '#F5C518',
+  },
+  toggleEditModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(8),
+    borderRadius: scale(20),
+    borderWidth: 1.5,
+  },
+  toggleEditModeBtnText: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '800',
+  },
+  editProfileCard: {
+    padding: scale(16),
+    borderRadius: scale(16),
+    borderWidth: 1.5,
+    marginBottom: verticalScale(14),
+  },
+  editCardTitle: {
+    fontSize: moderateFontScale(15),
+    fontWeight: '900',
+    marginBottom: verticalScale(12),
+  },
+  photoPickerTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: scale(10),
+    backgroundColor: 'rgba(245,197,24,0.06)',
+    borderRadius: scale(12),
+    borderWidth: 1,
+    borderColor: 'rgba(245,197,24,0.25)',
+  },
+  photoPickerPreview: {
+    width: scale(44),
+    height: scale(44),
+    borderRadius: scale(22),
+  },
+  photoPickerPlaceholder: {
+    width: scale(44),
+    height: scale(44),
+    borderRadius: scale(22),
+    backgroundColor: 'rgba(245,197,24,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoPickerTitle: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+  },
+  photoPickerSub: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '500',
+  },
+  saveProfileBtn: {
+    marginTop: verticalScale(16),
+    paddingVertical: verticalScale(12),
+    borderRadius: scale(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveProfileBtnText: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '900',
+    color: '#101010',
+  },
+  bottomLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(8),
+    backgroundColor: '#EF4444',
+    paddingVertical: verticalScale(14),
+    borderRadius: scale(14),
+    marginTop: verticalScale(16),
+    marginBottom: verticalScale(30),
+    elevation: 3,
+  },
+  bottomLogoutBtnText: {
+    color: '#FFFFFF',
+    fontSize: moderateFontScale(15),
+    fontWeight: '900',
   },
 });

@@ -1,10 +1,15 @@
+import NotificationModal from '@/components/NotificationModal';
 import {
+  acceptTripApi,
+  driverArrivedApi,
+  fetchDriverAdvanceSchedulesApi,
   fetchDriverRequestsApi,
   fetchDriverStatsApi,
   fetchDriverTripsApi,
   fetchUserProfileApi,
   fetchWalletBalanceApi,
   respondDriverRequestApi,
+  saveUserSettingsApi,
   submitWithdrawalApi,
   updateDriverLocationApi,
   updatePasswordApi,
@@ -387,6 +392,29 @@ export default function DriverDashboardScreen() {
     };
   }, [isOnline, activeTrip]);
 
+  // Fetch real-time driver schedules & pending queries from PostgreSQL database
+  useEffect(() => {
+    const loadDriverData = async () => {
+      const session = getUserSessionSync();
+      const dId = session?.id || 'd1';
+      const schedules = await fetchDriverAdvanceSchedulesApi(dId);
+      if (Array.isArray(schedules)) {
+        setDriverTrips(schedules);
+      }
+
+      // Fetch driver stats
+      const statsRes = await fetchDriverStatsApi(dId);
+      if (statsRes && statsRes.success && statsRes.data) {
+        setKmDriven(statsRes.data.todayKm || 142.5);
+        setTripsCount(statsRes.data.tripsCount || 8);
+        setEarningsToday(statsRes.data.todayEarnings || 2800);
+      }
+    };
+    loadDriverData();
+    const interval = setInterval(loadDriverData, 3000);
+    return () => clearInterval(interval);
+  }, [updateTrigger]);
+
   const handleLogout = async () => {
     Alert.alert(
       'Driver Logout',
@@ -589,6 +617,9 @@ export default function DriverDashboardScreen() {
             {driverDisplayName} <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>({vehicleModelName} • {vehiclePlateNum})</Text>
           </Text>
         </View>
+
+        {/* Bell Notification Icon */}
+        <NotificationModal role="driver" />
       </View>
 
       {/* Tab Switchboard Body */}
@@ -637,13 +668,68 @@ export default function DriverDashboardScreen() {
             </View>
           </View>
 
-          {/* Upcoming Advance Bookings card */}
+          {/* Upcoming Advance Bookings & Pending Requests card */}
           <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
-            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Upcoming Advance Booking Schedules</Text>
-            {adminState.advanceBookings
-              .filter(b => b.type === 'cab' && b.status !== 'Cancelled')
-              .map(booking => {
-                const isAcceptedByMe = booking.assignedToId === 'd1';
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Upcoming & Pending Booking Queries</Text>
+            {(() => {
+              const allBookingsMap = new Map();
+
+              // 1. Load real-time PostgreSQL database trips fetched via API
+              if (Array.isArray(driverTrips)) {
+                driverTrips.forEach(t => {
+                  allBookingsMap.set(t.id, {
+                    id: t.id,
+                    title: t.title || `${t.pickupName || 'Pickup'} ➔ ${t.dropName || 'Destination'}`,
+                    date: t.date || 'Today',
+                    time: t.time || 'Immediate',
+                    price: t.price || t.amount || 1200,
+                    touristName: t.touristName || t.customerName || 'Tourist Client',
+                    driverOrGuideName: t.driverOrGuideName || '',
+                    status: t.status || 'Pending',
+                    paymentMode: t.paymentMode || 'Cash',
+                    assignedToId: t.assignedToId,
+                    otp: t.otp || '8240',
+                  });
+                });
+              }
+
+              // 2. Load client-side advance bookings
+              if (adminState && Array.isArray(adminState.advanceBookings)) {
+                adminState.advanceBookings.forEach(b => {
+                  if (b.status !== 'Cancelled') {
+                    allBookingsMap.set(b.id, {
+                      id: b.id,
+                      title: b.title,
+                      date: b.date,
+                      time: b.time,
+                      price: b.price,
+                      touristName: b.touristName,
+                      driverOrGuideName: b.driverOrGuideName,
+                      status: b.status,
+                      paymentMode: b.paymentMode,
+                      assignedToId: b.assignedToId,
+                      otp: '8240',
+                    });
+                  }
+                });
+              }
+
+              const combinedList = Array.from(allBookingsMap.values());
+
+              if (combinedList.length === 0) {
+                return (
+                  <View style={{ padding: scale(16), alignItems: 'center' }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13) }}>
+                      No active or pending bookings found for driver.
+                    </Text>
+                  </View>
+                );
+              }
+
+              return combinedList.map(booking => {
+                const isAcceptedByMe = booking.driverOrGuideName?.toLowerCase().includes(driverName.toLowerCase()) || booking.assignedToId === currentSession?.id;
+                const isPending = booking.status === 'Pending' || booking.status === 'Dispatched' || booking.status === 'Confirmed';
+
                 return (
                   <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
                     <View style={styles.logHeaderRow}>
@@ -655,34 +741,70 @@ export default function DriverDashboardScreen() {
                         <Text style={[styles.logTime, { color: colors.textMuted }]}>
                           Client: {booking.touristName}
                         </Text>
+                        <Text style={[styles.logTime, { color: colors.amber }]}>
+                          Payment: {booking.paymentMode} | OTP: {booking.otp}
+                        </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price}</Text>
                         <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
                           <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' ? '#10B981' : colors.amber }}>
-                            {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Available'}
+                            {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Pending Request'}
                           </Text>
                         </View>
                       </View>
                     </View>
 
-                    {booking.status === 'Pending' && (
+                    {isPending && (
                       <TouchableOpacity
                         style={[styles.smallPayoutBtn, { backgroundColor: colors.amber, marginTop: verticalScale(10), alignItems: 'center' }]}
-                        onPress={() => {
+                        onPress={async () => {
+                          const session = getUserSessionSync();
+                          const dId = session?.id || 'd1';
+                          const name = session?.name || driverName || 'Shubham';
+                          
+                          await respondDriverRequestApi(booking.id, dId, 'accept', name);
+                          await acceptTripApi(booking.id, dId, name);
+
                           booking.status = 'Accepted';
-                          booking.assignedToId = 'd1';
-                          booking.driverOrGuideName = 'Anil Gowda';
-                          Alert.alert('Booking Claimed!', `You have accepted the advance booking: ${booking.title} on ${booking.date}.`);
+                          booking.driverOrGuideName = name;
+                          booking.assignedToId = dId;
+
+                          const reqObj: ActiveRequest = {
+                            touristName: booking.touristName,
+                            pickup: booking.title,
+                            pickupLat: 12.9716,
+                            pickupLng: 77.5946,
+                            drop: booking.title,
+                            dropLat: 12.3053,
+                            dropLng: 76.6552,
+                            distanceKm: 45,
+                            durationMins: 60,
+                            estimatedFare: Number(booking.price) || 2500,
+                            paymentMode: booking.paymentMode || 'Cash',
+                            otp: booking.otp || '8240',
+                            tripId: booking.id,
+                          } as any;
+
+                          setActiveTrip(reqObj);
+                          setTripPhase('pickup');
+                          setActiveTab('active_trip');
+
+                          sendLocalNotification(
+                            '✅ Booking Accepted!',
+                            `You have accepted the trip: ${booking.title}! GPS navigation active.`
+                          );
+                          Alert.alert('🎉 Booking Accepted!', `Trip '${booking.title}' accepted! Switched to Active Trip tab.`);
                           setUpdateTrigger(prev => prev + 1);
                         }}
                       >
-                        <Text style={styles.smallPayoutBtnText}>Accept Advance Schedule</Text>
+                        <Text style={styles.smallPayoutBtnText}>Accept Booking Schedule</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 );
-              })}
+              });
+            })()}
           </View>
         </ScrollView>
       )}
@@ -755,7 +877,17 @@ export default function DriverDashboardScreen() {
                     </View>
 
                     <View style={styles.actionBtnGrid}>
-                      <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]} onPress={() => Alert.alert('Status updated', 'Rider notified.')}>
+                      <TouchableOpacity
+                        style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]}
+                        onPress={async () => {
+                          const tripId = (activeTrip as any)?.tripId;
+                          if (tripId) {
+                            await driverArrivedApi(tripId, driverName);
+                          }
+                          sendLocalNotification('📍 Arrived at Pickup!', 'Rider notified that you have arrived at pickup location.');
+                          Alert.alert('📍 Arrived at Pickup', 'Notification sent to tourist!');
+                        }}
+                      >
                         <Text style={styles.navActionTextCancel}>Arrived</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: colors.amber }]} onPress={() => setOtpVisible(true)}>
@@ -1032,14 +1164,22 @@ export default function DriverDashboardScreen() {
             <View style={styles.vehiclePillsRow}>
               <TouchableOpacity
                 style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppLang('en')}
+                onPress={() => {
+                  setAppLang('en');
+                  const session = getUserSessionSync();
+                  if (session?.id) saveUserSettingsApi(session.id, { language: 'en' });
+                }}
               >
                 <Text style={[styles.langPillText, { color: appLang === 'en' ? '#101010' : colors.textPrimary }]}>English</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.langPill, appLang === 'kn' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppLang('kn')}
+                onPress={() => {
+                  setAppLang('kn');
+                  const session = getUserSessionSync();
+                  if (session?.id) saveUserSettingsApi(session.id, { language: 'kn' });
+                }}
               >
                 <Text style={[styles.langPillText, { color: appLang === 'kn' ? '#101010' : colors.textPrimary }]}>ಕನ್ನಡ (Kannada)</Text>
               </TouchableOpacity>
@@ -1540,9 +1680,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   tabIconWrapper: {
-    width: scale(40),
-    height: scale(32),
-    borderRadius: scale(16),
+    width: scale(48),
+    height: verticalScale(28),
+    borderRadius: scale(14),
     alignItems: 'center',
     justifyContent: 'center',
   },

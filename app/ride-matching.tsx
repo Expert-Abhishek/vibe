@@ -15,6 +15,8 @@ import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import NotificationModal from '@/components/NotificationModal';
+import { fetchLiveLocationApi } from '@/constants/api';
 import { adminState, TripRecord } from './admin-state';
 
 let MapView: any = null;
@@ -72,14 +74,14 @@ export default function RideMatchingScreen() {
   const paymentMode = (params.paymentMode as 'UPI' | 'Cash') || 'UPI';
   const passengerCount = parseInt((params.passengerCount as string) || '1');
 
-  // Demo driver information
+  // Live / Server driver information
   const demoDriver = {
-    name: tripType === 'guide' ? 'Ramesh Gowda' : (vehicle === 'auto' ? 'Raju Auto' : 'Suresh Kumar'),
-    rating: '4.8 ★',
-    phone: '+91 98765 43210',
-    vehicleName: tripType === 'guide' ? 'Government Certified Guide' : (vehicle === 'auto' ? 'Bajaj RE Auto' : 'Maruti Swift Premium'),
-    vehicleNumber: tripType === 'guide' ? 'GUIDE-ID-8240' : (vehicle === 'auto' ? 'KA-02-AU-9912' : 'KA-03-MY-7788'),
-    otp: '4892',
+    name: liveDriverInfo?.name || (tripType === 'guide' ? 'Ramesh Gowda' : (vehicle === 'auto' ? 'Raju Auto' : 'Shubham (Captain)')),
+    rating: liveDriverInfo?.rating ? `${liveDriverInfo.rating} ★` : '4.9 ★',
+    phone: liveDriverInfo?.phone || '+91 99000 82400',
+    vehicleName: liveDriverInfo?.vehicleModel || (tripType === 'guide' ? 'Government Certified Guide' : (vehicle === 'auto' ? 'Bajaj RE Auto' : 'Mahindra Thar 4x4 / Innova')),
+    vehicleNumber: liveDriverInfo?.vehicleNumber || (tripType === 'guide' ? 'GUIDE-ID-8240' : (vehicle === 'auto' ? 'KA-02-AU-9912' : 'KA-03-EX-8240')),
+    otp: (params.otp as string) || '8240',
   };
 
   // Generate route coordinates list connecting pickup -> stops -> drop
@@ -150,15 +152,43 @@ export default function RideMatchingScreen() {
     return () => clearInterval(interval);
   }, [status]);
 
+  const tripIdParam = (params.tripId as string) || '';
+  const [liveDriverInfo, setLiveDriverInfo] = useState<any>(null);
+
+  // Poll live server status & driver location
+  useEffect(() => {
+    if (!tripIdParam) return;
+
+    async function pollLiveLocation() {
+      const res = await fetchLiveLocationApi(tripIdParam);
+      if (res && res.success && res.data) {
+        if (res.data.driver) {
+          setLiveDriverInfo(res.data.driver);
+        }
+        if (res.data.status === 'Accepted' || res.data.status === 'Arrived') {
+          setStatus('matched');
+        } else if (res.data.status === 'Active') {
+          setStatus('started');
+        } else if (res.data.status === 'Completed') {
+          setStatus('completed');
+        }
+      }
+    }
+
+    pollLiveLocation();
+    const interval = setInterval(pollLiveLocation, 3000);
+    return () => clearInterval(interval);
+  }, [tripIdParam]);
+
   // Transition searching -> matched after 3.5 seconds automatically
   useEffect(() => {
-    if (status === 'searching') {
+    if (status === 'searching' && !tripIdParam) {
       const timer = setTimeout(() => {
         setStatus('matched');
       }, 3500);
       return () => clearTimeout(timer);
     }
-  }, [status]);
+  }, [status, tripIdParam]);
 
   // Drive marker simulation along the points list when started
   useEffect(() => {

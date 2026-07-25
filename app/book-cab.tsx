@@ -1,4 +1,5 @@
-import { createTripApi } from '@/constants/api';
+import { bookTripApi, createTripApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -368,15 +369,20 @@ export default function BookCabScreen() {
       const remainingAmount = final - advanceAmount;
 
       if (paymentMethod === 'cash') {
-        await createTripApi({
+        const session = getUserSessionSync();
+        await bookTripApi({
           tripType: 'cab',
           title: `${pickup.name} ➔ ${drop.name}`,
-          customerName: 'Abhishek (Tourist)',
-          driverOrGuideName: 'Anil Gowda (Captain)',
-          driverId: 'd1',
+          customerId: session?.id || 't1',
+          customerName: session?.name || 'Abhishek (Tourist)',
+          pickupName: pickup.name,
+          dropName: drop.name,
+          pickupLat: pickup.latitude || 12.9716,
+          pickupLng: pickup.longitude || 77.5946,
+          dropLat: drop.latitude || 12.2958,
+          dropLng: drop.longitude || 76.6394,
           amount: final,
           paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
-          status: 'Pending',
         });
 
         const newAdv = {

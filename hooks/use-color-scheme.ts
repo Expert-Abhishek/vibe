@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useColorScheme as useDeviceColorScheme } from 'react-native';
+import { saveUserSettingsApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 
 type Theme = 'light' | 'dark';
 
@@ -13,6 +15,16 @@ export function getAppTheme(): Theme {
 export function setAppTheme(theme: Theme) {
   currentTheme = theme;
   listeners.forEach((l) => l(theme));
+
+  // Auto-sync theme to PostgreSQL backend database
+  try {
+    const session = getUserSessionSync();
+    if (session?.id) {
+      saveUserSettingsApi(session.id, { theme });
+    }
+  } catch (e) {
+    // Ignore if unauthenticated
+  }
 }
 
 export function toggleAppTheme() {

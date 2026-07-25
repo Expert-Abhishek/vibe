@@ -12,6 +12,8 @@ import { scale, verticalScale } from '@/constants/responsive';
 import { loginUserApi } from '@/constants/api';
 import { saveUserSession } from '@/constants/authStore';
 
+import { setAppTheme } from '@/hooks/use-color-scheme';
+
 export default function SignInScreen() {
   const router = useRouter();
 
@@ -22,6 +24,10 @@ export default function SignInScreen() {
     try {
       const apiRes = await loginUserApi({ identifier: cleanPhone, password: pass });
       if (apiRes.success && apiRes.user) {
+        if (apiRes.user.theme === 'light' || apiRes.user.theme === 'dark') {
+          setAppTheme(apiRes.user.theme);
+        }
+
         await saveUserSession({
           id: apiRes.user.id,
           name: apiRes.user.name,
@@ -29,6 +35,8 @@ export default function SignInScreen() {
           email: apiRes.user.email,
           role: apiRes.user.role,
           status: apiRes.user.status,
+          theme: apiRes.user.theme || 'dark',
+          language: apiRes.user.language || 'en',
           token: apiRes.token,
           profile: apiRes.user.profile,
         });

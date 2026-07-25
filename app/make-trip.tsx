@@ -76,7 +76,7 @@ export default function MakeTripScreen() {
   const searchParams = useLocalSearchParams();
   const [selectedRide, setSelectedRide] = useState<string>((searchParams.selectedRide as string) || '5seater');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('upi');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('cash');
 
   // Vehicle selector modal visibility state
   const [isVehiclePickerVisible, setIsVehiclePickerVisible] = useState(false);
@@ -1408,16 +1408,66 @@ export default function MakeTripScreen() {
               </Text>
             </View>
 
+            {/* Payment Method Selector (Cash vs Online UPI) */}
+            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12), marginTop: verticalScale(10), marginBottom: verticalScale(6) }}>
+              Select Payment Method
+            </Text>
+            <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(12) }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: scale(6),
+                  paddingVertical: verticalScale(10),
+                  borderRadius: scale(10),
+                  borderWidth: 1.5,
+                  borderColor: paymentMethod === 'cash' ? colors.amber : colors.border,
+                  backgroundColor: paymentMethod === 'cash' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                }}
+                onPress={() => setPaymentMethod('cash')}
+              >
+                <MaterialIcons name="payments" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
+                <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                  Cash Payment
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: scale(6),
+                  paddingVertical: verticalScale(10),
+                  borderRadius: scale(10),
+                  borderWidth: 1.5,
+                  borderColor: paymentMethod === 'upi' ? colors.amber : colors.border,
+                  backgroundColor: paymentMethod === 'upi' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                }}
+                onPress={() => setPaymentMethod('upi')}
+              >
+                <MaterialIcons name="qr-code-scanner" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
+                <Text style={{ color: paymentMethod === 'upi' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                  Online UPI
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
-              style={[styles.confirmButton, { marginTop: verticalScale(14) }]}
+              style={[styles.confirmButton, { marginTop: verticalScale(4) }]}
               activeOpacity={0.8}
               onPress={handleBookCustomRide}
             >
               <MaterialIcons name="payment" size={scale(20)} color="#101014" />
               <Text style={styles.confirmBtnText}>
-                {!adminState.instantBookingEnabled
-                  ? `Pay Pre-Booking Fees (₹${Math.round(computedTripPrice * 0.20)})`
-                  : `Pay Total Fare (₹${computedTripPrice})`}
+                {paymentMethod === 'cash'
+                  ? `Book Trip with Cash (₹${computedTripPrice})`
+                  : (!adminState.instantBookingEnabled
+                      ? `Pay Pre-Booking Fees (₹${Math.round(computedTripPrice * 0.20)})`
+                      : `Pay Total Fare (₹${computedTripPrice})`)}
               </Text>
             </TouchableOpacity>
           </View>

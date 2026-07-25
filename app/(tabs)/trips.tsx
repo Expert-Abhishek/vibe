@@ -15,6 +15,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '../admin-state';
 import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
 
+import NotificationModal from '@/components/NotificationModal';
+
 const initialTripHistory: any[] = [];
 
 export default function TripsHistoryScreen() {
@@ -165,9 +167,12 @@ export default function TripsHistoryScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Trips</Text>
-        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Upcoming trip</Text>
+      <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+        <View>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Trips</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Upcoming trip</Text>
+        </View>
+        <NotificationModal role="tourist" />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

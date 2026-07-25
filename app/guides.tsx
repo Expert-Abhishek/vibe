@@ -3,7 +3,9 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { fetchGuidesApi } from '@/constants/api';
+import { bookTripApi, fetchGuidesApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
+import { sendLocalNotification } from '@/constants/notifications';
 import {
   ActivityIndicator,
   Alert,
@@ -197,10 +199,28 @@ export default function GuidesScreen() {
     }, 1200);
   };
 
-  const checkoutGuide = () => {
+  const checkoutGuide = async () => {
     if (!selectedGuide) return;
     const finalDate = adminState.instantBookingEnabled ? 'Today' : prebookDate;
     const finalTime = adminState.instantBookingEnabled ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : prebookTime;
+    const fareAmt = selectedGuide.chargePerHour * 4;
+    const session = getUserSessionSync();
+
+    await bookTripApi({
+      tripType: 'guide',
+      title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
+      customerId: session?.id || 't1',
+      customerName: session?.name || 'Tourist Client',
+      pickupName: `${selectedGuide.city} Landmark Center`,
+      dropName: `${selectedGuide.city} Sightseeing Spots`,
+      amount: fareAmt,
+      paymentMode: 'UPI',
+    });
+
+    sendLocalNotification(
+      '🚩 Guide Booking Dispatched!',
+      `Booking request sent for ${selectedGuide.name}. Waiting for guide confirmation.`
+    );
 
     // Add guide booking to upcoming trips silently behind the scenes
     adminState.userTrips.push({
@@ -210,7 +230,7 @@ export default function GuidesScreen() {
       driverOrGuideName: selectedGuide.name,
       date: finalDate,
       time: finalTime,
-      price: selectedGuide.chargePerHour * 4, // 4 hours block charge
+      price: fareAmt,
       paymentMode: 'UPI',
       status: 'Upcoming',
     });

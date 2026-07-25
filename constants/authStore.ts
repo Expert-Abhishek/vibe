@@ -8,6 +8,8 @@ export interface UserSession {
   role: 'tourist' | 'driver' | 'guide' | 'admin';
   status: string;
   token?: string;
+  theme?: 'light' | 'dark';
+  language?: string;
   profile?: any;
 }
 

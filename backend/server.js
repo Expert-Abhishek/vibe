@@ -246,6 +246,8 @@ async function initTablesOnBoot() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS theme VARCHAR(20) DEFAULT 'dark';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'en';
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
       ALTER TABLE driver_profiles ALTER COLUMN photo_url TYPE TEXT;
       ALTER TABLE guide_profiles ALTER COLUMN photo_url TYPE TEXT;
@@ -258,15 +260,37 @@ async function initTablesOnBoot() {
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS car_right_url TEXT;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS car_back_url TEXT;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2) DEFAULT 2500.00;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_name TEXT;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_name TEXT;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_lat NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_lng NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lat NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lng NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id UUID;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS guide_id UUID;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(10,2) DEFAULT 10.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);
 
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS license_cert_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS id_proof_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2) DEFAULT 2000.00;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);
+
+      CREATE TABLE IF NOT EXISTS activity_notifications (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID,
+          role VARCHAR(20) DEFAULT 'tourist',
+          title VARCHAR(255) NOT NULL,
+          body TEXT NOT NULL,
+          trip_id UUID,
+          is_read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_profiles_user_id ON driver_profiles (user_id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_guide_profiles_user_id ON guide_profiles (user_id);
