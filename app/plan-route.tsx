@@ -317,6 +317,10 @@ export default function PlanRouteScreen() {
         ? `Cash (Pre-Booking Fees: ₹${paymentAmount}, Bal ₹${remainingBalance})`
         : `Cash (Full Payment ₹${totalPrice})`;
 
+      const calculatedScheduledTime = isPreBooking && bookingDate
+        ? new Date(`${bookingDate}T${bookingTime || '10:00:00'}`).toISOString()
+        : new Date().toISOString();
+
       await createTripApi({
         tripType: 'plan',
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
@@ -330,6 +334,8 @@ export default function PlanRouteScreen() {
         durationHours: totalHours,
         extraHours: priceInfo.extraHoursRounded,
         addonCharge: priceInfo.extraAddonCharge,
+        bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
+        scheduledTime: calculatedScheduledTime,
       });
 
       const newAdvBooking = {

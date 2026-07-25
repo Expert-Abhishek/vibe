@@ -643,6 +643,10 @@ export default function MakeTripScreen() {
         ? `Cash (Pre-Booking Fees: ₹${paymentAmount}, Bal ₹${remainingAmount})`
         : `Cash (Full Payment ₹${totalPrice})`;
 
+      const calculatedScheduledTime = isPreBooking && bookingDate
+        ? new Date(`${bookingDate}T${bookingTime || '10:00:00'}`).toISOString()
+        : new Date().toISOString();
+
       await createTripApi({
         tripType: 'custom_trip',
         title: `Trip: ${pickup.name} → ${drop.name}`,
@@ -655,6 +659,10 @@ export default function MakeTripScreen() {
         durationHours: totalTripHours,
         extraHours: extraHoursRounded,
         addonCharge: extraAddonCharge,
+        bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
+        scheduledTime: calculatedScheduledTime,
+        pickupName: pickup.name,
+        dropName: drop.name,
       });
 
       sendLocalNotification(
@@ -704,6 +712,10 @@ export default function MakeTripScreen() {
       title: `Custom Trip: ${pickup.name} → ${drop.name}`,
       customerName: 'Abhishek (Tourist)',
       onSuccess: async (paymentId: string) => {
+        const calculatedScheduledTime = isPreBooking && bookingDate
+          ? new Date(`${bookingDate}T${bookingTime || '10:00:00'}`).toISOString()
+          : new Date().toISOString();
+
         // Save trip to real backend DB
         await createTripApi({
           tripType: 'custom_trip',
@@ -716,6 +728,10 @@ export default function MakeTripScreen() {
           durationHours: totalTripHours,
           extraHours: extraHoursRounded,
           addonCharge: extraAddonCharge,
+          bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
+          scheduledTime: calculatedScheduledTime,
+          pickupName: pickup.name,
+          dropName: drop.name,
         });
 
         Alert.alert(

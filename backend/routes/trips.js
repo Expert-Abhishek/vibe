@@ -599,11 +599,13 @@ router.post('/', async (req, res) => {
       destinationIds = [],
       amount = 0,
       paymentMode = 'UPI',
-      status = 'Completed',
+      status = 'Pending',
       durationHours = 8,
       extraHours = 0,
       addonCharge = 0,
       rating = 5,
+      bookingType = 'INSTANT',
+      scheduledTime = null,
     } = req.body;
 
     if (!title || !title.trim()) {
@@ -611,14 +613,19 @@ router.post('/', async (req, res) => {
     }
 
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const totalAmount = parseFloat(amount || 0);
+    const isPreBooked = bookingType === 'PRE_BOOKED';
+    const advanceDepositPaid = isPreBooked ? Math.round(totalAmount * 0.20) : 0;
+    const remainingCashBalance = isPreBooked ? totalAmount - advanceDepositPaid : totalAmount;
 
     const result = await db.query(
       `INSERT INTO trips (
         trip_type, title, customer_id, customer_name, driver_or_guide_name,
         plan_id, destination_ids, amount, payment_mode, status,
-        duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name
+        duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
+        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING *`,
       [
         tripType,
@@ -628,7 +635,7 @@ router.post('/', async (req, res) => {
         driverOrGuideName || 'Assigned Driver',
         planId || null,
         Array.isArray(destinationIds) ? destinationIds : [],
-        parseFloat(amount),
+        totalAmount,
         paymentMode,
         status || 'Pending',
         parseFloat(durationHours),
@@ -638,6 +645,10 @@ router.post('/', async (req, res) => {
         otpCode,
         req.body.pickupName || 'Bengaluru City Center',
         req.body.dropName || title.trim(),
+        bookingType,
+        scheduledTime ? new Date(scheduledTime) : null,
+        advanceDepositPaid,
+        remainingCashBalance,
       ]
     );
 

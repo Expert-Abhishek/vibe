@@ -223,6 +223,10 @@ export async function createTripApi(payload: {
   durationHours?: number;
   extraHours?: number;
   addonCharge?: number;
+  bookingType?: 'INSTANT' | 'PRE_BOOKED';
+  scheduledTime?: string;
+  pickupName?: string;
+  dropName?: string;
 }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips`, {
