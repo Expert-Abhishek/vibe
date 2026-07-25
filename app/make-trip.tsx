@@ -18,7 +18,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from './admin-state';
+import { adminState } from '@/constants/admin-state';
 import { fetchDestinationsApi, fetchDriversApi, createTripApi } from '@/constants/api';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { sendLocalNotification } from '@/constants/notifications';

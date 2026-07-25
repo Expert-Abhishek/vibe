@@ -17,7 +17,7 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import NotificationModal from '@/components/NotificationModal';
 import { fetchLiveLocationApi } from '@/constants/api';
-import { adminState, TripRecord } from './admin-state';
+import { adminState, TripRecord } from '@/constants/admin-state';
 
 let MapView: any = null;
 let Marker: any = null;

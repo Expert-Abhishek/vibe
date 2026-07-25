@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { adminState } from '../admin-state';
+import { adminState } from '@/constants/admin-state';
 
 interface HistoryRecord {
   id: string;

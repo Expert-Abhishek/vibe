@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationModal from '@/components/NotificationModal';
+import { adminState } from '@/constants/admin-state';
 
 const rides = [
   { key: '5seater', name: '5 Seater', desc: 'Comfort & Style', image: require('@/assets/images/sedan.png') },

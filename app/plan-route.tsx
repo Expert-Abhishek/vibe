@@ -17,7 +17,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from './admin-state';
+import { adminState } from '@/constants/admin-state';
 import { openRazorpayPayment } from '@/constants/razorpay';
 
 interface TourPackage {

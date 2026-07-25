@@ -20,7 +20,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from './admin-state';
+import { adminState } from '@/constants/admin-state';
 
 // Dynamically require maps for web safety
 let MapView: any = null;

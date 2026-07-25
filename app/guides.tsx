@@ -21,7 +21,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from './admin-state';
+import { adminState } from '@/constants/admin-state';
 
 // Dynamically import react-native-maps to prevent crashes on web
 let MapView: any = null;

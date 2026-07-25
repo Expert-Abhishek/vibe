@@ -1,15 +1,24 @@
 import { Alert, Platform } from 'react-native';
 
-// Safe dynamic helper to get expo-notifications module without crashing on unsupported environments
-function getNotificationsModule() {
+/**
+ * Safe helper to fetch expo-notifications module ONLY in standalone native builds.
+ * Bypasses in Expo Go & Web to prevent 'Cannot find native module ExpoPushTokenManager'.
+ */
+function getNotificationsModule(): any {
+  if (Platform.OS === 'web') return null;
   try {
+    const Constants = require('expo-constants').default;
+    // Expo Go app environment check
+    if (Constants?.appOwnership === 'expo' || Constants?.executionEnvironment === 'storeClient') {
+      return null;
+    }
     return require('expo-notifications');
   } catch (e) {
     return null;
   }
 }
 
-// Safely configure notification behavior if module exists
+// Safely configure notification behavior if standalone native module exists
 try {
   const Notifications = getNotificationsModule();
   if (Notifications && typeof Notifications.setNotificationHandler === 'function') {
@@ -22,7 +31,7 @@ try {
     });
   }
 } catch (e) {
-  // Ignored on environments without native push support
+  // Ignored in Expo Go & Web
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
@@ -53,7 +62,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
     }
     return false;
   } catch (e) {
-    console.warn('Failed to request notification permission:', e);
+    console.warn('Notification permission check bypassed safely:', e);
     return false;
   }
 }
@@ -81,7 +90,7 @@ export async function getExpoPushToken(): Promise<string | null> {
 
 export async function sendLocalNotification(title: string, body: string, data?: any): Promise<void> {
   try {
-    // Show visual Banner Alert fallback for instant UI response
+    // Show visual Banner Alert fallback for instant UI response on all platforms
     Alert.alert(`🔔 ${title}`, body);
 
     if (Platform.OS !== 'web') {

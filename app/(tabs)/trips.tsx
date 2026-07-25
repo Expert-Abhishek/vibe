@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { adminState } from '../admin-state';
+import { adminState } from '@/constants/admin-state';
 import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
 
 import NotificationModal from '@/components/NotificationModal';

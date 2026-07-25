@@ -15,7 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchDriversApi } from '@/constants/api';
-import { adminState } from './admin-state';
+import { adminState } from '@/constants/admin-state';
 
 interface CategoryInfo {
   key: string;

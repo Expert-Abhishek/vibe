@@ -16,7 +16,7 @@ import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useRouter } from 'expo-router';
-import { adminState, Driver, Guide } from './admin-state';
+import { adminState, Driver, Guide } from '@/constants/admin-state';
 import { updateUserStatus } from '@/constants/api';
 
 // Interfaces
