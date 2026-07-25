@@ -9,6 +9,7 @@ const destinationsRoutes = require('./routes/destinations');
 const plansRoutes = require('./routes/plans');
 const tripsRoutes = require('./routes/trips');
 const walletRoutes = require('./routes/wallet');
+const notificationsRoutes = require('./routes/notifications');
 
 dotenv.config();
 
@@ -27,6 +28,8 @@ app.use('/api/destinations', destinationsRoutes);
 app.use('/api/plans', plansRoutes);
 app.use('/api/trips', tripsRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 
 

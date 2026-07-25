@@ -13,6 +13,9 @@ import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+import NotificationIcon from '@src/components/NotificationIcon';
+import { notificationStore, useNotificationStore } from '@src/store/notificationStore';
+
 interface Props {
   role?: 'tourist' | 'driver' | 'guide';
 }
@@ -30,8 +33,7 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
   };
 
   const [visible, setVisible] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const { notifications } = useNotificationStore();
 
   const loadNotifications = async () => {
     const session = getUserSessionSync();
@@ -39,11 +41,7 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
     const list = await fetchNotificationsApi(userId, role);
 
     if (Array.isArray(list) && list.length > 0) {
-      setNotifications(list);
-      setUnreadCount(list.filter(n => !n.isRead).length);
-    } else {
-      setNotifications([]);
-      setUnreadCount(0);
+      notificationStore.setNotifications(list);
     }
   };
 
@@ -56,23 +54,18 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
   const handleOpen = () => {
     loadNotifications();
     setVisible(true);
-    setUnreadCount(0);
   };
+
+  const session = getUserSessionSync();
+  const currentUserId = session?.id;
 
   return (
     <>
-      <TouchableOpacity
-        style={[styles.bellButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6' }]}
+      <NotificationIcon
+        userId={currentUserId}
+        role={role}
         onPress={handleOpen}
-        activeOpacity={0.7}
-      >
-        <MaterialIcons name="notifications" size={scale(22)} color={colors.amber} />
-        {unreadCount > 0 && (
-          <View style={styles.badgeContainer}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      />
 
       <Modal visible={visible} animationType="slide" transparent>
         <View style={styles.overlay}>

@@ -9,6 +9,7 @@ import { savePushTokenApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { getExpoPushToken } from '@/constants/notifications';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ModalProvider } from '@src/context/ModalContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -38,7 +39,8 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <ModalProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="sign-in" />
@@ -60,6 +62,7 @@ export default function RootLayout() {
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
-    </SafeAreaProvider>
+    </ModalProvider>
+  </SafeAreaProvider>
   );
 }

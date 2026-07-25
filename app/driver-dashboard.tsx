@@ -1,4 +1,5 @@
 import NotificationModal from '@/components/NotificationModal';
+import { rideStateService } from '@src/services/rideStateService';
 import {
   acceptTripApi,
   driverArrivedApi,
@@ -911,12 +912,21 @@ export default function DriverDashboardScreen() {
                       <TouchableOpacity
                         style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]}
                         onPress={async () => {
-                          const tripId = (activeTrip as any)?.tripId;
-                          if (tripId) {
-                            await driverArrivedApi(tripId, driverName);
+                          const tripId = (activeTrip as any)?.tripId || 'active_trip_1';
+                          const currStatus = rideStateService.getRideStatus(tripId);
+
+                          // Safety guard check: must be STARTED to transition to ARRIVED
+                          if (currStatus !== 'STARTED' && currStatus !== 'TRIP_STARTED') {
+                            Alert.alert(
+                              '📍 Arrived Guard',
+                              'Arrived action is locked until trip state transitions to STARTED.'
+                            );
+                            return;
                           }
-                          sendLocalNotification('📍 Arrived at Pickup!', 'Rider notified that you have arrived at pickup location.');
-                          Alert.alert('📍 Arrived at Pickup', 'Notification sent to tourist!');
+
+                          await rideStateService.transitionRideState(tripId, 'ARRIVED', driverName);
+                          sendLocalNotification('📍 Arrived at Location!', 'Rider notified that you have arrived.');
+                          Alert.alert('📍 Arrived at Location', 'Notification sent to tourist!');
                         }}
                       >
                         <Text style={styles.navActionTextCancel}>Arrived</Text>
