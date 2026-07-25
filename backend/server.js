@@ -261,12 +261,14 @@ async function initTablesOnBoot() {
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(10,2) DEFAULT 10.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);
 
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS license_cert_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS id_proof_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2) DEFAULT 2000.00;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_driver_profiles_user_id ON driver_profiles (user_id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_guide_profiles_user_id ON guide_profiles (user_id);
