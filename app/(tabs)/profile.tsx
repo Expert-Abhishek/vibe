@@ -1,13 +1,20 @@
-import { fetchWalletBalanceApi, topupWalletApi, submitWithdrawalApi, fetchUserProfileApi, updateUserProfileApi, saveUserSettingsApi } from '@/constants/api';
+import {
+  fetchWalletBalanceApi,
+  submitWithdrawalApi,
+  fetchUserProfileApi,
+  updateUserProfileApi,
+  saveUserSettingsApi,
+  updateProfilePhotoApi,
+  fetchAdminPaymentSettingsApi,
+  submitWalletTopupRequestApi,
+} from '@/constants/api';
 import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
-import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Alert,
   FlatList,
   Modal,
   ScrollView,
@@ -17,8 +24,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAppModal } from '@src/context/ModalContext';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileScreen() {
   const router = useRouter();

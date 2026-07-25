@@ -91,13 +91,27 @@ router.get('/notifications/:userId', async (req, res) => {
       );
     `);
 
-    const result = await db.query(
-      `SELECT * FROM activity_notifications 
-       WHERE (user_id = $1 OR user_id IS NULL) 
-         AND (role = $2 OR role = 'all')
-       ORDER BY created_at DESC LIMIT 50`,
-      [userId, role]
-    );
+    const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    const isValidUuid = userId && UUID_REGEX.test(userId);
+
+    let result;
+    if (isValidUuid) {
+      result = await db.query(
+        `SELECT * FROM activity_notifications 
+         WHERE (user_id = $1 OR user_id IS NULL) 
+           AND (role = $2 OR role = 'all')
+         ORDER BY created_at DESC LIMIT 50`,
+        [userId, role]
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM activity_notifications 
+         WHERE user_id IS NULL 
+           AND (role = $1 OR role = 'all')
+         ORDER BY created_at DESC LIMIT 50`,
+        [role]
+      );
+    }
 
     const logs = result.rows.map(row => ({
       id: row.id,
@@ -469,7 +483,33 @@ router.post('/book', async (req, res) => {
       dropLng = 76.6394,
       amount = 1200,
       paymentMode = 'UPI',
+      bookingType = 'INSTANT',
+      scheduledTime = null,
     } = req.body;
+
+    const numAmount = parseFloat(amount || 0);
+    const isPreBooked = bookingType === 'PRE_BOOKED';
+    const advanceDepositPaid = isPreBooked ? Math.round(numAmount * 0.20) : 0;
+    const remainingCashBalance = isPreBooked ? numAmount - advanceDepositPaid : numAmount;
+
+    // Wallet Balance Check for Wallet/UPI payment mode
+    if (paymentMode && paymentMode.toLowerCase().includes('upi') && customerId) {
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(customerId);
+      if (isUuid) {
+        const dWallet = await db.query('SELECT wallet_balance FROM driver_profiles WHERE user_id = $1', [customerId]);
+        const gWallet = await db.query('SELECT wallet_balance FROM guide_profiles WHERE user_id = $1', [customerId]);
+        const userWallet = (dWallet.rows[0]?.wallet_balance || 0) || (gWallet.rows[0]?.wallet_balance || 0);
+
+        const requiredPayment = isPreBooked ? advanceDepositPaid : numAmount;
+        if (userWallet < requiredPayment && userWallet > 0) {
+          return res.status(400).json({
+            success: false,
+            code: 'INSUFFICIENT_WALLET_BALANCE',
+            message: `Insufficient wallet balance (₹${userWallet}). Required: ₹${requiredPayment}. Please add money to wallet.`,
+          });
+        }
+      }
+    }
 
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
@@ -573,6 +613,12 @@ router.get('/pending-requests', async (req, res) => {
       otp: t.otp || '8240',
       status: t.status,
       tripType: t.trip_type,
+      bookingType: t.booking_type || 'INSTANT',
+      scheduledTime: t.scheduled_time,
+      advanceDepositPaid: parseFloat(t.advance_deposit_paid || 0),
+      remainingCashBalance: parseFloat(t.remaining_cash_balance || t.amount || 0),
+      destinationIds: t.destination_ids || [],
+      paymentMode: t.payment_mode || 'UPI',
       createdAt: t.created_at,
     }));
 
@@ -580,6 +626,73 @@ router.get('/pending-requests', async (req, res) => {
   } catch (error) {
     console.error('Error fetching pending requests:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch pending requests' });
+  }
+});
+
+/**
+ * GET /api/trips/upcoming/:driverId
+ * Fetch accepted pre-booked upcoming trips for driver's "Upcoming / Scheduled" dashboard tab
+ */
+router.get('/upcoming/:driverId', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+
+    const result = await db.query(
+      `SELECT * FROM trips 
+       WHERE (status = 'ACCEPTED' OR status = 'Accepted') 
+         AND booking_type = 'PRE_BOOKED'
+       ORDER BY scheduled_time ASC`,
+    );
+
+    const trips = result.rows.map(t => ({
+      id: t.id,
+      touristName: t.customer_name || 'Tourist',
+      pickup: t.pickup_name || 'Pickup Point',
+      drop: t.drop_name || t.title,
+      estimatedFare: parseFloat(t.amount || 0),
+      bookingType: t.booking_type || 'PRE_BOOKED',
+      scheduledTime: t.scheduled_time,
+      advanceDepositPaid: parseFloat(t.advance_deposit_paid || 0),
+      remainingCashBalance: parseFloat(t.remaining_cash_balance || t.amount || 0),
+      status: t.status,
+      otp: t.otp || '8240',
+      destinationIds: t.destination_ids || [],
+      createdAt: t.created_at,
+    }));
+
+    res.json({ success: true, data: trips });
+  } catch (error) {
+    console.error('Error fetching upcoming trips:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch upcoming trips' });
+  }
+});
+
+/**
+ * POST /api/trips/:id/decline
+ * Driver declines pending pre-booked request -> returns to pending pool for redispatch
+ */
+router.post('/:id/decline', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId } = req.body;
+
+    const result = await db.query(
+      `UPDATE trips SET status = 'Pending', driver_or_guide_name = NULL WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Trip declined and returned to pending pool for re-dispatch',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error('Error declining trip:', error);
+    res.status(500).json({ success: false, message: 'Failed to decline trip' });
   }
 });
 

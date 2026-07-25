@@ -750,3 +750,145 @@ export async function saveUserSettingsApi(userId: string, settings: { theme?: 'l
     return { success: false, message: 'Failed to save settings to server' };
   }
 }
+
+/**
+ * Update Profile Photo for Rider / Driver / Guide
+ */
+export async function updateProfilePhotoApi(userId: string, role: string, photoData: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/users/${userId}/photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photoData, role }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('updateProfilePhotoApi error:', e);
+    return { success: false, message: 'Failed to update profile photo' };
+  }
+}
+
+/**
+ * Fetch Admin Payment Settings (QR Code & UPI ID)
+ */
+export async function fetchAdminPaymentSettingsApi(): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/payment-settings`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchAdminPaymentSettingsApi error:', e);
+    return {
+      success: true,
+      data: {
+        upiId: 'vibe.pay@upi',
+        qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform',
+      },
+    };
+  }
+}
+
+/**
+ * Submit Wallet Top-Up Request (with 5-minute timer & screenshot proof)
+ */
+export async function submitWalletTopupRequestApi(payload: {
+  userId: string;
+  userName?: string;
+  role?: string;
+  amount: number;
+  screenshotUrl: string;
+}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/topup-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('submitWalletTopupRequestApi error:', e);
+    return { success: false, message: 'Failed to submit top-up request' };
+  }
+}
+
+/**
+ * Fetch Pending Wallet Top-Up Requests for Admin Queue
+ */
+export async function fetchPendingTopupRequestsApi(status: string = 'Pending'): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/topup-requests?status=${status}`);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+  } catch (e) {
+    console.warn('fetchPendingTopupRequestsApi error:', e);
+  }
+  return [];
+}
+
+/**
+ * Admin Approve Top-Up Request
+ */
+export async function approveTopupRequestApi(requestId: string, adminId?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/topup-requests/${requestId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminId }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('approveTopupRequestApi error:', e);
+    return { success: false, message: 'Failed to approve top-up request' };
+  }
+}
+
+/**
+ * Admin Reject Top-Up Request
+ */
+export async function rejectTopupRequestApi(requestId: string, rejectReason?: string, adminId?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/topup-requests/${requestId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rejectReason, adminId }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('rejectTopupRequestApi error:', e);
+    return { success: false, message: 'Failed to reject top-up request' };
+  }
+}
+
+/**
+ * Fetch Driver Upcoming / Scheduled Pre-Booked Trips
+ */
+export async function fetchDriverUpcomingTripsApi(driverId: string): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/upcoming/${driverId}`);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+  } catch (e) {
+    console.warn('fetchDriverUpcomingTripsApi error:', e);
+  }
+  return [];
+}
+
+/**
+ * Driver Decline Pending Pre-Booked Request (Redispatches to Pending Pool)
+ */
+export async function declineTripApi(tripId: string, driverId?: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/decline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('declineTripApi error:', e);
+    return { success: false, message: 'Failed to decline trip' };
+  }
+}

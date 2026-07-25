@@ -188,6 +188,27 @@ CREATE TABLE IF NOT EXISTS activity_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_activity_notifications_user_role ON activity_notifications(user_id, role);
 
+-- 14. Admin Payment Settings Table (QR Code & UPI ID)
+CREATE TABLE IF NOT EXISTS admin_payment_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    upi_id VARCHAR(100) NOT NULL DEFAULT 'vibe.pay@upi',
+    qr_code_url TEXT NOT NULL DEFAULT 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform',
+    updated_by UUID,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-
-
+-- 15. Wallet Top-Up Requests Table (5-Minute Proof Verification)
+CREATE TABLE IF NOT EXISTS wallet_topup_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_name VARCHAR(255),
+    role VARCHAR(20) DEFAULT 'tourist',
+    amount NUMERIC(10,2) NOT NULL,
+    screenshot_url TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'Pending', -- 'Pending', 'Approved', 'Rejected', 'Expired'
+    requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    reviewed_by UUID,
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    reject_reason TEXT
+);

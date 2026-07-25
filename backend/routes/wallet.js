@@ -366,4 +366,261 @@ router.post('/withdraw', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/payment-settings
+ * Fetch static Admin QR Code & UPI ID for wallet top-ups
+ */
+router.get('/admin/payment-settings', async (req, res) => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS admin_payment_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        upi_id VARCHAR(100) NOT NULL DEFAULT 'vibe.pay@upi',
+        qr_code_url TEXT NOT NULL DEFAULT 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform',
+        updated_by UUID,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const result = await db.query('SELECT * FROM admin_payment_settings ORDER BY updated_at DESC LIMIT 1');
+    if (result.rows.length === 0) {
+      const initRes = await db.query(`
+        INSERT INTO admin_payment_settings (upi_id, qr_code_url)
+        VALUES ('vibe.pay@upi', 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform')
+        RETURNING *
+      `);
+      return res.json({ success: true, data: initRes.rows[0] });
+    }
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching admin payment settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch payment settings' });
+  }
+});
+
+/**
+ * POST /api/wallet/topup-request
+ * Submit Wallet Top-Up Request with 5-minute timer & screenshot proof
+ */
+router.post('/topup-request', async (req, res) => {
+  try {
+    const { userId, userName = 'Partner', role = 'tourist', amount, screenshotUrl } = req.body;
+
+    if (!userId || !amount || parseFloat(amount) < 500) {
+      return res.status(400).json({
+        success: false,
+        code: 'MINIMUM_AMOUNT_REQUIRED',
+        message: 'Minimum top-up amount is ₹500.',
+      });
+    }
+
+    if (!screenshotUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment screenshot proof is required.',
+      });
+    }
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS wallet_topup_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        user_name VARCHAR(255),
+        role VARCHAR(20) DEFAULT 'tourist',
+        amount NUMERIC(10,2) NOT NULL,
+        screenshot_url TEXT NOT NULL,
+        status VARCHAR(20) DEFAULT 'Pending',
+        requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        reviewed_by UUID,
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        reject_reason TEXT
+      );
+    `);
+
+    const requestedAt = new Date();
+    const expiresAt = new Date(requestedAt.getTime() + 5 * 60 * 1000); // 5-minute window
+
+    const result = await db.query(
+      `INSERT INTO wallet_topup_requests (
+        user_id, user_name, role, amount, screenshot_url, status, requested_at, expires_at
+       )
+       VALUES ($1, $2, $3, $4, $5, 'Pending', $6, $7)
+       RETURNING *`,
+      [userId, userName, role, parseFloat(amount), screenshotUrl, requestedAt, expiresAt]
+    );
+
+    const topupReq = result.rows[0];
+
+    // Log notification for Admin Queue
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, 'admin', '💵 New Wallet Top-Up Request!', $2, CURRENT_TIMESTAMP)`,
+        [userId, `${userName} requested ₹${amount} wallet top-up. Proof uploaded.`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to insert admin notification:', nErr);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Top-up request submitted successfully! Admin will verify and credit your wallet.',
+      data: topupReq,
+    });
+  } catch (error) {
+    console.error('Error submitting top-up request:', error);
+    res.status(500).json({ success: false, message: 'Failed to submit top-up request' });
+  }
+});
+
+/**
+ * GET /api/admin/wallet/topup-requests
+ * Admin Queue for pending top-up requests
+ */
+router.get('/admin/topup-requests', async (req, res) => {
+  try {
+    const { status = 'Pending' } = req.query;
+
+    const result = await db.query(
+      `SELECT * FROM wallet_topup_requests WHERE status = $1 ORDER BY requested_at DESC`,
+      [status]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error fetching admin topup requests:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch topup requests' });
+  }
+});
+
+/**
+ * POST /api/admin/wallet/topup-requests/:id/approve
+ * Admin approves top-up request & credits user wallet_balance
+ */
+router.post('/admin/topup-requests/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminId } = req.body;
+
+    const reqRes = await db.query('SELECT * FROM wallet_topup_requests WHERE id = $1', [id]);
+    if (reqRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Top-up request not found' });
+    }
+
+    const topup = reqRes.rows[0];
+    if (topup.status !== 'Pending') {
+      return res.status(400).json({ success: false, message: `Request is already ${topup.status}` });
+    }
+
+    // Check 5-minute expiry timestamp
+    const now = new Date();
+    if (now > new Date(topup.expires_at)) {
+      await db.query(
+        `UPDATE wallet_topup_requests SET status = 'Expired', reviewed_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [id]
+      );
+      return res.status(400).json({
+        success: false,
+        code: 'TOPUP_EXPIRED',
+        message: 'Top-up proof arrived after the 5-minute expiry window.',
+      });
+    }
+
+    const numAmount = parseFloat(topup.amount);
+
+    // 1. Update top-up request status
+    await db.query(
+      `UPDATE wallet_topup_requests SET status = 'Approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [adminId || null, id]
+    );
+
+    // 2. Record wallet transaction
+    await db.query(
+      `INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'TOPUP', $2, $3)`,
+      [topup.user_id, numAmount, `Admin Approved Wallet Top-Up (₹${numAmount})`]
+    );
+
+    // 3. Credit wallet balance
+    await db.query('UPDATE driver_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2', [numAmount, topup.user_id]);
+    await db.query('UPDATE guide_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2', [numAmount, topup.user_id]);
+
+    // 4. Notify user
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '🎉 Wallet Top-Up Approved!', $3, CURRENT_TIMESTAMP)`,
+        [topup.user_id, topup.role || 'tourist', `₹${numAmount} credited to your wallet balance.`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to notify user:', nErr);
+    }
+
+    res.json({ success: true, message: `Successfully approved top-up of ₹${numAmount}` });
+  } catch (error) {
+    console.error('Error approving topup request:', error);
+    res.status(500).json({ success: false, message: 'Failed to approve top-up request' });
+  }
+});
+
+/**
+ * POST /api/admin/wallet/topup-requests/:id/reject
+ * Admin rejects top-up request
+ */
+router.post('/admin/topup-requests/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejectReason = 'Invalid payment proof', adminId } = req.body;
+
+    const reqRes = await db.query('SELECT * FROM wallet_topup_requests WHERE id = $1', [id]);
+    if (reqRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Top-up request not found' });
+    }
+
+    const topup = reqRes.rows[0];
+
+    await db.query(
+      `UPDATE wallet_topup_requests SET status = 'Rejected', reject_reason = $1, reviewed_by = $2, reviewed_at = CURRENT_TIMESTAMP WHERE id = $3`,
+      [rejectReason, adminId || null, id]
+    );
+
+    // Notify user
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '❌ Wallet Top-Up Rejected', $3, CURRENT_TIMESTAMP)`,
+        [topup.user_id, topup.role || 'tourist', `Reason: ${rejectReason}`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to notify user:', nErr);
+    }
+
+    res.json({ success: true, message: 'Top-up request rejected' });
+  } catch (error) {
+    console.error('Error rejecting topup request:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject top-up request' });
+  }
+});
+
+/**
+ * GET /api/admin/wallet/reconciliation
+ * Full Wallet Reconciliation Ledger Audit for Admin Panel
+ */
+router.get('/admin/reconciliation', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT wt.*, u.name AS user_name, u.role AS user_role 
+       FROM wallet_transactions wt
+       LEFT JOIN users u ON wt.user_id = u.id
+       ORDER BY wt.created_at DESC LIMIT 100`
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error fetching wallet reconciliation ledger:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch reconciliation ledger' });
+  }
+});
+
 module.exports = router;

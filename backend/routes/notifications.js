@@ -23,10 +23,13 @@ router.post('/mark-read', async (req, res) => {
       );
     `);
 
+    const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    const isValidUuid = userId && UUID_REGEX.test(userId);
+
     let queryText = '';
     let queryParams = [];
 
-    if (userId) {
+    if (isValidUuid) {
       queryText = `
         UPDATE activity_notifications
         SET is_read = TRUE

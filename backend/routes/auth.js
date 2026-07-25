@@ -1139,5 +1139,59 @@ router.post('/update-password', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/users/:id/photo
+ * Updates user profile photo across users, driver_profiles, and guide_profiles tables
+ */
+router.post('/users/:id/photo', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { photoData, role = 'tourist' } = req.body;
+
+    if (!photoData) {
+      return res.status(400).json({ success: false, message: 'photoData is required' });
+    }
+
+    // 1. Update users table
+    const userRes = await db.query(
+      `UPDATE users SET photo_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *`,
+      [photoData, id]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const updatedUser = userRes.rows[0];
+
+    // 2. Update role-specific profile table
+    if (role === 'driver') {
+      await db.query(
+        `UPDATE driver_profiles SET photo_url = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`,
+        [photoData, id]
+      );
+    } else if (role === 'guide') {
+      await db.query(
+        `UPDATE guide_profiles SET photo_url = $1, updated_at = CURRENT_TIMESTAMP WHERE user_id = $2`,
+        [photoData, id]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: 'Profile photo updated successfully',
+      photoUrl: photoData,
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error('Error updating profile photo:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update profile photo',
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;
 
