@@ -21,6 +21,19 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// URL Rewrite Middleware for Admin / Wallet Compatibility
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/admin/payment-settings')) {
+    req.url = req.url.replace('/api/admin/payment-settings', '/api/wallet/admin/payment-settings');
+  } else if (req.url.startsWith('/api/admin/wallet/topup-requests')) {
+    req.url = req.url.replace('/api/admin/wallet/topup-requests', '/api/wallet/admin/topup-requests');
+  } else if (req.url.startsWith('/api/admin/wallet/reconciliation')) {
+    req.url = req.url.replace('/api/admin/wallet/reconciliation', '/api/wallet/admin/reconciliation');
+  } else if (req.url.startsWith('/api/users/') && req.url.includes('/photo')) {
+    req.url = req.url.replace('/api/users/', '/api/auth/users/');
+  }
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -246,6 +259,7 @@ async function initTablesOnBoot() {
     }
     // Auto-migrate missing columns for existing PostgreSQL tables
     await db.query(`
+      ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS trip_id UUID REFERENCES trips(id) ON DELETE SET NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT;

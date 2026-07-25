@@ -1,9 +1,7 @@
 import NotificationModal from '@/components/NotificationModal';
-import { rideStateService } from '@src/services/rideStateService';
-import { useAppModal } from '@src/context/ModalContext';
+import { adminState } from '@/constants/admin-state';
 import {
   acceptTripApi,
-  driverArrivedApi,
   fetchDriverAdvanceSchedulesApi,
   fetchDriverRequestsApi,
   fetchDriverStatsApi,
@@ -20,8 +18,10 @@ import {
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
-import { setAppTheme, toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
+import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useAppModal } from '@src/context/ModalContext';
+import { rideStateService } from '@src/services/rideStateService';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -41,7 +41,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from '@/constants/admin-state';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -75,6 +74,7 @@ export default function DriverDashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { showError, showSuccess } = useAppModal();
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(true);
@@ -263,7 +263,7 @@ export default function DriverDashboardScreen() {
     });
     if (!apiRes?.success) {
       setIsSavingProfile(false);
-      Alert.alert('Update Failed', apiRes?.message || 'Could not save your profile. Please try again.');
+      showError('Update Failed', apiRes?.message || 'Could not save your profile. Please try again.');
       return;
     }
     // 2. Update Password if entered
@@ -271,7 +271,7 @@ export default function DriverDashboardScreen() {
     if (newPassword.trim().length > 0) {
       if (!currentPassword.trim()) {
         setIsSavingProfile(false);
-        Alert.alert('🔐 Current Password Required', 'Please enter your current password to update your password.');
+        showError('🔐 Current Password Required', 'Please enter your current password to update your password.');
         return;
       }
       const passRes = await updatePasswordApi({
@@ -286,7 +286,7 @@ export default function DriverDashboardScreen() {
         setNewPassword('');
       } else {
         setIsSavingProfile(false);
-        Alert.alert('🔐 Password Error', passRes?.message || 'Current password invalid. Failed to update password.');
+        showError('🔐 Password Error', passRes?.message || 'Current password invalid. Failed to update password.');
         return;
       }
     }
@@ -312,7 +312,7 @@ export default function DriverDashboardScreen() {
     await saveUserSession(updatedSession as any);
     setIsEditMode(false);
 
-    Alert.alert('Profile updated successfully!');
+    showSuccess('Success', 'Profile updated successfully!');
   };
 
   const colors = {
@@ -794,7 +794,7 @@ export default function DriverDashboardScreen() {
                           const session = getUserSessionSync();
                           const dId = session?.id || 'd1';
                           const name = session?.name || driverName || 'Shubham';
-                          
+
                           await respondDriverRequestApi(booking.id, dId, 'accept', name);
                           await acceptTripApi(booking.id, dId, name);
 
@@ -923,7 +923,7 @@ export default function DriverDashboardScreen() {
                               description: 'Arrived action is locked until trip state transitions to STARTED.',
                               variant: 'warning',
                               primaryButtonText: 'Understood',
-                              onPrimaryAction: () => {},
+                              onPrimaryAction: () => { },
                             });
                             return;
                           }
@@ -935,7 +935,7 @@ export default function DriverDashboardScreen() {
                             description: 'Notification sent to tourist!',
                             variant: 'info',
                             primaryButtonText: 'OK',
-                            onPrimaryAction: () => {},
+                            onPrimaryAction: () => { },
                           });
                         }}
                       >

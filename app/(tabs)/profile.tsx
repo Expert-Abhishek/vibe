@@ -1,21 +1,25 @@
 import {
-  fetchWalletBalanceApi,
-  submitWithdrawalApi,
-  fetchUserProfileApi,
-  updateUserProfileApi,
-  saveUserSettingsApi,
-  updateProfilePhotoApi,
   fetchAdminPaymentSettingsApi,
+  fetchUserProfileApi,
+  fetchWalletBalanceApi,
+  saveUserSettingsApi,
   submitWalletTopupRequestApi,
+  submitWithdrawalApi,
+  updateProfilePhotoApi,
+  updateUserProfileApi,
 } from '@/constants/api';
 import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAppModal } from '@src/context/ModalContext';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -24,22 +28,21 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Image,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppModal } from '@src/context/ModalContext';
-import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { showError, showSuccess } = useAppModal();
 
   const [name, setName] = useState('Abhishek');
   const [phone, setPhone] = useState('+91 98765 43210');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   const [walletModalVisible, setWalletModalVisible] = useState(false);
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
@@ -48,6 +51,18 @@ export default function ProfileScreen() {
   const [walletBalance, setWalletBalance] = useState(1500);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
 
+  // Top-Up state variables
+  const [topupModalVisible, setTopupModalVisible] = useState(false);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupStep, setTopupStep] = useState<1 | 2>(1);
+  const [timerSeconds, setTimerSeconds] = useState(300);
+  const [screenshotBase64, setScreenshotBase64] = useState('');
+  const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
+  const [initiatedAt, setInitiatedAt] = useState<Date | null>(null);
+
+  const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
+  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
+
   const session = getUserSessionSync();
   const userId = session?.id || 'c1';
 
@@ -55,11 +70,14 @@ export default function ProfileScreen() {
     async function loadProfileAndWalletData() {
       if (session?.name) setName(session.name);
       if (session?.phone) setPhone(session.phone);
+      if (session?.photo_url) setPhotoUrl(session.photo_url);
 
       const userRes = await fetchUserProfileApi(userId);
       if (userRes && userRes.success && userRes.user) {
         if (userRes.user.name) setName(userRes.user.name);
         if (userRes.user.phone) setPhone(userRes.user.phone);
+        const photo = userRes.user.photo_url || userRes.user.profile?.photo_url || null;
+        if (photo) setPhotoUrl(photo);
       }
 
       const data = await fetchWalletBalanceApi(userId);
@@ -67,9 +85,124 @@ export default function ProfileScreen() {
         if (data.balance !== undefined) setWalletBalance(data.balance);
         if (data.transactions) setWalletTransactions(data.transactions);
       }
+
+      const adminRes = await fetchAdminPaymentSettingsApi();
+      if (adminRes && adminRes.success && adminRes.data) {
+        if (adminRes.data.upi_id || adminRes.data.upiId) setAdminUpiId(adminRes.data.upi_id || adminRes.data.upiId);
+        if (adminRes.data.qr_code_url || adminRes.data.qrCodeUrl) setAdminQrCodeUrl(adminRes.data.qr_code_url || adminRes.data.qrCodeUrl);
+      }
     }
     loadProfileAndWalletData();
   }, [userId]);
+
+  // Client-side countdown timer for Top-Up Screenshot uploads
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (topupModalVisible && topupStep === 2 && timerSeconds > 0) {
+      interval = setInterval(() => {
+        setTimerSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(interval!);
+            setTopupModalVisible(false);
+            setTopupStep(1);
+            setScreenshotBase64('');
+            showError('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            return 300;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [topupModalVisible, topupStep, timerSeconds]);
+
+  const handlePickScreenshot = async () => {
+    Alert.alert(
+      'Payment Screenshot',
+      'Upload proof of payment:',
+      [
+        {
+          text: '📸 Take Photo (Camera)',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+            if (!granted) {
+              showError('Permission Denied', 'Camera access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              quality: 0.5,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+              setScreenshotBase64(dataUrl);
+            }
+          },
+        },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!granted) {
+              showError('Permission Denied', 'Gallery access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              quality: 0.5,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+              setScreenshotBase64(dataUrl);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleSubmitTopupProof = async () => {
+    if (!screenshotBase64) {
+      showError('Required', 'Please upload a screenshot proof of the payment.');
+      return;
+    }
+
+    try {
+      setIsSubmittingTopup(true);
+      const payload = {
+        userId,
+        userName: name,
+        role: session?.role || 'tourist',
+        amount: parseFloat(topupAmount),
+        screenshotUrl: screenshotBase64,
+        initiatedAt: initiatedAt ? initiatedAt.toISOString() : new Date().toISOString(),
+      };
+
+      const res = await submitWalletTopupRequestApi(payload);
+
+      if (res && res.success) {
+        setTopupModalVisible(false);
+        setTopupStep(1);
+        setScreenshotBase64('');
+        setTopupAmount('');
+        showSuccess('🎉 Submitted!', 'Your top-up request was submitted. Admin will verify and credit your wallet.');
+      } else {
+        showError('Submission Failed', res?.message || 'Could not submit your top-up request.');
+      }
+    } catch (e: any) {
+      showError('Submission Error', e?.message || 'A network error occurred.');
+    } finally {
+      setIsSubmittingTopup(false);
+    }
+  };
 
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
@@ -124,9 +257,99 @@ export default function ProfileScreen() {
     },
   }[appLang];
 
+  const handlePickImage = async () => {
+    Alert.alert(
+      'Profile Picture',
+      'Choose an option to upload your photo:',
+      [
+        {
+          text: '📸 Take Photo (Camera)',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+            if (!granted) {
+              showError('Permission Denied', 'Camera access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.3,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              await handleUploadPhoto(result.assets[0]);
+            }
+          },
+        },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!granted) {
+              showError('Permission Denied', 'Gallery access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.3,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              await handleUploadPhoto(result.assets[0]);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleUploadPhoto = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      setIsUploadingPhoto(true);
+      let photoData = '';
+      if (asset.base64) {
+        photoData = asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`;
+      } else {
+        photoData = asset.uri;
+      }
+
+      const role = session?.role || 'tourist';
+      const response = await updateProfilePhotoApi(userId, role, photoData);
+
+      if (response && response.success) {
+        const newPhotoUrl = response.photoUrl || photoData;
+        setPhotoUrl(newPhotoUrl);
+        if (session) {
+          await saveUserSession({
+            ...session,
+            photo_url: newPhotoUrl,
+            user: {
+              ...(session.user || {}),
+              photo_url: newPhotoUrl,
+            },
+            profile: session.profile ? {
+              ...session.profile,
+              photo_url: newPhotoUrl,
+            } : undefined,
+          });
+        }
+        showSuccess('🎉 Success!', 'Your profile photo has been updated successfully.');
+      } else {
+        showError('Upload Failed', response?.message || 'Failed to update profile photo on the server.');
+      }
+    } catch (error: any) {
+      showError('Upload Error', error?.message || 'An unexpected error occurred during photo upload.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   const handleUpdateName = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Name cannot be empty.');
+      showError('Error', 'Name cannot be empty.');
       return;
     }
     const updateRes = await updateUserProfileApi(userId, { name });
@@ -134,9 +357,9 @@ export default function ProfileScreen() {
       if (session) {
         await saveUserSession({ ...session, name });
       }
-      Alert.alert('🎉 Profile Updated!', 'Your profile information has been saved to the database.');
+      showSuccess('🎉 Profile Updated!', 'Your profile information has been saved to the database.');
     } else {
-      Alert.alert('Success', 'Profile updated locally.');
+      showSuccess('Success', 'Profile updated locally.');
     }
   };
 
@@ -162,9 +385,22 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* HEADER SECTION */}
         <View style={styles.header}>
-          <View style={[styles.avatarCircle, { backgroundColor: colors.amber }]}>
-            <Text style={styles.avatarText}>{name ? name[0].toUpperCase() : 'U'}</Text>
-          </View>
+          <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8} style={styles.avatarContainer} disabled={isUploadingPhoto}>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={[styles.avatarImage, isUploadingPhoto && { opacity: 0.5 }]} />
+            ) : (
+              <View style={[styles.avatarCircle, { backgroundColor: colors.amber }, isUploadingPhoto && { opacity: 0.5 }]}>
+                <Text style={styles.avatarText}>{name ? name[0].toUpperCase() : 'U'}</Text>
+              </View>
+            )}
+            {isUploadingPhoto ? (
+              <ActivityIndicator size="small" color={colors.amber} style={StyleSheet.absoluteFillObject} />
+            ) : (
+              <View style={[styles.cameraIconBadge, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+                <MaterialIcons name="photo-camera" size={scale(14)} color={colors.amber} />
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={[styles.userName, { color: colors.textPrimary }]}>{name}</Text>
           <Text style={[styles.userRole, { color: colors.textMuted }]}>{trans.profileRole}</Text>
         </View>
@@ -231,24 +467,11 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]}
               onPress={() => {
-                openRazorpayPayment({
-                  amount: 500,
-                  title: 'Vibe Wallet Recharge (₹500)',
-                  customerName: name || 'Abhishek',
-                  userId,
-                  onSuccess: async (paymentId) => {
-                    setWalletBalance(prev => prev + 500);
-                    await topupWalletApi({ userId, amount: 500, paymentId, description: 'Vibe Wallet Top-Up via Razorpay' });
-                    Alert.alert('🎉 Top-Up Successful!', `₹500 added to your Vibe Wallet via Razorpay.\nTransaction ID: ${paymentId}`);
-                  },
-                  onCancel: () => {
-                    Alert.alert('Cancelled', 'Razorpay payment was cancelled.');
-                  },
-                  onError: (err: any) => {
-                    const msg = typeof err === 'string' ? err : (err?.message || 'Razorpay Gateway error.');
-                    Alert.alert('Payment Error', msg);
-                  }
-                });
+                setTopupAmount('');
+                setTopupStep(1);
+                setScreenshotBase64('');
+                setTimerSeconds(300);
+                setTopupModalVisible(true);
               }}
             >
               <Text style={styles.primaryButtonText}>💳 Add Money</Text>
@@ -363,6 +586,137 @@ export default function ProfileScreen() {
                 );
               }}
             />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Wallet Add Money (Top-Up) Modal */}
+      <Modal visible={topupModalVisible} animationType="slide" transparent={true} onRequestClose={() => setTopupModalVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>
+                {topupStep === 1 ? '💳 Add Money to Wallet' : '📲 Scan QR & Pay'}
+              </Text>
+              <TouchableOpacity onPress={() => setTopupModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {topupStep === 1 ? (
+              <ScrollView>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginBottom: verticalScale(16) }}>
+                  Top up your Vibe wallet balance to pay for trips or services instantly.
+                </Text>
+
+                <Text style={[styles.label, { color: colors.textPrimary }]}>Enter Amount (₹)</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                  keyboardType="numeric"
+                  value={topupAmount}
+                  onChangeText={setTopupAmount}
+                  placeholder="Minimum ₹500"
+                  placeholderTextColor={colors.textMuted}
+                />
+
+                {/* Quick select buttons */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(20), gap: scale(8) }}>
+                  {[500, 1000, 2000, 5000].map(amt => (
+                    <TouchableOpacity
+                      key={amt}
+                      style={{ flex: 1, paddingVertical: verticalScale(8), borderRadius: scale(8), backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.line, alignItems: 'center' }}
+                      onPress={() => setTopupAmount(amt.toString())}
+                    >
+                      <Text style={{ color: colors.amber, fontWeight: 'bold', fontSize: moderateFontScale(13) }}>₹{amt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(10) }]}
+                  onPress={() => {
+                    const amt = parseFloat(topupAmount);
+                    if (!amt || amt < 500) {
+                      showError('Minimum Amount Required', 'The minimum top-up amount is ₹500.');
+                      return;
+                    }
+                    setInitiatedAt(new Date());
+                    setTimerSeconds(300);
+                    setTopupStep(2);
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Proceed to Pay</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* 5-minute countdown timer header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingVertical: verticalScale(8), borderRadius: scale(8), marginBottom: verticalScale(16) }}>
+                  <MaterialIcons name="alarm" size={scale(18)} color={colors.danger} style={{ marginRight: scale(6) }} />
+                  <Text style={{ color: colors.danger, fontWeight: 'bold', fontSize: moderateFontScale(14) }}>
+                    Upload screenshot in: {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+                  </Text>
+                </View>
+
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(12) }}>
+                  Scan the QR code below using any UPI App (Google Pay, PhonePe, Paytm) to transfer ₹{topupAmount}.
+                </Text>
+
+                {/* Admin static payment QR Code */}
+                <View style={{ alignSelf: 'center', padding: scale(10), backgroundColor: '#FFFFFF', borderRadius: scale(12), marginBottom: verticalScale(12) }}>
+                  <Image source={{ uri: adminQrCodeUrl }} style={{ width: scale(180), height: scale(180) }} resizeMode="contain" />
+                </View>
+
+                {/* Admin static UPI ID details */}
+                <View style={{ backgroundColor: colors.surfaceAlt, padding: scale(12), borderRadius: scale(10), borderWidth: 1, borderColor: colors.line, marginBottom: verticalScale(16), alignItems: 'center' }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>UPI ID for Manual Transfer</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold', marginTop: verticalScale(4) }}>{adminUpiId}</Text>
+                </View>
+
+                {/* Screenshot uploader */}
+                <Text style={[styles.label, { color: colors.textPrimary, textAlign: 'center', marginBottom: verticalScale(8) }]}>
+                  Step 2: Upload Payment Screenshot Proof
+                </Text>
+
+                <TouchableOpacity
+                  style={{ height: verticalScale(100), borderStyle: 'dashed', borderWidth: 2, borderColor: screenshotBase64 ? colors.amber : colors.textMuted, borderRadius: scale(12), alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(16), overflow: 'hidden' }}
+                  onPress={handlePickScreenshot}
+                >
+                  {screenshotBase64 ? (
+                    <Image source={{ uri: screenshotBase64 }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  ) : (
+                    <View style={{ alignItems: 'center' }}>
+                      <MaterialIcons name="cloud-upload" size={scale(32)} color={colors.textMuted} />
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(4) }}>Tap to upload proof screenshot</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: colors.line, marginTop: 0 }]}
+                    onPress={() => {
+                      setTopupStep(1);
+                      setScreenshotBase64('');
+                    }}
+                  >
+                    <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { flex: 2, backgroundColor: colors.amber, marginTop: 0 }]}
+                    onPress={handleSubmitTopupProof}
+                    disabled={isSubmittingTopup}
+                  >
+                    {isSubmittingTopup ? (
+                      <ActivityIndicator size="small" color="#101014" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Submit Top-Up Proof</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -535,5 +889,26 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: moderateFontScale(15),
     fontWeight: 'bold',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: verticalScale(12),
+    alignSelf: 'center',
+  },
+  avatarImage: {
+    width: scale(80),
+    height: scale(80),
+    borderRadius: scale(40),
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: scale(24),
+    height: scale(24),
+    borderRadius: scale(12),
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

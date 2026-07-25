@@ -892,3 +892,20 @@ export async function declineTripApi(tripId: string, driverId?: string): Promise
     return { success: false, message: 'Failed to decline trip' };
   }
 }
+
+/**
+ * Deduct trip payment from user wallet
+ */
+export async function deductWalletApi(payload: { userId: string; amount: number; tripId?: string; description?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/trip-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('deductWalletApi error:', e);
+    return { success: false, message: 'Wallet deduction failed. Check server connection.' };
+  }
+}

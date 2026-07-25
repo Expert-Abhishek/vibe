@@ -367,6 +367,79 @@ router.post('/withdraw', async (req, res) => {
 });
 
 /**
+ * POST /api/wallet/trip-payment
+ * Automatic Wallet Deduction on Booking/Payment of a Trip
+ */
+router.post('/trip-payment', async (req, res) => {
+  try {
+    const { userId, amount, tripId, description = 'Trip Payment' } = req.body;
+
+    if (!userId || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid userId and positive amount required' });
+    }
+
+    const numAmount = parseFloat(amount);
+
+    // 1. Fetch user role & wallet balance
+    const userRes = await db.query('SELECT role FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const role = userRes.rows[0].role;
+    let balance = 0;
+
+    if (role === 'driver') {
+      const dRes = await db.query('SELECT wallet_balance FROM driver_profiles WHERE user_id = $1', [userId]);
+      balance = parseFloat(dRes.rows[0]?.wallet_balance || 0);
+    } else if (role === 'guide') {
+      const gRes = await db.query('SELECT wallet_balance FROM guide_profiles WHERE user_id = $1', [userId]);
+      balance = parseFloat(gRes.rows[0]?.wallet_balance || 0);
+    } else {
+      // Tourist dynamic balance
+      const txSum = await db.query(
+        "SELECT COALESCE(SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
+        [userId]
+      );
+      balance = parseFloat(txSum.rows[0]?.total || 0);
+    }
+
+    // 2. Insufficient balance check
+    if (balance < numAmount) {
+      return res.status(400).json({
+        success: false,
+        code: 'INSUFFICIENT_WALLET_BALANCE',
+        message: `Insufficient wallet balance. Available: ₹${balance}. Required: ₹${numAmount}. Please top up first.`,
+        balance
+      });
+    }
+
+    // 3. Perform automatic deduction / log debit transaction
+    await db.query(
+      `INSERT INTO wallet_transactions (user_id, type, amount, trip_id, description) 
+       VALUES ($1, 'debit', $2, $3, $4)`,
+      [userId, numAmount, tripId || null, description]
+    );
+
+    if (role === 'driver') {
+      await db.query('UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2', [numAmount, userId]);
+    } else if (role === 'guide') {
+      await db.query('UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2', [numAmount, userId]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment deducted from wallet successfully!',
+      deductedAmount: numAmount,
+      remainingBalance: balance - numAmount
+    });
+  } catch (error) {
+    console.error('Error in trip-payment deduction:', error);
+    res.status(500).json({ success: false, message: 'Trip payment deduction failed', error: error.message });
+  }
+});
+
+/**
  * GET /api/admin/payment-settings
  * Fetch static Admin QR Code & UPI ID for wallet top-ups
  */
@@ -405,7 +478,7 @@ router.get('/admin/payment-settings', async (req, res) => {
  */
 router.post('/topup-request', async (req, res) => {
   try {
-    const { userId, userName = 'Partner', role = 'tourist', amount, screenshotUrl } = req.body;
+    const { userId, userName = 'Partner', role = 'tourist', amount, screenshotUrl, initiatedAt } = req.body;
 
     if (!userId || !amount || parseFloat(amount) < 500) {
       return res.status(400).json({
@@ -419,6 +492,18 @@ router.post('/topup-request', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Payment screenshot proof is required.',
+      });
+    }
+
+    const requestedAt = initiatedAt ? new Date(initiatedAt) : new Date();
+    const expiresAt = new Date(requestedAt.getTime() + 5 * 60 * 1000); // 5-minute window
+
+    const now = new Date();
+    if (now > expiresAt) {
+      return res.status(400).json({
+        success: false,
+        code: 'TOPUP_EXPIRED',
+        message: 'Your top-up session expired. Please submit the payment screenshot within 5 minutes of initiating the transaction.',
       });
     }
 
@@ -438,9 +523,6 @@ router.post('/topup-request', async (req, res) => {
         reject_reason TEXT
       );
     `);
-
-    const requestedAt = new Date();
-    const expiresAt = new Date(requestedAt.getTime() + 5 * 60 * 1000); // 5-minute window
 
     const result = await db.query(
       `INSERT INTO wallet_topup_requests (
@@ -512,20 +594,6 @@ router.post('/admin/topup-requests/:id/approve', async (req, res) => {
     const topup = reqRes.rows[0];
     if (topup.status !== 'Pending') {
       return res.status(400).json({ success: false, message: `Request is already ${topup.status}` });
-    }
-
-    // Check 5-minute expiry timestamp
-    const now = new Date();
-    if (now > new Date(topup.expires_at)) {
-      await db.query(
-        `UPDATE wallet_topup_requests SET status = 'Expired', reviewed_at = CURRENT_TIMESTAMP WHERE id = $1`,
-        [id]
-      );
-      return res.status(400).json({
-        success: false,
-        code: 'TOPUP_EXPIRED',
-        message: 'Top-up proof arrived after the 5-minute expiry window.',
-      });
     }
 
     const numAmount = parseFloat(topup.amount);
