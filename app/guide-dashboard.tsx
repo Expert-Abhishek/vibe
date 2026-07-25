@@ -179,10 +179,10 @@ export default function GuideDashboardScreen() {
     const apiRes = await updateUserProfileApi(userId, {
       name: guideName,
       phone: guidePhone,
+      role: 'guide',
       photo_url: photoUrl,
       photoUrl: photoUrl,
       upiId: upiId,
-      role: 'guide',
     });
 
     if (!apiRes?.success) {

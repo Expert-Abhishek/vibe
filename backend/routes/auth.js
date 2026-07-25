@@ -147,8 +147,8 @@ router.post('/register', async (req, res) => {
       } catch (profileErr) {
         console.warn('Inserting driver document columns failed, using fallback insert:', profileErr.message);
         const fallbackDriverQuery = `
-          INSERT INTO driver_profiles (user_id, vehicle_type, vehicle_model, vehicle_number, license_number)
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO driver_profiles (user_id, vehicle_type, vehicle_model, vehicle_number, license_number, photo_url)
+          VALUES ($1, $2, $3, $4, $5, $6)
           RETURNING *
         `;
         const fallbackRes = await client.query(fallbackDriverQuery, [
@@ -157,6 +157,7 @@ router.post('/register', async (req, res) => {
           vehicle_model || '',
           vehicle_number || '',
           license_number || '',
+          photo_url || null,
         ]);
         profileData = fallbackRes.rows[0];
       }
@@ -182,8 +183,8 @@ router.post('/register', async (req, res) => {
       } catch (profileErr) {
         console.warn('Inserting guide document columns failed, using fallback insert:', profileErr.message);
         const fallbackGuideQuery = `
-          INSERT INTO guide_profiles (user_id, expertise, license_id, bio)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO guide_profiles (user_id, expertise, license_id, bio, photo_url)
+          VALUES ($1, $2, $3, $4, $5)
           RETURNING *
         `;
         const fallbackRes = await client.query(fallbackGuideQuery, [
@@ -191,6 +192,7 @@ router.post('/register', async (req, res) => {
           expertise || 'General Tour Guide',
           license_id || '',
           bio || '',
+          photo_url || null,
         ]);
         profileData = fallbackRes.rows[0];
       }
@@ -304,20 +306,10 @@ router.post('/login', async (req, res) => {
     const userRole = (user.role || '').toLowerCase();
     if (userRole === 'driver' || userRole === 'captain') {
       const driverRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1', [user.id]);
-      if (driverRes.rows.length > 0) {
-        profileData = driverRes.rows[0];
-      } else {
-        const fallbackRes = await db.query('SELECT * FROM driver_profiles ORDER BY updated_at DESC LIMIT 1');
-        profileData = fallbackRes.rows[0] || null;
-      }
+      profileData = driverRes.rows[0] || null;
     } else if (userRole === 'guide') {
       const guideRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1', [user.id]);
-      if (guideRes.rows.length > 0) {
-        profileData = guideRes.rows[0];
-      } else {
-        const fallbackRes = await db.query('SELECT * FROM guide_profiles ORDER BY updated_at DESC LIMIT 1');
-        profileData = fallbackRes.rows[0] || null;
-      }
+      profileData = guideRes.rows[0] || null;
     }
 
     // Generate JWT Token
@@ -928,6 +920,7 @@ router.put('/users/:id/profile', async (req, res) => {
       alternate_phone,
       alt_phone,
       email,
+      role,
       vehicle_model,
       vehicle_number,
       upiId,
@@ -941,6 +934,7 @@ router.put('/users/:id/profile', async (req, res) => {
     const altPhone = (alternate_phone || alt_phone || '').trim();
     const upi = upiId || upi_id || '';
     const photo = photo_url || photoUrl || '';
+    const requestedRole = (role || '').toLowerCase();
 
     const isUuid = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
@@ -951,32 +945,45 @@ router.put('/users/:id/profile', async (req, res) => {
         if (pRes.rows.length > 0) targetUserId = pRes.rows[0].id;
       }
       if (!isUuid(targetUserId)) {
-        const fallbackUser = await db.query("SELECT id FROM users WHERE role = 'driver' ORDER BY created_at DESC LIMIT 1");
+        const fallbackRole = requestedRole === 'guide' ? 'guide' : 'driver';
+        const fallbackUser = await db.query(
+          'SELECT id FROM users WHERE role = $1 ORDER BY created_at DESC LIMIT 1',
+          [fallbackRole]
+        );
         if (fallbackUser.rows.length > 0) {
           targetUserId = fallbackUser.rows[0].id;
         }
       }
     }
 
-    // 1. Update main users table
-    if (isUuid(targetUserId)) {
-      if (name || phone || email || altPhone || photo) {
-        await db.query(
-          `UPDATE users
-           SET name = COALESCE($1, name),
-               phone = COALESCE($2, phone),
-               alternate_phone = COALESCE($3, alternate_phone),
-               email = COALESCE($4, email),
-               photo_url = COALESCE($5, photo_url),
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $6`,
-          [name || null, phone || null, altPhone || null, email || null, photo || null, targetUserId]
-        ).catch(e => console.warn('Users photo update warning:', e.message));
-      }
+    if (!isUuid(targetUserId)) {
+      return res.status(400).json({ success: false, message: 'Could not resolve user. Please log in again.' });
     }
 
-    // 2. Safe UPDATE driver_profiles (with INSERT fallback if profile row does not exist)
-    if (isUuid(targetUserId)) {
+    // 1. Update main users table
+    if (name || phone || email || altPhone || photo) {
+      await db.query(
+        `UPDATE users
+         SET name = COALESCE($1, name),
+             phone = COALESCE($2, phone),
+             alternate_phone = COALESCE($3, alternate_phone),
+             email = COALESCE($4, email),
+             photo_url = COALESCE($5, photo_url),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $6`,
+        [name || null, phone || null, altPhone || null, email || null, photo || null, targetUserId]
+      ).catch(e => console.warn('Users photo update warning:', e.message));
+    }
+
+    const updatedUserRes = await db.query(
+      'SELECT id, name, phone, alternate_phone, email, role, status FROM users WHERE id = $1',
+      [targetUserId]
+    );
+    const userObj = updatedUserRes.rows[0];
+    const userRole = (userObj?.role || requestedRole || 'driver').toLowerCase();
+
+    // 2. Update role-specific profile
+    if (userRole === 'driver' || userRole === 'captain') {
       const updateRes = await db.query(
         `UPDATE driver_profiles
          SET photo_url = COALESCE($1, photo_url),
@@ -995,38 +1002,38 @@ router.put('/users/:id/profile', async (req, res) => {
           [targetUserId, photo || null, vehicle_model || null, vehicle_number || null, upi || null]
         ).catch(e => console.warn('Insert driver_profile warning:', e.message));
       }
-    }
-
-    // 3. Update guide_profiles if guide
-    if (isUuid(targetUserId)) {
-      await db.query(
+    } else if (userRole === 'guide') {
+      const updateRes = await db.query(
         `UPDATE guide_profiles
          SET photo_url = COALESCE($1, photo_url),
              upi_id = COALESCE($2, upi_id),
+             expertise = COALESCE($3, expertise),
+             bio = COALESCE($4, bio),
              updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $3 OR id = $3`,
-        [photo || null, upi || null, targetUserId]
-      ).catch(() => {});
+         WHERE user_id = $5 OR id = $5`,
+        [photo || null, upi || null, expertise || null, bio || null, targetUserId]
+      ).catch(e => console.warn('Guide profile update warning:', e.message));
+
+      if (!updateRes || updateRes.rowCount === 0) {
+        await db.query(
+          `INSERT INTO guide_profiles (user_id, photo_url, upi_id, expertise, bio)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [targetUserId, photo || null, upi || null, expertise || 'General Tour Guide', bio || '']
+        ).catch(e => console.warn('Insert guide_profile warning:', e.message));
+      }
     }
 
-
-    // 4. Fetch updated user and driver profile
-    let updatedUserRes = null;
-    if (isUuid(targetUserId)) {
-      updatedUserRes = await db.query('SELECT id, name, phone, alternate_phone, email, role, status FROM users WHERE id = $1', [targetUserId]);
-    }
-    const userObj = updatedUserRes?.rows[0] || { id: targetUserId, name: name || 'Driver', phone: phone || '', role: 'driver', status: 'Active' };
-
-    let dRes = null;
-    if (isUuid(targetUserId)) {
-      dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1', [targetUserId]);
-    }
-    if (!dRes || dRes.rows.length === 0) {
-      dRes = await db.query('SELECT * FROM driver_profiles ORDER BY updated_at DESC LIMIT 1');
+    // 3. Fetch updated role profile
+    let profileObj = null;
+    if (userRole === 'driver' || userRole === 'captain') {
+      const dRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1', [targetUserId]);
+      profileObj = dRes.rows[0] || { user_id: targetUserId, vehicle_model, vehicle_number };
+    } else if (userRole === 'guide') {
+      const gRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1', [targetUserId]);
+      profileObj = gRes.rows[0] || { user_id: targetUserId, expertise, bio };
     }
 
-    const profileObj = dRes?.rows[0] || { user_id: targetUserId, photo_url: photo, photoUrl: photo, vehicle_model, vehicle_number };
-    if (photo) {
+    if (profileObj && photo) {
       profileObj.photo_url = photo;
       profileObj.photoUrl = photo;
     }

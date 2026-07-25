@@ -112,7 +112,7 @@ export default function DriverDashboardScreen() {
   const [vehicleModel, setVehicleModel] = useState(currentSession?.profile?.vehicle_model || 'Innova Crysta AC');
   const [vehicleNumber, setVehicleNumber] = useState(currentSession?.profile?.vehicle_number || 'KA-01-EX-8240');
   const [vehicleType, setVehicleType] = useState(currentSession?.profile?.vehicle_type || '7 Seater Cab');
-  const [photoUrl, setPhotoUrl] = useState(currentSession?.profile?.photo_url || '');
+  const [photoUrl, setPhotoUrl] = useState(currentSession?.profile?.photo_url || currentSession?.profile?.photoUrl || '');
   const [upiId, setUpiId] = useState(currentSession?.profile?.upi_id || currentSession?.profile?.upiId || 'ka03md8240@okaxis');
 
   // Unified Edit Mode & Password toggle
@@ -137,7 +137,7 @@ export default function DriverDashboardScreen() {
         if (u.phone) setDriverPhone(u.phone);
         if (p.vehicle_model) setVehicleModel(p.vehicle_model);
         if (p.vehicle_number) setVehicleNumber(p.vehicle_number);
-        if (p.photo_url) setPhotoUrl(p.photo_url);
+        if (p.photo_url || p.photoUrl) setPhotoUrl(p.photo_url || p.photoUrl);
         if (p.upi_id || p.upiId) setUpiId(p.upi_id || p.upiId);
       }
 
@@ -233,14 +233,15 @@ export default function DriverDashboardScreen() {
     const apiRes = await updateUserProfileApi(userId, {
       name: driverName,
       phone: driverPhone,
+      role: 'driver',
       vehicle_model: vehicleModel,
       vehicle_number: vehicleNumber,
       photo_url: photoUrl,
       photoUrl: photoUrl,
       upiId: upiId,
     });
-    // ADD THIS:
     if (!apiRes?.success) {
+      setIsSavingProfile(false);
       Alert.alert('Update Failed', apiRes?.message || 'Could not save your profile. Please try again.');
       return;
     }
