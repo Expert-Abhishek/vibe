@@ -1,6 +1,20 @@
 import NotificationModal from '@/components/NotificationModal';
+import { useAppModal } from '@src/context/ModalContext';
 import { adminState } from '@/constants/admin-state';
-import { acceptTripApi, fetchPendingRequestsApi, fetchUserProfileApi, saveUserSettingsApi, submitWithdrawalApi, updatePasswordApi, updateUserProfileApi } from '@/constants/api';
+import {
+  acceptTripApi,
+  fetchPendingRequestsApi,
+  fetchUserProfileApi,
+  saveUserSettingsApi,
+  submitWithdrawalApi,
+  updatePasswordApi,
+  updateUserProfileApi,
+  declineTripApi,
+  verifyTripOtpApi,
+  fetchGuideStatsApi,
+  fetchGuideAdvanceSchedulesApi,
+  completeTripApi
+} from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -93,6 +107,33 @@ export default function GuideDashboardScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+  const [realSchedules, setRealSchedules] = useState<any[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+
+  const loadRealStatsAndSchedules = async () => {
+    const session = getUserSessionSync();
+    const guideId = session?.id || 'g1';
+
+    try {
+      // 1. Fetch real stats
+      const statsRes = await fetchGuideStatsApi(guideId);
+      if (statsRes && statsRes.success && statsRes.data) {
+        setTripsCount(statsRes.data.tripsCount || 0);
+        setEarningsToday(statsRes.data.todayEarnings || 0);
+        setEarningsBalance(statsRes.data.walletBalance || 0);
+      }
+
+      // 2. Fetch real schedules/trips
+      setLoadingSchedules(true);
+      const schedules = await fetchGuideAdvanceSchedulesApi(guideId);
+      setRealSchedules(schedules || []);
+    } catch (e) {
+      console.warn('Error loading real stats or schedules:', e);
+    } finally {
+      setLoadingSchedules(false);
+    }
+  };
+
   useEffect(() => {
     async function loadGuideBackendData() {
       const session = getUserSessionSync();
@@ -110,6 +151,10 @@ export default function GuideDashboardScreen() {
     }
     loadGuideBackendData();
   }, []);
+
+  useEffect(() => {
+    loadRealStatsAndSchedules();
+  }, [updateTrigger]);
 
   const handlePickImage = async () => {
     Alert.alert(
@@ -335,6 +380,8 @@ export default function GuideDashboardScreen() {
           otp: req.otp || '8240',
         };
         (guideReq as any).tripId = req.id;
+        (guideReq as any).bookingType = req.bookingType || 'INSTANT';
+        (guideReq as any).scheduledTime = req.scheduledTime;
         setIncomingRequest(guideReq);
         setTimerSeconds(30);
         setRequestVisible(true);
@@ -376,37 +423,70 @@ export default function GuideDashboardScreen() {
     const tripId = (incomingRequest as any).tripId;
 
     if (tripId) {
-      await acceptTripApi(tripId, guideId, guideName);
+      const res = await acceptTripApi(tripId, guideId, guideName);
+      if (!res || !res.success) {
+        showError('Accept Failed', res?.message || 'Could not accept this booking. Please add money or try again.');
+        return;
+      }
     }
 
     setRequestVisible(false);
-    setActiveTour(incomingRequest);
-    setTourPhase('pickup');
-    setCurrentSpotIndex(0);
-    setIncomingRequest(null);
-    setActiveTab('active_tour');
 
-    sendLocalNotification(
-      '🚩 Tour Accepted!',
-      `You accepted the guide booking for ${incomingRequest.touristName}. Proceed to pickup spot.`
-    );
+    if ((incomingRequest as any).bookingType === 'PRE_BOOKED') {
+      showSuccess('Pre-booking Accepted', 'The pre-booking request has been accepted and added to your schedules.');
+      setIncomingRequest(null);
+    } else {
+      setActiveTour(incomingRequest);
+      setTourPhase('pickup');
+      setCurrentSpotIndex(0);
+      setIncomingRequest(null);
+      setActiveTab('active_tour');
+
+      sendLocalNotification(
+        '🚩 Tour Accepted!',
+        `You accepted the guide booking for ${incomingRequest.touristName}. Proceed to pickup spot.`
+      );
+    }
+
+    setUpdateTrigger(prev => prev + 1);
   };
 
-  const handleRejectRequest = () => {
+  const handleRejectRequest = async () => {
+    if (!incomingRequest) return;
+    const tripId = (incomingRequest as any).tripId;
+    if (tripId) {
+      await declineTripApi(tripId);
+    }
     setRequestVisible(false);
     setIncomingRequest(null);
+    setUpdateTrigger(prev => prev + 1);
   };
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     if (!activeTour) return;
-    if (enteredOtp === activeTour.otp) {
+    const tripId = (activeTour as any).tripId;
+    if (!tripId) {
+      if (enteredOtp === activeTour.otp) {
+        setOtpVisible(false);
+        setEnteredOtp('');
+        setTourPhase('tour');
+        setCurrentSpotIndex(0);
+        showSuccess('Verification Success!', 'OTP code matched. Sightseeing tour started.');
+      } else {
+        showError('Invalid OTP', 'The code did not match. Please verify with tourist.');
+      }
+      return;
+    }
+
+    const res = await verifyTripOtpApi(tripId, enteredOtp);
+    if (res && res.success) {
       setOtpVisible(false);
       setEnteredOtp('');
       setTourPhase('tour');
       setCurrentSpotIndex(0);
-      Alert.alert('Verification Success!', 'OTP code matched. Sightseeing tour started.');
+      showSuccess('Verification Success!', 'OTP code matched. Sightseeing tour started.');
     } else {
-      Alert.alert('Invalid OTP', 'The code did not match. Please verify with tourist (Try 8240).');
+      showError('Invalid OTP', res.message || 'The code did not match. Please verify with tourist.');
     }
   };
 
@@ -430,7 +510,15 @@ export default function GuideDashboardScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm End',
-          onPress: () => {
+          onPress: async () => {
+            const tripId = (activeTour as any).tripId;
+            const session = getUserSessionSync();
+            const guideId = session?.id || 'g1';
+
+            if (tripId) {
+              await completeTripApi(tripId, guideId);
+            }
+
             const fareEarned = activeTour.estimatedFare;
             setEarningsToday(prev => prev + fareEarned);
             setEarningsBalance(prev => prev + fareEarned);
@@ -449,7 +537,8 @@ export default function GuideDashboardScreen() {
             setActiveTour(null);
             setTourPhase('pickup');
             setActiveTab('profile');
-            Alert.alert('Tour Complete!', `₹${fareEarned} added to your balance.`);
+            setUpdateTrigger(prev => prev + 1);
+            showSuccess('Tour Complete!', `₹${fareEarned} added to your balance.`);
           }
         }
       ]
@@ -615,13 +704,27 @@ export default function GuideDashboardScreen() {
             </View>
           </View>
 
-          {/* Upcoming Advance Bookings card */}
+          {/* Real Guide Bookings & Tours card */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Upcoming Advance Booking Schedules</Text>
-            {adminState.advanceBookings
-              .filter(b => b.type === 'guide' && b.status !== 'Cancelled')
-              .map(booking => {
-                const isAcceptedByMe = booking.assignedToId === 'g1';
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>My Guide Bookings & Tours (Real-time)</Text>
+
+            {loadingSchedules ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.amber} />
+              </View>
+            ) : realSchedules.length === 0 ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                  No active bookings or instant tours found.
+                </Text>
+              </View>
+            ) : (
+              realSchedules.map((booking) => {
+                const session = getUserSessionSync();
+                const guideId = session?.id || 'g1';
+                const isAcceptedByMe = String(booking.assignedToId) === String(guideId);
+                const isInstant = booking.bookingType === 'INSTANT';
+
                 return (
                   <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
                     <View style={styles.logHeaderRow}>
@@ -633,12 +736,15 @@ export default function GuideDashboardScreen() {
                         <Text style={[styles.logTime, { color: colors.textMuted }]}>
                           Client: {booking.touristName}
                         </Text>
+                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '700', color: colors.amber, marginTop: 4 }}>
+                          ⚡ Type: {isInstant ? 'Instant Match' : 'Pre-booking / Schedule'}
+                        </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price}</Text>
-                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
-                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' ? '#10B981' : colors.amber }}>
-                            {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Available'}
+                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' || booking.status === 'Completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
+                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' || booking.status === 'Completed' ? '#10B981' : colors.amber }}>
+                            {booking.status}
                           </Text>
                         </View>
                       </View>
@@ -647,20 +753,23 @@ export default function GuideDashboardScreen() {
                     {booking.status === 'Pending' && (
                       <TouchableOpacity
                         style={[styles.smallPayoutBtn, { backgroundColor: colors.amber, marginTop: verticalScale(10), alignItems: 'center' }]}
-                        onPress={() => {
-                          booking.status = 'Accepted';
-                          booking.assignedToId = 'g1';
-                          booking.driverOrGuideName = 'Anil Gowda';
-                          Alert.alert('Booking Claimed!', `You have accepted the guided tour reservation: ${booking.title} on ${booking.date}.`);
-                          setUpdateTrigger(prev => prev + 1);
+                        onPress={async () => {
+                          const res = await acceptTripApi(booking.id, guideId, guideName);
+                          if (res && res.success) {
+                            showSuccess('Booking Claimed!', `You have accepted the guided tour reservation: ${booking.title}.`);
+                            setUpdateTrigger(prev => prev + 1);
+                          } else {
+                            showError('Error', res?.message || 'Failed to claim booking.');
+                          }
                         }}
                       >
-                        <Text style={styles.smallPayoutBtnText}>Accept Advance Schedule</Text>
+                        <Text style={styles.smallPayoutBtnText}>Accept Booking Schedule</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 );
-              })}
+              })
+            )}
           </View>
         </ScrollView>
       )}
@@ -1099,7 +1208,9 @@ export default function GuideDashboardScreen() {
             <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <View style={styles.popupTimerHeader}>
                 <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
-                <Text style={styles.popupTimerText}>INCOMING INSTANT BOOKING ({timerSeconds}s)</Text>
+                <Text style={styles.popupTimerText}>
+                  INCOMING {((incomingRequest as any).bookingType || 'INSTANT') === 'PRE_BOOKED' ? 'PRE-BOOKING' : 'INSTANT BOOKING'} ({timerSeconds}s)
+                </Text>
               </View>
 
               <View style={styles.popupMainDetails}>
