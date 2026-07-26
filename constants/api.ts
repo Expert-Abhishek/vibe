@@ -560,6 +560,35 @@ export async function fetchDriverAdvanceSchedulesApi(driverId: string): Promise<
 }
 
 /**
+ * Fetch Guide Statistics (Trips Count, Today Earnings)
+ */
+export async function fetchGuideStatsApi(guideId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/guide-stats/${guideId}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchGuideStatsApi error:', e);
+    return { success: false, data: { tripsCount: 0, todayEarnings: 0 } };
+  }
+}
+
+/**
+ * Fetch Guide Advance Schedules from backend DB
+ */
+export async function fetchGuideAdvanceSchedulesApi(guideId: string): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/guide-advance-schedules/${guideId}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchGuideAdvanceSchedulesApi error:', e);
+  }
+  return [];
+}
+
+/**
  * Fetch User Profile (Tourist, Driver, or Guide) from backend DB
  */
 export async function fetchUserProfileApi(userId: string): Promise<any> {

@@ -592,12 +592,17 @@ router.post('/book', async (req, res) => {
 router.get('/pending-requests', async (req, res) => {
   try {
     const { role = 'driver' } = req.query;
-    const targetType = role === 'guide' ? 'guide' : 'cab';
+    let result;
 
-    const result = await db.query(
-      `SELECT * FROM trips WHERE status = 'Pending' AND (trip_type = $1 OR trip_type = 'custom_trip') ORDER BY created_at DESC LIMIT 5`,
-      [targetType]
-    );
+    if (role === 'guide') {
+      result = await db.query(
+        `SELECT * FROM trips WHERE status = 'Pending' AND (trip_type IN ('guide', 'plan_package') OR trip_type = 'custom_trip') ORDER BY created_at DESC LIMIT 5`
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM trips WHERE status = 'Pending' AND (trip_type = 'cab' OR trip_type = 'custom_trip') ORDER BY created_at DESC LIMIT 5`
+      );
+    }
 
     const trips = result.rows.map(t => ({
       id: t.id,
@@ -823,6 +828,49 @@ router.post('/:id/accept', async (req, res) => {
     const { id } = req.params;
     const { driverId, driverName = 'Verified Partner' } = req.body;
 
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: 'driverId is required' });
+    }
+
+    // 1. Fetch wallet balance and platform fee for driver or guide
+    const dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1", [driverId]);
+    const gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1", [driverId]);
+    
+    let walletBalance = 0;
+    let platformFee = 10.00;
+    let isDriver = false;
+    let isGuide = false;
+
+    if (dRes.rows.length > 0) {
+      walletBalance = parseFloat(dRes.rows[0].wallet_balance || 0);
+      platformFee = parseFloat(dRes.rows[0].platform_fee || 10.00);
+      isDriver = true;
+    } else if (gRes.rows.length > 0) {
+      walletBalance = parseFloat(gRes.rows[0].wallet_balance || 0);
+      platformFee = parseFloat(gRes.rows[0].platform_fee || 10.00);
+      isGuide = true;
+    }
+
+    if (walletBalance < platformFee) {
+      return res.status(400).json({
+        success: false,
+        message: `Insufficient wallet balance. You need at least ₹${platformFee} to accept this booking.`
+      });
+    }
+
+    // 2. Deduct platform fee
+    if (isDriver) {
+      await db.query("UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
+    } else if (isGuide) {
+      await db.query("UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
+    }
+
+    // 3. Log transaction
+    await db.query(
+      "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
+      [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
+    );
+
     const result = await db.query(
       `UPDATE trips 
        SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2 
@@ -1018,6 +1066,49 @@ router.post('/:id/respond', async (req, res) => {
     const { driverId, action, driverName } = req.body;
 
     if (action === 'accept') {
+      if (!driverId) {
+        return res.status(400).json({ success: false, message: 'driverId is required' });
+      }
+
+      // 1. Fetch wallet balance and platform fee
+      const dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1", [driverId]);
+      const gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1", [driverId]);
+      
+      let walletBalance = 0;
+      let platformFee = 10.00;
+      let isDriver = false;
+      let isGuide = false;
+
+      if (dRes.rows.length > 0) {
+        walletBalance = parseFloat(dRes.rows[0].wallet_balance || 0);
+        platformFee = parseFloat(dRes.rows[0].platform_fee || 10.00);
+        isDriver = true;
+      } else if (gRes.rows.length > 0) {
+        walletBalance = parseFloat(gRes.rows[0].wallet_balance || 0);
+        platformFee = parseFloat(gRes.rows[0].platform_fee || 10.00);
+        isGuide = true;
+      }
+
+      if (walletBalance < platformFee) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient wallet balance. You need at least ₹${platformFee} to accept this booking.`
+        });
+      }
+
+      // 2. Deduct platform fee
+      if (isDriver) {
+        await db.query("UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
+      } else if (isGuide) {
+        await db.query("UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
+      }
+
+      // 3. Log transaction
+      await db.query(
+        "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
+        [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
+      );
+
       await db.query(
         "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id = $3",
         [driverId, driverName || 'Verified Partner', id]
@@ -1139,6 +1230,102 @@ router.get('/driver-advance-schedules/:driverId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching driver advance schedules:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch advance schedules' });
+  }
+});
+
+/**
+ * GET /api/trips/guide-stats/:guideId
+ * Fetch real-time statistics for guide (Trips Count, Today Earnings, wallet balance)
+ */
+router.get('/guide-stats/:guideId', async (req, res) => {
+  try {
+    const { guideId } = req.params;
+
+    const result = await db.query(
+      `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Completed', 'Accepted', 'Active') ORDER BY created_at DESC`,
+      [guideId]
+    );
+
+    let tripsCount = 0;
+    let todayEarnings = 0;
+    let totalEarnings = 0;
+
+    result.rows.forEach(t => {
+      const amt = parseFloat(t.amount || 0);
+      if (t.status === 'Completed' || t.status === 'Accepted' || t.status === 'Active') {
+        tripsCount += 1;
+        todayEarnings += amt;
+        totalEarnings += amt;
+      }
+    });
+
+    // Wallet balance
+    const profileRes = await db.query(
+      'SELECT wallet_balance FROM guide_profiles WHERE user_id = $1',
+      [guideId]
+    );
+    const walletBalance = profileRes.rows.length > 0 ? parseFloat(profileRes.rows[0].wallet_balance || 0) : todayEarnings;
+
+    res.json({
+      success: true,
+      data: {
+        todayKm: 0,
+        tripsCount,
+        todayEarnings,
+        totalEarnings,
+        walletBalance,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching guide stats:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch guide stats' });
+  }
+});
+
+/**
+ * GET /api/trips/guide-advance-schedules/:guideId
+ * Fetch upcoming advance booking schedules for guide
+ */
+router.get('/guide-advance-schedules/:guideId', async (req, res) => {
+  try {
+    const { guideId } = req.params;
+
+    const userRes = await db.query('SELECT name FROM users WHERE id = $1', [guideId]);
+    const guideName = userRes.rows.length > 0 ? userRes.rows[0].name : '';
+
+    let result;
+    if (guideName && guideName.trim().length > 2) {
+      result = await db.query(
+        `SELECT * FROM trips WHERE (driver_id = $1 OR LOWER(driver_or_guide_name) = LOWER($2)) AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        [guideId, guideName.trim()]
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        [guideId]
+      );
+    }
+
+    const schedules = result.rows.map(t => ({
+      id: t.id,
+      title: t.title || `${t.pickup_name} ➔ ${t.drop_name}`,
+      date: new Date(t.created_at).toISOString().split('T')[0],
+      time: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      price: parseFloat(t.amount || 0),
+      touristName: t.customer_name || 'Tourist',
+      driverOrGuideName: t.driver_or_guide_name || '',
+      status: t.status,
+      assignedToId: guideId,
+      tripType: t.trip_type,
+      otp: t.otp || '8240',
+      bookingType: t.booking_type || 'INSTANT',
+      scheduledTime: t.scheduled_time,
+    }));
+
+    res.json({ success: true, data: schedules });
+  } catch (error) {
+    console.error('Error fetching guide advance schedules:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch guide advance schedules' });
   }
 });
 

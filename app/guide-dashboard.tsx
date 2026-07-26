@@ -950,43 +950,41 @@ export default function GuideDashboardScreen() {
             </View>
           )}
 
-          {/* 1. Bank Account & Wallet (Paisa Section) */}
-          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>{trans.wallet}</Text>
+          {/* WALLET CARD SECTION */}
+          <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(20) }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
+              <MaterialIcons name="account-balance-wallet" size={scale(18)} color={colors.amber} />
+              <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.amber, textTransform: 'uppercase', letterSpacing: 0.5 }}>Vibe Wallet</Text>
+            </View>
+            <View style={{ marginBottom: verticalScale(14) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{earningsBalance}</Text>
+            </View>
 
-            <View style={styles.payoutBalanceRow}>
-              <View>
-                <Text style={[styles.payoutAmtVal, { color: colors.textPrimary }]}>₹{earningsBalance}</Text>
-                <Text style={[styles.payoutAmtSub, { color: colors.textMuted }]}>Available balance to settle</Text>
-              </View>
+            <View style={{ flexDirection: 'row', gap: scale(10) }}>
               <TouchableOpacity
-                style={[styles.smallPayoutBtn, { backgroundColor: colors.amber }]}
-                onPress={handleInstantPayout}
-                disabled={payoutLoading}
+                style={{ flex: 1, backgroundColor: colors.amber, height: verticalScale(44), borderRadius: scale(12), flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }}
+                onPress={() => router.push('/(tabs)/guide-wallet' as any)}
               >
-                {payoutLoading ? <ActivityIndicator size="small" color="#101010" /> : <Text style={styles.smallPayoutBtnText}>Settle Now</Text>}
+                <MaterialIcons name="add-circle-outline" size={scale(16)} color="#101014" />
+                <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: '#101014' }}>Add Money</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', height: verticalScale(44), borderRadius: scale(12), borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }}
+                onPress={() => router.push('/(tabs)/guide-wallet' as any)}
+              >
+                <MaterialIcons name="history" size={scale(16)} color={colors.textPrimary} />
+                <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: colors.textPrimary }}>History</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-            <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Settlement UPI ID</Text>
-            <View style={[styles.inputFieldBox, { borderColor: colors.border }]}>
-              <MaterialIcons name="payment" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(8) }} />
-              <TextInput
-                style={[styles.textInputStyle, { color: colors.textPrimary }]}
-                value={upiId}
-                onChangeText={setUpiId}
-                placeholder="ramesh@upi"
-                placeholderTextColor="rgba(255,255,255,0.2)"
-              />
-            </View>
-
             <TouchableOpacity
-              style={[styles.detailedWalletBtn, { marginTop: verticalScale(14), borderColor: colors.amber }]}
+              style={{ backgroundColor: 'rgba(255,255,255,0.06)', height: verticalScale(44), borderRadius: scale(12), marginTop: verticalScale(10), borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }}
               onPress={() => router.push('/(tabs)/guide-wallet' as any)}
             >
-              <Text style={[styles.detailedWalletBtnText, { color: colors.amber }]}>View Detailed Wallet & Pay History</Text>
+              <MaterialIcons name="payment" size={scale(16)} color={colors.textPrimary} />
+              <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: colors.textPrimary }}>Withdraw Funds</Text>
             </TouchableOpacity>
           </View>
 

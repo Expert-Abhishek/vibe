@@ -494,14 +494,6 @@ export default function ProfileScreen() {
               <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>History</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: 'rgba(255,255,255,0.06)', marginTop: verticalScale(10), borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
-            onPress={() => setWithdrawModalVisible(true)}
-          >
-            <MaterialIcons name="payment" size={scale(16)} color={colors.textPrimary} />
-            <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Withdraw Funds</Text>
-          </TouchableOpacity>
         </View>
 
         {/* PREFERENCES SECTION */}
@@ -561,8 +553,15 @@ export default function ProfileScreen() {
 
       {/* Wallet History Bottom Drawer */}
       <Modal visible={walletModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWalletModalVisible(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <View style={{ backgroundColor: colors.surface, height: '60%', borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}>
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setWalletModalVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{ backgroundColor: colors.surface, height: '60%', borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}
+          >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(20) }}>
               <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Wallet History</Text>
               <TouchableOpacity onPress={() => setWalletModalVisible(false)}>
@@ -597,14 +596,21 @@ export default function ProfileScreen() {
                 );
               }}
             />
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Wallet Add Money (Top-Up) Modal */}
       <Modal visible={topupModalVisible} animationType="slide" transparent={true} onRequestClose={() => setTopupModalVisible(false)}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}>
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setTopupModalVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}
+          >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
               <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>
                 {topupStep === 1 ? '💳 Add Money to Wallet' : '📲 Scan QR & Pay'}
@@ -728,78 +734,8 @@ export default function ProfileScreen() {
                 </View>
               </ScrollView>
             )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Withdraw Funds Modal */}
-      <Modal visible={withdrawModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWithdrawModalVisible(false)}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
-        >
-          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Withdraw Funds</Text>
-              <TouchableOpacity onPress={() => setWithdrawModalVisible(false)}>
-                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(4) }}>Available: ₹{walletBalance}</Text>
-
-            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>Amount</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
-              keyboardType="numeric"
-              value={withdrawAmount}
-              onChangeText={setWithdrawAmount}
-              placeholder="Enter amount"
-              placeholderTextColor={colors.textMuted}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>UPI ID</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
-              value={withdrawUpi}
-              onChangeText={setWithdrawUpi}
-              placeholder="yourname@upi"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-            />
-
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
-              onPress={async () => {
-                const amt = parseFloat(withdrawAmount);
-                if (!amt || amt <= 0) {
-                  Alert.alert('Error', 'Please enter a valid amount');
-                  return;
-                }
-                if (amt > walletBalance) {
-                  Alert.alert('Error', 'Withdrawal amount exceeds wallet balance');
-                  return;
-                }
-                if (!withdrawUpi.trim()) {
-                  Alert.alert('Error', 'Please enter your UPI ID');
-                  return;
-                }
-                const res = await submitWithdrawalApi({ userId, userName: name, amount: amt, upiId: withdrawUpi });
-                if (res.success) {
-                  Alert.alert('Success', res.message || 'Withdrawal request submitted');
-                  setWithdrawModalVisible(false);
-                  setWithdrawAmount('');
-                  setWithdrawUpi('');
-                  loadProfileAndWalletData();
-                } else {
-                  Alert.alert('Error', res.message || 'Withdrawal failed');
-                }
-              }}
-            >
-              <Text style={styles.primaryButtonText}>Submit Withdrawal Request</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
