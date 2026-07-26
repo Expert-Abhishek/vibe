@@ -321,7 +321,7 @@ export default function GuideWalletScreen() {
                 );
               }}
             />
-          </div>
+          </View>
         </View>
       </Modal>
 
