@@ -1,18 +1,36 @@
 import NotificationModal from '@/components/NotificationModal';
-import { adminState } from '@/constants/admin-state';
-import { acceptTripApi, fetchPendingRequestsApi, fetchUserProfileApi, saveUserSettingsApi, submitWithdrawalApi, updatePasswordApi, updateUserProfileApi } from '@/constants/api';
+import {
+  acceptTripApi,
+  completeTripApi,
+  declineTripApi,
+  fetchAdminPaymentSettingsApi,
+  fetchGuideAdvanceSchedulesApi,
+  fetchGuideStatsApi,
+  fetchPendingRequestsApi,
+  fetchUserProfileApi,
+  fetchWalletBalanceApi,
+  saveUserSettingsApi,
+  submitWalletTopupRequestApi,
+  submitWithdrawalApi,
+  updatePasswordApi,
+  updateUserProfileApi,
+  verifyTripOtpApi
+} from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useAppModal } from '@src/context/ModalContext';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -22,8 +40,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Dynamically require maps for web safety
@@ -73,6 +92,177 @@ export default function GuideDashboardScreen() {
   const [isOnline, setIsOnline] = useState(false);
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
+
+  const [name, setName] = useState('Partner');
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Top-Up state variables
+  const [topupModalVisible, setTopupModalVisible] = useState(false);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupStep, setTopupStep] = useState<1 | 2>(1);
+  const [timerSeconds, setTimerSeconds] = useState(300);
+  const [screenshotBase64, setScreenshotBase64] = useState('');
+  const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
+  const [initiatedAt, setInitiatedAt] = useState<Date | null>(null);
+
+  const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
+  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
+
+  // Withdrawal state variables
+  const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawUpi, setWithdrawUpi] = useState('');
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
+
+  // History modal visibility
+  const [walletModalVisible, setWalletModalVisible] = useState(false);
+
+  const session = getUserSessionSync();
+  const userId = session?.id || 'g1';
+
+  const loadWalletData = async () => {
+    setLoading(true);
+    if (session?.name) setName(session.name);
+
+    const userRes = await fetchUserProfileApi(userId);
+    if (userRes && userRes.success && userRes.user) {
+      if (userRes.user.name) setName(userRes.user.name);
+      const profile = userRes.user.profile || {};
+      const upi = profile.upiId || profile.upi_id || '';
+      if (upi) setWithdrawUpi(upi);
+    }
+
+    const data = await fetchWalletBalanceApi(userId);
+    if (data.success) {
+      if (data.balance !== undefined) setWalletBalance(data.balance);
+      if (data.transactions) setWalletTransactions(data.transactions);
+    }
+
+    const adminRes = await fetchAdminPaymentSettingsApi();
+    if (adminRes && adminRes.success && adminRes.data) {
+      if (adminRes.data.upi_id || adminRes.data.upiId) setAdminUpiId(adminRes.data.upi_id || adminRes.data.upiId);
+      if (adminRes.data.qr_code_url || adminRes.data.qrCodeUrl) setAdminQrCodeUrl(adminRes.data.qr_code_url || adminRes.data.qrCodeUrl);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadWalletData();
+  }, [userId]);
+
+  // Client-side countdown timer for Top-Up Screenshot uploads
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (topupModalVisible && topupStep === 2 && timerSeconds > 0) {
+      interval = setInterval(() => {
+        setTimerSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(interval!);
+            setTopupModalVisible(false);
+            setTopupStep(1);
+            setScreenshotBase64('');
+            Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            return 300;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [topupModalVisible, topupStep, timerSeconds]);
+
+  const handlePickScreenshot = async () => {
+    Alert.alert(
+      'Payment Screenshot',
+      'Upload proof of payment:',
+      [
+        {
+          text: '📸 Take Photo (Camera)',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Camera access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              quality: 0.5,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+              setScreenshotBase64(dataUrl);
+            }
+          },
+        },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Gallery access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              quality: 0.5,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+              setScreenshotBase64(dataUrl);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleSubmitTopupProof = async () => {
+    if (!screenshotBase64) {
+      Alert.alert('Required', 'Please upload a screenshot proof of the payment.');
+      return;
+    }
+
+    try {
+      setIsSubmittingTopup(true);
+      const payload = {
+        userId,
+        userName: name,
+        role: 'guide',
+        amount: parseFloat(topupAmount),
+        screenshotUrl: screenshotBase64,
+        initiatedAt: initiatedAt ? initiatedAt.toISOString() : new Date().toISOString(),
+      };
+
+      const res = await submitWalletTopupRequestApi(payload);
+
+      if (res && res.success) {
+        setTopupModalVisible(false);
+        setTopupStep(1);
+        setScreenshotBase64('');
+        setTopupAmount('');
+        Alert.alert('🎉 Submitted!', 'Your top-up request was submitted. Admin will verify and credit your wallet.');
+        loadWalletData();
+      } else {
+        Alert.alert('Submission Failed', res?.message || 'Could not submit your top-up request.');
+      }
+    } catch (e: any) {
+      Alert.alert('Submission Error', e?.message || 'A network error occurred.');
+    } finally {
+      setIsSubmittingTopup(false);
+    }
+  };
+
+
   // Daily statistics
   const [hoursOnline] = useState(0);
   const [tripsCount, setTripsCount] = useState(0);
@@ -93,6 +283,33 @@ export default function GuideDashboardScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+  const [realSchedules, setRealSchedules] = useState<any[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+
+  const loadRealStatsAndSchedules = async () => {
+    const session = getUserSessionSync();
+    const guideId = session?.id || 'g1';
+
+    try {
+      // 1. Fetch real stats
+      const statsRes = await fetchGuideStatsApi(guideId);
+      if (statsRes && statsRes.success && statsRes.data) {
+        setTripsCount(statsRes.data.tripsCount || 0);
+        setEarningsToday(statsRes.data.todayEarnings || 0);
+        setEarningsBalance(statsRes.data.walletBalance || 0);
+      }
+
+      // 2. Fetch real schedules/trips
+      setLoadingSchedules(true);
+      const schedules = await fetchGuideAdvanceSchedulesApi(guideId);
+      setRealSchedules(schedules || []);
+    } catch (e) {
+      console.warn('Error loading real stats or schedules:', e);
+    } finally {
+      setLoadingSchedules(false);
+    }
+  };
+
   useEffect(() => {
     async function loadGuideBackendData() {
       const session = getUserSessionSync();
@@ -110,6 +327,10 @@ export default function GuideDashboardScreen() {
     }
     loadGuideBackendData();
   }, []);
+
+  useEffect(() => {
+    loadRealStatsAndSchedules();
+  }, [updateTrigger]);
 
   const handlePickImage = async () => {
     Alert.alert(
@@ -248,7 +469,7 @@ export default function GuideDashboardScreen() {
 
   // Incoming Request Simulation
   const [incomingRequest, setIncomingRequest] = useState<ActiveRequest | null>(null);
-  const [timerSeconds, setTimerSeconds] = useState(30);
+
   const [requestVisible, setRequestVisible] = useState(false);
 
   // Active tour state
@@ -276,6 +497,10 @@ export default function GuideDashboardScreen() {
     border: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
     amber: '#F5C518',
     danger: '#ef4444',
+
+    surfaceAlt: isDark ? '#212129' : '#EFEFF4',
+    line: isDark ? '#2C2C34' : '#E5E5EA',
+
   };
 
   // Translations
@@ -335,6 +560,8 @@ export default function GuideDashboardScreen() {
           otp: req.otp || '8240',
         };
         (guideReq as any).tripId = req.id;
+        (guideReq as any).bookingType = req.bookingType || 'INSTANT';
+        (guideReq as any).scheduledTime = req.scheduledTime;
         setIncomingRequest(guideReq);
         setTimerSeconds(30);
         setRequestVisible(true);
@@ -376,37 +603,70 @@ export default function GuideDashboardScreen() {
     const tripId = (incomingRequest as any).tripId;
 
     if (tripId) {
-      await acceptTripApi(tripId, guideId, guideName);
+      const res = await acceptTripApi(tripId, guideId, guideName);
+      if (!res || !res.success) {
+        showError('Accept Failed', res?.message || 'Could not accept this booking. Please add money or try again.');
+        return;
+      }
     }
 
     setRequestVisible(false);
-    setActiveTour(incomingRequest);
-    setTourPhase('pickup');
-    setCurrentSpotIndex(0);
-    setIncomingRequest(null);
-    setActiveTab('active_tour');
 
-    sendLocalNotification(
-      '🚩 Tour Accepted!',
-      `You accepted the guide booking for ${incomingRequest.touristName}. Proceed to pickup spot.`
-    );
+    if ((incomingRequest as any).bookingType === 'PRE_BOOKED') {
+      showSuccess('Pre-booking Accepted', 'The pre-booking request has been accepted and added to your schedules.');
+      setIncomingRequest(null);
+    } else {
+      setActiveTour(incomingRequest);
+      setTourPhase('pickup');
+      setCurrentSpotIndex(0);
+      setIncomingRequest(null);
+      setActiveTab('active_tour');
+
+      sendLocalNotification(
+        '🚩 Tour Accepted!',
+        `You accepted the guide booking for ${incomingRequest.touristName}. Proceed to pickup spot.`
+      );
+    }
+
+    setUpdateTrigger(prev => prev + 1);
   };
 
-  const handleRejectRequest = () => {
+  const handleRejectRequest = async () => {
+    if (!incomingRequest) return;
+    const tripId = (incomingRequest as any).tripId;
+    if (tripId) {
+      await declineTripApi(tripId);
+    }
     setRequestVisible(false);
     setIncomingRequest(null);
+    setUpdateTrigger(prev => prev + 1);
   };
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     if (!activeTour) return;
-    if (enteredOtp === activeTour.otp) {
+    const tripId = (activeTour as any).tripId;
+    if (!tripId) {
+      if (enteredOtp === activeTour.otp) {
+        setOtpVisible(false);
+        setEnteredOtp('');
+        setTourPhase('tour');
+        setCurrentSpotIndex(0);
+        showSuccess('Verification Success!', 'OTP code matched. Sightseeing tour started.');
+      } else {
+        showError('Invalid OTP', 'The code did not match. Please verify with tourist.');
+      }
+      return;
+    }
+
+    const res = await verifyTripOtpApi(tripId, enteredOtp);
+    if (res && res.success) {
       setOtpVisible(false);
       setEnteredOtp('');
       setTourPhase('tour');
       setCurrentSpotIndex(0);
-      Alert.alert('Verification Success!', 'OTP code matched. Sightseeing tour started.');
+      showSuccess('Verification Success!', 'OTP code matched. Sightseeing tour started.');
     } else {
-      Alert.alert('Invalid OTP', 'The code did not match. Please verify with tourist (Try 8240).');
+      showError('Invalid OTP', res.message || 'The code did not match. Please verify with tourist.');
     }
   };
 
@@ -430,7 +690,15 @@ export default function GuideDashboardScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm End',
-          onPress: () => {
+          onPress: async () => {
+            const tripId = (activeTour as any).tripId;
+            const session = getUserSessionSync();
+            const guideId = session?.id || 'g1';
+
+            if (tripId) {
+              await completeTripApi(tripId, guideId);
+            }
+
             const fareEarned = activeTour.estimatedFare;
             setEarningsToday(prev => prev + fareEarned);
             setEarningsBalance(prev => prev + fareEarned);
@@ -449,7 +717,8 @@ export default function GuideDashboardScreen() {
             setActiveTour(null);
             setTourPhase('pickup');
             setActiveTab('profile');
-            Alert.alert('Tour Complete!', `₹${fareEarned} added to your balance.`);
+            setUpdateTrigger(prev => prev + 1);
+            showSuccess('Tour Complete!', `₹${fareEarned} added to your balance.`);
           }
         }
       ]
@@ -615,13 +884,27 @@ export default function GuideDashboardScreen() {
             </View>
           </View>
 
-          {/* Upcoming Advance Bookings card */}
+          {/* Real Guide Bookings & Tours card */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>Upcoming Advance Booking Schedules</Text>
-            {adminState.advanceBookings
-              .filter(b => b.type === 'guide' && b.status !== 'Cancelled')
-              .map(booking => {
-                const isAcceptedByMe = booking.assignedToId === 'g1';
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>My Guide Bookings & Tours (Real-time)</Text>
+
+            {loadingSchedules ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.amber} />
+              </View>
+            ) : realSchedules.length === 0 ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                  No active bookings or instant tours found.
+                </Text>
+              </View>
+            ) : (
+              realSchedules.map((booking) => {
+                const session = getUserSessionSync();
+                const guideId = session?.id || 'g1';
+                const isAcceptedByMe = String(booking.assignedToId) === String(guideId);
+                const isInstant = booking.bookingType === 'INSTANT';
+
                 return (
                   <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
                     <View style={styles.logHeaderRow}>
@@ -633,12 +916,15 @@ export default function GuideDashboardScreen() {
                         <Text style={[styles.logTime, { color: colors.textMuted }]}>
                           Client: {booking.touristName}
                         </Text>
+                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '700', color: colors.amber, marginTop: 4 }}>
+                          ⚡ Type: {isInstant ? 'Instant Match' : 'Pre-booking / Schedule'}
+                        </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price}</Text>
-                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
-                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' ? '#10B981' : colors.amber }}>
-                            {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Available'}
+                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' || booking.status === 'Completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
+                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' || booking.status === 'Completed' ? '#10B981' : colors.amber }}>
+                            {booking.status}
                           </Text>
                         </View>
                       </View>
@@ -647,20 +933,23 @@ export default function GuideDashboardScreen() {
                     {booking.status === 'Pending' && (
                       <TouchableOpacity
                         style={[styles.smallPayoutBtn, { backgroundColor: colors.amber, marginTop: verticalScale(10), alignItems: 'center' }]}
-                        onPress={() => {
-                          booking.status = 'Accepted';
-                          booking.assignedToId = 'g1';
-                          booking.driverOrGuideName = 'Anil Gowda';
-                          Alert.alert('Booking Claimed!', `You have accepted the guided tour reservation: ${booking.title} on ${booking.date}.`);
-                          setUpdateTrigger(prev => prev + 1);
+                        onPress={async () => {
+                          const res = await acceptTripApi(booking.id, guideId, guideName);
+                          if (res && res.success) {
+                            showSuccess('Booking Claimed!', `You have accepted the guided tour reservation: ${booking.title}.`);
+                            setUpdateTrigger(prev => prev + 1);
+                          } else {
+                            showError('Error', res?.message || 'Failed to claim booking.');
+                          }
                         }}
                       >
-                        <Text style={styles.smallPayoutBtnText}>Accept Advance Schedule</Text>
+                        <Text style={styles.smallPayoutBtnText}>Accept Booking Schedule</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 );
-              })}
+              })
+            )}
           </View>
         </ScrollView>
       )}
@@ -964,7 +1253,14 @@ export default function GuideDashboardScreen() {
             <View style={{ flexDirection: 'row', gap: scale(10) }}>
               <TouchableOpacity
                 style={{ flex: 1, backgroundColor: colors.amber, height: verticalScale(44), borderRadius: scale(12), flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }}
-                onPress={() => router.push('/(tabs)/guide-wallet' as any)}
+                onPress={() => {
+                  setTopupAmount('');
+                  setTopupStep(1);
+                  setScreenshotBase64('');
+                  setTimerSeconds(300);
+
+                  setTopupModalVisible(true);
+                }}
               >
                 <MaterialIcons name="add-circle-outline" size={scale(16)} color="#101014" />
                 <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: '#101014' }}>Add Money</Text>
@@ -972,7 +1268,10 @@ export default function GuideDashboardScreen() {
 
               <TouchableOpacity
                 style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', height: verticalScale(44), borderRadius: scale(12), borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }}
-                onPress={() => router.push('/(tabs)/guide-wallet' as any)}
+                onPress={() => {
+                  loadWalletData();
+                  setWalletModalVisible(true);
+                }}
               >
                 <MaterialIcons name="history" size={scale(16)} color={colors.textPrimary} />
                 <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: colors.textPrimary }}>History</Text>
@@ -981,59 +1280,56 @@ export default function GuideDashboardScreen() {
 
             <TouchableOpacity
               style={{ backgroundColor: 'rgba(255,255,255,0.06)', height: verticalScale(44), borderRadius: scale(12), marginTop: verticalScale(10), borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }}
-              onPress={() => router.push('/(tabs)/guide-wallet' as any)}
+              onPress={() => {
+                setWithdrawAmount('');
+                setWithdrawUpi(upiId || '');
+                setWithdrawModalVisible(true);
+              }}
             >
               <MaterialIcons name="payment" size={scale(16)} color={colors.textPrimary} />
               <Text style={{ fontSize: moderateFontScale(13), fontWeight: '900', color: colors.textPrimary }}>Withdraw Funds</Text>
             </TouchableOpacity>
           </View>
 
-          {/* App Appearance & Language (Matching Driver Profile) */}
+          {/* App Appearance & Language */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border }]}>
             <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>App Appearance & Language</Text>
 
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>App Display Theme</Text>
-            <View style={[styles.vehiclePillsRow, { marginBottom: verticalScale(14) }]}>
-              <TouchableOpacity
-                style={[styles.langPill, isDark && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppTheme('dark')}
-              >
-                <MaterialIcons name="dark-mode" size={scale(14)} color={isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
-                <Text style={[styles.langPillText, { color: isDark ? '#101010' : colors.textPrimary }]}>Dark Mode </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.langPill, !isDark && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => setAppTheme('light')}
-              >
-                <MaterialIcons name="light-mode" size={scale(14)} color={!isDark ? '#101010' : colors.textPrimary} style={{ marginRight: scale(4) }} />
-                <Text style={[styles.langPillText, { color: !isDark ? '#101010' : colors.textPrimary }]}>Light Mode </Text>
-              </TouchableOpacity>
+            {/* Dark Mode toggle */}
+            <View style={[styles.toggleSettingItem, { marginBottom: verticalScale(14) }]}>
+              <View>
+                <Text style={[styles.toggleSettingLabel, { color: colors.textPrimary }]}>Dark Mode</Text>
+                <Text style={[styles.toggleSettingSub, { color: colors.textMuted }]}>
+                  {isDark ? 'Currently using dark theme' : 'Currently using light theme'}
+                </Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={(val) => setAppTheme(val ? 'dark' : 'light')}
+                trackColor={{ false: '#2C2C34', true: colors.amber }}
+                thumbColor={isDark ? '#FFFFFF' : '#f4f3f4'}
+              />
             </View>
 
-            <Text style={[styles.inputLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>Select App Language / ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ</Text>
-            <View style={styles.vehiclePillsRow}>
-              <TouchableOpacity
-                style={[styles.langPill, appLang === 'en' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => {
-                  setAppLang('en');
+            {/* Kannada language toggle */}
+            <View style={styles.toggleSettingItem}>
+              <View>
+                <Text style={[styles.toggleSettingLabel, { color: colors.textPrimary }]}>ಕನ್ನಡ (Kannada)</Text>
+                <Text style={[styles.toggleSettingSub, { color: colors.textMuted }]}>
+                  {appLang === 'kn' ? 'App language: Kannada' : 'App language: English'}
+                </Text>
+              </View>
+              <Switch
+                value={appLang === 'kn'}
+                onValueChange={(val) => {
+                  const lang = val ? 'kn' : 'en';
+                  setAppLang(lang);
                   const session = getUserSessionSync();
-                  if (session?.id) saveUserSettingsApi(session.id, { language: 'en' });
+                  if (session?.id) saveUserSettingsApi(session.id, { language: lang });
                 }}
-              >
-                <Text style={[styles.langPillText, { color: appLang === 'en' ? '#101010' : colors.textPrimary }]}>English</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.langPill, appLang === 'kn' && styles.langPillActive, { borderColor: colors.border }]}
-                onPress={() => {
-                  setAppLang('kn');
-                  const session = getUserSessionSync();
-                  if (session?.id) saveUserSettingsApi(session.id, { language: 'kn' });
-                }}
-              >
-                <Text style={[styles.langPillText, { color: appLang === 'kn' ? '#101010' : colors.textPrimary }]}>ಕನ್ನಡ (Kannada)</Text>
-              </TouchableOpacity>
+                trackColor={{ false: '#2C2C34', true: colors.amber }}
+                thumbColor={appLang === 'kn' ? '#FFFFFF' : '#f4f3f4'}
+              />
             </View>
           </View>
 
@@ -1091,7 +1387,281 @@ export default function GuideDashboardScreen() {
           </Text>
         </TouchableOpacity>
       </View>
+      {/* Wallet History Modal */}
+      <Modal visible={walletModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWalletModalVisible(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setWalletModalVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{ backgroundColor: colors.surface, height: '60%', borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(20) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontStyle: 'normal', fontWeight: 'bold' }}>Wallet History</Text>
+              <TouchableOpacity onPress={() => setWalletModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
 
+            <FlatList
+              data={walletTransactions}
+              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+              ListEmptyComponent={
+                <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: verticalScale(30) }}>
+                  No transactions yet
+                </Text>
+              }
+              renderItem={({ item }) => {
+                const isIncoming = item.type?.toLowerCase() === 'topup' || item.type?.toLowerCase() === 'refund';
+                return (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: verticalScale(12), borderBottomWidth: 1, borderBottomColor: colors.line }}>
+                    <View style={{ flex: 1, marginRight: scale(10) }}>
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14) }} numberOfLines={1}>
+                        {item.description || (isIncoming ? 'Wallet Deposit' : 'Debit')}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                      </Text>
+                    </View>
+                    <Text style={{ color: isIncoming ? '#10B981' : colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold' }}>
+                      {isIncoming ? '+' : '-'}₹{item.amount}
+                    </Text>
+                  </View>
+                );
+              }}
+            />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Wallet Add Money (Top-Up) Modal */}
+      <Modal visible={topupModalVisible} animationType="slide" transparent={true} onRequestClose={() => setTopupModalVisible(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setTopupModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ width: '100%' }}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>
+                  {topupStep === 1 ? '💳 Add Money to Wallet' : '📲 Scan QR & Pay'}
+                </Text>
+                <TouchableOpacity onPress={() => setTopupModalVisible(false)}>
+                  <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {topupStep === 1 ? (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
+                    Enter the amount you wish to add. Minimim amount is ₹500.
+                  </Text>
+
+                  <Text style={[styles.label, { color: colors.textPrimary }]}>Amount (₹)</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                    keyboardType="numeric"
+                    value={topupAmount}
+                    onChangeText={setTopupAmount}
+                    placeholder="Minimum ₹500"
+                    placeholderTextColor={colors.textMuted}
+                  />
+
+                  <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(12) }}>
+                    {[500, 1000, 2000, 5000].map(amt => (
+                      <TouchableOpacity
+                        key={amt}
+                        style={{ flex: 1, paddingVertical: verticalScale(8), borderRadius: scale(8), backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.line, alignItems: 'center' }}
+                        onPress={() => setTopupAmount(amt.toString())}
+                      >
+                        <Text style={{ color: colors.amber, fontWeight: 'bold', fontSize: moderateFontScale(13) }}>₹{amt}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(10) }]}
+                    onPress={() => {
+                      const amt = parseFloat(topupAmount);
+                      if (!amt || amt < 500) {
+                        Alert.alert('Minimum Amount Required', 'The minimum top-up amount is ₹500.');
+                        return;
+                      }
+                      setInitiatedAt(new Date());
+                      setTimerSeconds(300);
+                      setTopupStep(2);
+                    }}
+                  >
+                    <Text style={styles.primaryButtonText}>Proceed to Pay</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {/* 5-minute countdown timer header */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingVertical: verticalScale(8), borderRadius: scale(8), marginBottom: verticalScale(16) }}>
+                    <MaterialIcons name="alarm" size={scale(18)} color={colors.danger} style={{ marginRight: scale(6) }} />
+                    <Text style={{ color: colors.danger, fontWeight: 'bold', fontSize: moderateFontScale(14) }}>
+                      Upload screenshot in: {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+                    </Text>
+                  </View>
+
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(12) }}>
+                    Scan the QR code below using any UPI App (Google Pay, PhonePe, Paytm) to transfer ₹{topupAmount}.
+                  </Text>
+
+                  {/* Admin static payment QR Code */}
+                  <View style={{ alignSelf: 'center', padding: scale(10), backgroundColor: '#FFFFFF', borderRadius: scale(12), marginBottom: verticalScale(12) }}>
+                    <Image source={{ uri: adminQrCodeUrl }} style={{ width: scale(180), height: scale(180) }} resizeMode="contain" />
+                  </View>
+
+                  {/* Admin static UPI ID details */}
+                  <View style={{ backgroundColor: colors.surfaceAlt, padding: scale(12), borderRadius: scale(10), borderWidth: 1, borderColor: colors.line, marginBottom: verticalScale(16), alignItems: 'center' }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>UPI ID for Manual Transfer</Text>
+                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold', marginTop: verticalScale(4) }}>{adminUpiId}</Text>
+                  </View>
+
+                  {/* Screenshot uploader */}
+                  <Text style={[styles.label, { color: colors.textPrimary, textAlign: 'center', marginBottom: verticalScale(8) }]}>
+                    Step 2: Upload Payment Screenshot Proof
+                  </Text>
+
+                  <TouchableOpacity
+                    style={{ height: verticalScale(100), borderStyle: 'dashed', borderWidth: 2, borderColor: screenshotBase64 ? colors.amber : colors.textMuted, borderRadius: scale(12), alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(16), overflow: 'hidden' }}
+                    onPress={handlePickScreenshot}
+                  >
+                    {screenshotBase64 ? (
+                      <Image source={{ uri: screenshotBase64 }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <View style={{ alignItems: 'center' }}>
+                        <MaterialIcons name="cloud-upload" size={scale(32)} color={colors.textMuted} />
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(4) }}>Tap to upload proof screenshot</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                    <TouchableOpacity
+                      style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: colors.line, marginTop: 0 }]}
+                      onPress={() => {
+                        setTopupStep(1);
+                        setScreenshotBase64('');
+                      }}
+                    >
+                      <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Back</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.primaryButton, { flex: 2, backgroundColor: colors.amber, marginTop: 0 }]}
+                      onPress={handleSubmitTopupProof}
+                      disabled={isSubmittingTopup}
+                    >
+                      {isSubmittingTopup ? (
+                        <ActivityIndicator size="small" color="#101014" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Submit Top-Up Proof</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              )}
+            </TouchableOpacity></KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Withdraw Funds Modal */}
+      <Modal visible={withdrawModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWithdrawModalVisible(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setWithdrawModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ width: '100%' }}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Withdraw Funds</Text>
+                <TouchableOpacity onPress={() => setWithdrawModalVisible(false)}>
+                  <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(4) }}>Available: ₹{walletBalance}</Text>
+
+              <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>Amount</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                keyboardType="numeric"
+                value={withdrawAmount}
+                onChangeText={setWithdrawAmount}
+                placeholder="Enter amount"
+                placeholderTextColor={colors.textMuted}
+              />
+
+              <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>UPI ID</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                value={withdrawUpi}
+                onChangeText={setWithdrawUpi}
+                placeholder="yourname@upi"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
+                onPress={async () => {
+                  const amt = parseFloat(withdrawAmount);
+                  if (!amt || amt <= 0) {
+                    Alert.alert('Error', 'Please enter a valid amount');
+                    return;
+                  }
+                  if (amt > walletBalance) {
+                    Alert.alert('Error', 'Withdrawal amount exceeds wallet balance');
+                    return;
+                  }
+                  if (!withdrawUpi.trim()) {
+                    Alert.alert('Error', 'Please enter your UPI ID');
+                    return;
+                  }
+                  setIsSubmittingWithdraw(true);
+                  const res = await submitWithdrawalApi({ userId, userName: name, role: 'guide', amount: amt, upiId: withdrawUpi });
+                  setIsSubmittingWithdraw(false);
+                  if (res.success) {
+                    Alert.alert('Success', res.message || 'Withdrawal request submitted');
+                    setWithdrawModalVisible(false);
+                    setWithdrawAmount('');
+                    setWithdrawUpi('');
+                    loadWalletData();
+                  } else {
+                    Alert.alert('Error', res.message || 'Withdrawal failed');
+                  }
+                }}
+                disabled={isSubmittingWithdraw}
+              >
+                {isSubmittingWithdraw ? (
+                  <ActivityIndicator size="small" color="#101014" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Submit Withdrawal Request</Text>
+                )}
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
       {/* Simulated Incoming Request Modal Pop-up */}
       <Modal visible={requestVisible} transparent={true} animationType="slide">
         {incomingRequest && (
@@ -1099,7 +1669,9 @@ export default function GuideDashboardScreen() {
             <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <View style={styles.popupTimerHeader}>
                 <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
-                <Text style={styles.popupTimerText}>INCOMING INSTANT BOOKING ({timerSeconds}s)</Text>
+                <Text style={styles.popupTimerText}>
+                  INCOMING {((incomingRequest as any).bookingType || 'INSTANT') === 'PRE_BOOKED' ? 'PRE-BOOKING' : 'INSTANT BOOKING'} ({timerSeconds}s)
+                </Text>
               </View>
 
               <View style={styles.popupMainDetails}>
@@ -1180,7 +1752,143 @@ export default function GuideDashboardScreen() {
           </View>
         )}
       </Modal>
+      <Modal visible={topupModalVisible} animationType="slide" transparent={true} onRequestClose={() => setTopupModalVisible(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setTopupModalVisible(false)}
+        >
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>
+                  {topupStep === 1 ? '💳 Add Money to Wallet' : '📲 Scan QR & Pay'}
+                </Text>
+                <TouchableOpacity onPress={() => setTopupModalVisible(false)}>
+                  <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
 
+              {topupStep === 1 ? (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
+                    Enter the amount you wish to add. Minimim amount is ₹500.
+                  </Text>
+
+                  <Text style={[styles.label, { color: colors.textPrimary }]}>Amount (₹)</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                    keyboardType="numeric"
+                    value={topupAmount}
+                    onChangeText={setTopupAmount}
+                    placeholder="Minimum ₹500"
+                    placeholderTextColor={colors.textMuted}
+                  />
+
+                  <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(12) }}>
+                    {[500, 1000, 2000, 5000].map(amt => (
+                      <TouchableOpacity
+                        key={amt}
+                        style={{ flex: 1, paddingVertical: verticalScale(8), borderRadius: scale(8), backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.line, alignItems: 'center' }}
+                        onPress={() => setTopupAmount(amt.toString())}
+                      >
+                        <Text style={{ color: colors.amber, fontWeight: 'bold', fontSize: moderateFontScale(13) }}>₹{amt}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(10) }]}
+                    onPress={() => {
+                      const amt = parseFloat(topupAmount);
+                      if (!amt || amt < 500) {
+                        Alert.alert('Minimum Amount Required', 'The minimum top-up amount is ₹500.');
+                        return;
+                      }
+                      setInitiatedAt(new Date());
+                      setTimerSeconds(300);
+                      setTopupStep(2);
+                    }}
+                  >
+                    <Text style={styles.primaryButtonText}>Proceed to Pay</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {/* 5-minute countdown timer header */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingVertical: verticalScale(8), borderRadius: scale(8), marginBottom: verticalScale(16) }}>
+                    <MaterialIcons name="alarm" size={scale(18)} color={colors.danger} style={{ marginRight: scale(6) }} />
+                    <Text style={{ color: colors.danger, fontWeight: 'bold', fontSize: moderateFontScale(14) }}>
+                      Upload screenshot in: {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+                    </Text>
+                  </View>
+
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(12) }}>
+                    Scan the QR code below using any UPI App (Google Pay, PhonePe, Paytm) to transfer ₹{topupAmount}.
+                  </Text>
+
+                  {/* Admin static payment QR Code */}
+                  <View style={{ alignSelf: 'center', padding: scale(10), backgroundColor: '#FFFFFF', borderRadius: scale(12), marginBottom: verticalScale(12) }}>
+                    <Image source={{ uri: adminQrCodeUrl }} style={{ width: scale(180), height: scale(180) }} resizeMode="contain" />
+                  </View>
+
+                  {/* Admin static UPI ID details */}
+                  <View style={{ backgroundColor: colors.surfaceAlt, padding: scale(12), borderRadius: scale(10), borderWidth: 1, borderColor: colors.line, marginBottom: verticalScale(16), alignItems: 'center' }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>UPI ID for Manual Transfer</Text>
+                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold', marginTop: verticalScale(4) }}>{adminUpiId}</Text>
+                  </View>
+
+                  {/* Screenshot uploader */}
+                  <Text style={[styles.label, { color: colors.textPrimary, textAlign: 'center', marginBottom: verticalScale(8) }]}>
+                    Step 2: Upload Payment Screenshot Proof
+                  </Text>
+
+                  <TouchableOpacity
+                    style={{ height: verticalScale(100), borderStyle: 'dashed', borderWidth: 2, borderColor: screenshotBase64 ? colors.amber : colors.textMuted, borderRadius: scale(12), alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(16), overflow: 'hidden' }}
+                    onPress={handlePickScreenshot}
+                  >
+                    {screenshotBase64 ? (
+                      <Image source={{ uri: screenshotBase64 }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <View style={{ alignItems: 'center' }}>
+                        <MaterialIcons name="cloud-upload" size={scale(32)} color={colors.textMuted} />
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(4) }}>Tap to upload proof screenshot</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                    <TouchableOpacity
+                      style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: colors.line, marginTop: 0 }]}
+                      onPress={() => {
+                        setTopupStep(1);
+                        setScreenshotBase64('');
+                      }}
+                    >
+                      <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Back</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.primaryButton, { flex: 2, backgroundColor: colors.amber, marginTop: 0 }]}
+                      onPress={handleSubmitTopupProof}
+                      disabled={isSubmittingTopup}
+                    >
+                      {isSubmittingTopup ? (
+                        <ActivityIndicator size="small" color="#101014" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Submit Top-Up Proof</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              )}
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
       {/* Digital Tickets QR Code Modal Popup */}
       <Modal visible={qrVisible} transparent={true} animationType="fade">
         <View style={styles.popupOverlay}>
@@ -1552,6 +2260,20 @@ const styles = StyleSheet.create({
   },
   popupMainDetails: {
     marginBottom: verticalScale(20),
+  },
+  label: {
+    fontSize: moderateFontScale(12),
+    fontWeight: 'bold',
+    marginBottom: verticalScale(6),
+  },
+  input: {
+    height: verticalScale(44),
+    borderWidth: 1.2,
+    borderRadius: scale(12),
+    paddingHorizontal: scale(14),
+    fontSize: moderateFontScale(14),
+    fontWeight: '600',
+    marginBottom: verticalScale(12),
   },
   touristNameBadge: {
     flexDirection: 'row',
@@ -2088,5 +2810,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: moderateFontScale(15),
     fontWeight: '900',
+  },
+  primaryButton: {
+    borderRadius: scale(14),
+    height: verticalScale(46),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '900',
+    color: '#101014',
   },
 });

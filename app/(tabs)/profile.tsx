@@ -4,9 +4,8 @@ import {
   fetchWalletBalanceApi,
   saveUserSettingsApi,
   submitWalletTopupRequestApi,
-  submitWithdrawalApi,
   updateProfilePhotoApi,
-  updateUserProfileApi,
+  updateUserProfileApi
 } from '@/constants/api';
 import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -28,9 +27,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  KeyboardAvoidingView,
-  Platform,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

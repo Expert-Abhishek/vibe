@@ -17,7 +17,9 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -25,8 +27,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -238,7 +238,7 @@ export default function GuideWalletScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
+
           {/* WALLET CARD SECTION */}
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
@@ -486,72 +486,72 @@ export default function GuideWalletScreen() {
               activeOpacity={1}
               style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}
             >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Withdraw Funds</Text>
-              <TouchableOpacity onPress={() => setWithdrawModalVisible(false)}>
-                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Withdraw Funds</Text>
+                <TouchableOpacity onPress={() => setWithdrawModalVisible(false)}>
+                  <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(4) }}>Available: ₹{walletBalance}</Text>
+
+              <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>Amount</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                keyboardType="numeric"
+                value={withdrawAmount}
+                onChangeText={setWithdrawAmount}
+                placeholder="Enter amount"
+                placeholderTextColor={colors.textMuted}
+              />
+
+              <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>UPI ID</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                value={withdrawUpi}
+                onChangeText={setWithdrawUpi}
+                placeholder="yourname@upi"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
+                onPress={async () => {
+                  const amt = parseFloat(withdrawAmount);
+                  if (!amt || amt <= 0) {
+                    Alert.alert('Error', 'Please enter a valid amount');
+                    return;
+                  }
+                  if (amt > walletBalance) {
+                    Alert.alert('Error', 'Withdrawal amount exceeds wallet balance');
+                    return;
+                  }
+                  if (!withdrawUpi.trim()) {
+                    Alert.alert('Error', 'Please enter your UPI ID');
+                    return;
+                  }
+                  setIsSubmittingWithdraw(true);
+                  const res = await submitWithdrawalApi({ userId, userName: name, role: 'guide', amount: amt, upiId: withdrawUpi });
+                  setIsSubmittingWithdraw(false);
+                  if (res.success) {
+                    Alert.alert('Success', res.message || 'Withdrawal request submitted');
+                    setWithdrawModalVisible(false);
+                    setWithdrawAmount('');
+                    setWithdrawUpi('');
+                    loadWalletData();
+                  } else {
+                    Alert.alert('Error', res.message || 'Withdrawal failed');
+                  }
+                }}
+                disabled={isSubmittingWithdraw}
+              >
+                {isSubmittingWithdraw ? (
+                  <ActivityIndicator size="small" color="#101014" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Submit Withdrawal Request</Text>
+                )}
               </TouchableOpacity>
-            </View>
-
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(4) }}>Available: ₹{walletBalance}</Text>
-
-            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>Amount</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
-              keyboardType="numeric"
-              value={withdrawAmount}
-              onChangeText={setWithdrawAmount}
-              placeholder="Enter amount"
-              placeholderTextColor={colors.textMuted}
-            />
-
-            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>UPI ID</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
-              value={withdrawUpi}
-              onChangeText={setWithdrawUpi}
-              placeholder="yourname@upi"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-            />
-
-            <TouchableOpacity
-              style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
-              onPress={async () => {
-                const amt = parseFloat(withdrawAmount);
-                if (!amt || amt <= 0) {
-                  Alert.alert('Error', 'Please enter a valid amount');
-                  return;
-                }
-                if (amt > walletBalance) {
-                  Alert.alert('Error', 'Withdrawal amount exceeds wallet balance');
-                  return;
-                }
-                if (!withdrawUpi.trim()) {
-                  Alert.alert('Error', 'Please enter your UPI ID');
-                  return;
-                }
-                setIsSubmittingWithdraw(true);
-                const res = await submitWithdrawalApi({ userId, userName: name, role: 'guide', amount: amt, upiId: withdrawUpi });
-                setIsSubmittingWithdraw(false);
-                if (res.success) {
-                  Alert.alert('Success', res.message || 'Withdrawal request submitted');
-                  setWithdrawModalVisible(false);
-                  setWithdrawAmount('');
-                  setWithdrawUpi('');
-                  loadWalletData();
-                } else {
-                  Alert.alert('Error', res.message || 'Withdrawal failed');
-                }
-              }}
-              disabled={isSubmittingWithdraw}
-            >
-              {isSubmittingWithdraw ? (
-                <ActivityIndicator size="small" color="#101014" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Submit Withdrawal Request</Text>
-              )}
-            </TouchableOpacity>
             </TouchableOpacity>
           </KeyboardAvoidingView>
         </TouchableOpacity>

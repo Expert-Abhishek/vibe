@@ -636,6 +636,8 @@ export async function bookTripApi(payload: {
   dropLng?: number;
   amount?: number;
   paymentMode?: string;
+  bookingType?: string;
+  scheduledTime?: string;
 }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips/book`, {
