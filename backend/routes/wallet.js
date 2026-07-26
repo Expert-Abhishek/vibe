@@ -473,6 +473,130 @@ router.get('/admin/payment-settings', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/payment-settings
+ * Update static Admin QR Code & UPI ID for wallet top-ups
+ */
+router.post('/admin/payment-settings', async (req, res) => {
+  try {
+    const { upi_id, qr_code_url, updated_by } = req.body;
+
+    if (!upi_id || !qr_code_url) {
+      return res.status(400).json({ success: false, message: 'UPI ID and QR Code URL are required.' });
+    }
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS admin_payment_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        upi_id VARCHAR(100) NOT NULL DEFAULT 'vibe.pay@upi',
+        qr_code_url TEXT NOT NULL DEFAULT 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform',
+        updated_by UUID,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const result = await db.query('SELECT * FROM admin_payment_settings ORDER BY updated_at DESC LIMIT 1');
+    
+    let query;
+    let params;
+    
+    if (result.rows.length === 0) {
+      query = `
+        INSERT INTO admin_payment_settings (upi_id, qr_code_url, updated_by, updated_at)
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+        RETURNING *
+      `;
+      params = [upi_id, qr_code_url, updated_by || null];
+    } else {
+      const existingId = result.rows[0].id;
+      query = `
+        UPDATE admin_payment_settings
+        SET upi_id = $1, qr_code_url = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $4
+        RETURNING *
+      `;
+      params = [upi_id, qr_code_url, updated_by || null, existingId];
+    }
+
+    const saveRes = await db.query(query, params);
+    res.json({ success: true, message: 'Payment settings updated successfully', data: saveRes.rows[0] });
+  } catch (error) {
+    console.error('Error updating admin payment settings:', error);
+    res.status(500).json({ success: false, message: 'Failed to update payment settings', error: error.message });
+  }
+});
+
+/**
+ * POST /api/wallet/admin/adjust-balance
+ * Manually update wallet balance for a user (tourist, driver, guide)
+ */
+router.post('/admin/adjust-balance', async (req, res) => {
+  const client = await db.pool.connect();
+  try {
+    const { userId, amount, description = 'Manual wallet balance update by Admin' } = req.body;
+
+    if (!userId || amount === undefined || isNaN(parseFloat(amount))) {
+      return res.status(400).json({ success: false, message: 'userId and valid amount are required.' });
+    }
+
+    const numAmount = parseFloat(amount);
+    const type = numAmount >= 0 ? 'topup' : 'withdrawal';
+
+    // Verify user role
+    const userRes = await client.query('SELECT role FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const actualRole = userRes.rows[0].role;
+    
+    // Begin transaction
+    await client.query('BEGIN');
+
+    // 1. Insert into wallet_transactions
+    await client.query(
+      `INSERT INTO wallet_transactions (user_id, type, amount, description) 
+       VALUES ($1, $2, $3, $4)`,
+      [userId, type, Math.abs(numAmount), description]
+    );
+
+    // 2. If driver or guide, update their wallet_balance in the profile table
+    if (actualRole === 'driver') {
+      await client.query(
+        'UPDATE driver_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2',
+        [numAmount, userId]
+      );
+    } else if (actualRole === 'guide') {
+      await client.query(
+        'UPDATE guide_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2',
+        [numAmount, userId]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // 3. Notify user
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '💼 Wallet Balance Adjusted', $3, CURRENT_TIMESTAMP)`,
+        [userId, actualRole, `Your wallet balance was updated by the Admin. Adjustment: ₹${numAmount}. Description: ${description}`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to notify user about wallet adjustment:', nErr);
+    }
+
+    res.json({ success: true, message: `Successfully adjusted wallet balance by ₹${numAmount}` });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error adjusting wallet balance:', error);
+    res.status(500).json({ success: false, message: 'Failed to adjust wallet balance', error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * POST /api/wallet/topup-request
  * Submit Wallet Top-Up Request with 5-minute timer & screenshot proof
  */

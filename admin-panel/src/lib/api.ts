@@ -406,4 +406,56 @@ export async function deletePlanDestinationApi(planId: string, destinationId: st
   }
 }
 
+// Payment Settings and Manual Wallet Balance API
+
+export interface PaymentSettings {
+  id?: string;
+  upi_id: string;
+  qr_code_url: string;
+  updated_at?: string;
+}
+
+export async function fetchPaymentSettingsApi(): Promise<PaymentSettings | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/payment-settings`);
+    const data = await res.json();
+    if (data.success && data.data) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('Error fetching payment settings:', e);
+  }
+  return null;
+}
+
+export async function updatePaymentSettingsApi(upiId: string, qrCodeUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/payment-settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ upi_id: upiId, qr_code_url: qrCodeUrl }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error updating payment settings:', e);
+    return false;
+  }
+}
+
+export async function adjustWalletBalanceApi(userId: string, amount: number, description: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/admin/adjust-balance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, amount, description }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error adjusting wallet balance:', e);
+    return false;
+  }
+}
+
 

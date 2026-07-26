@@ -583,7 +583,15 @@ router.get('/me', authenticateToken, async (req, res) => {
 router.get('/customers', async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, name, phone, email, role, status, created_at FROM users WHERE role = $1 ORDER BY created_at DESC',
+      `SELECT id, name, phone, email, role, status, created_at,
+         COALESCE((
+           SELECT SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END)
+           FROM wallet_transactions
+           WHERE user_id = users.id
+         ), 0.00) AS wallet_balance
+       FROM users
+       WHERE role = $1
+       ORDER BY created_at DESC`,
       ['tourist']
     );
     return res.json({
@@ -605,7 +613,14 @@ router.get('/customers/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const result = await db.query(
-      'SELECT id, name, phone, email, role, status, created_at FROM users WHERE id = $1 AND role = $2',
+      `SELECT id, name, phone, email, role, status, created_at,
+         COALESCE((
+           SELECT SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END)
+           FROM wallet_transactions
+           WHERE user_id = users.id
+         ), 0.00) AS wallet_balance
+       FROM users
+       WHERE id = $1 AND role = $2`,
       [id, 'tourist']
     );
     if (result.rows.length === 0) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { deleteUserApi, fetchGuidesApi, updateGuideRateApi, updateUserStatusApi } from '@/lib/api';
+import { deleteUserApi, fetchGuidesApi, updateGuideRateApi, updateUserStatusApi, adjustWalletBalanceApi } from '@/lib/api';
 import { Guide, KYCStatus } from '@/lib/types';
 import {
   CheckCircle,
@@ -13,6 +13,7 @@ import {
   Trash2,
   X,
   XCircle,
+  Star as StarIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -255,6 +256,16 @@ export default function GuidesPage() {
             setSelectedGuide((prev) => (prev ? { ...prev, dailyRate: daily, platformFee: fee } : null));
             await updateGuideRateApi(selectedGuide.id, daily, fee);
           }}
+          onAdjustBalance={async (amount, reason) => {
+            const success = await adjustWalletBalanceApi(selectedGuide.id, amount, reason);
+            if (success) {
+              setGuidesList((prev) =>
+                prev.map((g) => (g.id === selectedGuide.id ? { ...g, walletBalance: g.walletBalance + amount } : g))
+              );
+              setSelectedGuide((prev) => (prev ? { ...prev, walletBalance: prev.walletBalance + amount } : null));
+            }
+            return success;
+          }}
         />
       )}
     </div>
@@ -266,20 +277,53 @@ function GuideDetailModal({
   onClose,
   onUpdateStatus,
   onSaveRate,
+  onAdjustBalance,
 }: {
   guide: Guide;
   onClose: () => void;
   onUpdateStatus: (id: string, status: KYCStatus) => void;
   onSaveRate: (dailyRate: number, platformFee: number) => void;
+  onAdjustBalance: (amount: number, reason: string) => Promise<boolean>;
 }) {
   const [dailyRate, setDailyRate] = useState<number>(guide.dailyRate || 2000);
   const [platformFee, setPlatformFee] = useState<number>(guide.platformFee !== undefined ? guide.platformFee : 10);
   const [rateSavedMsg, setRateSavedMsg] = useState(false);
 
+  const [adjType, setAdjType] = useState<'add' | 'deduct'>('add');
+  const [adjAmount, setAdjAmount] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+  const [isAdjLoading, setIsAdjLoading] = useState(false);
+  const [adjMsg, setAdjMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const handleSave = () => {
     onSaveRate(Number(dailyRate), Number(platformFee));
     setRateSavedMsg(true);
     setTimeout(() => setRateSavedMsg(false), 2500);
+  };
+
+  const handleAdjustWallet = async () => {
+    const amountNum = parseFloat(adjAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setAdjMsg({ type: 'error', text: 'Please enter a valid positive amount.' });
+      return;
+    }
+
+    setIsAdjLoading(true);
+    setAdjMsg(null);
+
+    const actualAmount = adjType === 'add' ? amountNum : -amountNum;
+    const desc = adjReason.trim() || `Manual wallet adjustment (${adjType === 'add' ? 'Added' : 'Deducted'} ₹${amountNum})`;
+
+    const success = await onAdjustBalance(actualAmount, desc);
+    setIsAdjLoading(false);
+
+    if (success) {
+      setAdjAmount('');
+      setAdjReason('');
+      setAdjMsg({ type: 'success', text: `Wallet balance updated by ₹${actualAmount.toLocaleString('en-IN')}` });
+    } else {
+      setAdjMsg({ type: 'error', text: 'Failed to adjust wallet balance.' });
+    }
   };
 
   return (
@@ -388,6 +432,59 @@ function GuideDetailModal({
                 Save Guide Rates
               </button>
             </div>
+          </div>
+
+          {/* MANUAL WALLET BALANCE ADJUSTMENT */}
+          <div className="p-5 rounded-2xl bg-dark-hover/60 border border-dark-border/80 space-y-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <span className="text-emerald-400 font-extrabold">₹</span>
+              <span>Manual Wallet Balance Adjustment</span>
+            </h3>
+            <p className="text-[11px] text-dark-textMuted">
+              Manually add money or deduct money from this guide's wallet.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 min-w-[120px]">
+                <select
+                  value={adjType}
+                  onChange={(e) => setAdjType(e.target.value as 'add' | 'deduct')}
+                  className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-500"
+                >
+                  <option value="add">Add Balance (+)</option>
+                  <option value="deduct">Deduct Balance (-)</option>
+                </select>
+              </div>
+              <div className="flex-1 min-w-[120px]">
+                <input
+                  type="number"
+                  placeholder="Amount (e.g. 500)"
+                  value={adjAmount}
+                  onChange={(e) => setAdjAmount(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500"
+                />
+              </div>
+              <div className="flex-[2] min-w-[200px]">
+                <input
+                  type="text"
+                  placeholder="Reason (e.g., Verified top-up screenshot)"
+                  value={adjReason}
+                  onChange={(e) => setAdjReason(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500"
+                />
+              </div>
+              <button
+                onClick={handleAdjustWallet}
+                disabled={isAdjLoading}
+                className="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-brand-500/50 text-black font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
+              >
+                {isAdjLoading ? 'Updating...' : 'Update Balance'}
+              </button>
+            </div>
+            {adjMsg && (
+              <p className={`text-[11px] font-semibold ${adjMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                {adjMsg.text}
+              </p>
+            )}
           </div>
 
           {/* Bio & Specialty */}

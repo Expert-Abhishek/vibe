@@ -11,6 +11,7 @@ import {
   Route,
   ShieldCheck,
   ChevronRight,
+  QrCode,
 } from 'lucide-react';
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
   { name: 'Guides', href: '/guides', icon: Compass },
   { name: 'Destinations', href: '/destinations', icon: MapPin },
   { name: 'Plans & Packages', href: '/plans', icon: Route },
+  { name: 'Payment Settings', href: '/payment-settings', icon: QrCode },
 ];
 
 

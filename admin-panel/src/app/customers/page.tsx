@@ -14,7 +14,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import { initialCustomers, fetchCustomersApi } from '@/lib/api';
+import { initialCustomers, fetchCustomersApi, adjustWalletBalanceApi } from '@/lib/api';
 import { Customer } from '@/lib/types';
 
 export default function CustomersPage() {
@@ -22,11 +22,61 @@ export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
+  // Manual wallet balance adjustment states
+  const [adjustmentType, setAdjustmentType] = useState<'add' | 'deduct'>('add');
+  const [adjustmentAmount, setAdjustmentAmount] = useState('');
+  const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [isAdjusting, setIsAdjusting] = useState(false);
+  const [adjustmentMessage, setAdjustmentMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     fetchCustomersApi().then((data) => {
       setCustomersList(data || []);
     });
   }, []);
+
+  useEffect(() => {
+    // Reset adjustment states when selected user changes
+    setAdjustmentType('add');
+    setAdjustmentAmount('');
+    setAdjustmentReason('');
+    setAdjustmentMessage(null);
+  }, [selectedCustomer]);
+
+  const handleAdjustBalance = async () => {
+    if (!selectedCustomer) return;
+    const amountNum = parseFloat(adjustmentAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setAdjustmentMessage({ type: 'error', text: 'Please enter a valid positive amount.' });
+      return;
+    }
+
+    setIsAdjusting(true);
+    setAdjustmentMessage(null);
+
+    const actualAmount = adjustmentType === 'add' ? amountNum : -amountNum;
+    const desc = adjustmentReason.trim() || `Manual wallet adjustment (${adjustmentType === 'add' ? 'Added' : 'Deducted'} ₹${amountNum})`;
+
+    const success = await adjustWalletBalanceApi(selectedCustomer.id, actualAmount, desc);
+    setIsAdjusting(false);
+
+    if (success) {
+      const updatedBalance = selectedCustomer.walletBalance + actualAmount;
+      const updatedCust = { ...selectedCustomer, walletBalance: updatedBalance };
+      setSelectedCustomer(updatedCust);
+      setCustomersList((prev) =>
+        prev.map((c) => (c.id === selectedCustomer.id ? updatedCust : c))
+      );
+      setAdjustmentAmount('');
+      setAdjustmentReason('');
+      setAdjustmentMessage({
+        type: 'success',
+        text: `Wallet balance updated by ₹${actualAmount.toLocaleString('en-IN')}`,
+      });
+    } else {
+      setAdjustmentMessage({ type: 'error', text: 'Failed to update wallet balance.' });
+    }
+  };
 
   const filteredCustomers = customersList.filter(
     (c) =>
@@ -199,6 +249,57 @@ export default function CustomersPage() {
                     ₹{selectedCustomer.totalSpent.toLocaleString('en-IN')}
                   </span>
                 </div>
+              </div>
+
+              {/* Adjust Wallet Balance Panel */}
+              <div className="p-4 rounded-xl bg-dark-hover/60 border border-dark-border/80 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">Adjust Wallet Balance Manually</h4>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 min-w-[120px]">
+                    <select
+                      value={adjustmentType}
+                      onChange={(e) => setAdjustmentType(e.target.value as 'add' | 'deduct')}
+                      className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-brand-500"
+                    >
+                      <option value="add">Add Balance (+)</option>
+                      <option value="deduct">Deduct Balance (-)</option>
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[120px]">
+                    <input
+                      type="number"
+                      placeholder="Amount (e.g. 500)"
+                      value={adjustmentAmount}
+                      onChange={(e) => setAdjustmentAmount(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500"
+                    />
+                  </div>
+                  <div className="flex-[2] min-w-[200px]">
+                    <input
+                      type="text"
+                      placeholder="Reason (e.g., Verified screenshot)"
+                      value={adjustmentReason}
+                      onChange={(e) => setAdjustmentReason(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-dark-bg border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAdjustBalance}
+                    disabled={isAdjusting}
+                    className="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:bg-brand-500/50 text-black font-bold text-xs rounded-xl shadow-lg transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {isAdjusting ? 'Updating...' : 'Update'}
+                  </button>
+                </div>
+                {adjustmentMessage && (
+                  <p
+                    className={`text-[11px] font-semibold ${
+                      adjustmentMessage.type === 'success' ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {adjustmentMessage.text}
+                  </p>
+                )}
               </div>
 
               {/* Trip History Section */}
