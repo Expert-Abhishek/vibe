@@ -321,7 +321,7 @@ export default function DriverWalletScreen() {
                 );
               }}
             />
-          </View>
+          </div>
         </View>
       </Modal>
 

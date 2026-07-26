@@ -28,7 +28,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function DriverWalletScreen() {
+export default function GuideWalletScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -60,7 +60,7 @@ export default function DriverWalletScreen() {
   const [walletModalVisible, setWalletModalVisible] = useState(false);
 
   const session = getUserSessionSync();
-  const userId = session?.id || 'd1';
+  const userId = session?.id || 'g1';
 
   const loadWalletData = async () => {
     setLoading(true);
@@ -177,7 +177,7 @@ export default function DriverWalletScreen() {
       const payload = {
         userId,
         userName: name,
-        role: 'driver',
+        role: 'guide',
         amount: parseFloat(topupAmount),
         screenshotUrl: screenshotBase64,
         initiatedAt: initiatedAt ? initiatedAt.toISOString() : new Date().toISOString(),
@@ -220,11 +220,11 @@ export default function DriverWalletScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
-          <TouchableOpacity style={{ marginRight: scale(8) }} onPress={() => router.replace('/driver-dashboard' as any)}>
+          <TouchableOpacity style={{ marginRight: scale(8) }} onPress={() => router.replace('/guide-dashboard' as any)}>
             <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
           </TouchableOpacity>
-          <MaterialIcons name="directions-car" size={scale(24)} color={colors.amber} style={{ marginRight: scale(8) }} />
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Driver Wallet</Text>
+          <MaterialIcons name="hiking" size={scale(24)} color={colors.amber} style={{ marginRight: scale(8) }} />
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Guide Wallet</Text>
         </View>
         <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage your balance, payouts and deposits</Text>
       </View>
@@ -288,7 +288,7 @@ export default function DriverWalletScreen() {
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <View style={{ backgroundColor: colors.surface, height: '60%', borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(20) }}>
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Wallet History</Text>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontStyle: 'normal', fontWeight: 'bold' }}>Wallet History</Text>
               <TouchableOpacity onPress={() => setWalletModalVisible(false)}>
                 <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
               </TouchableOpacity>
@@ -321,7 +321,7 @@ export default function DriverWalletScreen() {
                 );
               }}
             />
-          </View>
+          </div>
         </View>
       </Modal>
 
@@ -508,7 +508,7 @@ export default function DriverWalletScreen() {
                   return;
                 }
                 setIsSubmittingWithdraw(true);
-                const res = await submitWithdrawalApi({ userId, userName: name, role: 'driver', amount: amt, upiId: withdrawUpi });
+                const res = await submitWithdrawalApi({ userId, userName: name, role: 'guide', amount: amt, upiId: withdrawUpi });
                 setIsSubmittingWithdraw(false);
                 if (res.success) {
                   Alert.alert('Success', res.message || 'Withdrawal request submitted');

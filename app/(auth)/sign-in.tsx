@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -84,16 +84,21 @@ export default function SignInScreen() {
     <ThemedView style={styles.container}>
       <View style={styles.backgroundGlow} />
       <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
         >
-          <LogoHeader />
-          <LoginForm onLogin={handleLogin} />
-          <SocialLogin />
-          <FooterLink />
-        </ScrollView>
+          <ScrollView 
+            contentContainerStyle={styles.scrollContent} 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <LogoHeader />
+            <LoginForm onLogin={handleLogin} />
+            <SocialLogin />
+            <FooterLink />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
