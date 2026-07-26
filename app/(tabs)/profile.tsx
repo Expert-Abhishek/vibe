@@ -48,7 +48,7 @@ export default function ProfileScreen() {
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
   const [withdrawUpi, setWithdrawUpi] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [walletBalance, setWalletBalance] = useState(1500);
+  const [walletBalance, setWalletBalance] = useState(0);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
 
   // Top-Up state variables
@@ -457,7 +457,10 @@ export default function ProfileScreen() {
 
         {/* WALLET CARD SECTION */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.cardTitle, { color: colors.amber }]}>💳 Vibe Wallet</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
+            <MaterialIcons name="account-balance-wallet" size={scale(18)} color={colors.amber} />
+            <Text style={[styles.cardTitle, { color: colors.amber, marginBottom: 0 }]}>Vibe Wallet</Text>
+          </View>
           <View style={{ marginBottom: verticalScale(14) }}>
             <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
             <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
@@ -465,7 +468,7 @@ export default function ProfileScreen() {
 
           <View style={{ flexDirection: 'row', gap: scale(10) }}>
             <TouchableOpacity
-              style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0 }]}
+              style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
               onPress={() => {
                 setTopupAmount('');
                 setTopupStep(1);
@@ -474,22 +477,25 @@ export default function ProfileScreen() {
                 setTopupModalVisible(true);
               }}
             >
-              <Text style={styles.primaryButtonText}>💳 Add Money</Text>
+              <MaterialIcons name="add-circle-outline" size={scale(16)} color="#101014" />
+              <Text style={styles.primaryButtonText}>Add Money</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line }]}
+              style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
               onPress={() => setWalletModalVisible(true)}
             >
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>📜 History</Text>
+              <MaterialIcons name="history" size={scale(16)} color={colors.textPrimary} />
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>History</Text>
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: 'rgba(255,255,255,0.06)', marginTop: verticalScale(10), borderWidth: 1, borderColor: colors.line }]}
+            style={[styles.primaryButton, { backgroundColor: 'rgba(255,255,255,0.06)', marginTop: verticalScale(10), borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
             onPress={() => setWithdrawModalVisible(true)}
           >
-            <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>💸 Withdraw Funds</Text>
+            <MaterialIcons name="payment" size={scale(16)} color={colors.textPrimary} />
+            <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Withdraw Funds</Text>
           </TouchableOpacity>
         </View>
 

@@ -74,10 +74,10 @@ export default function GuideDashboardScreen() {
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   // Daily statistics
-  const [hoursOnline] = useState(5.4);
-  const [tripsCount, setTripsCount] = useState(3);
-  const [earningsToday, setEarningsToday] = useState(3250);
-  const [earningsBalance, setEarningsBalance] = useState(1750);
+  const [hoursOnline] = useState(0);
+  const [tripsCount, setTripsCount] = useState(0);
+  const [earningsToday, setEarningsToday] = useState(0);
+  const [earningsBalance, setEarningsBalance] = useState(0);
 
   // Profile & Unified Edit state
   const currentSession = getUserSessionSync();

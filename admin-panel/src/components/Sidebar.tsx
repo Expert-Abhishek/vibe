@@ -12,6 +12,8 @@ import {
   ShieldCheck,
   ChevronRight,
   QrCode,
+  Image,
+  ArrowUpRight,
 } from 'lucide-react';
 
 const navItems = [
@@ -22,6 +24,8 @@ const navItems = [
   { name: 'Destinations', href: '/destinations', icon: MapPin },
   { name: 'Plans & Packages', href: '/plans', icon: Route },
   { name: 'Payment Settings', href: '/payment-settings', icon: QrCode },
+  { name: 'Top-Up Requests', href: '/topup-requests', icon: Image },
+  { name: 'Withdrawals', href: '/withdrawals', icon: ArrowUpRight },
 ];
 
 

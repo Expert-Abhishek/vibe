@@ -458,4 +458,115 @@ export async function adjustWalletBalanceApi(userId: string, amount: number, des
   }
 }
 
+export interface TopupRequest {
+  id: string;
+  user_id: string;
+  user_name: string;
+  role: string;
+  amount: number;
+  screenshot_url: string;
+  status: string;
+  requested_at: string;
+  expires_at: string;
+  reject_reason?: string;
+}
+
+export interface WithdrawalRequest {
+  id: string;
+  user_id: string;
+  user_name: string;
+  role: string;
+  amount: number;
+  upi_id?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchTopupRequestsApi(status = 'Pending'): Promise<TopupRequest[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/topup-requests?status=${status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('Error fetching topup requests:', e);
+  }
+  return [];
+}
+
+export async function approveTopupRequestApi(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/topup-requests/${id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error approving topup request:', e);
+    return false;
+  }
+}
+
+export async function rejectTopupRequestApi(id: string, rejectReason: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/topup-requests/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rejectReason }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error rejecting topup request:', e);
+    return false;
+  }
+}
+
+export async function fetchWithdrawalsApi(status = 'Pending'): Promise<WithdrawalRequest[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/admin/withdrawals?status=${status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('Error fetching withdrawals:', e);
+  }
+  return [];
+}
+
+export async function approveWithdrawalApi(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/admin/withdrawals/${id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error approving withdrawal:', e);
+    return false;
+  }
+}
+
+export async function rejectWithdrawalApi(id: string, rejectReason: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/admin/withdrawals/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rejectReason }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error rejecting withdrawal:', e);
+    return false;
+  }
+}
+
 

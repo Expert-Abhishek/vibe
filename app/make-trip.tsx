@@ -643,9 +643,27 @@ export default function MakeTripScreen() {
         ? `Cash (Pre-Booking Fees: ₹${paymentAmount}, Bal ₹${remainingAmount})`
         : `Cash (Full Payment ₹${totalPrice})`;
 
-      const calculatedScheduledTime = isPreBooking && bookingDate
-        ? new Date(`${bookingDate}T${bookingTime || '10:00:00'}`).toISOString()
-        : new Date().toISOString();
+      let calculatedScheduledTime = new Date().toISOString();
+      if (isPreBooking && bookingDate) {
+        try {
+          let hours24 = bookingHour;
+          if (bookingAmPm === 'PM' && hours24 < 12) {
+            hours24 += 12;
+          } else if (bookingAmPm === 'AM' && hours24 === 12) {
+            hours24 = 0;
+          }
+          const dateParts = bookingDate.split('-');
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0], 10);
+            const month = parseInt(dateParts[1], 10) - 1;
+            const day = parseInt(dateParts[2], 10);
+            const localDate = new Date(year, month, day, hours24, bookingMinute, 0);
+            calculatedScheduledTime = localDate.toISOString();
+          }
+        } catch (e) {
+          console.warn('Error parsing booking date:', e);
+        }
+      }
 
       await createTripApi({
         tripType: 'custom_trip',
@@ -712,9 +730,27 @@ export default function MakeTripScreen() {
       title: `Custom Trip: ${pickup.name} → ${drop.name}`,
       customerName: 'Abhishek (Tourist)',
       onSuccess: async (paymentId: string) => {
-        const calculatedScheduledTime = isPreBooking && bookingDate
-          ? new Date(`${bookingDate}T${bookingTime || '10:00:00'}`).toISOString()
-          : new Date().toISOString();
+        let calculatedScheduledTime = new Date().toISOString();
+        if (isPreBooking && bookingDate) {
+          try {
+            let hours24 = bookingHour;
+            if (bookingAmPm === 'PM' && hours24 < 12) {
+              hours24 += 12;
+            } else if (bookingAmPm === 'AM' && hours24 === 12) {
+              hours24 = 0;
+            }
+            const dateParts = bookingDate.split('-');
+            if (dateParts.length === 3) {
+              const year = parseInt(dateParts[0], 10);
+              const month = parseInt(dateParts[1], 10) - 1;
+              const day = parseInt(dateParts[2], 10);
+              const localDate = new Date(year, month, day, hours24, bookingMinute, 0);
+              calculatedScheduledTime = localDate.toISOString();
+            }
+          } catch (e) {
+            console.warn('Error parsing booking date:', e);
+          }
+        }
 
         // Save trip to real backend DB
         await createTripApi({

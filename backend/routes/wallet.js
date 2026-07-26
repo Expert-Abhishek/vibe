@@ -93,7 +93,7 @@ router.get('/:userId', async (req, res) => {
     } else {
       // Tourist wallet
       const txSum = await db.query(
-        "SELECT COALESCE(SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
+        "SELECT COALESCE(SUM(CASE WHEN LOWER(type) = 'topup' OR LOWER(type) = 'refund' THEN amount WHEN LOWER(type) = 'withdrawal' OR LOWER(type) = 'debit' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
         [userId]
       );
       balance = parseFloat(txSum.rows[0]?.total || 0);
@@ -332,17 +332,21 @@ router.post('/topup', async (req, res) => {
  * Submit withdrawal request for Driver / Guide / Tourist
  */
 router.post('/withdraw', async (req, res) => {
+  const client = await db.pool.connect();
   try {
     const { userId, userName = 'Partner', role = 'driver', amount, upiId, accountNumber, ifscCode } = req.body;
 
     if (!userId || !amount || amount <= 0) {
+      client.release();
       return res.status(400).json({ success: false, message: 'UserId and valid withdrawal amount required' });
     }
 
     const numAmount = parseFloat(amount);
 
+    await client.query('BEGIN');
+
     // Record withdrawal request
-    const wRes = await db.query(
+    const wRes = await client.query(
       `INSERT INTO withdrawals (user_id, user_name, role, amount, upi_id, account_number, ifsc_code, status)
        VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending')
        RETURNING *`,
@@ -350,10 +354,25 @@ router.post('/withdraw', async (req, res) => {
     );
 
     // Record transaction log
-    await db.query(
+    await client.query(
       'INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, $2, $3, $4)',
       [userId, 'withdrawal', numAmount, `Withdrawal Request to ${upiId || accountNumber || 'Bank'} (Pending Approval)`]
     );
+
+    // Deduct immediately from profile balance
+    if (role === 'driver') {
+      await client.query(
+        'UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2',
+        [numAmount, userId]
+      );
+    } else if (role === 'guide') {
+      await client.query(
+        'UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2',
+        [numAmount, userId]
+      );
+    }
+
+    await client.query('COMMIT');
 
     res.status(201).json({
       success: true,
@@ -361,8 +380,11 @@ router.post('/withdraw', async (req, res) => {
       withdrawal: wRes.rows[0],
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Error in withdrawal request:', error);
     res.status(500).json({ success: false, message: 'Withdrawal submission failed', error: error.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -812,6 +834,138 @@ router.get('/admin/reconciliation', async (req, res) => {
   } catch (error) {
     console.error('Error fetching wallet reconciliation ledger:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch reconciliation ledger' });
+  }
+});
+
+/**
+ * GET /api/wallet/admin/withdrawals
+ * Admin view to get withdrawals list by status
+ */
+router.get('/admin/withdrawals', async (req, res) => {
+  try {
+    const { status = 'Pending' } = req.query;
+    const result = await db.query(
+      'SELECT * FROM withdrawals WHERE status = $1 ORDER BY created_at DESC',
+      [status]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error fetching admin withdrawals:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch withdrawals' });
+  }
+});
+
+/**
+ * POST /api/wallet/admin/withdrawals/:id/approve
+ * Admin approves withdrawal request
+ */
+router.post('/admin/withdrawals/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminId } = req.body;
+
+    const wRes = await db.query('SELECT * FROM withdrawals WHERE id = $1', [id]);
+    if (wRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Withdrawal request not found' });
+    }
+
+    const withdrawal = wRes.rows[0];
+    if (withdrawal.status !== 'Pending') {
+      return res.status(400).json({ success: false, message: `Request is already ${withdrawal.status}` });
+    }
+
+    await db.query(
+      "UPDATE withdrawals SET status = 'Approved', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+      [id]
+    );
+
+    // Notify user
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '🎉 Withdrawal Approved', $3, CURRENT_TIMESTAMP)`,
+        [withdrawal.user_id, withdrawal.role, `Your withdrawal of ₹${withdrawal.amount} has been approved and sent to your UPI ID: ${withdrawal.upi_id || 'bank account'}.`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to notify user about withdrawal approval:', nErr);
+    }
+
+    res.json({ success: true, message: 'Withdrawal approved successfully' });
+  } catch (error) {
+    console.error('Error approving withdrawal:', error);
+    res.status(500).json({ success: false, message: 'Failed to approve withdrawal' });
+  }
+});
+
+/**
+ * POST /api/wallet/admin/withdrawals/:id/reject
+ * Admin rejects withdrawal request (reverts/refunds balance)
+ */
+router.post('/admin/withdrawals/:id/reject', async (req, res) => {
+  const client = await db.pool.connect();
+  try {
+    const { id } = req.params;
+    const { rejectReason = 'Rejected by Admin', adminId } = req.body;
+
+    await client.query('BEGIN');
+
+    const wRes = await client.query('SELECT * FROM withdrawals WHERE id = $1 FOR UPDATE', [id]);
+    if (wRes.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'Withdrawal request not found' });
+    }
+
+    const withdrawal = wRes.rows[0];
+    if (withdrawal.status !== 'Pending') {
+      client.release();
+      return res.status(400).json({ success: false, message: `Request is already ${withdrawal.status}` });
+    }
+
+    // 1. Update status
+    await client.query(
+      "UPDATE withdrawals SET status = 'Rejected', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+      [id]
+    );
+
+    // 2. Refund balance
+    const numAmount = parseFloat(withdrawal.amount);
+    await client.query(
+      "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'refund', $2, $3)",
+      [withdrawal.user_id, numAmount, `Reversal of Rejected Withdrawal: ${rejectReason}`]
+    );
+
+    if (withdrawal.role === 'driver') {
+      await client.query(
+        'UPDATE driver_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2',
+        [numAmount, withdrawal.user_id]
+      );
+    } else if (withdrawal.role === 'guide') {
+      await client.query(
+        'UPDATE guide_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2',
+        [numAmount, withdrawal.user_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // 3. Notify user
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '❌ Withdrawal Rejected', $3, CURRENT_TIMESTAMP)`,
+        [withdrawal.user_id, withdrawal.role, `Your withdrawal of ₹${withdrawal.amount} was rejected. Reason: ${rejectReason}`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to notify user about withdrawal rejection:', nErr);
+    }
+
+    res.json({ success: true, message: 'Withdrawal rejected and balance refunded successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error rejecting withdrawal:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject withdrawal' });
+  } finally {
+    client.release();
   }
 });
 

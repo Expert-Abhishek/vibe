@@ -1,30 +1,55 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { QrCode, Link2, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { QrCode, Upload, CheckCircle, AlertTriangle, RefreshCw, Eye } from 'lucide-react';
 import { fetchPaymentSettingsApi, updatePaymentSettingsApi, PaymentSettings } from '@/lib/api';
 
 export default function PaymentSettingsPage() {
   const [upiId, setUpiId] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [currentSettings, setCurrentSettings] = useState<PaymentSettings | null>(null);
+  
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
+  const loadData = () => {
+    setIsLoading(true);
     fetchPaymentSettingsApi().then((data) => {
       if (data) {
         setUpiId(data.upi_id);
         setQrCodeUrl(data.qr_code_url);
+        setCurrentSettings(data);
       }
       setIsLoading(false);
     });
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setQrCodeUrl(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!upiId.trim() || !qrCodeUrl.trim()) {
-      setMessage({ type: 'error', text: 'Both fields are required.' });
+    if (!upiId.trim()) {
+      setMessage({ type: 'error', text: 'UPI ID is required.' });
+      return;
+    }
+    if (!qrCodeUrl.trim()) {
+      setMessage({ type: 'error', text: 'Please upload a QR Code image.' });
       return;
     }
 
@@ -36,6 +61,10 @@ export default function PaymentSettingsPage() {
 
     if (success) {
       setMessage({ type: 'success', text: 'Payment settings updated successfully!' });
+      setCurrentSettings({
+        upi_id: upiId.trim(),
+        qr_code_url: qrCodeUrl.trim()
+      });
     } else {
       setMessage({ type: 'error', text: 'Failed to update payment settings. Please try again.' });
     }
@@ -51,7 +80,7 @@ export default function PaymentSettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
@@ -59,14 +88,14 @@ export default function PaymentSettingsPage() {
           <span>Payment & Top-Up Settings</span>
         </h1>
         <p className="text-xs text-dark-textMuted mt-1">
-          Configure the official QR code and UPI ID shown to customers, drivers, and guides for manual wallet top-ups.
+          Configure the official QR code image and UPI ID shown to customers, drivers, and guides for manual wallet top-ups.
         </p>
       </div>
 
       {/* Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Form Card */}
-        <div className="md:col-span-2 glass-card rounded-2xl p-6 border border-dark-border shadow-xl">
+        <div className="lg:col-span-7 glass-card rounded-2xl p-6 border border-dark-border shadow-xl">
           <h2 className="text-sm font-bold text-white mb-4">Edit Payment Details</h2>
           
           <form onSubmit={handleSave} className="space-y-5">
@@ -75,36 +104,37 @@ export default function PaymentSettingsPage() {
               <label htmlFor="upiId" className="block text-[11px] font-bold uppercase tracking-wider text-dark-textMuted">
                 UPI ID (Virtual Payment Address)
               </label>
-              <div className="relative">
-                <input
-                  id="upiId"
-                  type="text"
-                  placeholder="e.g. vibe.pay@upi"
-                  value={upiId}
-                  onChange={(e) => setUpiId(e.target.value)}
-                  className="w-full pl-4 pr-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500 transition-colors"
-                />
-              </div>
+              <input
+                id="upiId"
+                type="text"
+                placeholder="e.g. vibe.pay@upi"
+                value={upiId}
+                onChange={(e) => setUpiId(e.target.value)}
+                className="w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500 transition-colors"
+              />
             </div>
 
-            {/* QR Code URL */}
+            {/* QR Code Upload */}
             <div className="space-y-2">
-              <label htmlFor="qrCodeUrl" className="block text-[11px] font-bold uppercase tracking-wider text-dark-textMuted">
-                QR Code Image URL
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-dark-textMuted">
+                Upload QR Code Image
               </label>
-              <div className="relative">
-                <input
-                  id="qrCodeUrl"
-                  type="text"
-                  placeholder="https://example.com/qr-code.png"
-                  value={qrCodeUrl}
-                  onChange={(e) => setQrCodeUrl(e.target.value)}
-                  className="w-full pl-4 pr-4 py-3 bg-dark-bg border border-dark-border rounded-xl text-xs text-white placeholder-dark-textMuted focus:outline-none focus:border-brand-500 transition-colors"
-                />
+              
+              <div className="flex items-center justify-center w-full">
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dark-border border-dashed rounded-xl cursor-pointer bg-dark-bg hover:bg-dark-hover/40 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                    <Upload className="w-8 h-8 text-brand-500 mb-2" />
+                    <p className="text-xs text-gray-300 font-bold">Click to upload QR code</p>
+                    <p className="text-[10px] text-dark-textMuted mt-1">PNG, JPG or JPEG format</p>
+                  </div>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                  />
+                </label>
               </div>
-              <p className="text-[10px] text-dark-textMuted">
-                Specify a static QR code image link, or use the QR Code Generator format to dynamically generate one.
-              </p>
             </div>
 
             {/* Notifications */}
@@ -143,32 +173,57 @@ export default function PaymentSettingsPage() {
           </form>
         </div>
 
-        {/* Live Preview Card */}
-        <div className="glass-card rounded-2xl p-6 border border-dark-border shadow-xl flex flex-col items-center justify-center text-center">
-          <h2 className="text-sm font-bold text-white mb-4 self-start">QR Code Preview</h2>
-          
-          <div className="bg-white p-4 rounded-xl shadow-inner mb-4 flex items-center justify-center w-48 h-48 border border-gray-200">
-            {qrCodeUrl ? (
-              <img
-                src={qrCodeUrl}
-                alt="UPI QR Code Preview"
-                className="w-full h-full object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform';
-                }}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center text-gray-400">
-                <QrCode className="w-12 h-12 mb-2" />
-                <span className="text-[10px] font-semibold uppercase">No QR URL</span>
-              </div>
-            )}
+        {/* Live Preview & Verification */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Live Preview Card */}
+          <div className="glass-card rounded-2xl p-6 border border-dark-border shadow-xl flex flex-col items-center justify-center text-center">
+            <h2 className="text-sm font-bold text-white mb-4 self-start flex items-center gap-1.5">
+              <Eye className="w-4 h-4 text-brand-500" />
+              <span>Live Edit Preview</span>
+            </h2>
+            
+            <div className="bg-white p-3 rounded-xl shadow-inner mb-4 flex items-center justify-center w-40 h-40 border border-gray-200">
+              {qrCodeUrl ? (
+                <img
+                  src={qrCodeUrl}
+                  alt="UPI QR Code Preview"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-gray-400">
+                  <QrCode className="w-10 h-10 mb-2 animate-pulse" />
+                  <span className="text-[9px] font-semibold uppercase">Pending Upload</span>
+                </div>
+              )}
+            </div>
+
+            <div className="w-full bg-dark-bg p-3 rounded-xl border border-dark-border text-left">
+              <span className="text-[9px] text-dark-textMuted uppercase font-bold block mb-0.5">Target UPI ID (Edit)</span>
+              <span className="text-xs font-bold text-white font-mono break-all">{upiId || 'Not Configured'}</span>
+            </div>
           </div>
 
-          <div className="w-full bg-dark-bg p-3.5 rounded-xl border border-dark-border text-left">
-            <span className="text-[10px] text-dark-textMuted uppercase font-bold block mb-1">Target UPI ID</span>
-            <span className="text-xs font-bold text-white font-mono break-all">{upiId || 'Not Configured'}</span>
-          </div>
+          {/* Current Saved Configuration */}
+          {currentSettings && (
+            <div className="glass-card rounded-2xl p-6 border border-dark-border/80 shadow-md flex flex-col items-center justify-center text-center opacity-75 hover:opacity-100 transition-opacity">
+              <h2 className="text-xs font-bold text-dark-textMuted mb-3 self-start uppercase tracking-wider">
+                Currently Live on App
+              </h2>
+              
+              <div className="bg-white p-3 rounded-xl shadow-inner mb-3 flex items-center justify-center w-36 h-36 border border-gray-200">
+                <img
+                  src={currentSettings.qr_code_url}
+                  alt="Live QR Code"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              <div className="w-full bg-dark-bg/50 p-2.5 rounded-xl border border-dark-border/50 text-left">
+                <span className="text-[9px] text-dark-textMuted uppercase font-bold block mb-0.5">Live UPI ID</span>
+                <span className="text-xs font-semibold text-gray-300 font-mono break-all">{currentSettings.upi_id}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
