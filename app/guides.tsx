@@ -206,6 +206,20 @@ export default function GuidesScreen() {
     const fareAmt = selectedGuide.chargePerHour * 4;
     const session = getUserSessionSync();
 
+    // Construct scheduled time
+    let scheduledTimeStr: string | null = null;
+    if (!adminState.instantBookingEnabled) {
+      let finalHour = prebookHour;
+      if (prebookAmPm === 'PM' && prebookHour !== 12) {
+        finalHour += 12;
+      } else if (prebookAmPm === 'AM' && prebookHour === 12) {
+        finalHour = 0;
+      }
+      const [year, month, day] = prebookDate.split('-').map(Number);
+      const dateObj = new Date(year, month - 1, day, finalHour, prebookMinute);
+      scheduledTimeStr = dateObj.toISOString();
+    }
+
     await bookTripApi({
       tripType: 'guide',
       title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
@@ -215,6 +229,8 @@ export default function GuidesScreen() {
       dropName: `${selectedGuide.city} Sightseeing Spots`,
       amount: fareAmt,
       paymentMode: 'UPI',
+      bookingType: adminState.instantBookingEnabled ? 'INSTANT' : 'PRE_BOOKED',
+      scheduledTime: scheduledTimeStr || undefined,
     });
 
     sendLocalNotification(

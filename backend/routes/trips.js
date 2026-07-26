@@ -517,9 +517,9 @@ router.post('/book', async (req, res) => {
       `INSERT INTO trips (
         trip_type, title, customer_id, customer_name, pickup_name, drop_name,
         pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-        status, otp, created_at
+        status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, created_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
        RETURNING *`,
       [
         tripType,
@@ -535,6 +535,10 @@ router.post('/book', async (req, res) => {
         parseFloat(amount),
         paymentMode,
         otpCode,
+        bookingType,
+        scheduledTime ? new Date(scheduledTime) : null,
+        advanceDepositPaid,
+        remainingCashBalance,
       ]
     );
 
