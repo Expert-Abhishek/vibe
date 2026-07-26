@@ -1,170 +1,216 @@
-import { fetchWalletBalanceApi, submitWithdrawalApi, updateUserProfileApi } from '@/constants/api';
-import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
+import {
+  fetchAdminPaymentSettingsApi,
+  fetchUserProfileApi,
+  fetchWalletBalanceApi,
+  submitWalletTopupRequestApi,
+  submitWithdrawalApi,
+} from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
+  Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-interface EarningItem {
-  id: string;
-  tour: string;
-  time: string;
-  amount: number;
-  rating: number;
-  status: 'Settled' | 'Pending';
-}
 
 export default function GuideWalletScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [upiId, setUpiId] = useState('ramesh.guide@okaxis');
-  const [editingUpi, setEditingUpi] = useState(false);
-  const [tempUpi, setTempUpi] = useState('ramesh.guide@okaxis');
-
-  const [todayEarnings, setTodayEarnings] = useState(0);
-  const [totalEarnings, setTotalEarnings] = useState(0);
+  const [name, setName] = useState('Partner');
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const [history, setHistory] = useState<EarningItem[]>([]);
-  const [cashingOut, setCashingOut] = useState(false);
+  // Top-Up state variables
+  const [topupModalVisible, setTopupModalVisible] = useState(false);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupStep, setTopupStep] = useState<1 | 2>(1);
+  const [timerSeconds, setTimerSeconds] = useState(300);
+  const [screenshotBase64, setScreenshotBase64] = useState('');
+  const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
+  const [initiatedAt, setInitiatedAt] = useState<Date | null>(null);
+
+  const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
+  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
+
+  // Withdrawal state variables
+  const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawUpi, setWithdrawUpi] = useState('');
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
+
+  // History modal visibility
+  const [walletModalVisible, setWalletModalVisible] = useState(false);
+
+  const session = getUserSessionSync();
+  const userId = session?.id || 'g1';
+
+  const loadWalletData = async () => {
+    setLoading(true);
+    if (session?.name) setName(session.name);
+
+    const userRes = await fetchUserProfileApi(userId);
+    if (userRes && userRes.success && userRes.user) {
+      if (userRes.user.name) setName(userRes.user.name);
+      const profile = userRes.user.profile || {};
+      const upi = profile.upiId || profile.upi_id || '';
+      if (upi) setWithdrawUpi(upi);
+    }
+
+    const data = await fetchWalletBalanceApi(userId);
+    if (data.success) {
+      if (data.balance !== undefined) setWalletBalance(data.balance);
+      if (data.transactions) setWalletTransactions(data.transactions);
+    }
+
+    const adminRes = await fetchAdminPaymentSettingsApi();
+    if (adminRes && adminRes.success && adminRes.data) {
+      if (adminRes.data.upi_id || adminRes.data.upiId) setAdminUpiId(adminRes.data.upi_id || adminRes.data.upiId);
+      if (adminRes.data.qr_code_url || adminRes.data.qrCodeUrl) setAdminQrCodeUrl(adminRes.data.qr_code_url || adminRes.data.qrCodeUrl);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    async function loadWalletData() {
-      const session = getUserSessionSync();
-      const userId = session?.id || 'g1';
-
-      const sessionUpi = session?.profile?.upiId || session?.profile?.upi_id || 'ramesh.guide@okaxis';
-      setUpiId(sessionUpi);
-      setTempUpi(sessionUpi);
-
-      setLoading(true);
-      const res = await fetchWalletBalanceApi(userId);
-      setLoading(false);
-
-      if (res && res.success) {
-        setTodayEarnings(res.balance || 0);
-
-        const mappedHistory: EarningItem[] = (res.transactions || []).map((t: any) => {
-          return {
-            id: t.id,
-            tour: t.description || 'Tour Guide Earning',
-            time: t.created_at ? new Date(t.created_at).toLocaleString() : 'Recent',
-            amount: parseFloat(t.amount || 0),
-            rating: 5,
-            status: t.type === 'withdrawal' ? 'Pending' : 'Settled',
-          };
-        });
-
-        setHistory(mappedHistory);
-
-        // Sum approved/completed withdrawals
-        const settledWithdrawals = (res.withdrawals || [])
-          .filter((w: any) => w.status === 'Approved' || w.status === 'Completed')
-          .reduce((sum: number, w: any) => sum + parseFloat(w.amount || 0), 0);
-        setTotalEarnings(settledWithdrawals);
-      }
-    }
     loadWalletData();
-  }, [refreshTrigger]);
+  }, [userId]);
 
-  const colors = {
-    background: isDark ? '#101014' : '#F5F5F7',
-    surface: isDark ? '#1E1E24' : '#FFFFFF',
-    surfaceCard: isDark ? '#16161B' : '#FFFFFF',
-    textPrimary: isDark ? '#ffffff' : '#1C1C1E',
-    textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
-    border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
-    amber: '#F5C518',
-    success: '#10B981',
-  };
-
-  const handleUpdateUpi = async () => {
-    const trimmed = tempUpi.trim();
-    if (!trimmed || !trimmed.includes('@')) {
-      Alert.alert('Invalid UPI ID', 'Please enter a valid UPI ID (e.g. username@bank).');
-      return;
+  // Client-side countdown timer for Top-Up Screenshot uploads
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (topupModalVisible && topupStep === 2 && timerSeconds > 0) {
+      interval = setInterval(() => {
+        setTimerSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(interval!);
+            setTopupModalVisible(false);
+            setTopupStep(1);
+            setScreenshotBase64('');
+            Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            return 300;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [topupModalVisible, topupStep, timerSeconds]);
 
-    const session = getUserSessionSync();
-    if (session?.id) {
-      setLoading(true);
-      await updateUserProfileApi(session.id, {
-        ...(session.profile || {}),
-        upiId: trimmed,
-      });
-      setLoading(false);
-
-      const updatedSession = {
-        ...session,
-        profile: {
-          ...(session.profile || {}),
-          upiId: trimmed,
-        },
-      };
-      await saveUserSession(updatedSession);
-    }
-
-    setUpiId(trimmed);
-    setEditingUpi(false);
-    Alert.alert('UPI Updated', 'Your UPI ID has been updated successfully for receiving payouts.');
-  };
-
-  const handleCashout = () => {
-    if (todayEarnings <= 0) {
-      Alert.alert('No Balance', "Today's tour earnings have already been settled to your bank.");
-      return;
-    }
-
+  const handlePickScreenshot = async () => {
     Alert.alert(
-      'Confirm Cashout',
-      `Would you like to instantly transfer ₹${todayEarnings} to your registered UPI account (${upiId})?`,
+      'Payment Screenshot',
+      'Upload proof of payment:',
       [
-        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Transfer Now',
+          text: '📸 Take Photo (Camera)',
           onPress: async () => {
-            setCashingOut(true);
-            const session = getUserSessionSync();
-            const res = await submitWithdrawalApi({
-              userId: session?.id || 'g1',
-              userName: session?.name || 'Partner',
-              role: 'guide',
-              amount: todayEarnings,
-              upiId: upiId || 'guide@okaxis',
+            const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Camera access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              quality: 0.5,
+              base64: true,
             });
-            setCashingOut(false);
-
-            if (res && res.success) {
-              const transferAmount = todayEarnings;
-              setTodayEarnings(0);
-              Alert.alert(
-                'Success!',
-                `₹${transferAmount} withdrawal request submitted successfully! Admin will approve and settle it shortly.`,
-                [{ text: 'OK', onPress: () => setRefreshTrigger(prev => prev + 1) }]
-              );
-            } else {
-              Alert.alert('Error', res?.message || 'Failed to submit withdrawal request.');
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+              setScreenshotBase64(dataUrl);
             }
           },
         },
+        {
+          text: '🖼️ Choose from Gallery',
+          onPress: async () => {
+            const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!granted) {
+              Alert.alert('Permission Denied', 'Gallery access permission is required.');
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              quality: 0.5,
+              base64: true,
+            });
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              const asset = result.assets[0];
+              const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+              setScreenshotBase64(dataUrl);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
       ]
     );
+  };
+
+  const handleSubmitTopupProof = async () => {
+    if (!screenshotBase64) {
+      Alert.alert('Required', 'Please upload a screenshot proof of the payment.');
+      return;
+    }
+
+    try {
+      setIsSubmittingTopup(true);
+      const payload = {
+        userId,
+        userName: name,
+        role: 'guide',
+        amount: parseFloat(topupAmount),
+        screenshotUrl: screenshotBase64,
+        initiatedAt: initiatedAt ? initiatedAt.toISOString() : new Date().toISOString(),
+      };
+
+      const res = await submitWalletTopupRequestApi(payload);
+
+      if (res && res.success) {
+        setTopupModalVisible(false);
+        setTopupStep(1);
+        setScreenshotBase64('');
+        setTopupAmount('');
+        Alert.alert('🎉 Submitted!', 'Your top-up request was submitted. Admin will verify and credit your wallet.');
+        loadWalletData();
+      } else {
+        Alert.alert('Submission Failed', res?.message || 'Could not submit your top-up request.');
+      }
+    } catch (e: any) {
+      Alert.alert('Submission Error', e?.message || 'A network error occurred.');
+    } finally {
+      setIsSubmittingTopup(false);
+    }
+  };
+
+  const colors = {
+    background: isDark ? '#101014' : '#F5F5F7',
+    surface: isDark ? '#1A1A20' : '#FFFFFF',
+    surfaceAlt: isDark ? '#212129' : '#EFEFF4',
+    line: isDark ? '#2C2C34' : '#E5E5EA',
+    textPrimary: isDark ? '#F5F4F0' : '#1C1C1E',
+    textMuted: isDark ? '#8D8D97' : '#8E8E93',
+    amber: '#F5C518',
+    danger: '#F0555F',
   };
 
   return (
@@ -177,10 +223,10 @@ export default function GuideWalletScreen() {
           <TouchableOpacity style={{ marginRight: scale(8) }} onPress={() => router.replace('/guide-dashboard' as any)}>
             <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
           </TouchableOpacity>
-          <MaterialIcons name="explore" size={scale(24)} color={colors.amber} style={{ marginRight: scale(8) }} />
+          <MaterialIcons name="hiking" size={scale(24)} color={colors.amber} style={{ marginRight: scale(8) }} />
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Guide Wallet</Text>
         </View>
-        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage tour guide earnings and bank cashouts</Text>
+        <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage your balance, payouts and deposits</Text>
       </View>
 
       {loading ? (
@@ -190,142 +236,299 @@ export default function GuideWalletScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Earnings Dashboard Box */}
-          <View style={[styles.dashboardCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.earningsGrid}>
-              <View style={styles.earningBox}>
-                <Text style={[styles.earningLabel, { color: colors.textMuted }]}>TODAY'S TOUR REVENUE</Text>
-                <Text style={[styles.earningValue, { color: colors.amber }]}>₹{todayEarnings.toLocaleString('en-IN')}</Text>
-              </View>
-              <View style={[styles.verticalDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.earningBox}>
-                <Text style={[styles.earningLabel, { color: colors.textMuted }]}>TOTAL PAID OUT</Text>
-                <Text style={[styles.earningValue, { color: colors.success }]}>₹{totalEarnings.toLocaleString('en-IN')}</Text>
-              </View>
+          
+          {/* WALLET CARD SECTION */}
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
+              <MaterialIcons name="account-balance-wallet" size={scale(18)} color={colors.amber} />
+              <Text style={[styles.cardTitle, { color: colors.amber }]}>Vibe Wallet</Text>
+            </View>
+            <View style={{ marginBottom: verticalScale(14) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: scale(10) }}>
+              <TouchableOpacity
+                style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
+                onPress={() => {
+                  setTopupAmount('');
+                  setTopupStep(1);
+                  setScreenshotBase64('');
+                  setTimerSeconds(300);
+                  setTopupModalVisible(true);
+                }}
+              >
+                <MaterialIcons name="add-circle-outline" size={scale(16)} color="#101014" />
+                <Text style={styles.primaryButtonText}>Add Money</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
+                onPress={() => setWalletModalVisible(true)}
+              >
+                <MaterialIcons name="history" size={scale(16)} color={colors.textPrimary} />
+                <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>History</Text>
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity
-              style={[
-                styles.cashoutBtn,
-                { backgroundColor: todayEarnings > 0 ? colors.amber : '#2C2C34' },
-              ]}
-              onPress={handleCashout}
-              disabled={todayEarnings === 0 || cashingOut}
+              style={[styles.primaryButton, { backgroundColor: 'rgba(255,255,255,0.06)', marginTop: verticalScale(10), borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
+              onPress={() => setWithdrawModalVisible(true)}
             >
-              {cashingOut ? (
-                <ActivityIndicator color="#101010" size="small" />
-              ) : (
-                <>
-                  <MaterialIcons name="account-balance" size={scale(18)} color={todayEarnings > 0 ? '#101010' : '#8D8D97'} style={{ marginRight: scale(6) }} />
-                  <Text style={[styles.cashoutBtnText, { color: todayEarnings > 0 ? '#101010' : '#8D8D97' }]}>
-                    {todayEarnings > 0 ? 'Instant Bank Settlement' : 'Nothing to Settle'}
+              <MaterialIcons name="payment" size={scale(16)} color={colors.textPrimary} />
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Withdraw Funds</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* Wallet History Modal */}
+      <Modal visible={walletModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWalletModalVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.surface, height: '60%', borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(20) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontStyle: 'normal', fontWeight: 'bold' }}>Wallet History</Text>
+              <TouchableOpacity onPress={() => setWalletModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={walletTransactions}
+              keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+              ListEmptyComponent={
+                <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: verticalScale(30) }}>
+                  No transactions yet
+                </Text>
+              }
+              renderItem={({ item }) => {
+                const isIncoming = item.type?.toLowerCase() === 'topup' || item.type?.toLowerCase() === 'refund';
+                return (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: verticalScale(12), borderBottomWidth: 1, borderBottomColor: colors.line }}>
+                    <View style={{ flex: 1, marginRight: scale(10) }}>
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14) }} numberOfLines={1}>
+                        {item.description || (isIncoming ? 'Wallet Deposit' : 'Debit')}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                      </Text>
+                    </View>
+                    <Text style={{ color: isIncoming ? '#10B981' : colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold' }}>
+                      {isIncoming ? '+' : '-'}₹{item.amount}
+                    </Text>
+                  </View>
+                );
+              }}
+            />
+          </div>
+        </View>
+      </Modal>
+
+      {/* Wallet Add Money (Top-Up) Modal */}
+      <Modal visible={topupModalVisible} animationType="slide" transparent={true} onRequestClose={() => setTopupModalVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>
+                {topupStep === 1 ? '💳 Add Money to Wallet' : '📲 Scan QR & Pay'}
+              </Text>
+              <TouchableOpacity onPress={() => setTopupModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {topupStep === 1 ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
+                  Enter the amount you wish to add. Minimim amount is ₹500.
+                </Text>
+
+                <Text style={[styles.label, { color: colors.textPrimary }]}>Amount (₹)</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                  keyboardType="numeric"
+                  value={topupAmount}
+                  onChangeText={setTopupAmount}
+                  placeholder="Minimum ₹500"
+                  placeholderTextColor={colors.textMuted}
+                />
+
+                <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(12) }}>
+                  {[500, 1000, 2000, 5000].map(amt => (
+                    <TouchableOpacity
+                      key={amt}
+                      style={{ flex: 1, paddingVertical: verticalScale(8), borderRadius: scale(8), backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.line, alignItems: 'center' }}
+                      onPress={() => setTopupAmount(amt.toString())}
+                    >
+                      <Text style={{ color: colors.amber, fontWeight: 'bold', fontSize: moderateFontScale(13) }}>₹{amt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(10) }]}
+                  onPress={() => {
+                    const amt = parseFloat(topupAmount);
+                    if (!amt || amt < 500) {
+                      Alert.alert('Minimum Amount Required', 'The minimum top-up amount is ₹500.');
+                      return;
+                    }
+                    setInitiatedAt(new Date());
+                    setTimerSeconds(300);
+                    setTopupStep(2);
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Proceed to Pay</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* 5-minute countdown timer header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)', paddingVertical: verticalScale(8), borderRadius: scale(8), marginBottom: verticalScale(16) }}>
+                  <MaterialIcons name="alarm" size={scale(18)} color={colors.danger} style={{ marginRight: scale(6) }} />
+                  <Text style={{ color: colors.danger, fontWeight: 'bold', fontSize: moderateFontScale(14) }}>
+                    Upload screenshot in: {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
                   </Text>
-                </>
+                </View>
+
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(12) }}>
+                  Scan the QR code below using any UPI App (Google Pay, PhonePe, Paytm) to transfer ₹{topupAmount}.
+                </Text>
+
+                {/* Admin static payment QR Code */}
+                <View style={{ alignSelf: 'center', padding: scale(10), backgroundColor: '#FFFFFF', borderRadius: scale(12), marginBottom: verticalScale(12) }}>
+                  <Image source={{ uri: adminQrCodeUrl }} style={{ width: scale(180), height: scale(180) }} resizeMode="contain" />
+                </View>
+
+                {/* Admin static UPI ID details */}
+                <View style={{ backgroundColor: colors.surfaceAlt, padding: scale(12), borderRadius: scale(10), borderWidth: 1, borderColor: colors.line, marginBottom: verticalScale(16), alignItems: 'center' }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>UPI ID for Manual Transfer</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: 'bold', marginTop: verticalScale(4) }}>{adminUpiId}</Text>
+                </View>
+
+                {/* Screenshot uploader */}
+                <Text style={[styles.label, { color: colors.textPrimary, textAlign: 'center', marginBottom: verticalScale(8) }]}>
+                  Step 2: Upload Payment Screenshot Proof
+                </Text>
+
+                <TouchableOpacity
+                  style={{ height: verticalScale(100), borderStyle: 'dashed', borderWidth: 2, borderColor: screenshotBase64 ? colors.amber : colors.textMuted, borderRadius: scale(12), alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(16), overflow: 'hidden' }}
+                  onPress={handlePickScreenshot}
+                >
+                  {screenshotBase64 ? (
+                    <Image source={{ uri: screenshotBase64 }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  ) : (
+                    <View style={{ alignItems: 'center' }}>
+                      <MaterialIcons name="cloud-upload" size={scale(32)} color={colors.textMuted} />
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(4) }}>Tap to upload proof screenshot</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: colors.line, marginTop: 0 }]}
+                    onPress={() => {
+                      setTopupStep(1);
+                      setScreenshotBase64('');
+                    }}
+                  >
+                    <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { flex: 2, backgroundColor: colors.amber, marginTop: 0 }]}
+                    onPress={handleSubmitTopupProof}
+                    disabled={isSubmittingTopup}
+                  >
+                    {isSubmittingTopup ? (
+                      <ActivityIndicator size="small" color="#101014" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Submit Top-Up Proof</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Withdraw Funds Modal */}
+      <Modal visible={withdrawModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWithdrawModalVisible(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Withdraw Funds</Text>
+              <TouchableOpacity onPress={() => setWithdrawModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(4) }}>Available: ₹{walletBalance}</Text>
+
+            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>Amount</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+              keyboardType="numeric"
+              value={withdrawAmount}
+              onChangeText={setWithdrawAmount}
+              placeholder="Enter amount"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>UPI ID</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+              value={withdrawUpi}
+              onChangeText={setWithdrawUpi}
+              placeholder="yourname@upi"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+            />
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
+              onPress={async () => {
+                const amt = parseFloat(withdrawAmount);
+                if (!amt || amt <= 0) {
+                  Alert.alert('Error', 'Please enter a valid amount');
+                  return;
+                }
+                if (amt > walletBalance) {
+                  Alert.alert('Error', 'Withdrawal amount exceeds wallet balance');
+                  return;
+                }
+                if (!withdrawUpi.trim()) {
+                  Alert.alert('Error', 'Please enter your UPI ID');
+                  return;
+                }
+                setIsSubmittingWithdraw(true);
+                const res = await submitWithdrawalApi({ userId, userName: name, role: 'guide', amount: amt, upiId: withdrawUpi });
+                setIsSubmittingWithdraw(false);
+                if (res.success) {
+                  Alert.alert('Success', res.message || 'Withdrawal request submitted');
+                  setWithdrawModalVisible(false);
+                  setWithdrawAmount('');
+                  setWithdrawUpi('');
+                  loadWalletData();
+                } else {
+                  Alert.alert('Error', res.message || 'Withdrawal failed');
+                }
+              }}
+              disabled={isSubmittingWithdraw}
+            >
+              {isSubmittingWithdraw ? (
+                <ActivityIndicator size="small" color="#101014" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Submit Withdrawal Request</Text>
               )}
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
 
-          {/* UPI Configuration Panel */}
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Settlement Account (UPI)</Text>
-
-            {editingUpi ? (
-              <View style={styles.upiInputRow}>
-                <TextInput
-                  style={[styles.upiInput, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}
-                  value={tempUpi}
-                  onChangeText={setTempUpi}
-                  placeholder="UPI ID (e.g. guide@bank)"
-                  placeholderTextColor="rgba(255,255,255,0.2)"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <View style={styles.upiActionButtons}>
-                  <TouchableOpacity
-                    style={[styles.upiSubBtn, { backgroundColor: colors.success }]}
-                    onPress={handleUpdateUpi}
-                  >
-                    <MaterialIcons name="check" size={scale(18)} color="#FFFFFF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.upiSubBtn, { backgroundColor: '#ef4444' }]}
-                    onPress={() => {
-                      setTempUpi(upiId);
-                      setEditingUpi(false);
-                    }}
-                  >
-                    <MaterialIcons name="close" size={scale(18)} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.upiDisplayRow}>
-                <View style={styles.upiDisplayLeft}>
-                  <FontAwesome5 name="wallet" size={scale(16)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
-                  <Text style={[styles.upiText, { color: colors.textPrimary }]}>{upiId}</Text>
-                </View>
-                <TouchableOpacity
-                  style={[styles.editBtn, { borderColor: colors.amber }]}
-                  onPress={() => {
-                    setTempUpi(upiId);
-                    setEditingUpi(true);
-                  }}
-                >
-                  <Text style={[styles.editBtnText, { color: colors.amber }]}>Change UPI</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <Text style={[styles.upiNote, { color: colors.textMuted }]}>
-              All guide booking earnings are credited to this UPI ID upon tapping "Instant Bank Settlement".
-            </Text>
-          </View>
-
-          {/* Earning History */}
-          <View style={styles.historySection}>
-            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Tour Guide Earnings History</Text>
-
-            {history.length === 0 ? (
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginVertical: scale(20) }}>
-                No transaction logs recorded yet.
-              </Text>
-            ) : (
-              history.map((item) => (
-                <View key={item.id} style={[styles.historyItem, { borderBottomColor: colors.border }]}>
-                  <View style={[styles.itemIconBox, { backgroundColor: 'rgba(245,197,24,0.08)' }]}>
-                    <MaterialIcons name="hiking" size={scale(18)} color={colors.amber} />
-                  </View>
-                  <View style={styles.itemMain}>
-                    <Text style={[styles.itemTripText, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {item.tour}
-                    </Text>
-                    <View style={styles.ratingRow}>
-                      <Text style={[styles.itemTimeText, { color: colors.textMuted, marginRight: scale(8) }]}>
-                        {item.time}
-                      </Text>
-                      <View style={styles.starBadge}>
-                        <MaterialIcons name="star" size={scale(10)} color={colors.amber} style={{ marginRight: scale(2) }} />
-                        <Text style={styles.starText}>{item.rating}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  <View style={styles.itemRight}>
-                    <Text style={[styles.itemAmountText, { color: colors.textPrimary }]}>
-                      +₹{item.amount}
-                    </Text>
-                    <View style={[styles.statusBadge, { backgroundColor: item.status === 'Pending' ? 'rgba(245,197,24,0.1)' : 'rgba(16,185,129,0.1)' }]}>
-                      <Text style={[styles.statusText, { color: item.status === 'Pending' ? colors.amber : colors.success }]}>
-                        {item.status}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-
-          <View style={{ height: verticalScale(100) }} />
-        </ScrollView>
-      )}
     </SafeAreaView>
   );
 }
@@ -355,7 +558,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(18),
     paddingTop: verticalScale(8),
   },
-  dashboardCard: {
+  card: {
     borderRadius: scale(24),
     borderWidth: 1.2,
     padding: scale(20),
@@ -366,171 +569,35 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 5,
   },
-  earningsGrid: {
-    flexDirection: 'row',
-    marginBottom: verticalScale(18),
-  },
-  earningBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  earningLabel: {
-    fontSize: moderateFontScale(9),
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  earningValue: {
-    fontSize: moderateFontScale(24),
-    fontWeight: '800',
-    marginTop: verticalScale(4),
-  },
-  verticalDivider: {
-    width: 1.2,
-    height: '80%',
-    alignSelf: 'center',
-  },
-  cashoutBtn: {
-    borderRadius: scale(14),
-    height: verticalScale(44),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cashoutBtnText: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '800',
-  },
-  card: {
-    borderRadius: scale(20),
-    borderWidth: 1.2,
-    padding: scale(18),
-    marginBottom: verticalScale(18),
-  },
-  sectionTitle: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '700',
+  cardTitle: {
+    fontSize: moderateFontScale(16),
+    fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  label: {
+    fontSize: moderateFontScale(12),
+    fontWeight: 'bold',
+    marginBottom: verticalScale(6),
+  },
+  input: {
+    height: verticalScale(44),
+    borderWidth: 1.2,
+    borderRadius: scale(12),
+    paddingHorizontal: scale(14),
+    fontSize: moderateFontScale(14),
+    fontWeight: '600',
     marginBottom: verticalScale(12),
   },
-  upiDisplayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: verticalScale(4),
-  },
-  upiDisplayLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: scale(10),
-  },
-  upiText: {
-    fontSize: moderateFontScale(14),
-    fontWeight: '700',
-  },
-  editBtn: {
-    borderWidth: 1.2,
-    borderRadius: scale(8),
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(6),
-  },
-  editBtnText: {
-    fontSize: moderateFontScale(11),
-    fontWeight: '700',
-  },
-  upiInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(8),
-  },
-  upiInput: {
-    flex: 1,
-    height: verticalScale(38),
-    borderWidth: 1.2,
-    borderRadius: scale(10),
-    paddingHorizontal: scale(12),
-    fontSize: moderateFontScale(13),
-    fontWeight: '700',
-  },
-  upiActionButtons: {
-    flexDirection: 'row',
-    gap: scale(6),
-  },
-  upiSubBtn: {
-    width: scale(34),
-    height: scale(34),
-    borderRadius: scale(8),
+  primaryButton: {
+    borderRadius: scale(14),
+    height: verticalScale(46),
     alignItems: 'center',
     justifyContent: 'center',
   },
-  upiNote: {
-    fontSize: moderateFontScale(10),
-    marginTop: verticalScale(10),
-    lineHeight: verticalScale(14),
-  },
-  historySection: {
-    marginTop: scale(2),
-  },
-  historyItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: verticalScale(12),
-    borderBottomWidth: 1.2,
-  },
-  itemIconBox: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(10),
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: scale(12),
-  },
-  itemMain: {
-    flex: 1,
-    marginRight: scale(10),
-  },
-  itemTripText: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '700',
-  },
-  itemTimeText: {
-    fontSize: moderateFontScale(10),
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: verticalScale(2),
-  },
-  starBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245,197,24,0.08)',
-    borderRadius: scale(4),
-    paddingHorizontal: scale(4),
-    paddingVertical: verticalScale(1),
-  },
-  starText: {
-    fontSize: moderateFontScale(9),
-    fontWeight: '800',
-    color: '#F5C518',
-  },
-  itemRight: {
-    alignItems: 'flex-end',
-    gap: scale(4),
-  },
-  itemAmountText: {
+  primaryButtonText: {
     fontSize: moderateFontScale(14),
-    fontWeight: '800',
-  },
-  statusBadge: {
-    borderRadius: scale(6),
-    paddingHorizontal: scale(6),
-    paddingVertical: verticalScale(2),
-  },
-  statusText: {
-    fontSize: moderateFontScale(9),
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: '900',
+    color: '#101014',
   },
 });

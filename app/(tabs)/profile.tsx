@@ -67,32 +67,33 @@ export default function ProfileScreen() {
   const session = getUserSessionSync();
   const userId = session?.id || 'c1';
 
-  React.useEffect(() => {
-    async function loadProfileAndWalletData() {
-      if (session?.name) setName(session.name);
-      if (session?.phone) setPhone(session.phone);
-      if (session?.photo_url) setPhotoUrl(session.photo_url);
+  const loadProfileAndWalletData = async () => {
+    if (session?.name) setName(session.name);
+    if (session?.phone) setPhone(session.phone);
+    if (session?.photo_url) setPhotoUrl(session.photo_url);
 
-      const userRes = await fetchUserProfileApi(userId);
-      if (userRes && userRes.success && userRes.user) {
-        if (userRes.user.name) setName(userRes.user.name);
-        if (userRes.user.phone) setPhone(userRes.user.phone);
-        const photo = userRes.user.photo_url || userRes.user.profile?.photo_url || null;
-        if (photo) setPhotoUrl(photo);
-      }
-
-      const data = await fetchWalletBalanceApi(userId);
-      if (data.success) {
-        if (data.balance !== undefined) setWalletBalance(data.balance);
-        if (data.transactions) setWalletTransactions(data.transactions);
-      }
-
-      const adminRes = await fetchAdminPaymentSettingsApi();
-      if (adminRes && adminRes.success && adminRes.data) {
-        if (adminRes.data.upi_id || adminRes.data.upiId) setAdminUpiId(adminRes.data.upi_id || adminRes.data.upiId);
-        if (adminRes.data.qr_code_url || adminRes.data.qrCodeUrl) setAdminQrCodeUrl(adminRes.data.qr_code_url || adminRes.data.qrCodeUrl);
-      }
+    const userRes = await fetchUserProfileApi(userId);
+    if (userRes && userRes.success && userRes.user) {
+      if (userRes.user.name) setName(userRes.user.name);
+      if (userRes.user.phone) setPhone(userRes.user.phone);
+      const photo = userRes.user.photo_url || userRes.user.profile?.photo_url || null;
+      if (photo) setPhotoUrl(photo);
     }
+
+    const data = await fetchWalletBalanceApi(userId);
+    if (data.success) {
+      if (data.balance !== undefined) setWalletBalance(data.balance);
+      if (data.transactions) setWalletTransactions(data.transactions);
+    }
+
+    const adminRes = await fetchAdminPaymentSettingsApi();
+    if (adminRes && adminRes.success && adminRes.data) {
+      if (adminRes.data.upi_id || adminRes.data.upiId) setAdminUpiId(adminRes.data.upi_id || adminRes.data.upiId);
+      if (adminRes.data.qr_code_url || adminRes.data.qrCodeUrl) setAdminQrCodeUrl(adminRes.data.qr_code_url || adminRes.data.qrCodeUrl);
+    }
+  };
+
+  React.useEffect(() => {
     loadProfileAndWalletData();
   }, [userId]);
 
@@ -195,6 +196,7 @@ export default function ProfileScreen() {
         setScreenshotBase64('');
         setTopupAmount('');
         showSuccess('🎉 Submitted!', 'Your top-up request was submitted. Admin will verify and credit your wallet.');
+        loadProfileAndWalletData();
       } else {
         showError('Submission Failed', res?.message || 'Could not submit your top-up request.');
       }
@@ -575,7 +577,7 @@ export default function ProfileScreen() {
                 </Text>
               }
               renderItem={({ item }) => {
-                const isIncoming = item.type === 'topup' || item.type === 'refund';
+                const isIncoming = item.type?.toLowerCase() === 'topup' || item.type?.toLowerCase() === 'refund';
                 return (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: verticalScale(12), borderBottomWidth: 1, borderBottomColor: colors.line }}>
                     <View style={{ flex: 1, marginRight: scale(10) }}>
@@ -783,6 +785,7 @@ export default function ProfileScreen() {
                   setWithdrawModalVisible(false);
                   setWithdrawAmount('');
                   setWithdrawUpi('');
+                  loadProfileAndWalletData();
                 } else {
                   Alert.alert('Error', res.message || 'Withdrawal failed');
                 }
