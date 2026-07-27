@@ -1,5 +1,5 @@
 import { adminState } from '@/constants/admin-state';
-import { bookTripApi, fetchGuidesApi } from '@/constants/api';
+import { bookTripApi, deductWalletApi, fetchGuidesApi, fetchWalletBalanceApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -296,7 +296,7 @@ export default function GuidesScreen() {
           time: finalTime,
           price: fareAmt,
           paymentMode: chosenPaymentMode === 'wallet' ? 'wallet' : 'cash',
-          status: isPrebook ? 'Upcoming' : 'Ongoing',
+          status: (isPrebook ? 'Upcoming' : 'Ongoing') as any,
           otp: tripData.otp || '8240',
           endOtp: tripData.end_otp || '4321',
         });
