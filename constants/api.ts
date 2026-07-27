@@ -227,6 +227,8 @@ export async function createTripApi(payload: {
   scheduledTime?: string;
   pickupName?: string;
   dropName?: string;
+  advanceDepositPaid?: number;
+  remainingCashBalance?: number;
 }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips`, {
@@ -699,6 +701,23 @@ export async function verifyTripOtpApi(tripId: string, otp: string): Promise<any
   } catch (e) {
     console.warn('verifyTripOtpApi error:', e);
     return { success: false, message: 'Failed to verify OTP' };
+  }
+}
+
+/**
+ * Verify 4-digit OTP code to end trip
+ */
+export async function verifyTripEndOtpApi(tripId: string, otp: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/verify-end-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otp }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('verifyTripEndOtpApi error:', e);
+    return { success: false, message: 'Failed to verify End OTP' };
   }
 }
 

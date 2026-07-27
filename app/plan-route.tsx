@@ -29,7 +29,8 @@ interface TourPackage {
   image: string;
 }
 
-import { fetchPlansApi, fetchDriversApi, createTripApi } from '@/constants/api';
+import { fetchPlansApi, fetchDriversApi, createTripApi, fetchWalletBalanceApi, deductWalletApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 
 export default function PlanRouteScreen() {
   const router = useRouter();
@@ -46,7 +47,8 @@ export default function PlanRouteScreen() {
   const [selectedPlan, setSelectedPlan] = useState<TourPackage | null>(null);
   const [bookingPax, setBookingPax] = useState(1);
   const [bookingVehicle, setBookingVehicle] = useState<'5seater' | '7seater' | '4x4jeep' | 'auto'>('5seater');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('upi');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>(!adminState.instantBookingEnabled ? 'upi' : 'upi');
+  const [prebookPayOption, setPrebookPayOption] = useState<'advance' | 'full'>('advance');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
 
   const getInitialTimeParts = () => {
@@ -300,8 +302,8 @@ export default function PlanRouteScreen() {
     const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
     const totalPrice = priceInfo.computedPrice;
     const isPreBooking = !adminState.instantBookingEnabled;
-    const paymentAmount = isPreBooking ? Math.round(totalPrice * 0.20) : totalPrice;
-    const remainingBalance = isPreBooking ? totalPrice - paymentAmount : 0;
+    const paymentAmount = (isPreBooking && prebookPayOption === 'advance') ? Math.round(totalPrice * 0.20) : totalPrice;
+    const remainingBalance = totalPrice - paymentAmount;
     const totalHours = priceInfo.totalTripHours;
 
     const finalDate = adminState.instantBookingEnabled ? 'Today' : bookingDate;
@@ -311,6 +313,9 @@ export default function PlanRouteScreen() {
 
     const driverName = selectedDriver?.name || 'Anil Gowda (Captain)';
     const driverId = selectedDriver?.id || 'd1';
+
+    const session = getUserSessionSync();
+    const customerId = session?.id || 'c1';
 
     if (paymentMethod === 'cash') {
       const paymentLabel = isPreBooking
@@ -342,7 +347,8 @@ export default function PlanRouteScreen() {
       await createTripApi({
         tripType: 'plan',
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-        customerName: 'Abhishek (Tourist)',
+        customerId: customerId,
+        customerName: session?.name || 'Abhishek (Tourist)',
         driverOrGuideName: driverName,
         driverId: driverId,
         planId: selectedPlan.id,
@@ -354,6 +360,8 @@ export default function PlanRouteScreen() {
         addonCharge: priceInfo.extraAddonCharge,
         bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
         scheduledTime: calculatedScheduledTime,
+        advanceDepositPaid: paymentAmount,
+        remainingCashBalance: remainingBalance,
       });
 
       const newAdvBooking = {
@@ -364,7 +372,7 @@ export default function PlanRouteScreen() {
         date: finalDate,
         time: finalTime,
         price: totalPrice,
-        touristName: 'Abhishek (Tourist)',
+        touristName: session?.name || 'Abhishek (Tourist)',
         driverOrGuideName: driverName,
         assignedToId: driverId,
         bookingDate: new Date().toISOString().split('T')[0],
@@ -400,63 +408,108 @@ export default function PlanRouteScreen() {
       return;
     }
 
-    openRazorpayPayment({
-      amount: paymentAmount,
-      title: selectedPlan.name,
-      customerName: 'Abhishek (Tourist)',
-      onSuccess: async (paymentId: string) => {
-        const paymentLabel = isPreBooking
-          ? `UPI Pre-Booking Fees: ₹${paymentAmount} (Bal ₹${remainingBalance})`
-          : `UPI Full Payment: ₹${paymentAmount}`;
+    const paymentLabel = isPreBooking
+      ? `UPI Pre-Booking Fees: ₹${paymentAmount} (Bal ₹${remainingBalance})`
+      : `UPI Full Payment: ₹${paymentAmount}`;
 
-        // Save trip to real backend DB
-        await createTripApi({
-          tripType: 'plan',
-          title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-          customerName: 'Abhishek (Tourist)',
-          driverOrGuideName: driverName,
-          planId: selectedPlan.id,
-          amount: totalPrice,
-          paymentMode: paymentLabel,
-          status: 'Confirmed',
-          durationHours: totalHours,
-          extraHours: priceInfo.extraHoursRounded,
-          addonCharge: priceInfo.extraAddonCharge,
-        });
+    try {
+      // Check wallet balance
+      const balanceRes = await fetchWalletBalanceApi(customerId);
+      const currentBalance = balanceRes?.success ? (balanceRes.balance ?? 0) : 0;
 
-        // Store in local adminState as well
-        adminState.userTrips.push({
-          id: `plan_book_${Date.now()}`,
-          type: 'plan',
-          title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-          route: selectedPlan.checkpoints,
-          driverOrGuideName: driverName,
-          date: finalDate,
-          time: finalTime,
-          price: totalPrice,
-          paymentMode: paymentLabel,
-          status: 'Upcoming',
-          passengerCount: bookingPax,
-        });
-
+      if (currentBalance < paymentAmount) {
         Alert.alert(
-          '🎉 UPI Booking Confirmed!',
-          isPreBooking
-            ? `Pre-Booking Fees Paid: ₹${paymentAmount}\nRemaining Balance: ₹${remainingBalance} (Payable at trip time)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-            : `Full Payment Paid: ₹${paymentAmount}\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
+          'Insufficient Wallet Balance',
+          `Required: ₹${paymentAmount}\nWallet Balance: ₹${currentBalance}\n\nadd money to your wallet`
         );
-
-        setSelectedPlan(null);
-        setBookingStep('details');
-        router.replace('/(tabs)/trips');
-      },
-      onCancel: () => {
-        Alert.alert('Payment Cancelled', 'Razorpay payment was cancelled.');
-      },
-      onError: () => {
-        Alert.alert('Payment Error', 'Razorpay Payment Gateway error. Please check connection.');
+        return;
       }
-    });
+
+      // Deduct from wallet
+      const deductRes = await deductWalletApi({
+        userId: customerId,
+        amount: paymentAmount,
+        description: `Plan booking deposit: ${selectedPlan.name}`,
+      });
+
+      if (!deductRes || !deductRes.success) {
+        Alert.alert('Payment Failed', deductRes.message || 'Failed to process wallet payment deduction.');
+        return;
+      }
+
+      const paymentId = 'WALLET_' + Date.now();
+      let calculatedScheduledTime = new Date().toISOString();
+      if (isPreBooking && bookingDate) {
+        try {
+          let hours24 = bookingHour;
+          if (bookingAmPm === 'PM' && hours24 < 12) {
+            hours24 += 12;
+          } else if (bookingAmPm === 'AM' && hours24 === 12) {
+            hours24 = 0;
+          }
+          const dateParts = bookingDate.split('-');
+          if (dateParts.length === 3) {
+            const year = parseInt(dateParts[0], 10);
+            const month = parseInt(dateParts[1], 10) - 1;
+            const day = parseInt(dateParts[2], 10);
+            const localDate = new Date(year, month, day, hours24, bookingMinute, 0);
+            calculatedScheduledTime = localDate.toISOString();
+          }
+        } catch (e) {
+          console.warn('Error parsing booking date:', e);
+        }
+      }
+
+      // Save trip to real backend DB
+      await createTripApi({
+        tripType: 'plan',
+        title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+        customerId: customerId,
+        customerName: session?.name || 'Abhishek (Tourist)',
+        driverOrGuideName: driverName,
+        driverId: driverId,
+        planId: selectedPlan.id,
+        amount: totalPrice,
+        paymentMode: paymentLabel,
+        status: 'Confirmed',
+        durationHours: totalHours,
+        extraHours: priceInfo.extraHoursRounded,
+        addonCharge: priceInfo.extraAddonCharge,
+        bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
+        scheduledTime: calculatedScheduledTime,
+        advanceDepositPaid: paymentAmount,
+        remainingCashBalance: remainingBalance,
+      });
+
+      // Store in local adminState as well
+      adminState.userTrips.push({
+        id: `plan_book_${Date.now()}`,
+        type: 'plan',
+        title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+        route: selectedPlan.checkpoints,
+        driverOrGuideName: driverName,
+        date: finalDate,
+        time: finalTime,
+        price: totalPrice,
+        paymentMode: paymentLabel,
+        status: 'Upcoming',
+        passengerCount: bookingPax,
+      });
+
+      Alert.alert(
+        '🎉 UPI Booking Confirmed!',
+        isPreBooking
+          ? `Pre-Booking Fees Paid from Wallet: ₹${paymentAmount}\nRemaining Balance: ₹${remainingBalance} (Payable at trip time)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
+          : `Full Payment Paid from Wallet: ₹${paymentAmount}\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
+      );
+
+      setSelectedPlan(null);
+      setBookingStep('details');
+      router.replace('/(tabs)/trips');
+    } catch (err) {
+      Alert.alert('Payment Error', 'An error occurred during wallet payment processing. Please try again.');
+      console.warn('Wallet payment error:', err);
+    }
   };
 
   return (
@@ -809,26 +862,28 @@ export default function PlanRouteScreen() {
                 Select Payment Mode
               </Text>
               <View style={{ flexDirection: 'row', gap: scale(10) }}>
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: verticalScale(10),
-                    borderRadius: scale(12),
-                    borderWidth: 1.5,
-                    borderColor: paymentMethod === 'cash' ? colors.amber : colors.border,
-                    backgroundColor: paymentMethod === 'cash' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
-                    gap: scale(6),
-                  }}
-                  onPress={() => setPaymentMethod('cash')}
-                >
-                  <MaterialIcons name="attach-money" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
-                  <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
-                    Cash
-                  </Text>
-                </TouchableOpacity>
+                {adminState.instantBookingEnabled && (
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: verticalScale(10),
+                      borderRadius: scale(12),
+                      borderWidth: 1.5,
+                      borderColor: paymentMethod === 'cash' ? colors.amber : colors.border,
+                      backgroundColor: paymentMethod === 'cash' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                      gap: scale(6),
+                    }}
+                    onPress={() => setPaymentMethod('cash')}
+                  >
+                    <MaterialIcons name="attach-money" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
+                    <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
+                      Cash
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={{
@@ -847,7 +902,7 @@ export default function PlanRouteScreen() {
                 >
                   <MaterialIcons name="qr-code" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
                   <Text style={{ color: paymentMethod === 'upi' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
-                    UPI / Online
+                    UPI / Wallet
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -858,7 +913,9 @@ export default function PlanRouteScreen() {
               const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
               const { computedPrice, baseDayRate, extraHoursRounded, extraAddonCharge, vehicleHourlyRate, totalTripHours } = priceInfo;
               const isPreBooking = !adminState.instantBookingEnabled;
-              const advancePayable = isPreBooking ? Math.round(computedPrice * 0.20) : computedPrice;
+              const advancePayable = isPreBooking
+                ? (prebookPayOption === 'advance' ? Math.round(computedPrice * 0.20) : computedPrice)
+                : computedPrice;
               const remainingBalance = isPreBooking ? (computedPrice - advancePayable) : 0;
 
               return (
@@ -905,8 +962,50 @@ export default function PlanRouteScreen() {
 
                     {isPreBooking ? (
                       <>
+                        <View style={{ flexDirection: 'row', gap: scale(8), marginVertical: verticalScale(8) }}>
+                          <TouchableOpacity
+                            style={{
+                              flex: 1,
+                              paddingVertical: verticalScale(8),
+                              borderRadius: scale(8),
+                              borderWidth: 1.5,
+                              alignItems: 'center',
+                              borderColor: prebookPayOption === 'advance' ? colors.amber : colors.border,
+                              backgroundColor: prebookPayOption === 'advance' ? 'rgba(245, 197, 24, 0.12)' : 'transparent',
+                            }}
+                            onPress={() => setPrebookPayOption('advance')}
+                          >
+                            <Text style={{ fontSize: moderateFontScale(10), color: prebookPayOption === 'advance' ? colors.amber : colors.textMuted, fontWeight: '700' }}>
+                              Pay 20% Advance
+                            </Text>
+                            <Text style={{ fontSize: moderateFontScale(13), color: prebookPayOption === 'advance' ? colors.textPrimary : colors.textMuted, fontWeight: '800', marginTop: 2 }}>
+                              ₹{Math.round(computedPrice * 0.20)}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={{
+                              flex: 1,
+                              paddingVertical: verticalScale(8),
+                              borderRadius: scale(8),
+                              borderWidth: 1.5,
+                              alignItems: 'center',
+                              borderColor: prebookPayOption === 'full' ? colors.amber : colors.border,
+                              backgroundColor: prebookPayOption === 'full' ? 'rgba(245, 197, 24, 0.12)' : 'transparent',
+                            }}
+                            onPress={() => setPrebookPayOption('full')}
+                          >
+                            <Text style={{ fontSize: moderateFontScale(10), color: prebookPayOption === 'full' ? colors.amber : colors.textMuted, fontWeight: '700' }}>
+                              Pay 100% Full
+                            </Text>
+                            <Text style={{ fontSize: moderateFontScale(13), color: prebookPayOption === 'full' ? colors.textPrimary : colors.textMuted, fontWeight: '800', marginTop: 2 }}>
+                              ₹{computedPrice}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
-                          <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '800' }}>Pre-Booking Fees ({paymentMethod.toUpperCase()})</Text>
+                          <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '800' }}>Pre-Booking Fees Paid Now</Text>
                           <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>₹{advancePayable}</Text>
                         </View>
 
@@ -962,7 +1061,7 @@ export default function PlanRouteScreen() {
                         ? `Book via Cash (Pre-Booking Fees ₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
                         : `Book via Cash (Total Fare ₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)
                     : (!adminState.instantBookingEnabled
-                        ? `Pay Pre-Booking Fees (₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
+                        ? `Pay Pre-Booking Fees (₹${prebookPayOption === 'advance' ? Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20) : calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`
                         : `Pay Total Fare (₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)}
               </Text>
             </TouchableOpacity>
