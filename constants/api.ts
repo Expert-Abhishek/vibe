@@ -861,6 +861,30 @@ export async function submitWalletTopupRequestApi(payload: {
 }
 
 /**
+ * Submit Wallet Deduction/Payment Request (with optional screenshot proof)
+ */
+export async function submitWalletDeductionRequestApi(payload: {
+  userId: string;
+  userName?: string;
+  role?: string;
+  amount: number;
+  description?: string;
+  screenshotUrl?: string;
+}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/deduction-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('submitWalletDeductionRequestApi error:', e);
+    return { success: false, message: 'Failed to submit deduction request' };
+  }
+}
+
+/**
  * Fetch Pending Wallet Top-Up Requests for Admin Queue
  */
 export async function fetchPendingTopupRequestsApi(status: string = 'Pending'): Promise<any[]> {

@@ -161,6 +161,63 @@ export async function updateUserStatusApi(userId: string, status: string): Promi
   }
 }
 
+export interface DeductionRequest {
+  id: string;
+  user_id: string;
+  user_name: string;
+  role: string;
+  amount: number;
+  description?: string;
+  screenshot_url?: string;
+  status: string;
+  requested_at: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  reject_reason?: string;
+}
+
+export async function fetchDeductionRequestsApi(status = 'Pending'): Promise<DeductionRequest[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/deduction-requests?status=${status}`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('Error fetching deduction requests:', e);
+  }
+  return [];
+}
+
+export async function approveDeductionRequestApi(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/deduction-requests/${id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error approving deduction request:', e);
+    return false;
+  }
+}
+
+export async function rejectDeductionRequestApi(id: string, rejectReason: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/wallet/deduction-requests/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rejectReason }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Error rejecting deduction request:', e);
+    return false;
+  }
+}
+
 export async function updateDriverRateApi(userId: string, dailyRate: number, hourlyAddonRate: number, platformFee: number): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/drivers/${userId}/rate`, {
