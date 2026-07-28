@@ -5,7 +5,7 @@ import {
   completeTripApi,
   declineTripApi,
   fetchAdminPaymentSettingsApi,
-  fetchGuideAdvanceSchedulesApi,
+  fetchGuideScheduledBookingsApi,
   fetchGuideStatsApi,
   fetchPendingRequestsApi,
   fetchUserProfileApi,
@@ -15,8 +15,7 @@ import {
   submitWithdrawalApi,
   updatePasswordApi,
   updateUserProfileApi,
-  verifyTripOtpApi,
-  fetchGuideScheduledBookingsApi
+  verifyTripOtpApi
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -400,27 +399,30 @@ export default function GuideDashboardScreen() {
       // 2. Fetch real schedules/trips via fetchGuideScheduledBookingsApi
       setLoadingSchedules(true);
       const apiBookings = await fetchGuideScheduledBookingsApi(guideId);
-      if (Array.isArray(apiBookings) && apiBookings.length > 0) {
-        setRealSchedules(apiBookings);
-      } else {
-        const guideBookings = (adminState.advanceBookings || [])
-          .filter((b: any) => b && (b.type === 'guide' || String(b.type).toLowerCase().includes('guide')))
-          .map((b: any) => ({
-            id: b.id,
-            title: b.title || 'Sightseeing Guided Tour',
-            touristName: b.touristName || 'Tourist Client',
-            date: b.date || 'Scheduled Date',
-            time: b.time || '4 Hours Guided Tour',
-            pickup: b.pickup || 'Landmark Center',
-            price: b.price || 2000,
-            status: b.status || 'Accepted',
-            bookingType: b.bookingType || 'PRE_BOOKED',
-            advanceDepositPaid: b.advanceDepositPaid || 400,
-            remainingCashBalance: b.remainingCashBalance || 1600,
-            otp: b.otp || '8240',
-          }));
-        setRealSchedules(guideBookings);
-      }
+      const adminBookings = (adminState.advanceBookings || [])
+        .filter((b: any) => b && (b.type === 'guide' || String(b.type).toLowerCase().includes('guide')))
+        .map((b: any) => ({
+          id: b.id,
+          title: b.title || 'Sightseeing Guided Tour',
+          touristName: b.touristName || 'Tourist Client',
+          date: b.date || 'Scheduled Date',
+          time: b.time || '4 Hours Guided Tour',
+          pickup: b.pickup || 'Landmark Center',
+          price: b.price || 2000,
+          status: b.status || 'Accepted',
+          bookingType: b.bookingType || 'PRE_BOOKED',
+          advanceDepositPaid: b.advanceDepositPaid || 400,
+          remainingCashBalance: b.remainingCashBalance || 1600,
+          otp: b.otp || '8240',
+        }));
+
+      setRealSchedules(prev => {
+        const combined = [...(apiBookings || []), ...adminBookings, ...prev];
+        const unique = combined.filter((item, index, self) =>
+          item && item.id && index === self.findIndex(t => t && String(t.id) === String(item.id))
+        );
+        return unique;
+      });
     } catch (e) {
       console.warn('Error loading real stats or schedules:', e);
     } finally {
