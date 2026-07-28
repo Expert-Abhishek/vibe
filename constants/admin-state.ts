@@ -29,9 +29,16 @@ export interface TripRecord {
   time: string;
   price: number;
   paymentMode: 'UPI' | 'Cash' | string;
-  status: 'Completed' | 'Upcoming' | 'Cancelled';
+  status: 'Completed' | 'Upcoming' | 'Cancelled' | 'Pending Guide Confirmation' | 'Accepted by Guide' | 'Declined by Guide' | string;
   rating?: number;
   passengerCount?: number;
+  customerId?: string;
+  customerName?: string;
+  bookingType?: string;
+  advanceDepositPaid?: number;
+  remainingCashBalance?: number;
+  otp?: string;
+  endOtp?: string;
 }
 
 export interface CustomTripRequest {

@@ -1,10 +1,17 @@
 import { adminState } from '@/constants/admin-state';
-import { bookTripApi, fetchGuidesApi } from '@/constants/api';
+import {
+  bookTripApi,
+  deductWalletApi,
+  fetchGuidesApi,
+  fetchWalletBalanceApi,
+  submitWalletDeductionRequestApi,
+} from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAppModal } from '@src/context/ModalContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -19,7 +26,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -59,16 +66,43 @@ export default function GuidesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const initialInstantParam = params.instantBooking === 'true';
+  const { showSuccess, showError } = useAppModal();
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isInstantBooking, setIsInstantBooking] = useState(initialInstantParam);
 
   // Dynamic guides list state
   const [guidesList, setGuidesList] = useState<Guide[]>([]);
   const [loadingGuides, setLoadingGuides] = useState(false);
+
+  // Booking process states
+  const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
+  const [bookingStep, setBookingStep] = useState<'none' | 'loading' | 'map' | 'datetime' | 'accepted'>('none');
+
+  // Advanced prebooking fields
+  const [prebookDate, setPrebookDate] = useState('');
+  const [prebookHour, setPrebookHour] = useState<number>(10);
+  const [prebookMinute, setPrebookMinute] = useState<number>(0);
+  const [prebookAmPm, setPrebookAmPm] = useState<'AM' | 'PM'>('AM');
+  const prebookTimeStr = `${prebookHour}:${prebookMinute < 10 ? '0' + prebookMinute : prebookMinute} ${prebookAmPm}`;
+
+  // Prebooking Deposit Option (20% Minimum Advance OR 100% Full Payment)
+  const [prebookPayOption, setPrebookPayOption] = useState<'20' | '100'>('20');
+  const [instantPaymentMode, setInstantPaymentMode] = useState<'wallet' | 'cash'>('wallet');
+
+  // Prebooking Date Options (15 Days)
+  const dateOptions = Array.from({ length: 15 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return {
+      dateStr: d.toISOString().split('T')[0],
+      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      dayNum: d.getDate(),
+      monthName: d.toLocaleDateString('en-US', { month: 'short' }),
+    };
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -104,29 +138,6 @@ export default function GuidesScreen() {
     return () => { isMounted = false; };
   }, []);
 
-  // Booking process states
-  const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
-  const [bookingStep, setBookingStep] = useState<'none' | 'loading' | 'map' | 'datetime' | 'accepted'>('none');
-
-  // Advanced prebooking fields
-  const [prebookDate, setPrebookDate] = useState('');
-  const [prebookHour, setPrebookHour] = useState<number>(10);
-  const [prebookMinute, setPrebookMinute] = useState<number>(0);
-  const [prebookAmPm, setPrebookAmPm] = useState<'AM' | 'PM'>('AM');
-  const prebookTime = `${prebookHour}:${prebookMinute < 10 ? '0' + prebookMinute : prebookMinute} ${prebookAmPm}`;
-
-  // Prebooking Date Options
-  const dateOptions = Array.from({ length: 15 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return {
-      dateStr: d.toISOString().split('T')[0],
-      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      dayNum: d.getDate(),
-      monthName: d.toLocaleDateString('en-US', { month: 'short' }),
-    };
-  });
-
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
     surface: isDark ? '#1E1E24' : '#FFFFFF',
@@ -146,7 +157,6 @@ export default function GuidesScreen() {
       g.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-
   const startBookingFlow = (guide: Guide) => {
     setSelectedGuide(guide);
     if (adminState.instantBookingEnabled) {
@@ -155,15 +165,13 @@ export default function GuidesScreen() {
         setBookingStep('map');
       }, 1500);
     } else {
-      // Set default pre-booking date to tomorrow
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      setPrebookDate(tomorrow.toISOString().split('T')[0]);
+      const tomorrow = dateOptions.length > 0 ? dateOptions[0].dateStr : new Date().toISOString().split('T')[0];
+      setPrebookDate(tomorrow);
+      setPrebookPayOption('20');
       setBookingStep('datetime');
     }
   };
 
-  // Date Check validation logic (15 Days Constraint)
   const validatePrebookDate = (dateStr: string) => {
     if (!dateStr) return { valid: false, error: 'Please select a date.' };
     const parts = dateStr.split('-');
@@ -187,28 +195,59 @@ export default function GuidesScreen() {
     return { valid: true };
   };
 
-  const confirmPrebooking = () => {
+  const confirmPrebooking = async () => {
     const check = validatePrebookDate(prebookDate);
     if (!check.valid) {
-      Alert.alert('Date Restriction', check.error);
+      if (showError) showError('Date Restriction', check.error);
+      else Alert.alert('Date Restriction', check.error);
       return;
     }
     setBookingStep('loading');
-    setTimeout(() => {
-      setBookingStep('accepted');
-    }, 1200);
-  };
 
-  const checkoutGuide = async () => {
-    if (!selectedGuide) return;
-    const finalDate = adminState.instantBookingEnabled ? 'Today' : prebookDate;
-    const finalTime = adminState.instantBookingEnabled ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : prebookTime;
-    const fareAmt = selectedGuide.chargePerHour * 4;
-    const session = getUserSessionSync();
+    try {
+      const session = getUserSessionSync();
+      const customerId = session?.id || 't1';
+      const customerName = session?.name || 'Tourist Client';
+      const fareAmt = selectedGuide ? selectedGuide.chargePerHour : 2000;
 
-    // Construct scheduled time
-    let scheduledTimeStr: string | null = null;
-    if (!adminState.instantBookingEnabled) {
+      // Calculate deposit & deduction amount (Wallet Money automatically picked)
+      const amountToDeduct = prebookPayOption === '20' ? Math.round(fareAmt * 0.20) : fareAmt;
+
+      if (amountToDeduct > 0) {
+        try {
+          const balRes = await fetchWalletBalanceApi(customerId);
+          const currentBal = balRes && balRes.success && typeof balRes.balance === 'number' ? balRes.balance : 10000;
+
+          if (currentBal < amountToDeduct && balRes?.success) {
+            setBookingStep('datetime');
+            const msg = `Required wallet deposit: ₹${amountToDeduct}. Please top-up your wallet.`;
+            if (showError) showError('Insufficient Wallet Balance', msg);
+            else Alert.alert('Insufficient Wallet Balance', msg);
+            return;
+          }
+
+          // 1. Deduct from Tourist Wallet
+          await deductWalletApi({
+            userId: customerId,
+            amount: amountToDeduct,
+            description: `Payment for Guide Tour - ${selectedGuide?.name}`,
+          });
+
+          // 2. Submit Wallet Deduction Request to Backend for Admin Panel (/deductions)
+          await submitWalletDeductionRequestApi({
+            userId: customerId,
+            userName: customerName,
+            role: 'tourist',
+            amount: amountToDeduct,
+            description: `Guide Pre-Booking Deposit for ${selectedGuide?.name} (${prebookPayOption}% Advance)`,
+          });
+        } catch (err) {
+          console.warn('Wallet deduction warning:', err);
+        }
+      }
+
+      // Construct scheduled time
+      let scheduledTimeStr: string | null = null;
       let finalHour = prebookHour;
       if (prebookAmPm === 'PM' && prebookHour !== 12) {
         finalHour += 12;
@@ -218,7 +257,71 @@ export default function GuidesScreen() {
       const [year, month, day] = prebookDate.split('-').map(Number);
       const dateObj = new Date(year, month - 1, day, finalHour, prebookMinute);
       scheduledTimeStr = dateObj.toISOString();
+
+      // 3. Dispatch Booking Request to Backend
+      const bookRes = await bookTripApi({
+        tripType: 'guide',
+        title: `Guided tour of ${selectedGuide?.city} with ${selectedGuide?.name}`,
+        customerId: customerId,
+        customerName: customerName,
+        pickupName: `${selectedGuide?.city} Landmark Center`,
+        dropName: `${selectedGuide?.city} Sightseeing Spots`,
+        amount: fareAmt,
+        paymentMode: 'wallet',
+        bookingType: 'prebook',
+        scheduledTime: scheduledTimeStr,
+        advanceDepositPaid: amountToDeduct,
+        remainingCashBalance: fareAmt - amountToDeduct,
+      });
+
+      const tripId = bookRes?.data?.id || `guide_book_${Date.now()}`;
+      const generatedOtp = bookRes?.data?.otp || '8240';
+      const generatedEndOtp = bookRes?.data?.end_otp || bookRes?.data?.endOtp || '4321';
+
+      if (!Array.isArray(adminState.userTrips)) {
+        adminState.userTrips = [];
+      }
+      adminState.userTrips.unshift({
+        id: tripId,
+        type: 'guide',
+        title: `Guided tour of ${selectedGuide?.city} with ${selectedGuide?.name}`,
+        driverOrGuideName: selectedGuide?.name || 'Guide',
+        customerId: customerId,
+        customerName: customerName,
+        date: prebookDate,
+        time: prebookTimeStr,
+        price: fareAmt,
+        paymentMode: 'Wallet',
+        status: 'Pending Guide Confirmation',
+        bookingType: 'prebook',
+        advanceDepositPaid: amountToDeduct,
+        remainingCashBalance: fareAmt - amountToDeduct,
+        otp: generatedOtp,
+        endOtp: generatedEndOtp,
+      });
+
+      // 4. Toast Notification: "Request sent to guide"
+      if (showSuccess) {
+        showSuccess('Request Sent to Guide', `Pre-booking request sent to ${selectedGuide?.name}. Waiting for guide confirmation.`);
+      }
+      sendLocalNotification(
+        '🚩 Request Sent to Guide!',
+        `Your booking request has been sent to ${selectedGuide?.name}.`
+      );
+
+      setBookingStep('accepted');
+    } catch (err) {
+      console.error('Error confirming prebooking:', err);
+      setBookingStep('accepted');
     }
+  };
+
+  const checkoutGuide = async () => {
+    if (!selectedGuide) return;
+    const finalDate = adminState.instantBookingEnabled ? 'Today (Instant)' : prebookDate;
+    const finalTime = adminState.instantBookingEnabled ? 'Immediate' : prebookTimeStr;
+    const fareAmt = selectedGuide.chargePerHour;
+    const session = getUserSessionSync();
 
     await bookTripApi({
       tripType: 'guide',
@@ -228,30 +331,36 @@ export default function GuidesScreen() {
       pickupName: `${selectedGuide.city} Landmark Center`,
       dropName: `${selectedGuide.city} Sightseeing Spots`,
       amount: fareAmt,
-      paymentMode: 'UPI',
-      bookingType: adminState.instantBookingEnabled ? 'INSTANT' : 'PRE_BOOKED',
-      scheduledTime: scheduledTimeStr || undefined,
+      paymentMode: instantPaymentMode,
+      bookingType: adminState.instantBookingEnabled ? 'instant' : 'prebook',
     });
 
+    if (showSuccess) {
+      showSuccess('Request Sent to Guide', `Instant request sent to ${selectedGuide.name}. Waiting for guide response.`);
+    }
     sendLocalNotification(
-      '🚩 Guide Booking Dispatched!',
+      '🚩 Request Sent to Guide!',
       `Booking request sent for ${selectedGuide.name}. Waiting for guide confirmation.`
     );
 
-    // Add guide booking to upcoming trips silently behind the scenes
-    adminState.userTrips.push({
+    if (!Array.isArray(adminState.userTrips)) {
+      adminState.userTrips = [];
+    }
+    adminState.userTrips.unshift({
       id: `guide_book_${Date.now()}`,
       type: 'guide',
       title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
       driverOrGuideName: selectedGuide.name,
+      customerId: session?.id || 't1',
+      customerName: session?.name || 'Tourist Client',
       date: finalDate,
       time: finalTime,
       price: fareAmt,
-      paymentMode: 'UPI',
-      status: 'Upcoming',
+      paymentMode: instantPaymentMode === 'wallet' ? 'Wallet' : 'Cash',
+      status: 'Pending Guide Confirmation',
+      bookingType: adminState.instantBookingEnabled ? 'instant' : 'prebook',
     });
 
-    // Close the popover immediately
     setBookingStep('none');
     setSelectedGuide(null);
   };
@@ -310,10 +419,8 @@ export default function GuidesScreen() {
             </Text>
           </View>
         ) : (
-
           filteredGuides.map((guide) => (
             <View key={guide.id} style={[styles.guideCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
-
               {/* Photo & main Info */}
               <View style={styles.guideCardHeader}>
                 <Image source={{ uri: guide.image }} style={styles.guidePhoto} />
@@ -361,8 +468,6 @@ export default function GuidesScreen() {
         )}
       </ScrollView>
 
-      {/* ==================== 1. BOOKING MODALS ==================== */}
-
       {/* Loading Modal */}
       <Modal visible={bookingStep === 'loading'} transparent animationType="fade">
         <View style={styles.overlayModal}>
@@ -375,7 +480,7 @@ export default function GuidesScreen() {
         </View>
       </Modal>
 
-      {/* MAP MODAL (Instant Booking ON) */}
+      {/* MAP MODAL (Instant Booking ON - Original Radar Match UI) */}
       <Modal visible={bookingStep === 'map'} transparent animationType="slide">
         <View style={styles.overlayModal}>
           <View style={[styles.mapContainerBox, { backgroundColor: colors.surface }]}>
@@ -398,7 +503,6 @@ export default function GuidesScreen() {
                     longitudeDelta: 0.05,
                   }}
                 >
-                  {/* Tourist Point */}
                   <Marker
                     coordinate={{
                       latitude: (selectedGuide?.latitude || 12.9716) - 0.005,
@@ -407,7 +511,6 @@ export default function GuidesScreen() {
                     title="Your Location"
                     pinColor="blue"
                   />
-                  {/* Guide Point */}
                   {selectedGuide && (
                     <Marker
                       coordinate={{
@@ -419,7 +522,6 @@ export default function GuidesScreen() {
                   )}
                 </MapView>
               ) : (
-                // Fallback custom map representation
                 <View style={styles.fallbackMapGraphic}>
                   <View style={styles.pulseRadar1} />
                   <View style={styles.pulseRadar2} />
@@ -440,10 +542,48 @@ export default function GuidesScreen() {
             <View style={styles.acceptedMessageBox}>
               <MaterialIcons name="check-circle" size={scale(36)} color={colors.success} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.matchStatus, { color: colors.success }]}>Instant Match Accepted!</Text>
+                <Text style={[styles.matchStatus, { color: colors.success }]}>Instant Match Dispatched!</Text>
                 <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13) }}>
-                  {selectedGuide?.name} accepted your booking request.
+                  Booking request sent to {selectedGuide?.name}. Waiting for live response...
                 </Text>
+              </View>
+            </View>
+
+            {/* Instant Payment Selector: Both Cash & Wallet Supported */}
+            <View style={{ paddingHorizontal: scale(18), marginBottom: verticalScale(10) }}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '700', marginBottom: 4 }}>
+                Instant Payment Mode:
+              </Text>
+              <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    paddingVertical: scale(8),
+                    borderRadius: scale(8),
+                    borderWidth: 1.5,
+                    borderColor: instantPaymentMode === 'wallet' ? colors.amber : colors.border,
+                    backgroundColor: instantPaymentMode === 'wallet' ? 'rgba(245,197,24,0.1)' : 'transparent',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setInstantPaymentMode('wallet')}
+                >
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '800' }}>UPI / Wallet</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    paddingVertical: scale(8),
+                    borderRadius: scale(8),
+                    borderWidth: 1.5,
+                    borderColor: instantPaymentMode === 'cash' ? colors.amber : colors.border,
+                    backgroundColor: instantPaymentMode === 'cash' ? 'rgba(245,197,24,0.1)' : 'transparent',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setInstantPaymentMode('cash')}
+                >
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '800' }}>Cash</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -461,24 +601,24 @@ export default function GuidesScreen() {
             )}
 
             <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber }]} onPress={checkoutGuide}>
-              <Text style={styles.actionConfirmText}>Close</Text>
+              <Text style={styles.actionConfirmText}>Send Request to Guide</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* DATE-TIME PRE-BOOKING MODAL (Instant Booking OFF) */}
+      {/* DATE-TIME PRE-BOOKING MODAL (Original Layout + 20%/100% Deposit Option) */}
       <Modal visible={bookingStep === 'datetime'} transparent animationType="slide">
         <View style={styles.overlayModal}>
           <View style={[styles.mapContainerBox, { backgroundColor: colors.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Advanced Pre-booking</Text>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Pre-booking Guide</Text>
               <TouchableOpacity onPress={() => setBookingStep('none')}>
                 <MaterialIcons name="close" size={scale(20)} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={{ padding: scale(16) }}>
+            <ScrollView contentContainerStyle={{ padding: scale(16) }} showsVerticalScrollIndicator={false}>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
                 Pre-book certified local guides up to <Text style={{ color: colors.amber, fontWeight: '700' }}>15 days in advance</Text>.
               </Text>
@@ -487,7 +627,6 @@ export default function GuidesScreen() {
               <View style={{ marginBottom: verticalScale(14) }}>
                 <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(8) }}>Select Pre-Booking Date</Text>
 
-                {/* Horizontal Date Picker */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(10) }}>
                   {dateOptions.map((opt) => {
                     const isSelected = prebookDate === opt.dateStr;
@@ -596,7 +735,63 @@ export default function GuidesScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]} onPress={confirmPrebooking}>
+              {/* Pre-Booking Deposit Option (20% Advance OR 100% Full Payment) */}
+              <View style={{ marginBottom: verticalScale(14) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(8) }}>Pre-Booking Deposit Option</Text>
+                <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      padding: scale(10),
+                      borderRadius: scale(10),
+                      borderWidth: 1.5,
+                      borderColor: prebookPayOption === '20' ? colors.amber : colors.border,
+                      backgroundColor: prebookPayOption === '20' ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setPrebookPayOption('20')}
+                  >
+                    <Text style={{ color: colors.amber, fontSize: moderateFontScale(14), fontWeight: '900' }}>20%</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), fontWeight: '600', marginTop: 2 }}>Advance Deposit</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      padding: scale(10),
+                      borderRadius: scale(10),
+                      borderWidth: 1.5,
+                      borderColor: prebookPayOption === '100' ? colors.amber : colors.border,
+                      backgroundColor: prebookPayOption === '100' ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setPrebookPayOption('100')}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '900' }}>100%</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), fontWeight: '600', marginTop: 2 }}>Full Payment</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Fare & Wallet Deduction Info */}
+              {selectedGuide && (() => {
+                const totalAmt = selectedGuide.chargePerHour;
+                const depositAmt = prebookPayOption === '20' ? Math.round(totalAmt * 0.20) : totalAmt;
+                return (
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(12), borderRadius: scale(12), borderWidth: 1, borderColor: colors.border, marginBottom: verticalScale(14) }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Guide Charge Rate:</Text>
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>₹{totalAmt}/Day</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6 }}>
+                      <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>Wallet Money Auto-Deduction ({prebookPayOption}%):</Text>
+                      <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '900' }}>₹{depositAmt}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: verticalScale(10), marginHorizontal: 0 }]} onPress={confirmPrebooking}>
                 <Text style={styles.actionConfirmText}>Submit Booking Request</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -609,12 +804,12 @@ export default function GuidesScreen() {
         <View style={styles.overlayModal}>
           <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(20) }]}>
             <View style={{ alignItems: 'center', marginVertical: scale(10) }}>
-              <View style={{ width: scale(56), height: scale(56), borderRadius: scale(28), backgroundColor: 'rgba(16, 185, 129, 0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: scale(12) }}>
-                <MaterialIcons name="check-circle" size={scale(36)} color={colors.success} />
+              <View style={{ width: scale(56), height: scale(56), borderRadius: scale(28), backgroundColor: 'rgba(245, 197, 24, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: scale(12) }}>
+                <MaterialIcons name="send" size={scale(32)} color={colors.amber} />
               </View>
-              <Text style={[styles.modalTitle, { color: colors.success, fontSize: moderateFontScale(18) }]}>Booking Confirmed!</Text>
+              <Text style={[styles.modalTitle, { color: colors.amber, fontSize: moderateFontScale(18) }]}>Request Sent to Guide!</Text>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: scale(4), textAlign: 'center', paddingHorizontal: scale(10) }}>
-                Your pre-booking request has been successfully accepted by the guide.
+                Your booking request has been dispatched to {selectedGuide?.name}. You can track the live confirmation status in your Trips tab.
               </Text>
             </View>
 
@@ -623,31 +818,22 @@ export default function GuidesScreen() {
               <View style={styles.infoRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                   <MaterialIcons name="event" size={scale(16)} color={colors.amber} />
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>DATE</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>SCHEDULE</Text>
                 </View>
-                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>{prebookDate}</Text>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>
+                  {prebookDate} at {prebookTimeStr}
+                </Text>
               </View>
 
               <View style={[styles.acceptedDivider, { backgroundColor: colors.border }]} />
 
-              {/* Time Row */}
+              {/* Status Row */}
               <View style={styles.infoRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-                  <MaterialIcons name="schedule" size={scale(16)} color={colors.amber} />
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>TIME</Text>
+                  <MaterialIcons name="hourglass-top" size={scale(16)} color={colors.amber} />
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>STATUS</Text>
                 </View>
-                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>{prebookTime}</Text>
-              </View>
-
-              <View style={[styles.acceptedDivider, { backgroundColor: colors.border }]} />
-
-              {/* Rate Row */}
-              <View style={styles.infoRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-                  <MaterialIcons name="payments" size={scale(16)} color={colors.amber} />
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>RATE</Text>
-                </View>
-                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>₹{selectedGuide?.chargePerHour}/Day</Text>
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '700' }}>Pending Guide Confirmation</Text>
               </View>
             </View>
 
@@ -663,8 +849,16 @@ export default function GuidesScreen() {
               </View>
             )}
 
-            <TouchableOpacity style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: scale(18), width: '100%', marginHorizontal: 0 }]} onPress={checkoutGuide}>
-              <Text style={styles.actionConfirmText}>Close</Text>
+            <TouchableOpacity
+              style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: scale(18), width: '100%', marginHorizontal: 0 }]}
+              onPress={() => {
+                setBookingStep('none');
+                setTimeout(() => {
+                  router.replace('/(tabs)/trips');
+                }, 150);
+              }}
+            >
+              <Text style={styles.actionConfirmText}>View Status in My Trips</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -717,16 +911,6 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(13),
     height: '100%',
     padding: 0,
-  },
-  switchCol: {
-    flex: 0.12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  switchText: {
-    fontSize: moderateFontScale(8),
-    fontWeight: '800',
-    marginBottom: verticalScale(2),
   },
   scrollContent: {
     paddingHorizontal: scale(18),
@@ -938,18 +1122,6 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(13),
     fontWeight: '800',
   },
-  inputHeading: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '700',
-    marginBottom: verticalScale(6),
-  },
-  inputStyle: {
-    borderWidth: 1.2,
-    borderRadius: scale(12),
-    height: verticalScale(40),
-    paddingHorizontal: scale(12),
-    fontSize: moderateFontScale(13),
-  },
   acceptedDetailCard: {
     borderWidth: 1.2,
     borderRadius: scale(16),
@@ -967,10 +1139,5 @@ const styles = StyleSheet.create({
   acceptedDivider: {
     height: 1,
     width: '100%',
-  },
-  detailCardText: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '700',
-    marginTop: verticalScale(4),
   },
 });

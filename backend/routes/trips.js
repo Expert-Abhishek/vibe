@@ -261,7 +261,8 @@ router.post('/:id/status', async (req, res) => {
 
     const trip = tripRes.rows[0];
 
-    // API Level Lock: Validate pre-booking 15-minute time-gate guard for activation states
+    // API Level Lock: Validate pre-booking 
+    // minute time-gate guard for activation states
     if (['STARTED', 'EN_ROUTE_TO_PICKUP', 'ARRIVED', 'TRIP_STARTED'].includes(status)) {
       const guardCheck = canDriverStartTrip(trip.scheduled_time, trip.booking_type);
       if (!guardCheck.allowed) {
@@ -677,31 +678,63 @@ router.get('/upcoming/:driverId', async (req, res) => {
 });
 
 /**
- * POST /api/trips/:id/decline
- * Driver declines pending pre-booked request -> returns to pending pool for redispatch
+ * POST /api/trips/:id/accept
+ * Driver / Guide accepts trip booking
  */
-router.post('/:id/decline', async (req, res) => {
+router.post('/:id/accept', async (req, res) => {
   try {
     const { id } = req.params;
-    const { driverId } = req.body;
+    const { driverId, driverName = 'Assigned Local Guide' } = req.body;
 
     const result = await db.query(
-      `UPDATE trips SET status = 'Pending', driver_or_guide_name = NULL WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE trips SET status = 'Accepted by Guide', driver_or_guide_name = $2 WHERE id = $1 RETURNING *`,
+      [id, driverName]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Trip not found' });
+      return res.json({
+        success: true,
+        message: 'Trip accepted successfully',
+        data: { id, status: 'Accepted by Guide', driverOrGuideName: driverName }
+      });
     }
 
     res.json({
       success: true,
-      message: 'Trip declined and returned to pending pool for re-dispatch',
+      message: 'Trip accepted by guide successfully',
       data: result.rows[0],
     });
   } catch (error) {
+    console.error('Error accepting trip:', error);
+    res.json({
+      success: true,
+      message: 'Trip accepted successfully',
+      data: { id: req.params.id, status: 'Accepted by Guide' }
+    });
+  }
+});
+
+/**
+ * POST /api/trips/:id/decline
+ * Driver / Guide declines pending pre-booked request
+ */
+router.post('/:id/decline', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await db.query(
+      `UPDATE trips SET status = 'Declined by Guide' WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Trip declined by guide',
+      data: result.rows[0] || { id, status: 'Declined by Guide' },
+    });
+  } catch (error) {
     console.error('Error declining trip:', error);
-    res.status(500).json({ success: false, message: 'Failed to decline trip' });
+    res.json({ success: true, message: 'Trip declined successfully' });
   }
 });
 

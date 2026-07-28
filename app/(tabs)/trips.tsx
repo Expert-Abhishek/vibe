@@ -16,9 +16,11 @@ import { adminState } from '@/constants/admin-state';
 import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 
+import { useRouter } from 'expo-router';
 import NotificationModal from '@/components/NotificationModal';
 
 export default function TripsHistoryScreen() {
+  const router = useRouter();
 
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -93,7 +95,7 @@ export default function TripsHistoryScreen() {
       passengerCount: undefined as number | undefined,
     }));
 
-  const filteredUserTrips = adminState.userTrips.filter(t => userId ? String(t.customerId) === String(userId) : false);
+  const filteredUserTrips = adminState.userTrips.filter(t => !userId || !t.customerId || String(t.customerId) === String(userId));
 
   const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips];
   const allTrips = rawAllTrips.filter(
