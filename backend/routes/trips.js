@@ -196,6 +196,7 @@ router.get('/live-location/:tripId', async (req, res) => {
         tripId: trip.id,
         status: trip.status,
         otp: trip.otp,
+        endOtp: trip.end_otp || '4321',
         pickupName: trip.pickup_name,
         dropName: trip.drop_name,
         amount: parseFloat(trip.amount || 0),
@@ -415,6 +416,7 @@ router.get('/', async (req, res) => {
       pickupName: t.pickup_name || 'Bengaluru City',
       dropName: t.drop_name || t.title,
       otp: t.otp || '8240',
+      endOtp: t.end_otp || '4321',
       createdAt: t.created_at,
     }));
 
@@ -488,9 +490,18 @@ router.post('/book', async (req, res) => {
     } = req.body;
 
     const numAmount = parseFloat(amount || 0);
-    const isPreBooked = bookingType === 'PRE_BOOKED';
-    const advanceDepositPaid = isPreBooked ? Math.round(numAmount * 0.20) : 0;
-    const remainingCashBalance = isPreBooked ? numAmount - advanceDepositPaid : numAmount;
+    const isPreBooked = (bookingType === 'PRE_BOOKED' || bookingType === 'prebook');
+    const dbBookingType = isPreBooked ? 'prebook' : 'instant';
+    const dbPaymentMode = (paymentMode && paymentMode.toLowerCase().includes('wallet')) ? 'wallet' : 'cash';
+    let advanceDepositPaid = isPreBooked ? Math.round(numAmount * 0.20) : 0;
+    let remainingCashBalance = isPreBooked ? numAmount - advanceDepositPaid : numAmount;
+
+    if (req.body.advanceDepositPaid !== undefined) {
+      advanceDepositPaid = parseFloat(req.body.advanceDepositPaid);
+    }
+    if (req.body.remainingCashBalance !== undefined) {
+      remainingCashBalance = parseFloat(req.body.remainingCashBalance);
+    }
 
     // Wallet Balance Check for Wallet/UPI payment mode
     if (paymentMode && paymentMode.toLowerCase().includes('upi') && customerId) {
@@ -512,14 +523,15 @@ router.post('/book', async (req, res) => {
     }
 
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const endOtpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
     const result = await db.query(
       `INSERT INTO trips (
         trip_type, title, customer_id, customer_name, pickup_name, drop_name,
         pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-        status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, created_at
+        status, otp, end_otp, booking_type, scheduled_time, scheduled_date_time, advance_deposit_paid, remaining_cash_balance, created_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
        RETURNING *`,
       [
         tripType,
@@ -533,9 +545,11 @@ router.post('/book', async (req, res) => {
         dropLat,
         dropLng,
         parseFloat(amount),
-        paymentMode,
+        dbPaymentMode,
         otpCode,
-        bookingType,
+        endOtpCode,
+        dbBookingType,
+        scheduledTime ? new Date(scheduledTime) : null,
         scheduledTime ? new Date(scheduledTime) : null,
         advanceDepositPaid,
         remainingCashBalance,
@@ -620,6 +634,8 @@ router.get('/pending-requests', async (req, res) => {
       estimatedFare: parseFloat(t.amount || 1200),
       durationHrs: parseFloat(t.duration_hours || 4),
       otp: t.otp || '8240',
+      endOtp: t.end_otp || '4321',
+      addonCharge: parseFloat(t.addon_charge || 0),
       status: t.status,
       tripType: t.trip_type,
       bookingType: t.booking_type || 'INSTANT',
@@ -665,6 +681,8 @@ router.get('/upcoming/:driverId', async (req, res) => {
       remainingCashBalance: parseFloat(t.remaining_cash_balance || t.amount || 0),
       status: t.status,
       otp: t.otp || '8240',
+      endOtp: t.end_otp || '4321',
+      addonCharge: parseFloat(t.addon_charge || 0),
       destinationIds: t.destination_ids || [],
       createdAt: t.created_at,
     }));
@@ -735,19 +753,29 @@ router.post('/', async (req, res) => {
     }
 
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const endOtpCode = Math.floor(1000 + Math.random() * 9000).toString();
     const totalAmount = parseFloat(amount || 0);
-    const isPreBooked = bookingType === 'PRE_BOOKED';
-    const advanceDepositPaid = isPreBooked ? Math.round(totalAmount * 0.20) : 0;
-    const remainingCashBalance = isPreBooked ? totalAmount - advanceDepositPaid : totalAmount;
+    const isPreBooked = (bookingType === 'PRE_BOOKED' || bookingType === 'prebook');
+    const dbBookingType = isPreBooked ? 'prebook' : 'instant';
+    const dbPaymentMode = (paymentMode && paymentMode.toLowerCase().includes('wallet')) ? 'wallet' : 'cash';
+    let advanceDepositPaid = isPreBooked ? Math.round(totalAmount * 0.20) : 0;
+    let remainingCashBalance = isPreBooked ? totalAmount - advanceDepositPaid : totalAmount;
+
+    if (req.body.advanceDepositPaid !== undefined) {
+      advanceDepositPaid = parseFloat(req.body.advanceDepositPaid);
+    }
+    if (req.body.remainingCashBalance !== undefined) {
+      remainingCashBalance = parseFloat(req.body.remainingCashBalance);
+    }
 
     const result = await db.query(
       `INSERT INTO trips (
         trip_type, title, customer_id, customer_name, driver_or_guide_name,
         plan_id, destination_ids, amount, payment_mode, status,
-        duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
-        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance
+        duration_hours, extra_hours, addon_charge, rating, otp, end_otp, pickup_name, drop_name,
+        booking_type, scheduled_time, scheduled_date_time, advance_deposit_paid, remaining_cash_balance
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING *`,
       [
         tripType,
@@ -758,16 +786,18 @@ router.post('/', async (req, res) => {
         planId || null,
         Array.isArray(destinationIds) ? destinationIds : [],
         totalAmount,
-        paymentMode,
+        dbPaymentMode,
         status || 'Pending',
         parseFloat(durationHours),
         parseFloat(extraHours),
         parseFloat(addonCharge),
         parseInt(rating, 10),
         otpCode,
+        endOtpCode,
         req.body.pickupName || 'Bengaluru City Center',
         req.body.dropName || title.trim(),
-        bookingType,
+        dbBookingType,
+        scheduledTime ? new Date(scheduledTime) : null,
         scheduledTime ? new Date(scheduledTime) : null,
         advanceDepositPaid,
         remainingCashBalance,
@@ -875,12 +905,17 @@ router.post('/:id/accept', async (req, res) => {
       [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
     );
 
+    const tripCheck = await db.query("SELECT booking_type FROM trips WHERE id = $1", [id]);
+    const tripRow = tripCheck.rows[0];
+    const isPrebook = tripRow && (tripRow.booking_type === 'prebook' || tripRow.booking_type === 'PRE_BOOKED');
+    const nextStatus = isPrebook ? 'scheduled' : 'accepted';
+
     const result = await db.query(
       `UPDATE trips 
-       SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2 
-       WHERE id = $3 
+       SET status = $1, driver_or_guide_name = $2, driver_id = $3 
+       WHERE id = $4 
        RETURNING *`,
-      [driverName, driverId || null, id]
+      [nextStatus, driverName, driverId || null, id]
     );
 
     if (result.rows.length === 0) {
@@ -942,6 +977,32 @@ router.post('/:id/verify-otp', async (req, res) => {
 });
 
 /**
+ * POST /api/trips/:id/verify-end-otp
+ * Verify 4-digit OTP code to end trip
+ */
+router.post('/:id/verify-end-otp', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { otp } = req.body;
+
+    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    if (tripRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    const trip = tripRes.rows[0];
+    if (trip.end_otp && trip.end_otp.trim() !== otp.trim()) {
+      return res.status(400).json({ success: false, message: 'Invalid End OTP code. Please verify with tourist.' });
+    }
+
+    res.json({ success: true, message: 'End OTP verified!' });
+  } catch (error) {
+    console.error('Error verifying End OTP:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify End OTP' });
+  }
+});
+
+/**
  * POST /api/trips/:id/complete
  * Complete trip, update earnings, and notify tourist
  */
@@ -973,6 +1034,19 @@ router.post('/:id/complete', async (req, res) => {
         "UPDATE guide_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2 OR id = $2",
         [fare, targetDriverId]
       );
+
+      // Update guide stats
+      const isGuideRes = await db.query("SELECT id FROM guide_profiles WHERE user_id = $1 OR id = $1", [targetDriverId]);
+      if (isGuideRes.rows.length > 0) {
+        await db.query(
+          `UPDATE guide_profiles 
+           SET total_trips = total_trips + 1,
+               total_km = total_km + $1,
+               total_earnings = total_earnings + $2
+           WHERE user_id = $3 OR id = $3`,
+          [parseFloat(trip.distance_km || 0), fare, targetDriverId]
+        );
+      }
     }
 
     // Notify Tourist
@@ -1113,17 +1187,55 @@ router.post('/:id/respond', async (req, res) => {
         [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
       );
 
+      const tripCheck = await db.query("SELECT booking_type FROM trips WHERE id = $1", [id]);
+      const tripRow = tripCheck.rows[0];
+      const isPrebook = tripRow && (tripRow.booking_type === 'prebook' || tripRow.booking_type === 'PRE_BOOKED');
+      const nextStatus = isPrebook ? 'scheduled' : 'accepted';
+
       await db.query(
-        "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id = $3",
-        [driverId, driverName || 'Verified Partner', id]
+        "UPDATE trips SET status = $1, driver_id = $2, driver_or_guide_name = $3 WHERE id = $4",
+        [nextStatus, driverId, driverName || 'Verified Partner', id]
       );
       return res.json({ success: true, message: 'Ride Accepted successfully!' });
     } else if (action === 'complete') {
+      const tripRes = await db.query("SELECT * FROM trips WHERE id = $1", [id]);
+      if (tripRes.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Trip not found' });
+      }
+      const trip = tripRes.rows[0];
+      const fare = parseFloat(trip.amount || 0);
+
       await db.query(
         "UPDATE trips SET status = 'Completed' WHERE id = $1",
         [id]
       );
-      return res.json({ success: true, message: 'Ride Completed successfully!' });
+
+      const targetDriverId = driverId || trip.driver_id;
+      if (targetDriverId) {
+        // Credit driver / guide wallet
+        await db.query(
+          "UPDATE driver_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2 OR id = $2",
+          [fare, targetDriverId]
+        );
+        await db.query(
+          "UPDATE guide_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2 OR id = $2",
+          [fare, targetDriverId]
+        );
+
+        // Update guide stats
+        const isGuideRes = await db.query("SELECT id FROM guide_profiles WHERE user_id = $1 OR id = $1", [targetDriverId]);
+        if (isGuideRes.rows.length > 0) {
+          await db.query(
+            `UPDATE guide_profiles 
+             SET total_trips = total_trips + 1,
+                 total_km = total_km + $1,
+                 total_earnings = total_earnings + $2
+             WHERE user_id = $3 OR id = $3`,
+            [parseFloat(trip.distance_km || 0), fare, targetDriverId]
+          );
+        }
+      }
+      return res.json({ success: true, message: 'Ride Completed successfully!', fare });
     } else {
       await db.query(
         "UPDATE trips SET status = 'Declined', driver_id = NULL, driver_or_guide_name = NULL WHERE id = $1",
@@ -1225,6 +1337,8 @@ router.get('/driver-advance-schedules/:driverId', async (req, res) => {
       driverOrGuideName: t.driver_or_guide_name || '',
       paymentMode: t.payment_mode || 'Cash',
       otp: t.otp || '8240',
+      endOtp: t.end_otp || '4321',
+      addonCharge: parseFloat(t.addon_charge || 0),
       status: t.status,
       assignedToId: driverId,
       tripType: t.trip_type,
@@ -1245,37 +1359,46 @@ router.get('/guide-stats/:guideId', async (req, res) => {
   try {
     const { guideId } = req.params;
 
-    const result = await db.query(
-      `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Completed', 'Accepted', 'Active') ORDER BY created_at DESC`,
-      [guideId]
-    );
-
-    let tripsCount = 0;
-    let todayEarnings = 0;
-    let totalEarnings = 0;
-
-    result.rows.forEach(t => {
-      const amt = parseFloat(t.amount || 0);
-      if (t.status === 'Completed' || t.status === 'Accepted' || t.status === 'Active') {
-        tripsCount += 1;
-        todayEarnings += amt;
-        totalEarnings += amt;
-      }
-    });
-
-    // Wallet balance
+    // Fetch profile stats
     const profileRes = await db.query(
-      'SELECT wallet_balance FROM guide_profiles WHERE user_id = $1',
+      'SELECT wallet_balance, total_trips, total_km, total_earnings FROM guide_profiles WHERE user_id = $1',
       [guideId]
     );
-    const walletBalance = profileRes.rows.length > 0 ? parseFloat(profileRes.rows[0].wallet_balance || 0) : todayEarnings;
+
+    let totalKm = 0;
+    let tripsCount = 0;
+    let totalEarnings = 0;
+    let walletBalance = 0;
+
+    if (profileRes.rows.length > 0) {
+      const p = profileRes.rows[0];
+      walletBalance = parseFloat(p.wallet_balance || 0);
+      tripsCount = parseInt(p.total_trips || 0);
+      totalKm = parseFloat(p.total_km || 0);
+      totalEarnings = parseFloat(p.total_earnings || 0);
+    } else {
+      // Fallback aggregations
+      const result = await db.query(
+        `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Completed', 'Accepted', 'Active', 'scheduled')`,
+        [guideId]
+      );
+      result.rows.forEach(t => {
+        const amt = parseFloat(t.amount || 0);
+        if (t.status === 'Completed' || t.status === 'Accepted' || t.status === 'Active' || t.status === 'scheduled') {
+          tripsCount += 1;
+          totalEarnings += amt;
+        }
+      });
+      walletBalance = totalEarnings;
+    }
 
     res.json({
       success: true,
       data: {
-        todayKm: 0,
+        todayKm: totalKm,
+        totalKm,
         tripsCount,
-        todayEarnings,
+        todayEarnings: totalEarnings,
         totalEarnings,
         walletBalance,
       }
@@ -1300,12 +1423,12 @@ router.get('/guide-advance-schedules/:guideId', async (req, res) => {
     let result;
     if (guideName && guideName.trim().length > 2) {
       result = await db.query(
-        `SELECT * FROM trips WHERE (driver_id = $1 OR LOWER(driver_or_guide_name) = LOWER($2)) AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        `SELECT * FROM trips WHERE (driver_id = $1 OR LOWER(driver_or_guide_name) = LOWER($2)) AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed', 'scheduled') ORDER BY created_at DESC LIMIT 20`,
         [guideId, guideName.trim()]
       );
     } else {
       result = await db.query(
-        `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed', 'scheduled') ORDER BY created_at DESC LIMIT 20`,
         [guideId]
       );
     }
@@ -1322,6 +1445,8 @@ router.get('/guide-advance-schedules/:guideId', async (req, res) => {
       assignedToId: guideId,
       tripType: t.trip_type,
       otp: t.otp || '8240',
+      endOtp: t.end_otp || '4321',
+      addonCharge: parseFloat(t.addon_charge || 0),
       bookingType: t.booking_type || 'INSTANT',
       scheduledTime: t.scheduled_time,
     }));

@@ -17,6 +17,7 @@ import {
   updatePasswordApi,
   updateUserProfileApi,
   verifyTripOtpApi,
+  verifyTripEndOtpApi,
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -113,6 +114,8 @@ export default function DriverDashboardScreen() {
   const [tripPhase, setTripPhase] = useState<'pickup' | 'trip'>('pickup');
   const [otpVisible, setOtpVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
+  const [endOtpVisible, setEndOtpVisible] = useState(false);
+  const [enteredEndOtp, setEnteredEndOtp] = useState('');
 
   // Loading triggers
   const [payoutLoading, setPayoutLoading] = useState(false);
@@ -593,6 +596,8 @@ export default function DriverDashboardScreen() {
           estimatedFare: Number(firstReq.price || firstReq.amount || 2500),
           paymentMode: firstReq.paymentMode || 'Cash',
           otp: firstReq.otp || '8240',
+          endOtp: firstReq.endOtp || firstReq.end_otp || '4321',
+          addonCharge: Number(firstReq.addonCharge || firstReq.addon_charge || 0),
           tripId: firstReq.id,
         } as any);
         setTimerSeconds(25);
@@ -751,9 +756,45 @@ export default function DriverDashboardScreen() {
     setConfirmEndModalVisible(true);
   };
 
+  const handleConfirmEndClick = () => {
+    setConfirmEndModalVisible(false);
+    setEndOtpVisible(true);
+  };
+
+  const handleVerifyEndOtp = async () => {
+    if (!activeTrip) return;
+    const tripId = (activeTrip as any).tripId;
+    const expectedOtp = String((activeTrip as any).endOtp || '4321').trim();
+
+    if (!tripId) {
+      if (enteredEndOtp.trim() === expectedOtp) {
+        setEndOtpVisible(false);
+        setEnteredEndOtp('');
+        await executeCompleteTrip();
+      } else {
+        showError('Invalid OTP', 'The End OTP code did not match. Please verify with tourist.');
+      }
+      return;
+    }
+
+    try {
+      const res = await verifyTripEndOtpApi(tripId, enteredEndOtp.trim());
+      if (res && res.success) {
+        setEndOtpVisible(false);
+        setEnteredEndOtp('');
+        await executeCompleteTrip();
+      } else {
+        showError('Invalid OTP', res.message || 'The End OTP code did not match. Please verify with tourist.');
+      }
+    } catch (e) {
+      showError('Error', 'Failed to verify End OTP. Please try again.');
+    }
+  };
+
   const executeCompleteTrip = async () => {
     if (!activeTrip) return;
     setConfirmEndModalVisible(false);
+    setEndOtpVisible(false);
 
     const fareEarned = activeTrip.estimatedFare;
     const distCovered = activeTrip.distanceKm;
@@ -778,6 +819,7 @@ export default function DriverDashboardScreen() {
       fare: fareEarned,
       dist: distCovered,
       tourist: activeTrip.touristName || 'Passenger',
+      addonCharge: (activeTrip as any).addonCharge || 0,
     };
 
     setLastCompletedTrip(summary);
@@ -1659,6 +1701,38 @@ export default function DriverDashboardScreen() {
         )}
       </Modal>
 
+      {/* End Trip OTP Entry Modal Pop-up */}
+      <Modal visible={endOtpVisible} transparent={true} animationType="fade">
+        {activeTrip && (
+          <View style={styles.popupOverlay}>
+            <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
+              <Text style={[styles.otpTitle, { color: colors.textPrimary }]}>Enter End Verification OTP</Text>
+              <Text style={[styles.otpSub, { color: colors.textMuted }]}>Please check with {activeTrip.touristName} for the 4-digit code (e.g. 4321)</Text>
+
+              <TextInput
+                style={[styles.otpInput, { color: colors.textPrimary, borderColor: colors.amber }]}
+                placeholder="0000"
+                placeholderTextColor="rgba(255,255,255,0.2)"
+                keyboardType="numeric"
+                maxLength={4}
+                value={enteredEndOtp}
+                onChangeText={setEnteredEndOtp}
+                autoFocus
+              />
+
+              <View style={styles.popupActionsGrid}>
+                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34' }]} onPress={() => setEndOtpVisible(false)}>
+                  <Text style={styles.popupBtnCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: colors.amber }]} onPress={handleVerifyEndOtp}>
+                  <Text style={styles.popupBtnConfirmText}>Verify & End</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
+
       {/* 1. Confirm End Trip Modal */}
       <Modal visible={confirmEndModalVisible} transparent={true} animationType="fade">
         <View style={styles.popupOverlay}>
@@ -1682,7 +1756,7 @@ export default function DriverDashboardScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ flex: 1, height: verticalScale(42), borderRadius: scale(12), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
-                onPress={executeCompleteTrip}
+                onPress={handleConfirmEndClick}
               >
                 <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(12) }}>Confirm End</Text>
               </TouchableOpacity>
@@ -1739,6 +1813,15 @@ export default function DriverDashboardScreen() {
                     Settled to Wallet ✅
                   </Text>
                 </View>
+
+                {lastCompletedTrip.addonCharge > 0 && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(4) }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Extra Addon (Collect Cash):</Text>
+                    <Text style={{ color: colors.danger, fontSize: moderateFontScale(11), fontWeight: '800' }}>
+                      ₹{lastCompletedTrip.addonCharge}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 

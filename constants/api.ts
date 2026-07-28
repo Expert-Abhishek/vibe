@@ -227,6 +227,8 @@ export async function createTripApi(payload: {
   scheduledTime?: string;
   pickupName?: string;
   dropName?: string;
+  advanceDepositPaid?: number;
+  remainingCashBalance?: number;
 }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips`, {
@@ -703,6 +705,23 @@ export async function verifyTripOtpApi(tripId: string, otp: string): Promise<any
 }
 
 /**
+ * Verify 4-digit OTP code to end trip
+ */
+export async function verifyTripEndOtpApi(tripId: string, otp: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/verify-end-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ otp }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('verifyTripEndOtpApi error:', e);
+    return { success: false, message: 'Failed to verify End OTP' };
+  }
+}
+
+/**
  * Complete trip & settle earnings to wallet
  */
 export async function completeTripApi(tripId: string, driverId?: string): Promise<any> {
@@ -838,6 +857,30 @@ export async function submitWalletTopupRequestApi(payload: {
   } catch (e) {
     console.warn('submitWalletTopupRequestApi error:', e);
     return { success: false, message: 'Failed to submit top-up request' };
+  }
+}
+
+/**
+ * Submit Wallet Deduction/Payment Request (with optional screenshot proof)
+ */
+export async function submitWalletDeductionRequestApi(payload: {
+  userId: string;
+  userName?: string;
+  role?: string;
+  amount: number;
+  description?: string;
+  screenshotUrl?: string;
+}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/deduction-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('submitWalletDeductionRequestApi error:', e);
+    return { success: false, message: 'Failed to submit deduction request' };
   }
 }
 

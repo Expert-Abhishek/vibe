@@ -32,6 +32,8 @@ export interface TripRecord {
   status: 'Completed' | 'Upcoming' | 'Cancelled';
   rating?: number;
   passengerCount?: number;
+  otp?: string;
+  endOtp?: string;
 }
 
 export interface CustomTripRequest {

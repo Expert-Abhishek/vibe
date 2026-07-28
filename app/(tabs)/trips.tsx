@@ -65,7 +65,7 @@ export default function TripsHistoryScreen() {
     vehicleType: 'Verified Cab Partner',
     title: bt.title || 'Tour Booking',
     route: bt.destinationIds || [],
-    driverOrGuideName: bt.driverOrGuideName || 'Assigned Driver',
+    driverOrGuideName: bt.driverOrGuideName || (bt.tripType === 'guide' ? 'Pending Guide' : 'Assigned Driver'),
     date: bt.createdAt ? new Date(bt.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'Today',
     time: bt.createdAt ? new Date(bt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
     price: Number(bt.amount) || 0,

@@ -517,10 +517,10 @@ router.post('/admin/payment-settings', async (req, res) => {
     `);
 
     const result = await db.query('SELECT * FROM admin_payment_settings ORDER BY updated_at DESC LIMIT 1');
-    
+
     let query;
     let params;
-    
+
     if (result.rows.length === 0) {
       query = `
         INSERT INTO admin_payment_settings (upi_id, qr_code_url, updated_by, updated_at)
@@ -571,7 +571,7 @@ router.post('/admin/adjust-balance', async (req, res) => {
     }
 
     const actualRole = userRes.rows[0].role;
-    
+
     // Begin transaction
     await client.query('BEGIN');
 
@@ -966,6 +966,178 @@ router.post('/admin/withdrawals/:id/reject', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to reject withdrawal' });
   } finally {
     client.release();
+  }
+});
+
+/**
+ * POST /api/wallet/deduction-request
+ * Submit Wallet Deduction/Payment Request by Customer
+ */
+router.post('/deduction-request', async (req, res) => {
+  try {
+    const { userId, userName = 'Customer', role = 'tourist', amount, description, screenshotUrl } = req.body;
+
+    if (!userId || !amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid userId and positive deduction amount required.',
+      });
+    }
+
+    const result = await db.query(
+      `INSERT INTO wallet_deduction_requests (
+        user_id, user_name, role, amount, description, screenshot_url, status
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, 'Pending')
+       RETURNING *`,
+      [userId, userName, role, parseFloat(amount), description || null, screenshotUrl || null]
+    );
+
+    const deductionReq = result.rows[0];
+
+    // Log notification for Admin Queue
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, 'admin', '📉 New Wallet Deduction Request!', $2, CURRENT_TIMESTAMP)`,
+        [userId, `${userName} requested ₹${amount} wallet deduction/payment. Reason: ${description || 'None'}`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to insert admin notification:', nErr);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Deduction request submitted successfully! Admin will verify and process the wallet update.',
+      data: deductionReq,
+    });
+  } catch (error) {
+    console.error('Error submitting deduction request:', error);
+    res.status(500).json({ success: false, message: 'Failed to submit deduction request', error: error.message });
+  }
+});
+
+/**
+ * GET /api/wallet/admin/deduction-requests
+ * Admin Queue for pending/approved/rejected deduction requests
+ */
+router.get('/admin/deduction-requests', async (req, res) => {
+  try {
+    const { status = 'Pending' } = req.query;
+
+    const result = await db.query(
+      `SELECT * FROM wallet_deduction_requests WHERE status = $1 ORDER BY requested_at DESC`,
+      [status]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error fetching admin deduction requests:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch deduction requests', error: error.message });
+  }
+});
+
+/**
+ * POST /api/wallet/admin/deduction-requests/:id/approve
+ * Admin approves deduction request & deducts from user wallet_balance
+ */
+router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
+  const client = await db.pool.connect();
+  try {
+    const { id } = req.params;
+    const { adminId } = req.body;
+
+    await client.query('BEGIN');
+
+    const reqRes = await client.query('SELECT * FROM wallet_deduction_requests WHERE id = $1 FOR UPDATE', [id]);
+    if (reqRes.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'Deduction request not found' });
+    }
+
+    const deduction = reqRes.rows[0];
+    if (deduction.status !== 'Pending') {
+      client.release();
+      return res.status(400).json({ success: false, message: `Request is already ${deduction.status}` });
+    }
+
+    const numAmount = parseFloat(deduction.amount);
+
+    // 1. Update deduction request status
+    await client.query(
+      `UPDATE wallet_deduction_requests SET status = 'Approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [adminId || null, id]
+    );
+
+    // 2. Record wallet transaction
+    await client.query(
+      `INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)`,
+      [deduction.user_id, numAmount, `Wallet Deduction Approved: ${deduction.description || 'Manual payment'}`]
+    );
+
+    // 3. Deduct from driver / guide balance if applicable
+    await client.query('UPDATE driver_profiles SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE user_id = $2', [numAmount, deduction.user_id]);
+    await client.query('UPDATE guide_profiles SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE user_id = $2', [numAmount, deduction.user_id]);
+
+    await client.query('COMMIT');
+
+    // 4. Notify user
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '📉 Wallet Deduction Processed', $3, CURRENT_TIMESTAMP)`,
+        [deduction.user_id, deduction.role || 'tourist', `₹${numAmount} was successfully deducted/paid from your wallet.`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to notify user:', nErr);
+    }
+
+    res.json({ success: true, message: `Successfully approved and processed deduction of ₹${numAmount}` });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error approving deduction request:', error);
+    res.status(500).json({ success: false, message: 'Failed to approve deduction request', error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /api/wallet/admin/deduction-requests/:id/reject
+ * Admin rejects deduction request
+ */
+router.post('/admin/deduction-requests/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rejectReason = 'Invalid deduction request', adminId } = req.body;
+
+    const reqRes = await db.query('SELECT * FROM wallet_deduction_requests WHERE id = $1', [id]);
+    if (reqRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Deduction request not found' });
+    }
+
+    const deduction = reqRes.rows[0];
+
+    await db.query(
+      `UPDATE wallet_deduction_requests SET status = 'Rejected', reject_reason = $1, reviewed_by = $2, reviewed_at = CURRENT_TIMESTAMP WHERE id = $3`,
+      [rejectReason, adminId || null, id]
+    );
+
+    // Notify user
+    try {
+      await db.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+         VALUES ($1, $2, '❌ Wallet Deduction Rejected', $3, CURRENT_TIMESTAMP)`,
+        [deduction.user_id, deduction.role || 'tourist', `Deduction of ₹${deduction.amount} was rejected. Reason: ${rejectReason}`]
+      );
+    } catch (nErr) {
+      console.warn('Failed to notify user:', nErr);
+    }
+
+    res.json({ success: true, message: 'Deduction request rejected successfully' });
+  } catch (error) {
+    console.error('Error rejecting deduction request:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject deduction request', error: error.message });
   }
 });
 

@@ -27,6 +27,8 @@ app.use((req, res, next) => {
     req.url = req.url.replace('/api/admin/payment-settings', '/api/wallet/admin/payment-settings');
   } else if (req.url.startsWith('/api/admin/wallet/topup-requests')) {
     req.url = req.url.replace('/api/admin/wallet/topup-requests', '/api/wallet/admin/topup-requests');
+  } else if (req.url.startsWith('/api/admin/wallet/deduction-requests')) {
+    req.url = req.url.replace('/api/admin/wallet/deduction-requests', '/api/wallet/admin/deduction-requests');
   } else if (req.url.startsWith('/api/admin/wallet/reconciliation')) {
     req.url = req.url.replace('/api/admin/wallet/reconciliation', '/api/wallet/admin/reconciliation');
   } else if (req.url.startsWith('/api/users/') && req.url.includes('/photo')) {
@@ -284,6 +286,7 @@ async function initTablesOnBoot() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lat NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lng NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS end_otp VARCHAR(10);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id UUID;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS guide_id UUID;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00;
@@ -297,6 +300,67 @@ async function initTablesOnBoot() {
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2) DEFAULT 2000.00;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);
+
+      DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'booking_type_enum') THEN
+              CREATE TYPE booking_type_enum AS ENUM ('instant', 'prebook');
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_mode_enum') THEN
+              CREATE TYPE payment_mode_enum AS ENUM ('cash', 'wallet');
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'trip_status_enum') THEN
+              CREATE TYPE trip_status_enum AS ENUM ('pending', 'accepted', 'scheduled', 'ongoing', 'completed', 'cancelled');
+          END IF;
+      EXCEPTION
+          WHEN duplicate_object THEN null;
+      END $$;
+
+      DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'trips' AND column_name = 'booking_type') THEN
+              IF (SELECT data_type FROM information_schema.columns WHERE table_name = 'trips' AND column_name = 'booking_type') != 'USER-DEFINED' THEN
+                  ALTER TABLE trips ALTER COLUMN booking_type DROP DEFAULT;
+                  ALTER TABLE trips ALTER COLUMN booking_type TYPE booking_type_enum USING (
+                      CASE 
+                          WHEN booking_type = 'PRE_BOOKED' THEN 'prebook'::booking_type_enum 
+                          ELSE 'instant'::booking_type_enum 
+                      END
+                  );
+                  ALTER TABLE trips ALTER COLUMN booking_type SET DEFAULT 'instant'::booking_type_enum;
+              END IF;
+          ELSE
+              ALTER TABLE trips ADD COLUMN booking_type booking_type_enum DEFAULT 'instant'::booking_type_enum;
+          END IF;
+      EXCEPTION
+          WHEN others THEN null;
+      END $$;
+
+      DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'trips' AND column_name = 'payment_mode') THEN
+              IF (SELECT data_type FROM information_schema.columns WHERE table_name = 'trips' AND column_name = 'payment_mode') != 'USER-DEFINED' THEN
+                  ALTER TABLE trips ALTER COLUMN payment_mode DROP DEFAULT;
+                  ALTER TABLE trips ALTER COLUMN payment_mode TYPE payment_mode_enum USING (
+                      CASE 
+                          WHEN LOWER(payment_mode) LIKE '%wallet%' THEN 'wallet'::payment_mode_enum 
+                          ELSE 'cash'::payment_mode_enum 
+                      END
+                  );
+                  ALTER TABLE trips ALTER COLUMN payment_mode SET DEFAULT 'cash'::payment_mode_enum;
+              END IF;
+          ELSE
+              ALTER TABLE trips ADD COLUMN payment_mode payment_mode_enum DEFAULT 'cash'::payment_mode_enum;
+          END IF;
+      EXCEPTION
+          WHEN others THEN null;
+      END $$;
+
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS scheduled_date_time TIMESTAMP WITH TIME ZONE NULL;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS distance_km NUMERIC(6,2) DEFAULT 0.00;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS start_otp VARCHAR(6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS end_otp VARCHAR(6);
+
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS total_trips INT DEFAULT 0;
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS total_km NUMERIC(10,2) DEFAULT 0.00;
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS total_earnings NUMERIC(10,2) DEFAULT 0.00;
 
       CREATE TABLE IF NOT EXISTS activity_notifications (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -375,6 +439,21 @@ async function initTablesOnBoot() {
           ALTER TABLE plan_checkpoints ALTER COLUMN checkpoint_id DROP NOT NULL;
         END IF;
       END $$;
+
+      CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+          user_name VARCHAR(255),
+          role VARCHAR(20) DEFAULT 'tourist',
+          amount NUMERIC(10,2) NOT NULL,
+          description TEXT,
+          screenshot_url TEXT,
+          status VARCHAR(20) DEFAULT 'Pending',
+          requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          reviewed_by UUID,
+          reviewed_at TIMESTAMP WITH TIME ZONE,
+          reject_reason TEXT
+      );
     `);
 
 

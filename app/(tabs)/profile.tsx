@@ -3,6 +3,7 @@ import {
   fetchUserProfileApi,
   fetchWalletBalanceApi,
   saveUserSettingsApi,
+  submitWalletDeductionRequestApi,
   submitWalletTopupRequestApi,
   updateProfilePhotoApi,
   updateUserProfileApi
@@ -59,6 +60,13 @@ export default function ProfileScreen() {
   const [screenshotBase64, setScreenshotBase64] = useState('');
   const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
   const [initiatedAt, setInitiatedAt] = useState<Date | null>(null);
+
+  // Deduction state variables
+  const [deductModalVisible, setDeductModalVisible] = useState(false);
+  const [deductAmount, setDeductAmount] = useState('');
+  const [deductDescription, setDeductDescription] = useState('');
+  const [deductScreenshotBase64, setDeductScreenshotBase64] = useState('');
+  const [isSubmittingDeduct, setIsSubmittingDeduct] = useState(false);
 
   const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
   const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
@@ -468,9 +476,9 @@ export default function ProfileScreen() {
             <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: scale(10) }}>
+          <View style={{ flexDirection: 'row', gap: scale(8), flexWrap: 'wrap' }}>
             <TouchableOpacity
-              style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
+              style={[styles.primaryButton, { flex: 1, minWidth: scale(80), backgroundColor: colors.amber, marginTop: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(3) }]}
               onPress={() => {
                 setTopupAmount('');
                 setTopupStep(1);
@@ -479,16 +487,29 @@ export default function ProfileScreen() {
                 setTopupModalVisible(true);
               }}
             >
-              <MaterialIcons name="add-circle-outline" size={scale(16)} color="#101014" />
-              <Text style={styles.primaryButtonText}>Add Money</Text>
+              <MaterialIcons name="add-circle-outline" size={scale(14)} color="#101014" />
+              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(11) }]}>Add Money</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(4) }]}
+              style={[styles.primaryButton, { flex: 1, minWidth: scale(80), backgroundColor: colors.surfaceAlt, marginTop: 0, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(3) }]}
+              onPress={() => {
+                setDeductAmount('');
+                setDeductDescription('');
+                setDeductScreenshotBase64('');
+                setDeductModalVisible(true);
+              }}
+            >
+              <MaterialIcons name="remove-circle-outline" size={scale(14)} color={colors.amber} />
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>Pay/Deduct</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1, minWidth: scale(80), backgroundColor: 'rgba(255,255,255,0.06)', marginTop: 0, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(3) }]}
               onPress={() => setWalletModalVisible(true)}
             >
-              <MaterialIcons name="history" size={scale(16)} color={colors.textPrimary} />
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>History</Text>
+              <MaterialIcons name="history" size={scale(14)} color={colors.textPrimary} />
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>History</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -731,6 +752,184 @@ export default function ProfileScreen() {
                 </View>
               </ScrollView>
             )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Wallet Pay / Deduct Modal */}
+      <Modal visible={deductModalVisible} animationType="slide" transparent={true} onRequestClose={() => setDeductModalVisible(false)}>
+        <TouchableOpacity
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          activeOpacity={1}
+          onPress={() => setDeductModalVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>
+                📉 Request Wallet Pay/Deduct
+              </Text>
+              <TouchableOpacity onPress={() => setDeductModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginBottom: verticalScale(16) }}>
+                Submit a request to pay or deduct money from your Vibe wallet. Admin will verify and update your wallet balance.
+              </Text>
+
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Enter Amount (₹)</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                keyboardType="numeric"
+                value={deductAmount}
+                onChangeText={setDeductAmount}
+                placeholder="e.g. 250"
+                placeholderTextColor={colors.textMuted}
+              />
+
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Description / Reason for Deduction</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary, height: verticalScale(60), paddingTop: verticalScale(8) }]}
+                value={deductDescription}
+                onChangeText={setDeductDescription}
+                placeholder="e.g. Paid at local restaurant, transport service etc."
+                placeholderTextColor={colors.textMuted}
+                multiline
+              />
+
+              <Text style={[styles.label, { color: colors.textPrimary, textAlign: 'center', marginBottom: verticalScale(8) }]}>
+                Upload Proof Screenshot (Optional)
+              </Text>
+
+              <TouchableOpacity
+                style={{ height: verticalScale(100), borderStyle: 'dashed', borderWidth: 2, borderColor: deductScreenshotBase64 ? colors.amber : colors.textMuted, borderRadius: scale(12), alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(16), overflow: 'hidden' }}
+                onPress={async () => {
+                  Alert.alert(
+                    'Deduction Proof Screenshot',
+                    'Upload payment receipt / bill photo:',
+                    [
+                      {
+                        text: '📸 Take Photo (Camera)',
+                        onPress: async () => {
+                          const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+                          if (!granted) {
+                            showError('Permission Denied', 'Camera access permission is required.');
+                            return;
+                          }
+                          const result = await ImagePicker.launchCameraAsync({
+                            allowsEditing: true,
+                            quality: 0.5,
+                            base64: true,
+                          });
+                          if (!result.canceled && result.assets && result.assets.length > 0) {
+                            const asset = result.assets[0];
+                            const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+                            setDeductScreenshotBase64(dataUrl);
+                          }
+                        },
+                      },
+                      {
+                        text: '🖼️ Choose from Gallery',
+                        onPress: async () => {
+                          const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                          if (!granted) {
+                            showError('Permission Denied', 'Gallery access permission is required.');
+                            return;
+                          }
+                          const result = await ImagePicker.launchImageLibraryAsync({
+                            mediaTypes: ['images'],
+                            allowsEditing: true,
+                            quality: 0.5,
+                            base64: true,
+                          });
+                          if (!result.canceled && result.assets && result.assets.length > 0) {
+                            const asset = result.assets[0];
+                            const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
+                            setDeductScreenshotBase64(dataUrl);
+                          }
+                        },
+                      },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }}
+              >
+                {deductScreenshotBase64 ? (
+                  <Image source={{ uri: deductScreenshotBase64 }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                ) : (
+                  <View style={{ alignItems: 'center' }}>
+                    <MaterialIcons name="cloud-upload" size={scale(32)} color={colors.textMuted} />
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(4) }}>Tap to upload screenshot (optional)</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                <TouchableOpacity
+                  style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: colors.line, marginTop: 0 }]}
+                  onPress={() => {
+                    setDeductModalVisible(false);
+                  }}
+                >
+                  <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, { flex: 2, backgroundColor: colors.amber, marginTop: 0 }]}
+                  onPress={async () => {
+                    const amt = parseFloat(deductAmount);
+                    if (!amt || amt <= 0) {
+                      showError('Invalid Amount', 'Please enter a valid deduction amount.');
+                      return;
+                    }
+                    if (!deductDescription.trim()) {
+                      showError('Required', 'Please enter a description or reason for this deduction.');
+                      return;
+                    }
+
+                    try {
+                      setIsSubmittingDeduct(true);
+                      const payload = {
+                        userId,
+                        userName: name,
+                        role: session?.role || 'tourist',
+                        amount: amt,
+                        description: deductDescription.trim(),
+                        screenshotUrl: deductScreenshotBase64 || undefined,
+                      };
+
+                      const res = await submitWalletDeductionRequestApi(payload);
+
+                      if (res && res.success) {
+                        setDeductModalVisible(false);
+                        setDeductAmount('');
+                        setDeductDescription('');
+                        setDeductScreenshotBase64('');
+                        showSuccess('🎉 Submitted!', 'Your wallet deduction request has been submitted. Admin will process and update your balance.');
+                        loadProfileAndWalletData();
+                      } else {
+                        showError('Submission Failed', res?.message || 'Could not submit deduction request.');
+                      }
+                    } catch (e: any) {
+                      showError('Submission Error', e?.message || 'A network error occurred.');
+                    } finally {
+                      setIsSubmittingDeduct(false);
+                    }
+                  }}
+                  disabled={isSubmittingDeduct}
+                >
+                  {isSubmittingDeduct ? (
+                    <ActivityIndicator size="small" color="#101014" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Submit Request</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>

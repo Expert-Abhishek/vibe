@@ -14,7 +14,8 @@ import {
   submitWithdrawalApi,
   updatePasswordApi,
   updateUserProfileApi,
-  verifyTripOtpApi
+  verifyTripOtpApi,
+  verifyTripEndOtpApi
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -78,6 +79,10 @@ interface ActiveRequest {
   language: string;
   groupSize: number;
   otp: string;
+  endOtp?: string;
+  addonCharge?: number;
+  tripId?: string;
+  bookingType?: string;
 }
 
 export default function GuideDashboardScreen() {
@@ -268,6 +273,8 @@ export default function GuideDashboardScreen() {
   const [tripsCount, setTripsCount] = useState(0);
   const [earningsToday, setEarningsToday] = useState(0);
   const [earningsBalance, setEarningsBalance] = useState(0);
+  const [totalKm, setTotalKm] = useState(0);
+  const [totalEarnings, setTotalEarnings] = useState(0);
 
   // Profile & Unified Edit state
   const currentSession = getUserSessionSync();
@@ -297,6 +304,8 @@ export default function GuideDashboardScreen() {
         setTripsCount(statsRes.data.tripsCount || 0);
         setEarningsToday(statsRes.data.todayEarnings || 0);
         setEarningsBalance(statsRes.data.walletBalance || 0);
+        setTotalKm(statsRes.data.totalKm || 0);
+        setTotalEarnings(statsRes.data.totalEarnings || 0);
       }
 
       // 2. Fetch real schedules/trips
@@ -478,6 +487,8 @@ export default function GuideDashboardScreen() {
   const [currentSpotIndex, setCurrentSpotIndex] = useState(0);
   const [otpVisible, setOtpVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
+  const [endOtpVisible, setEndOtpVisible] = useState(false);
+  const [enteredEndOtp, setEnteredEndOtp] = useState('');
 
   // Daily Activity Logs
   const [dailyTours, setDailyTours] = useState<any[]>([
@@ -558,6 +569,8 @@ export default function GuideDashboardScreen() {
           language: 'English & Kannada',
           groupSize: 2,
           otp: req.otp || '8240',
+          endOtp: req.endOtp || req.end_otp || '4321',
+          addonCharge: Number(req.addonCharge || req.addon_charge || 0),
         };
         (guideReq as any).tripId = req.id;
         (guideReq as any).bookingType = req.bookingType || 'INSTANT';
@@ -690,39 +703,83 @@ export default function GuideDashboardScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm End',
-          onPress: async () => {
-            const tripId = (activeTour as any).tripId;
-            const session = getUserSessionSync();
-            const guideId = session?.id || 'g1';
-
-            if (tripId) {
-              await completeTripApi(tripId, guideId);
-            }
-
-            const fareEarned = activeTour.estimatedFare;
-            setEarningsToday(prev => prev + fareEarned);
-            setEarningsBalance(prev => prev + fareEarned);
-            setTripsCount(prev => prev + 1);
-            setDailyTours([
-              {
-                id: `tour_${Date.now()}`,
-                title: activeTour.pickup.split(' ')[0] + ' Heritage Tour',
-                time: 'Just Now',
-                fare: fareEarned,
-                payout: 'Paid to Wallet',
-                rating: 5
-              },
-              ...dailyTours
-            ]);
-            setActiveTour(null);
-            setTourPhase('pickup');
-            setActiveTab('profile');
-            setUpdateTrigger(prev => prev + 1);
-            showSuccess('Tour Complete!', `₹${fareEarned} added to your balance.`);
+          onPress: () => {
+            setEndOtpVisible(true);
           }
         }
       ]
     );
+  };
+
+  const handleVerifyEndOtp = async () => {
+    if (!activeTour) return;
+    const tripId = (activeTour as any).tripId;
+    const expectedOtp = String((activeTour as any).endOtp || '4321').trim();
+
+    if (!tripId) {
+      if (enteredEndOtp.trim() === expectedOtp) {
+        setEndOtpVisible(false);
+        setEnteredEndOtp('');
+        await executeCompleteTour();
+      } else {
+        showError('Invalid OTP', 'The End OTP code did not match. Please verify with tourist.');
+      }
+      return;
+    }
+
+    try {
+      const res = await verifyTripEndOtpApi(tripId, enteredEndOtp.trim());
+      if (res && res.success) {
+        setEndOtpVisible(false);
+        setEnteredEndOtp('');
+        await executeCompleteTour();
+      } else {
+        showError('Invalid OTP', res.message || 'The End OTP code did not match. Please verify with tourist.');
+      }
+    } catch (e) {
+      showError('Error', 'Failed to verify End OTP. Please try again.');
+    }
+  };
+
+  const executeCompleteTour = async () => {
+    if (!activeTour) return;
+    const tripId = (activeTour as any).tripId;
+    const session = getUserSessionSync();
+    const guideId = session?.id || 'g1';
+
+    if (tripId) {
+      await completeTripApi(tripId, guideId);
+    }
+
+    const fareEarned = activeTour.estimatedFare;
+    setEarningsToday(prev => prev + fareEarned);
+    setEarningsBalance(prev => prev + fareEarned);
+    setTripsCount(prev => prev + 1);
+    setDailyTours([
+      {
+        id: `tour_${Date.now()}`,
+        title: activeTour.pickup.split(' ')[0] + ' Heritage Tour',
+        time: 'Just Now',
+        fare: fareEarned,
+        payout: 'Paid to Wallet',
+        rating: 5
+      },
+      ...dailyTours
+    ]);
+    const addonVal = (activeTour as any).addonCharge || 0;
+    setActiveTour(null);
+    setTourPhase('pickup');
+    setActiveTab('profile');
+    setUpdateTrigger(prev => prev + 1);
+
+    if (addonVal > 0) {
+      Alert.alert(
+        'Tour Complete! 🎉',
+        `₹${fareEarned} added to your balance.\n\nExtra Addon Charge to collect from tourist: ₹${addonVal} (paid after ride)`
+      );
+    } else {
+      showSuccess('Tour Complete!', `₹${fareEarned} added to your balance.`);
+    }
   };
 
   const handleLogout = async () => {
@@ -828,18 +885,18 @@ export default function GuideDashboardScreen() {
             <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
             <View style={styles.dutyStatsGrid}>
               <View style={styles.dutyStatCell}>
-                <Text style={styles.statLabel}>Online Hours</Text>
-                <Text style={[styles.statValNum, { color: colors.textPrimary }]}>{hoursOnline}h</Text>
-              </View>
-              <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.dutyStatCell}>
-                <Text style={styles.statLabel}>Today Trips</Text>
+                <Text style={styles.statLabel}>Total Trips</Text>
                 <Text style={[styles.statValNum, { color: colors.textPrimary }]}>{tripsCount}</Text>
               </View>
               <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />
               <View style={styles.dutyStatCell}>
-                <Text style={styles.statLabel}>Today Earnings</Text>
-                <Text style={[styles.statValNum, { color: colors.amber }]}>₹{earningsToday}</Text>
+                <Text style={styles.statLabel}>Total KM</Text>
+                <Text style={[styles.statValNum, { color: colors.textPrimary }]}>{totalKm} km</Text>
+              </View>
+              <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.dutyStatCell}>
+                <Text style={styles.statLabel}>Total Earnings</Text>
+                <Text style={[styles.statValNum, { color: colors.amber }]}>₹{totalEarnings}</Text>
               </View>
             </View>
           </View>
@@ -946,6 +1003,60 @@ export default function GuideDashboardScreen() {
                         <Text style={styles.smallPayoutBtnText}>Accept Booking Schedule</Text>
                       </TouchableOpacity>
                     )}
+
+                    {(booking.status === 'scheduled' || booking.status === 'Accepted') && (() => {
+                      const now = new Date();
+                      const scheduledTime = booking.scheduledTime ? new Date(booking.scheduledTime) : null;
+                      const isTimeReached = scheduledTime ? (now.getTime() >= scheduledTime.getTime()) : true;
+                      return (
+                        <TouchableOpacity
+                          style={[
+                            styles.smallPayoutBtn, 
+                            { 
+                              backgroundColor: isTimeReached ? colors.amber : '#2C2C34', 
+                              opacity: isTimeReached ? 1 : 0.7, 
+                              marginTop: verticalScale(10), 
+                              alignItems: 'center' 
+                            }
+                          ]}
+                          disabled={!isTimeReached}
+                          onPress={() => {
+                            const activeReq: ActiveRequest = {
+                              touristName: booking.touristName || 'Tourist Client',
+                              pickup: booking.title || 'Sightseeing Point',
+                              pickupLat: 15.3350,
+                              pickupLng: 76.4600,
+                              spots: [
+                                { name: booking.title || 'Guided Spot', lat: 15.3350, lng: 76.4600 }
+                              ],
+                              durationHrs: 4,
+                              estimatedFare: booking.price || 2000,
+                              language: 'Kannada, English',
+                              groupSize: 2,
+                              otp: booking.otp || '8240',
+                              endOtp: booking.endOtp || '4321',
+                              addonCharge: booking.addonCharge || 0,
+                              tripId: booking.id,
+                              bookingType: booking.bookingType || 'prebook',
+                            };
+                            
+                            setActiveTour(activeReq);
+                            setTourPhase('pickup');
+                            setCurrentSpotIndex(0);
+                            setActiveTab('active_tour');
+                            
+                            sendLocalNotification(
+                              '🚩 Tour Started!',
+                              `Tour guide booking for ${booking.touristName} has started. Verify Start OTP.`
+                            );
+                          }}
+                        >
+                          <Text style={[styles.smallPayoutBtnText, { color: isTimeReached ? '#101010' : '#888888', fontWeight: '800' }]}>
+                            {isTimeReached ? 'Start Guided Tour' : `Starts at ${scheduledTime ? scheduledTime.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : ''}`}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
                   </View>
                 );
               })
@@ -1018,7 +1129,7 @@ export default function GuideDashboardScreen() {
                         <Text style={styles.navActionTextCancel}>Arrived</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: colors.amber }]} onPress={() => setOtpVisible(true)}>
-                        <Text style={styles.navActionTextConfirm}>Start Tour (OTP)</Text>
+                        <Text style={styles.navActionTextConfirm}>Start Tour (OTP: {activeTour.otp})</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1043,7 +1154,7 @@ export default function GuideDashboardScreen() {
                         <View style={{ flex: 1 }} />
                       )}
                       <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: colors.amber }]} onPress={handleEndTour}>
-                        <Text style={styles.navActionTextConfirm}>End Tour & Collect</Text>
+                        <Text style={styles.navActionTextConfirm}>End Tour (OTP: {(activeTour as any).endOtp || '4321'})</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1746,6 +1857,38 @@ export default function GuideDashboardScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.popupBtn, { backgroundColor: colors.amber }]} onPress={handleVerifyOtp}>
                   <Text style={styles.popupBtnConfirmText}>Verify & Start</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
+
+      {/* End Tour OTP Entry Modal Pop-up */}
+      <Modal visible={endOtpVisible} transparent={true} animationType="fade">
+        {activeTour && (
+          <View style={styles.popupOverlay}>
+            <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
+              <Text style={[styles.otpTitle, { color: colors.textPrimary }]}>Enter End Tour OTP</Text>
+              <Text style={[styles.otpSub, { color: colors.textMuted }]}>Please check with {activeTour.touristName} for the 4-digit code (e.g. 4321)</Text>
+
+              <TextInput
+                style={[styles.otpInput, { color: colors.textPrimary, borderColor: colors.amber }]}
+                placeholder="0000"
+                placeholderTextColor="rgba(255,255,255,0.2)"
+                keyboardType="numeric"
+                maxLength={4}
+                value={enteredEndOtp}
+                onChangeText={setEnteredEndOtp}
+                autoFocus
+              />
+
+              <View style={styles.popupActionsGrid}>
+                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34' }]} onPress={() => setEndOtpVisible(false)}>
+                  <Text style={styles.popupBtnCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: colors.amber }]} onPress={handleVerifyEndOtp}>
+                  <Text style={styles.popupBtnConfirmText}>Verify & End</Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -75,16 +75,8 @@ export default function RideMatchingScreen() {
   const vehicle = (params.vehicle as string) || '5seater';
   const paymentMode = (params.paymentMode as 'UPI' | 'Cash') || 'UPI';
   const passengerCount = parseInt((params.passengerCount as string) || '1');
+  const addonCharge = parseInt((params.addonCharge as string) || '0');
 
-  // Live / Server driver information
-  const demoDriver = {
-    name: liveDriverInfo?.name || (tripType === 'guide' ? 'Ramesh Gowda' : (vehicle === 'auto' ? 'Raju Auto' : 'Shubham (Captain)')),
-    rating: liveDriverInfo?.rating ? `${liveDriverInfo.rating} ★` : '4.9 ★',
-    phone: liveDriverInfo?.phone || '+91 99000 82400',
-    vehicleName: liveDriverInfo?.vehicleModel || (tripType === 'guide' ? 'Government Certified Guide' : (vehicle === 'auto' ? 'Bajaj RE Auto' : 'Mahindra Thar 4x4 / Innova')),
-    vehicleNumber: liveDriverInfo?.vehicleNumber || (tripType === 'guide' ? 'GUIDE-ID-8240' : (vehicle === 'auto' ? 'KA-02-AU-9912' : 'KA-03-EX-8240')),
-    otp: (params.otp as string) || '8240',
-  };
 
   // Generate route coordinates list connecting pickup -> stops -> drop
   const [routeCoords, setRouteCoords] = useState<Coordinate[]>([]);
@@ -156,6 +148,17 @@ export default function RideMatchingScreen() {
 
   const tripIdParam = (params.tripId as string) || '';
   const [liveDriverInfo, setLiveDriverInfo] = useState<any>(null);
+
+  // Live / Server driver information
+  const demoDriver = {
+    name: liveDriverInfo?.name || (tripType === 'guide' ? 'Ramesh Gowda' : (vehicle === 'auto' ? 'Raju Auto' : 'Shubham (Captain)')),
+    rating: liveDriverInfo?.rating ? `${liveDriverInfo.rating} ★` : '4.9 ★',
+    phone: liveDriverInfo?.phone || '+91 99000 82400',
+    vehicleName: liveDriverInfo?.vehicleModel || (tripType === 'guide' ? 'Government Certified Guide' : (vehicle === 'auto' ? 'Bajaj RE Auto' : 'Mahindra Thar 4x4 / Innova')),
+    vehicleNumber: liveDriverInfo?.vehicleNumber || (tripType === 'guide' ? 'GUIDE-ID-8240' : (vehicle === 'auto' ? 'KA-02-AU-9912' : 'KA-03-EX-8240')),
+    otp: (params.otp as string) || '8240',
+    endOtp: (params.endOtp as string) || '4321',
+  };
 
   // Poll live server status & driver location
   useEffect(() => {
@@ -402,10 +405,14 @@ export default function RideMatchingScreen() {
                 </View>
               </View>
 
-              <View style={[styles.otpLine, { borderTopColor: colors.border }]}>
-                <View style={styles.otpBox}>
-                  <Text style={styles.otpLabel}>SHARE OTP TO START RIDE</Text>
-                  <Text style={[styles.otpCode, { color: colors.textPrimary }]}>{demoDriver.otp}</Text>
+              <View style={[styles.otpLine, { borderTopColor: colors.border, flexDirection: 'row', flexWrap: 'wrap', gap: scale(10) }]}>
+                <View style={[styles.otpBox, { flex: 1 }]}>
+                  <Text style={styles.otpLabel}>START OTP</Text>
+                  <Text style={[styles.otpCode, { color: colors.textPrimary, fontSize: moderateFontScale(14) }]}>{demoDriver.otp}</Text>
+                </View>
+                <View style={[styles.otpBox, { flex: 1 }]}>
+                  <Text style={styles.otpLabel}>END OTP</Text>
+                  <Text style={[styles.otpCode, { color: colors.textPrimary, fontSize: moderateFontScale(14) }]}>{demoDriver.endOtp}</Text>
                 </View>
                 <View style={styles.fareSummary}>
                   <Text style={[styles.fareLabel, { color: colors.textMuted }]}>EST. CHARGE</Text>
@@ -526,6 +533,15 @@ export default function RideMatchingScreen() {
                   {paymentMode}
                 </Text>
               </View>
+
+              {addonCharge > 0 && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(6) }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Addon Charge (Pay after ride):</Text>
+                  <Text style={{ color: '#EF4444', fontSize: moderateFontScale(12), fontWeight: '700' }}>
+                    ₹{addonCharge}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <TouchableOpacity
