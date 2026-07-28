@@ -1024,6 +1024,11 @@ router.post('/:id/accept', async (req, res) => {
       message: 'Trip accepted successfully!',
       data: trip,
     });
+  } catch (error) {
+    console.error('Error accepting trip:', error);
+    res.status(500).json({ success: false, message: 'Failed to accept trip', error: error.message });
+  }
+});
 /**
  * POST /api/trips/book
  * Create/Book a new trip or pre-booking (Cab / Auto / Guide) in PostgreSQL DB
