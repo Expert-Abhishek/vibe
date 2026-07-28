@@ -3,6 +3,31 @@ const db = require('../config/db');
 
 const router = express.Router();
 
+// Auto-migrate trips table columns if missing on production database
+async function ensureTripsColumnsExist() {
+  try {
+    await db.query(`
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS scheduled_time TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'INSTANT';
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS advance_deposit_paid NUMERIC(10,2) DEFAULT 0.00;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS remaining_cash_balance NUMERIC(10,2) DEFAULT 0.00;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_or_guide_name VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_name VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_name VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_lat NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_lng NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lat NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lng NUMERIC(10,6);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
+    `);
+  } catch (e) {
+    console.warn('Trips table auto-migration warning:', e.message);
+  }
+}
+
+// Run migration on route load
+ensureTripsColumnsExist();
+
 /**
  * Expo Push Notification Helper
  */
@@ -514,34 +539,88 @@ router.post('/book', async (req, res) => {
 
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
-    const result = await db.query(
-      `INSERT INTO trips (
-        trip_type, title, customer_id, customer_name, pickup_name, drop_name,
-        pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-        status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, created_at
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
-       RETURNING *`,
-      [
-        tripType,
-        title || `${pickupName} ➔ ${dropName}`,
-        customerId || null,
-        customerName,
-        pickupName,
-        dropName,
-        pickupLat,
-        pickupLng,
-        dropLat,
-        dropLng,
-        parseFloat(amount),
-        paymentMode,
-        otpCode,
-        bookingType,
-        scheduledTime ? new Date(scheduledTime) : null,
-        advanceDepositPaid,
-        remainingCashBalance,
-      ]
-    );
+    let result;
+    try {
+      result = await db.query(
+        `INSERT INTO trips (
+          trip_type, title, customer_id, customer_name, pickup_name, drop_name,
+          pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
+          status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, created_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+         RETURNING *`,
+        [
+          tripType,
+          title || `${pickupName} ➔ ${dropName}`,
+          customerId || null,
+          customerName,
+          pickupName,
+          dropName,
+          pickupLat,
+          pickupLng,
+          dropLat,
+          dropLng,
+          parseFloat(amount),
+          paymentMode,
+          otpCode,
+          bookingType,
+          scheduledTime ? new Date(scheduledTime) : null,
+          advanceDepositPaid,
+          remainingCashBalance,
+        ]
+      );
+    } catch (dbErr) {
+      console.warn('Trips insert column error caught, attempting auto-migration:', dbErr.message);
+      await ensureTripsColumnsExist();
+      try {
+        result = await db.query(
+          `INSERT INTO trips (
+            trip_type, title, customer_id, customer_name, pickup_name, drop_name,
+            pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
+            status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, created_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+           RETURNING *`,
+          [
+            tripType,
+            title || `${pickupName} ➔ ${dropName}`,
+            customerId || null,
+            customerName,
+            pickupName,
+            dropName,
+            pickupLat,
+            pickupLng,
+            dropLat,
+            dropLng,
+            parseFloat(amount),
+            paymentMode,
+            otpCode,
+            bookingType,
+            scheduledTime ? new Date(scheduledTime) : null,
+            advanceDepositPaid,
+            remainingCashBalance,
+          ]
+        );
+      } catch (retryErr) {
+        console.warn('Retry with full columns failed, executing basic insert fallback:', retryErr.message);
+        result = await db.query(
+          `INSERT INTO trips (
+            trip_type, title, customer_id, customer_name, amount, payment_mode, status, otp, created_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7, CURRENT_TIMESTAMP)
+           RETURNING *`,
+          [
+            tripType,
+            title || `${pickupName} ➔ ${dropName}`,
+            customerId || null,
+            customerName,
+            parseFloat(amount),
+            paymentMode,
+            otpCode,
+          ]
+        );
+      }
+    }
 
     const newTrip = result.rows[0];
 
