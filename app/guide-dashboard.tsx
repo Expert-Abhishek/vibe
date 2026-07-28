@@ -1,4 +1,5 @@
 import NotificationModal from '@/components/NotificationModal';
+import { adminState } from '@/constants/admin-state';
 import {
   acceptTripApi,
   completeTripApi,
@@ -14,7 +15,8 @@ import {
   submitWithdrawalApi,
   updatePasswordApi,
   updateUserProfileApi,
-  verifyTripOtpApi
+  verifyTripOtpApi,
+  fetchGuideScheduledBookingsApi
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -395,10 +397,30 @@ export default function GuideDashboardScreen() {
         setEarningsBalance(statsRes.data.walletBalance || 0);
       }
 
-      // 2. Fetch real schedules/trips
+      // 2. Fetch real schedules/trips via fetchGuideScheduledBookingsApi
       setLoadingSchedules(true);
-      const schedules = await fetchGuideAdvanceSchedulesApi(guideId);
-      setRealSchedules(schedules || []);
+      const apiBookings = await fetchGuideScheduledBookingsApi(guideId);
+      if (Array.isArray(apiBookings) && apiBookings.length > 0) {
+        setRealSchedules(apiBookings);
+      } else {
+        const guideBookings = (adminState.advanceBookings || [])
+          .filter((b: any) => b && (b.type === 'guide' || String(b.type).toLowerCase().includes('guide')))
+          .map((b: any) => ({
+            id: b.id,
+            title: b.title || 'Sightseeing Guided Tour',
+            touristName: b.touristName || 'Tourist Client',
+            date: b.date || 'Scheduled Date',
+            time: b.time || '4 Hours Guided Tour',
+            pickup: b.pickup || 'Landmark Center',
+            price: b.price || 2000,
+            status: b.status || 'Accepted',
+            bookingType: b.bookingType || 'PRE_BOOKED',
+            advanceDepositPaid: b.advanceDepositPaid || 400,
+            remainingCashBalance: b.remainingCashBalance || 1600,
+            otp: b.otp || '8240',
+          }));
+        setRealSchedules(guideBookings);
+      }
     } catch (e) {
       console.warn('Error loading real stats or schedules:', e);
     } finally {
@@ -1000,27 +1022,46 @@ export default function GuideDashboardScreen() {
                 const isInstant = booking.bookingType === 'INSTANT';
 
                 return (
-                  <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
+                  <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10), padding: scale(12) }]}>
                     <View style={styles.logHeaderRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
-                        <Text style={[styles.logTime, { color: colors.textMuted }]}>
-                          Scheduled: {booking.date} · {booking.time}
+                        <Text style={[styles.logTime, { color: colors.textMuted, marginTop: 2 }]}>
+                          📅 Scheduled: {booking.date || 'Upcoming Date'} · {booking.time || 'Flexible Time'}
                         </Text>
-                        <Text style={[styles.logTime, { color: colors.textMuted }]}>
-                          Client: {booking.touristName}
+                        <Text style={[styles.logTime, { color: colors.textPrimary, fontWeight: '700', marginTop: 2 }]}>
+                          👤 Client Name: {booking.touristName || booking.customerName || 'Tourist Client'}
+                        </Text>
+                        <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: 2 }}>
+                          📍 Pickup: {booking.pickup || booking.pickupName || 'Landmark Pickup Point'}
                         </Text>
                         <Text style={{ fontSize: moderateFontScale(10), fontWeight: '700', color: colors.amber, marginTop: 4 }}>
-                          ⚡ Type: {isInstant ? 'Instant Match' : 'Pre-booking / Schedule'}
+                          ⚡ Booking Type: {isInstant ? 'Instant Match' : 'Pre-Booking / Scheduled'}
                         </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.logFare}>₹{booking.price}</Text>
-                        <View style={[styles.statusBadgeCompact, { backgroundColor: String(booking.status || '').toLowerCase().includes('cancel') ? 'rgba(239, 68, 68, 0.15)' : (booking.status === 'Accepted' || booking.status === 'Completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)'), marginTop: verticalScale(4) }]}>
-                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: String(booking.status || '').toLowerCase().includes('cancel') ? '#EF4444' : (booking.status === 'Accepted' || booking.status === 'Completed' ? '#10B981' : colors.amber) }}>
-                            {booking.status}
+                        <Text style={styles.logFare}>₹{booking.price || booking.amount}</Text>
+                        <View style={[styles.statusBadgeCompact, { backgroundColor: String(booking.status || '').toLowerCase().includes('cancel') ? 'rgba(239, 68, 68, 0.15)' : (booking.status === 'Accepted' || booking.status === 'Completed' || booking.status === 'Accepted by Guide' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)'), marginTop: verticalScale(4) }]}>
+                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '800', color: String(booking.status || '').toLowerCase().includes('cancel') ? '#EF4444' : (booking.status === 'Accepted' || booking.status === 'Completed' || booking.status === 'Accepted by Guide' ? '#10B981' : colors.amber) }}>
+                            {booking.status || 'Scheduled'}
                           </Text>
                         </View>
+                      </View>
+                    </View>
+
+                    {/* Pre-Booking Deposit Breakdown Box */}
+                    <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F3F4F6', padding: scale(8), borderRadius: scale(8), marginTop: verticalScale(8), flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <View>
+                        <Text style={{ fontSize: moderateFontScale(10), color: colors.textMuted }}>Advance Deposit Paid</Text>
+                        <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: '#10B981' }}>
+                          ₹{booking.advanceDepositPaid || Math.round((booking.price || 2000) * 0.2)}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: moderateFontScale(10), color: colors.textMuted }}>Remaining Cash Balance</Text>
+                        <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: colors.amber }}>
+                          ₹{booking.remainingCashBalance || ((booking.price || 2000) - (booking.advanceDepositPaid || Math.round((booking.price || 2000) * 0.2)))}
+                        </Text>
                       </View>
                     </View>
 
@@ -1041,19 +1082,19 @@ export default function GuideDashboardScreen() {
                       </TouchableOpacity>
                     )}
 
-                    {(booking.status === 'Accepted' || booking.status === 'Accepted by Guide' || booking.status === 'Upcoming') && (
+                    {(booking.status === 'Accepted' || booking.status === 'Accepted by Guide' || booking.status === 'Upcoming' || booking.status === 'Scheduled') && (
                       <View style={{ marginTop: verticalScale(10) }}>
                         <TouchableOpacity
-                          style={[styles.smallPayoutBtn, { backgroundColor: '#10B981', alignItems: 'center' }]}
+                          style={[styles.smallPayoutBtn, { backgroundColor: '#10B981', alignItems: 'center', height: verticalScale(38) }]}
                           onPress={() => {
                             setActiveTour({
-                              touristName: booking.touristName || 'Tourist Client',
-                              pickup: booking.pickup || booking.title || 'Hampi Sightseeing Center',
+                              touristName: booking.touristName || booking.customerName || 'Tourist Client',
+                              pickup: booking.pickup || booking.pickupName || booking.title || 'Hampi Sightseeing Center',
                               pickupLat: 15.3350,
                               pickupLng: 76.4600,
                               spots: [{ name: 'Heritage Landmarks', lat: 15.3400, lng: 76.4650 }],
                               durationHrs: 4,
-                              estimatedFare: booking.price || 2000,
+                              estimatedFare: booking.price || booking.amount || 2000,
                               language: 'Kannada, English',
                               groupSize: 1,
                               otp: booking.otp || '8240',
@@ -1061,11 +1102,11 @@ export default function GuideDashboardScreen() {
                             setTourPhase('pickup');
                             setCurrentSpotIndex(0);
                             setActiveTab('active_tour');
-                            if (showSuccess) showSuccess('Tour Started!', `Guided tour started for ${booking.touristName}.`);
-                            else Alert.alert('Tour Started!', `Guided tour started for ${booking.touristName}.`);
+                            if (showSuccess) showSuccess('Tour Started!', `Guided tour started for ${booking.touristName || booking.customerName}.`);
+                            else Alert.alert('Tour Started!', `Guided tour started for ${booking.touristName || booking.customerName}.`);
                           }}
                         >
-                          <Text style={[styles.smallPayoutBtnText, { color: '#ffffff' }]}>🚀 Start Guided Tour</Text>
+                          <Text style={[styles.smallPayoutBtnText, { color: '#ffffff', fontSize: moderateFontScale(12), fontWeight: '800' }]}>🚀 Start Guided Tour</Text>
                         </TouchableOpacity>
                       </View>
                     )}

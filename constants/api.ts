@@ -1128,3 +1128,19 @@ export async function cancelTripApi(tripId: string, payload?: { reason?: string;
     return { success: false, message: 'Failed to connect to server' };
   }
 }
+
+/**
+ * Fetch Guide Scheduled & Instant Bookings API
+ */
+export async function fetchGuideScheduledBookingsApi(guideId: string): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/guide/${guideId}`);
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      return json.data;
+    }
+  } catch (e) {
+    console.warn('fetchGuideScheduledBookingsApi error:', e);
+  }
+  return [];
+}
