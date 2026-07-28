@@ -1016,8 +1016,8 @@ export default function GuideDashboardScreen() {
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price}</Text>
-                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' || booking.status === 'Completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
-                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' || booking.status === 'Completed' ? '#10B981' : colors.amber }}>
+                        <View style={[styles.statusBadgeCompact, { backgroundColor: String(booking.status || '').toLowerCase().includes('cancel') ? 'rgba(239, 68, 68, 0.15)' : (booking.status === 'Accepted' || booking.status === 'Completed' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)'), marginTop: verticalScale(4) }]}>
+                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: String(booking.status || '').toLowerCase().includes('cancel') ? '#EF4444' : (booking.status === 'Accepted' || booking.status === 'Completed' ? '#10B981' : colors.amber) }}>
                             {booking.status}
                           </Text>
                         </View>

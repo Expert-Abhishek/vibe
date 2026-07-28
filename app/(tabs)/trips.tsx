@@ -1,6 +1,6 @@
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
-import { deductWalletApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi } from '@/constants/api';
+import { deductWalletApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi, cancelTripApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -228,6 +228,13 @@ export default function TripsHistoryScreen() {
               } catch (e) {
                 console.warn('Cancellation fine deduction warning:', e);
               }
+            }
+
+            // Hit Backend API to persist cancellation in Database
+            try {
+              await cancelTripApi(String(trip.id), { cancelledBy: 'tourist', role: 'tourist' });
+            } catch (e) {
+              console.warn('cancelTripApi call failed:', e);
             }
 
             if (Array.isArray(adminState.advanceBookings)) {

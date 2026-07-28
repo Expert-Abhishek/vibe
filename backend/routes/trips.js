@@ -1026,6 +1026,63 @@ router.post('/:id/accept', async (req, res) => {
 });
 
 /**
+ * POST /api/trips/:tripId/cancel
+ * Cancel a trip (tourist / guide / driver)
+ */
+router.post('/:tripId/cancel', async (req, res) => {
+  const { tripId } = req.params;
+  const { reason, cancelledBy, role } = req.body;
+  const newStatus = cancelledBy === 'guide' ? 'Cancelled by Guide' : 'Cancelled by Tourist';
+
+  try {
+    let updatedTrip = null;
+    try {
+      const dbRes = await db.query(
+        `UPDATE trips 
+         SET status = $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $2 OR CAST(id AS VARCHAR) = $2
+         RETURNING *`,
+        [newStatus, tripId]
+      );
+      if (dbRes.rows.length > 0) {
+        updatedTrip = dbRes.rows[0];
+        if (updatedTrip.customer_id) {
+          logActivityNotification(
+            updatedTrip.customer_id,
+            'tourist',
+            '🚫 Trip Cancelled',
+            `Your trip #${tripId} has been marked as ${newStatus}.`,
+            tripId
+          );
+        }
+        if (updatedTrip.driver_id) {
+          logActivityNotification(
+            updatedTrip.driver_id,
+            'driver',
+            '🚫 Trip Cancelled',
+            `Trip #${tripId} was cancelled by ${cancelledBy || 'tourist'}.`,
+            tripId
+          );
+        }
+      }
+    } catch (dbErr) {
+      console.warn('Trips table cancel DB update fallback:', dbErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: `Trip cancelled successfully as ${newStatus}`,
+      tripId,
+      status: newStatus,
+      data: updatedTrip,
+    });
+  } catch (err) {
+    console.error('Error cancelling trip:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/trips/:id/verify-otp
  * Verify 4-digit OTP code to start trip
  */

@@ -1111,3 +1111,20 @@ export async function submitWalletDeductionRequestApi(payload: {
   }
   return { success: true, message: 'Deduction request submitted to admin panel.' };
 }
+
+/**
+ * Cancel Trip API Call (Persists cancellation on PostgreSQL DB & Backend)
+ */
+export async function cancelTripApi(tripId: string, payload?: { reason?: string; cancelledBy?: string; role?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || { cancelledBy: 'tourist', role: 'tourist' }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('cancelTripApi error:', e);
+    return { success: false, message: 'Failed to connect to server' };
+  }
+}
