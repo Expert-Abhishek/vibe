@@ -81,6 +81,77 @@ interface ActiveRequest {
   otp: string;
 }
 
+function formatScheduleDateTime(dateVal?: any, timeVal?: any, scheduledTimeVal?: any): string {
+  // 1. Try scheduledTimeVal or ISO timestamp
+  const rawScheduled = scheduledTimeVal || (typeof dateVal === 'string' && dateVal.includes('T') ? dateVal : null);
+  if (rawScheduled) {
+    const d = new Date(rawScheduled);
+    if (!isNaN(d.getTime())) {
+      const day = d.getDate().toString().padStart(2, '0');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = monthNames[d.getMonth()];
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = d.getMinutes().toString().padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12;
+      const formattedHours = hours.toString().padStart(2, '0');
+      return `${day} ${month} ${year}, ${formattedHours}:${minutes} ${ampm}`;
+    }
+  }
+
+  const rawDateStr = String(dateVal || '').trim();
+  const rawTimeStr = String(timeVal || '').trim();
+
+  // 2. Parse YYYY-MM-DD or DD/MM/YYYY
+  if (rawDateStr.includes('-') || rawDateStr.includes('/')) {
+    const cleanDate = rawDateStr.split('T')[0];
+    const del = cleanDate.includes('-') ? '-' : '/';
+    const parts = cleanDate.split(del);
+    if (parts.length === 3) {
+      let year = Number(parts[0]);
+      let monthIdx = Number(parts[1]) - 1;
+      let dayNum = Number(parts[2]);
+      if (parts[0].length === 2 && parts[2].length === 4) {
+        dayNum = Number(parts[0]);
+        monthIdx = Number(parts[1]) - 1;
+        year = Number(parts[2]);
+      }
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = monthNames[monthIdx] || 'Jul';
+      const dayStr = dayNum.toString().padStart(2, '0');
+      const timeDisplay = rawTimeStr && rawTimeStr !== 'undefined' && rawTimeStr !== 'null' ? rawTimeStr : '10:00 AM';
+      return `${dayStr} ${month} ${year}, ${timeDisplay}`;
+    }
+  }
+
+  if (rawDateStr && rawDateStr !== 'undefined' && rawDateStr !== 'null' && rawDateStr !== 'Scheduled Date') {
+    const timeDisplay = rawTimeStr && rawTimeStr !== 'undefined' && rawTimeStr !== 'null' ? `, ${rawTimeStr}` : ', 10:00 AM';
+    return `${rawDateStr}${timeDisplay}`;
+  }
+
+  return '28 Jul 2026, 10:00 AM';
+}
+
+function isScheduleTimeReached(dateStr?: string, timeStr?: string, scheduledTime?: string): boolean {
+  if (scheduledTime) {
+    const t = new Date(scheduledTime).getTime();
+    if (!isNaN(t)) {
+      return Date.now() >= (t - 15 * 60 * 1000);
+    }
+  }
+  if (dateStr && dateStr.includes('-')) {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const targetDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      return todayDate.getTime() >= targetDate.getTime();
+    }
+  }
+  return true;
+}
+
 export default function GuideDashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -1004,7 +1075,7 @@ export default function GuideDashboardScreen() {
 
           {/* Real Guide Bookings & Tours card */}
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
-            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>My Guide Bookings & Tours (Real-time)</Text>
+            <Text style={[styles.profileSectionTitle, { color: colors.amber }]}>My Scheduled Bookings </Text>
 
             {loadingSchedules ? (
               <View style={{ padding: 20, alignItems: 'center' }}>
@@ -1020,27 +1091,31 @@ export default function GuideDashboardScreen() {
               realSchedules.map((booking) => {
                 const session = getUserSessionSync();
                 const guideId = session?.id || 'g1';
-                const isAcceptedByMe = String(booking.assignedToId) === String(guideId);
-                const isInstant = booking.bookingType === 'INSTANT';
+                const formattedDateTime = formatScheduleDateTime(booking.date, booking.time, booking.scheduledTime);
+                const canStartTour = isScheduleTimeReached(booking.date, booking.time, booking.scheduledTime);
 
                 return (
                   <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10), padding: scale(12) }]}>
                     <View style={styles.logHeaderRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
-                        <Text style={[styles.logTime, { color: colors.textMuted, marginTop: 2 }]}>
-                          📅 Scheduled: {booking.date || 'Upcoming Date'} · {booking.time || 'Flexible Time'}
+
+                        {/* 1. Formatted Schedule Date & Time */}
+                        <Text style={[styles.logTime, { color: colors.amber, fontWeight: '700', marginTop: verticalScale(4) }]}>
+                          📅 Scheduled: {formattedDateTime}
                         </Text>
-                        <Text style={[styles.logTime, { color: colors.textPrimary, fontWeight: '700', marginTop: 2 }]}>
-                          👤 Client Name: {booking.touristName || booking.customerName || 'Tourist Client'}
+
+                        {/* 2. Tourist Name */}
+                        <Text style={[styles.logTime, { color: colors.textPrimary, fontWeight: '700', marginTop: verticalScale(2) }]}>
+                          👤 Tourist Name: {booking.touristName || booking.customerName || 'Tourist Client'}
                         </Text>
-                        <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: 2 }}>
+
+                        {/* 3. Pickup Location */}
+                        <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: verticalScale(2) }}>
                           📍 Pickup: {booking.pickup || booking.pickupName || 'Landmark Pickup Point'}
                         </Text>
-                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '700', color: colors.amber, marginTop: 4 }}>
-                          ⚡ Booking Type: {isInstant ? 'Instant Match' : 'Pre-Booking / Scheduled'}
-                        </Text>
                       </View>
+
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price || booking.amount}</Text>
                         <View style={[styles.statusBadgeCompact, { backgroundColor: String(booking.status || '').toLowerCase().includes('cancel') ? 'rgba(239, 68, 68, 0.15)' : (booking.status === 'Accepted' || booking.status === 'Completed' || booking.status === 'Accepted by Guide' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)'), marginTop: verticalScale(4) }]}>
@@ -1048,22 +1123,6 @@ export default function GuideDashboardScreen() {
                             {booking.status || 'Scheduled'}
                           </Text>
                         </View>
-                      </View>
-                    </View>
-
-                    {/* Pre-Booking Deposit Breakdown Box */}
-                    <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F3F4F6', padding: scale(8), borderRadius: scale(8), marginTop: verticalScale(8), flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <View>
-                        <Text style={{ fontSize: moderateFontScale(10), color: colors.textMuted }}>Advance Deposit Paid</Text>
-                        <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: '#10B981' }}>
-                          ₹{booking.advanceDepositPaid || Math.round((booking.price || 2000) * 0.2)}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: moderateFontScale(10), color: colors.textMuted }}>Remaining Cash Balance</Text>
-                        <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: colors.amber }}>
-                          ₹{booking.remainingCashBalance || ((booking.price || 2000) - (booking.advanceDepositPaid || Math.round((booking.price || 2000) * 0.2)))}
-                        </Text>
                       </View>
                     </View>
 
@@ -1086,7 +1145,7 @@ export default function GuideDashboardScreen() {
 
                     {(booking.status === 'Accepted' || booking.status === 'Accepted by Guide' || booking.status === 'Upcoming' || booking.status === 'Scheduled') && (
                       <View style={{ marginTop: verticalScale(10) }}>
-                        <TouchableOpacity
+                        {canStartTour && <TouchableOpacity
                           style={[styles.smallPayoutBtn, { backgroundColor: '#10B981', alignItems: 'center', height: verticalScale(38) }]}
                           onPress={() => {
                             setActiveTour({
@@ -1109,7 +1168,7 @@ export default function GuideDashboardScreen() {
                           }}
                         >
                           <Text style={[styles.smallPayoutBtnText, { color: '#ffffff', fontSize: moderateFontScale(12), fontWeight: '800' }]}>🚀 Start Guided Tour</Text>
-                        </TouchableOpacity>
+                        </TouchableOpacity>}
                       </View>
                     )}
                   </View>
@@ -1578,15 +1637,8 @@ export default function GuideDashboardScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Schedule:</Text>
                   <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>
-                    {incomingRequest.scheduledTime ? (
-                      incomingRequest.scheduledTime.includes('T') ? (
-                        `${incomingRequest.scheduledTime.split('T')[0]} at ${incomingRequest.scheduledTime.split('T')[1]?.substring(0, 5) || '10:00 AM'}`
-                      ) : (
-                        incomingRequest.scheduledTime
-                      )
-                    ) : (
-                      '⚡ Immediate (Instant)'
-                    )}
+                    {(incomingRequest.scheduledTime || incomingRequest.date) && formatScheduleDateTime(incomingRequest.date, incomingRequest.time, incomingRequest.scheduledTime)
+                    }
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
