@@ -1,5 +1,5 @@
 import { adminState, Driver, Guide } from '@/constants/admin-state';
-import { updateUserStatus, sendAdminNotificationApi } from '@/constants/api';
+import { updateUserStatus, sendAdminNotificationApi, topupWalletApi, deductWalletApi } from '@/constants/api';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
@@ -39,8 +39,64 @@ export default function AdminDashboardScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  // Current Admin Tab: 'dashboard' | 'plan' | 'voucher' | 'driver' | 'guide'
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'plan' | 'voucher' | 'driver' | 'guide'>('dashboard');
+  // Current Admin Tab: 'dashboard' | 'plan' | 'voucher' | 'driver' | 'guide' | 'transactions'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'plan' | 'voucher' | 'driver' | 'guide' | 'transactions'>('dashboard');
+
+  // Unified Transactions & Manual Wallet Updater State
+  const [manualUserPhone, setManualUserPhone] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
+  const [manualAction, setManualAction] = useState<'add' | 'deduct'>('add');
+  const [manualReason, setManualReason] = useState('');
+  const [txnFilter, setTxnFilter] = useState<'all' | 'topup' | 'withdrawal' | 'deduction'>('all');
+
+  const handleExecuteManualWalletUpdate = async () => {
+    if (!manualUserPhone.trim() || !manualAmount.trim()) {
+      Alert.alert('Missing Info', 'Please enter User Phone/ID and Amount.');
+      return;
+    }
+    const amt = parseFloat(manualAmount);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid positive amount.');
+      return;
+    }
+
+    try {
+      if (manualAction === 'add') {
+        await topupWalletApi({
+          userId: manualUserPhone.trim(),
+          amount: amt,
+          paymentId: `manual_${Date.now()}`,
+          description: manualReason || 'Admin Manual Balance Credit',
+        });
+      } else {
+        await deductWalletApi({
+          userId: manualUserPhone.trim(),
+          amount: amt,
+          description: manualReason || 'Admin Manual Balance Deduction',
+        });
+      }
+
+      if (!Array.isArray((adminState as any).walletDeductions)) (adminState as any).walletDeductions = [];
+      (adminState as any).walletDeductions.unshift({
+        id: `txn_${Date.now()}`,
+        userId: manualUserPhone.trim(),
+        userName: `User (${manualUserPhone.trim()})`,
+        role: 'user',
+        amount: amt,
+        description: `Manual Admin ${manualAction.toUpperCase()}: ${manualReason || 'Razorpay / Manual Reconciliation'}`,
+        createdAt: new Date().toISOString(),
+        status: 'Updated',
+      });
+
+      Alert.alert('Wallet Updated! ⚡', `₹${amt} successfully ${manualAction === 'add' ? 'credited to' : 'deducted from'} user (${manualUserPhone}).`);
+      setManualUserPhone('');
+      setManualAmount('');
+      setManualReason('');
+      setAdminUpdateTrigger(prev => prev + 1);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update wallet balance.');
+    }
+  };
 
   // Tariff charges state
   const [dailyCharge, setDailyCharge] = useState('2500');
@@ -961,11 +1017,175 @@ export default function AdminDashboardScreen() {
           </View>
         )}
 
+        {/* 6. UNIFIED TRANSACTIONS & MANUAL WALLET AUDIT TAB */}
+        {activeTab === 'transactions' && (
+          <View>
+            <Text style={[styles.tabHeading, { color: colors.amber }]}>Transactions & Manual Wallet Audit</Text>
+
+            {/* Quick Manual Wallet Updater Tool */}
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginBottom: scale(10) }}>
+                <MaterialIcons name="account-balance-wallet" size={scale(20)} color={colors.amber} />
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800' }}>
+                  ⚡ Quick Manual User Wallet Updater
+                </Text>
+              </View>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: scale(12) }}>
+                Directly add or deduct money from any tourist, driver, or guide wallet (Manual Razorpay & fine adjustments)
+              </Text>
+
+              <TextInput
+                style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.line }]}
+                placeholder="User Phone Number or User ID (e.g. 9876543210 / t1)"
+                placeholderTextColor={colors.textMuted}
+                value={manualUserPhone}
+                onChangeText={setManualUserPhone}
+              />
+
+              <View style={{ flexDirection: 'row', gap: scale(10), marginBottom: verticalScale(10) }}>
+                <TextInput
+                  style={[styles.inputField, { flex: 1, color: colors.textPrimary, borderColor: colors.line }]}
+                  placeholder="Amount (₹)"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="numeric"
+                  value={manualAmount}
+                  onChangeText={setManualAmount}
+                />
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: scale(16),
+                    borderRadius: scale(10),
+                    backgroundColor: manualAction === 'add' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
+                    borderWidth: 1.5,
+                    borderColor: manualAction === 'add' ? '#10B981' : '#EF4444',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setManualAction(prev => (prev === 'add' ? 'deduct' : 'add'))}
+                >
+                  <Text style={{ color: manualAction === 'add' ? '#10B981' : '#EF4444', fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                    {manualAction === 'add' ? '+ Add Credit' : '- Deduct Fine'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TextInput
+                style={[styles.inputField, { color: colors.textPrimary, borderColor: colors.line }]}
+                placeholder="Reason / Note (e.g. Razorpay Manual Verification / Fine)"
+                placeholderTextColor={colors.textMuted}
+                value={manualReason}
+                onChangeText={setManualReason}
+              />
+
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: colors.amber, height: verticalScale(42), marginTop: verticalScale(6) }]}
+                onPress={handleExecuteManualWalletUpdate}
+              >
+                <Text style={[styles.primaryBtnText, { fontSize: moderateFontScale(13) }]}>
+                  Execute Wallet Update Query 🚀
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Combined Transactions Request Feed */}
+            <Text style={[styles.tabHeading, { color: colors.amber, marginTop: verticalScale(16) }]}>
+              All Transaction Requests (Topup / Withdrawal / Deduction)
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: scale(6), marginBottom: verticalScale(12) }}>
+              <TouchableOpacity
+                style={[styles.typeSelector, { backgroundColor: txnFilter === 'all' ? colors.amber : 'transparent', borderColor: colors.line }]}
+                onPress={() => setTxnFilter('all')}
+              >
+                <Text style={{ color: txnFilter === 'all' ? '#101010' : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(10) }}>All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeSelector, { backgroundColor: txnFilter === 'topup' ? colors.amber : 'transparent', borderColor: colors.line }]}
+                onPress={() => setTxnFilter('topup')}
+              >
+                <Text style={{ color: txnFilter === 'topup' ? '#101010' : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(10) }}>Top-Ups</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeSelector, { backgroundColor: txnFilter === 'withdrawal' ? colors.amber : 'transparent', borderColor: colors.line }]}
+                onPress={() => setTxnFilter('withdrawal')}
+              >
+                <Text style={{ color: txnFilter === 'withdrawal' ? '#101010' : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(10) }}>Withdrawals</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeSelector, { backgroundColor: txnFilter === 'deduction' ? colors.amber : 'transparent', borderColor: colors.line }]}
+                onPress={() => setTxnFilter('deduction')}
+              >
+                <Text style={{ color: txnFilter === 'deduction' ? '#101010' : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(10) }}>Deductions</Text>
+              </TouchableOpacity>
+            </View>
+
+            {(() => {
+              const topups = ((adminState as any).walletTopups || []).map((t: any) => ({ ...t, txnType: 'topup' }));
+              const withdrawals = ((adminState as any).withdrawalRequests || []).map((w: any) => ({ ...w, txnType: 'withdrawal' }));
+              const deductions = ((adminState as any).walletDeductions || []).map((d: any) => ({ ...d, txnType: 'deduction' }));
+              const combined = [...topups, ...withdrawals, ...deductions];
+
+              const filtered = combined.filter(item => {
+                if (txnFilter === 'all') return true;
+                return item.txnType === txnFilter;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line, alignItems: 'center', padding: scale(20) }]}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>No transaction requests found.</Text>
+                  </View>
+                );
+              }
+
+              return filtered.map((txn, idx) => {
+                const isDeduction = txn.txnType === 'deduction';
+                const isWithdrawal = txn.txnType === 'withdrawal';
+                const typeLabel = isDeduction ? 'FINE / DEDUCTION' : (isWithdrawal ? 'WITHDRAWAL' : 'TOP-UP CREDIT');
+                const badgeColor = isDeduction ? '#EF4444' : (isWithdrawal ? colors.amber : '#10B981');
+
+                return (
+                  <View key={txn.id || idx} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(8) }}>
+                      <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: scale(8), paddingVertical: verticalScale(3), borderRadius: scale(6) }}>
+                        <Text style={{ color: badgeColor, fontSize: moderateFontScale(10), fontWeight: '800' }}>{typeLabel}</Text>
+                      </View>
+                      <Text style={{ color: colors.amber, fontSize: moderateFontScale(15), fontWeight: '900' }}>₹{txn.amount}</Text>
+                    </View>
+
+                    <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800' }}>{txn.userName || txn.userId}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>{txn.description || 'Transaction Request'}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: 4 }}>Date: {txn.createdAt ? new Date(txn.createdAt).toLocaleString() : 'Recent'}</Text>
+
+                    <View style={{ flexDirection: 'row', gap: scale(8), marginTop: verticalScale(10) }}>
+                      <TouchableOpacity
+                        style={{ flex: 1, backgroundColor: '#10B981', paddingVertical: scale(8), borderRadius: scale(8), alignItems: 'center' }}
+                        onPress={() => {
+                          txn.status = 'Approved / Updated';
+                          Alert.alert('Request Updated', `Transaction approved for ${txn.userName || txn.userId}. Wallet updated.`);
+                          setAdminUpdateTrigger(prev => prev + 1);
+                        }}
+                      >
+                        <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: moderateFontScale(11) }}>Confirm & Sync Wallet</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              });
+            })()}
+          </View>
+        )}
+
         <View style={{ height: verticalScale(100) }} />
       </ScrollView>
 
       {/* Admin Sticky Bottom Tab Bar */}
       <View style={[styles.tabBarContainer, { backgroundColor: isDark ? 'rgba(26,26,32,0.95)' : 'rgba(255,255,255,0.95)', borderColor: colors.line }]}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('transactions')}>
+          <MaterialIcons name="account-balance-wallet" size={scale(20)} color={activeTab === 'transactions' ? colors.amber : colors.textMuted} />
+          <Text style={[styles.tabLabel, { color: activeTab === 'transactions' ? colors.amber : colors.textMuted }]}>Transactions</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('plan')}>
           <MaterialIcons name="map" size={scale(20)} color={activeTab === 'plan' ? colors.amber : colors.textMuted} />
           <Text style={[styles.tabLabel, { color: activeTab === 'plan' ? colors.amber : colors.textMuted }]}>Plan</Text>

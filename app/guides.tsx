@@ -81,8 +81,16 @@ export default function GuidesScreen() {
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [bookingStep, setBookingStep] = useState<'none' | 'loading' | 'map' | 'datetime' | 'accepted'>('none');
 
-  // Advanced prebooking fields
-  const [prebookDate, setPrebookDate] = useState('');
+  const getTodayDateString = () => {
+    const d = new Date();
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${da}`;
+  };
+
+  // Advanced prebooking fields initialized with today date
+  const [prebookDate, setPrebookDate] = useState(getTodayDateString());
   const [prebookHour, setPrebookHour] = useState<number>(10);
   const [prebookMinute, setPrebookMinute] = useState<number>(0);
   const [prebookAmPm, setPrebookAmPm] = useState<'AM' | 'PM'>('AM');
@@ -246,17 +254,31 @@ export default function GuidesScreen() {
         }
       }
 
-      // Construct scheduled time
+      // Construct scheduled time safely
       let scheduledTimeStr: string | null = null;
-      let finalHour = prebookHour;
-      if (prebookAmPm === 'PM' && prebookHour !== 12) {
-        finalHour += 12;
-      } else if (prebookAmPm === 'AM' && prebookHour === 12) {
-        finalHour = 0;
+      try {
+        const effectiveDateStr = prebookDate && prebookDate.includes('-') ? prebookDate : getTodayDateString();
+        const dateParts = effectiveDateStr.split('-').map(Number);
+        const year = dateParts[0] || new Date().getFullYear();
+        const month = (dateParts[1] || (new Date().getMonth() + 1)) - 1;
+        const day = dateParts[2] || new Date().getDate();
+
+        let finalHour = prebookHour || 10;
+        if (prebookAmPm === 'PM' && finalHour !== 12) {
+          finalHour += 12;
+        } else if (prebookAmPm === 'AM' && finalHour === 12) {
+          finalHour = 0;
+        }
+        const dateObj = new Date(year, month, day, finalHour, prebookMinute || 0);
+        if (!isNaN(dateObj.getTime())) {
+          scheduledTimeStr = dateObj.toISOString();
+        } else {
+          scheduledTimeStr = new Date().toISOString();
+        }
+      } catch (e) {
+        console.warn('Prebook date parsing fallback:', e);
+        scheduledTimeStr = new Date().toISOString();
       }
-      const [year, month, day] = prebookDate.split('-').map(Number);
-      const dateObj = new Date(year, month - 1, day, finalHour, prebookMinute);
-      scheduledTimeStr = dateObj.toISOString();
 
       // 3. Dispatch Booking Request to Backend
       const bookRes = await bookTripApi({
@@ -309,10 +331,12 @@ export default function GuidesScreen() {
         `Your booking request has been sent to ${selectedGuide?.name}.`
       );
 
-      setBookingStep('accepted');
+      setBookingStep('none');
+      setSelectedGuide(null);
     } catch (err) {
       console.error('Error confirming prebooking:', err);
-      setBookingStep('accepted');
+      setBookingStep('none');
+      setSelectedGuide(null);
     }
   };
 
@@ -853,12 +877,10 @@ export default function GuidesScreen() {
               style={[styles.actionConfirmBtn, { backgroundColor: colors.amber, marginTop: scale(18), width: '100%', marginHorizontal: 0 }]}
               onPress={() => {
                 setBookingStep('none');
-                setTimeout(() => {
-                  router.replace('/(tabs)/trips');
-                }, 150);
+                setSelectedGuide(null);
               }}
             >
-              <Text style={styles.actionConfirmText}>View Status in My Trips</Text>
+              <Text style={styles.actionConfirmText}>Guide Booked ✓</Text>
             </TouchableOpacity>
           </View>
         </View>

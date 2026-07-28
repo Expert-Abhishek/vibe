@@ -158,24 +158,38 @@ export default function GuideDashboardScreen() {
 
   const handleAcceptIncomingRequest = async () => {
     if (!incomingRequest) return;
+    const isPreBooking = incomingRequest.bookingType === 'PRE_BOOKED' || incomingRequest.bookingType === 'prebook' || (incomingRequest.scheduledTime && !incomingRequest.scheduledTime.includes('Instant'));
     try {
       await acceptTripApi(incomingRequest.id, userId, guideName);
 
-      setRealSchedules(prev => [
-        {
-          id: incomingRequest.id,
-          touristName: incomingRequest.touristName,
-          date: incomingRequest.scheduledTime || 'Today',
-          time: '4 Hours Guided Tour',
-          pickup: incomingRequest.pickup || 'Landmark Center',
-          price: incomingRequest.estimatedFare,
-          status: 'Accepted by Guide',
-        },
-        ...prev,
-      ]);
+      if (isPreBooking) {
+        setRealSchedules(prev => [
+          {
+            id: incomingRequest.id,
+            touristName: incomingRequest.touristName,
+            date: incomingRequest.scheduledTime || 'Upcoming Date',
+            time: '4 Hours Guided Tour',
+            pickup: incomingRequest.pickup || 'Landmark Center',
+            price: incomingRequest.estimatedFare,
+            status: 'Accepted by Guide',
+            advanceDepositPaid: incomingRequest.advanceDepositPaid || 0,
+            remainingCashBalance: incomingRequest.remainingCashBalance || incomingRequest.estimatedFare,
+          },
+          ...prev,
+        ]);
 
-      if (showSuccess) showSuccess('Request Accepted!', `Booking request accepted for ${incomingRequest.touristName}.`);
-      else Alert.alert('Request Accepted!', `Booking request accepted for ${incomingRequest.touristName}.`);
+        if (showSuccess) showSuccess('Pre-booking Accepted!', `Pre-booking request accepted for ${incomingRequest.touristName}. It is saved under Scheduled Pre-Bookings.`);
+        else Alert.alert('Pre-booking Accepted!', `Pre-booking request accepted for ${incomingRequest.touristName}. It is saved under Scheduled Pre-Bookings.`);
+      } else {
+        // Instant Booking goes to Active Tour tab!
+        setActiveTour(incomingRequest);
+        setTourPhase('pickup');
+        setCurrentSpotIndex(0);
+        setActiveTab('active_tour');
+
+        if (showSuccess) showSuccess('Instant Tour Accepted!', `Proceed to pickup location for ${incomingRequest.touristName}.`);
+        else Alert.alert('Instant Tour Accepted!', `Proceed to pickup location for ${incomingRequest.touristName}.`);
+      }
 
       setIncomingRequest(null);
       loadRealStatsAndSchedules();
@@ -1026,6 +1040,35 @@ export default function GuideDashboardScreen() {
                         <Text style={styles.smallPayoutBtnText}>Accept Booking Schedule</Text>
                       </TouchableOpacity>
                     )}
+
+                    {(booking.status === 'Accepted' || booking.status === 'Accepted by Guide' || booking.status === 'Upcoming') && (
+                      <View style={{ marginTop: verticalScale(10) }}>
+                        <TouchableOpacity
+                          style={[styles.smallPayoutBtn, { backgroundColor: '#10B981', alignItems: 'center' }]}
+                          onPress={() => {
+                            setActiveTour({
+                              touristName: booking.touristName || 'Tourist Client',
+                              pickup: booking.pickup || booking.title || 'Hampi Sightseeing Center',
+                              pickupLat: 15.3350,
+                              pickupLng: 76.4600,
+                              spots: [{ name: 'Heritage Landmarks', lat: 15.3400, lng: 76.4650 }],
+                              durationHrs: 4,
+                              estimatedFare: booking.price || 2000,
+                              language: 'Kannada, English',
+                              groupSize: 1,
+                              otp: booking.otp || '8240',
+                            });
+                            setTourPhase('pickup');
+                            setCurrentSpotIndex(0);
+                            setActiveTab('active_tour');
+                            if (showSuccess) showSuccess('Tour Started!', `Guided tour started for ${booking.touristName}.`);
+                            else Alert.alert('Tour Started!', `Guided tour started for ${booking.touristName}.`);
+                          }}
+                        >
+                          <Text style={[styles.smallPayoutBtnText, { color: '#ffffff' }]}>🚀 Start Guided Tour</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 );
               })
@@ -1080,7 +1123,7 @@ export default function GuideDashboardScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.touristProfileName, { color: colors.textPrimary }]}>{activeTour.touristName}</Text>
                     <Text style={[styles.touristProfileMeta, { color: colors.textMuted }]}>
-                      Language: {activeTour.language} | Group: {activeTour.groupSize} Pax
+                      Language: {activeTour.language}
                     </Text>
                   </View>
                 </View>
@@ -1484,13 +1527,23 @@ export default function GuideDashboardScreen() {
             {incomingRequest && (
               <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border, marginBottom: scale(16) }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Tourist Client:</Text>
-                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '800' }}>{incomingRequest.touristName}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Booking Type:</Text>
+                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '800' }}>
+                    {(incomingRequest.bookingType === 'prebook' || incomingRequest.bookingType === 'PRE_BOOKED' || incomingRequest.scheduledTime) ? '📅 Pre-Booking (Advance)' : '⚡ Instant Booking'}
+                  </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Schedule:</Text>
                   <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>
-                    {incomingRequest.scheduledTime || 'Instant Assignment'}
+                    {incomingRequest.scheduledTime ? (
+                      incomingRequest.scheduledTime.includes('T') ? (
+                        `${incomingRequest.scheduledTime.split('T')[0]} at ${incomingRequest.scheduledTime.split('T')[1]?.substring(0, 5) || '10:00 AM'}`
+                      ) : (
+                        incomingRequest.scheduledTime
+                      )
+                    ) : (
+                      '⚡ Immediate (Instant)'
+                    )}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
