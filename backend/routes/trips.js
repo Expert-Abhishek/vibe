@@ -1138,9 +1138,8 @@ router.get('/guide/:guideId', async (req, res) => {
       `SELECT * FROM trips 
        WHERE trip_type = 'guide' 
           OR LOWER(trip_type) LIKE '%guide%'
-          OR driver_id = $1 
           OR CAST(driver_id AS VARCHAR) = $1 
-          OR customer_id = $1
+          OR CAST(customer_id AS VARCHAR) = $1
        ORDER BY created_at DESC`,
       [guideId]
     );
@@ -1616,18 +1615,18 @@ router.get('/guide-advance-schedules/:guideId', async (req, res) => {
   try {
     const { guideId } = req.params;
 
-    const userRes = await db.query('SELECT name FROM users WHERE id = $1', [guideId]);
+    const userRes = await db.query('SELECT name FROM users WHERE id = $1 OR CAST(id AS VARCHAR) = $1', [guideId]);
     const guideName = userRes.rows.length > 0 ? userRes.rows[0].name : '';
 
     let result;
     if (guideName && guideName.trim().length > 2) {
       result = await db.query(
-        `SELECT * FROM trips WHERE (driver_id = $1 OR LOWER(driver_or_guide_name) = LOWER($2)) AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        `SELECT * FROM trips WHERE (CAST(driver_id AS VARCHAR) = $1 OR LOWER(driver_or_guide_name) = LOWER($2)) AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
         [guideId, guideName.trim()]
       );
     } else {
       result = await db.query(
-        `SELECT * FROM trips WHERE driver_id = $1 AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
+        `SELECT * FROM trips WHERE CAST(driver_id AS VARCHAR) = $1 AND status IN ('Accepted', 'Active', 'Arrived', 'Confirmed') ORDER BY created_at DESC LIMIT 20`,
         [guideId]
       );
     }
