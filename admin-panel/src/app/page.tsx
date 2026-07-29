@@ -11,6 +11,8 @@ import {
   AlertCircle,
   ArrowUpRight,
   ShieldAlert,
+  Receipt,
+  Filter,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -26,7 +28,9 @@ import {
   fetchCustomersApi,
   fetchDriversApi,
   fetchGuidesApi,
+  fetchPlatformFeeRevenueApi,
   getDashboardStats,
+  PlatformFeeRevenueData,
 } from '@/lib/api';
 import { Customer, Driver, Guide } from '@/lib/types';
 
@@ -35,11 +39,25 @@ export default function DashboardPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [guides, setGuides] = useState<Guide[]>([]);
 
+  const [platformFeeData, setPlatformFeeData] = useState<PlatformFeeRevenueData>({
+    totalRevenue: 0,
+    guideRevenue: 0,
+    driverRevenue: 0,
+    records: [],
+  });
+  const [feeRoleFilter, setFeeRoleFilter] = useState<'all' | 'guide' | 'driver'>('all');
+
   useEffect(() => {
-    Promise.all([fetchCustomersApi(), fetchDriversApi(), fetchGuidesApi()]).then(([c, d, g]) => {
+    Promise.all([
+      fetchCustomersApi(),
+      fetchDriversApi(),
+      fetchGuidesApi(),
+      fetchPlatformFeeRevenueApi(),
+    ]).then(([c, d, g, pf]) => {
       setCustomers(c || []);
       setDrivers(d || []);
       setGuides(g || []);
+      setPlatformFeeData(pf || { totalRevenue: 0, guideRevenue: 0, driverRevenue: 0, records: [] });
     });
   }, []);
 
@@ -52,8 +70,14 @@ export default function DashboardPage() {
   const pendingDrivers = drivers.filter((d) => d.status === 'Pending KYC').length;
   const pendingGuides = guides.filter((g) => g.status === 'Pending KYC').length;
 
+  const filteredFeeRecords = platformFeeData.records.filter((r) => {
+    if (feeRoleFilter === 'guide') return r.user_role === 'guide';
+    if (feeRoleFilter === 'driver') return r.user_role === 'driver';
+    return true;
+  });
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12">
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-dark-card via-dark-hover to-dark-card p-6 rounded-2xl border border-dark-border shadow-xl">
         <div>
@@ -61,7 +85,7 @@ export default function DashboardPage() {
             Welcome back, Admin 👋
           </h1>
           <p className="text-xs text-dark-textMuted mt-1">
-            Real-time platform metrics, revenue tracking & pending KYC approvals.
+            Real-time platform metrics, partner platform fee revenues & pending KYC approvals.
           </p>
         </div>
         <div className="flex items-center space-x-3">
@@ -139,7 +163,7 @@ export default function DashboardPage() {
         <div className="glass-card p-5 rounded-2xl transition-all hover:-translate-y-1 border-brand-500/30">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-dark-textMuted uppercase tracking-wider">
-              Gross Revenue
+              Platform Fee Revenue
             </span>
             <div className="w-10 h-10 rounded-xl bg-brand-500 text-black flex items-center justify-center font-bold">
               <IndianRupee className="w-5 h-5" />
@@ -147,13 +171,15 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl font-black text-white">
-              ₹{stats.totalRevenue.toLocaleString('en-IN')}
+              ₹{platformFeeData.totalRevenue.toLocaleString('en-IN')}
             </span>
             <span className="text-xs font-bold text-green-400 flex items-center">
-              <TrendingUp className="w-3.5 h-3.5 mr-0.5" /> +22.4%
+              <TrendingUp className="w-3.5 h-3.5 mr-0.5" /> Live
             </span>
           </div>
-          <p className="text-[11px] text-dark-textMuted mt-2">Platform booking volume</p>
+          <p className="text-[11px] text-dark-textMuted mt-2">
+            Guides: ₹{platformFeeData.guideRevenue} | Drivers: ₹{platformFeeData.driverRevenue}
+          </p>
         </div>
       </div>
 
@@ -241,6 +267,115 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Unified Platform Fee Revenue Ledger Section */}
+      <div className="glass-card p-6 rounded-2xl border border-dark-border shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-brand-500" />
+              <span>Platform Fee Revenue Ledger (Guides & Drivers)</span>
+            </h2>
+            <p className="text-xs text-dark-textMuted mt-1">
+              Automated record of platform fees collected when partners accept bookings.
+            </p>
+          </div>
+
+          {/* Role Filter Tabs */}
+          <div className="flex items-center space-x-1 p-1 bg-dark-bg rounded-xl border border-dark-border">
+            <button
+              onClick={() => setFeeRoleFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                feeRoleFilter === 'all'
+                  ? 'bg-brand-500 text-black'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              All Partners (₹{platformFeeData.totalRevenue})
+            </button>
+            <button
+              onClick={() => setFeeRoleFilter('guide')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                feeRoleFilter === 'guide'
+                  ? 'bg-emerald-500 text-black'
+                  : 'text-gray-400 hover:text-emerald-400'
+              }`}
+            >
+              Guides Only (₹{platformFeeData.guideRevenue})
+            </button>
+            <button
+              onClick={() => setFeeRoleFilter('driver')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                feeRoleFilter === 'driver'
+                  ? 'bg-blue-500 text-white'
+                  : 'text-gray-400 hover:text-blue-400'
+              }`}
+            >
+              Drivers Only (₹{platformFeeData.driverRevenue})
+            </button>
+          </div>
+        </div>
+
+        {/* Platform Fee Table */}
+        <div className="overflow-x-auto rounded-xl border border-dark-border">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-dark-hover/80 text-dark-textMuted font-bold border-b border-dark-border uppercase tracking-wider text-[11px]">
+                <th className="py-3.5 px-6">Partner Name</th>
+                <th className="py-3.5 px-6">Category / Role</th>
+                <th className="py-3.5 px-6">Trip / Booking ID</th>
+                <th className="py-3.5 px-6">Fee Collected</th>
+                <th className="py-3.5 px-6">Description</th>
+                <th className="py-3.5 px-6 text-right">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-dark-border/60">
+              {filteredFeeRecords.map((fee) => (
+                <tr key={fee.id} className="hover:bg-dark-hover/40 transition-colors">
+                  <td className="py-3.5 px-6 font-bold text-white">
+                    {fee.user_name}
+                    <span className="block text-[10px] text-dark-textMuted font-mono font-normal">
+                      ID: {fee.user_id}
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-6">
+                    <span
+                      className={`capitalize px-2 py-0.5 rounded-md border font-semibold text-[10px] ${
+                        fee.user_role === 'guide'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      }`}
+                    >
+                      {fee.user_role}
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-6 font-mono text-gray-300">
+                    {fee.trip_id ? `#${fee.trip_id.slice(0, 8)}...` : 'N/A'}
+                  </td>
+                  <td className="py-3.5 px-6 font-bold text-brand-500 font-mono text-sm">
+                    +₹{fee.amount}
+                  </td>
+                  <td className="py-3.5 px-6 text-gray-300 text-xs">
+                    {fee.description || 'Platform booking fee'}
+                  </td>
+                  <td className="py-3.5 px-6 text-right text-dark-textMuted text-[11px]">
+                    {new Date(fee.created_at).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+
+              {filteredFeeRecords.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-10 text-center text-dark-textMuted">
+                    No platform fee revenue records found for this filter.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   );
 }

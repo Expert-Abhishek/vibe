@@ -987,6 +987,29 @@ router.post('/:id/accept', async (req, res) => {
       [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
     );
 
+    // 4. Log Platform Fee Revenue for Admin Dashboard (Flexible Guide vs Driver)
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+            user_name VARCHAR(255),
+            user_role VARCHAR(50) NOT NULL,
+            trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
+            amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+            description TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await db.query(
+        `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [driverId, driverName, isGuide ? 'guide' : 'driver', id, platformFee, `Platform Fee for Booking #${id}`]
+      );
+    } catch (pErr) {
+      console.warn('Failed to log platform fee revenue:', pErr.message);
+    }
+
     const result = await db.query(
       `UPDATE trips 
        SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2 
@@ -1433,6 +1456,29 @@ router.post('/:id/respond', async (req, res) => {
         "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
         [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
       );
+
+      // 4. Log Platform Fee Revenue for Admin Dashboard
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+              user_name VARCHAR(255),
+              user_role VARCHAR(50) NOT NULL,
+              trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
+              amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+              description TEXT,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        await db.query(
+          `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [driverId, driverName || 'Verified Partner', isGuide ? 'guide' : 'driver', id, platformFee, `Platform Fee for Booking #${id}`]
+        );
+      } catch (pErr) {
+        console.warn('Failed to log platform fee revenue:', pErr.message);
+      }
 
       await db.query(
         "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id = $3",

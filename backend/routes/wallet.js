@@ -818,6 +818,59 @@ router.post('/admin/topup-requests/:id/reject', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/platform-fee-revenue
+ * Fetch platform fee earnings, breakdown by Guide vs Driver
+ */
+router.get('/admin/platform-fee-revenue', async (req, res) => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+          user_name VARCHAR(255),
+          user_role VARCHAR(50) NOT NULL,
+          trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
+          amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+          description TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const result = await db.query(
+      `SELECT * FROM platform_fee_revenue ORDER BY created_at DESC LIMIT 100`
+    );
+
+    const records = result.rows.map(r => ({
+      id: r.id,
+      user_id: r.user_id,
+      user_name: r.user_name || 'Partner',
+      user_role: r.user_role || 'guide',
+      trip_id: r.trip_id,
+      amount: parseFloat(r.amount || 0),
+      description: r.description,
+      created_at: r.created_at,
+    }));
+
+    const totalRevenue = records.reduce((acc, curr) => acc + curr.amount, 0);
+    const guideRevenue = records.filter(r => r.user_role === 'guide').reduce((acc, curr) => acc + curr.amount, 0);
+    const driverRevenue = records.filter(r => r.user_role === 'driver').reduce((acc, curr) => acc + curr.amount, 0);
+
+    res.json({
+      success: true,
+      data: {
+        totalRevenue,
+        guideRevenue,
+        driverRevenue,
+        records,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching platform fee revenue:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch platform fee revenue' });
+  }
+});
+
+/**
  * GET /api/admin/wallet/reconciliation
  * Full Wallet Reconciliation Ledger Audit for Admin Panel
  */

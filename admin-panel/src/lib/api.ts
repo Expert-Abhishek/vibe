@@ -734,5 +734,42 @@ export async function fetchAllTransactionsApi(
   return { transactions: combined, stats };
 }
 
+export interface PlatformFeeRecord {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_role: 'guide' | 'driver' | string;
+  trip_id?: string;
+  amount: number;
+  description?: string;
+  created_at: string;
+}
+
+export interface PlatformFeeRevenueData {
+  totalRevenue: number;
+  guideRevenue: number;
+  driverRevenue: number;
+  records: PlatformFeeRecord[];
+}
+
+export async function fetchPlatformFeeRevenueApi(): Promise<PlatformFeeRevenueData> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/wallet/admin/platform-fee-revenue`);
+    const data = await res.json();
+    if (data.success && data.data) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('Error fetching platform fee revenue:', e);
+  }
+  return {
+    totalRevenue: 0,
+    guideRevenue: 0,
+    driverRevenue: 0,
+    records: [],
+  };
+}
+
+
 
 

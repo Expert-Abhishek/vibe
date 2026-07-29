@@ -228,3 +228,16 @@ CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
     reviewed_at TIMESTAMP WITH TIME ZONE,
     reject_reason TEXT
 );
+
+-- 17. Platform Fee Revenue Table (Flexible for Guide & Driver platform earnings)
+CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_name VARCHAR(255),
+    user_role VARCHAR(50) NOT NULL, -- 'guide' or 'driver'
+    trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
+    amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+

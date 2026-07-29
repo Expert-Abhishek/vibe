@@ -381,7 +381,7 @@ export default function TripsHistoryScreen() {
                   {/* Status indicator */}
                   <View style={[styles.statusBadge, { backgroundColor: badgeColors.bg }]}>
                     <Text style={[styles.statusBadgeText, { color: badgeColors.text }]}>
-                      {isCancelled ? '🚫 Cancelled by Tourist' : (trip.status || 'Upcoming')}
+                      {isCancelled ? '🚫 Cancelled by you' : (trip.status || 'Upcoming')}
                     </Text>
                   </View>
                 </View>
