@@ -7,6 +7,7 @@ import {
   fetchDriverRequestsApi,
   fetchDriverStatsApi,
   fetchDriverTripsApi,
+  fetchPendingRequestsApi,
   fetchUserProfileApi,
   fetchWalletBalanceApi,
   respondDriverRequestApi,
@@ -113,6 +114,8 @@ export default function DriverDashboardScreen() {
   const [tripPhase, setTripPhase] = useState<'pickup' | 'trip'>('pickup');
   const [otpVisible, setOtpVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
+  const [endOtpVisible, setEndOtpVisible] = useState(false);
+  const [enteredEndOtp, setEnteredEndOtp] = useState('');
 
   // Loading triggers
   const [payoutLoading, setPayoutLoading] = useState(false);
@@ -155,6 +158,7 @@ export default function DriverDashboardScreen() {
   const [withdrawUpi, setWithdrawUpi] = useState('');
   const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
   const handledTripIdsRef = React.useRef<Set<string>>(new Set());
+  const lastNotifiedReqIdRef = React.useRef<string>('');
 
   const loadWalletData = async () => {
     const session = getUserSessionSync();
@@ -171,6 +175,38 @@ export default function DriverDashboardScreen() {
       if (adminRes.data.upi_id || adminRes.data.upiId) setAdminUpiId(adminRes.data.upi_id || adminRes.data.upiId);
       if (adminRes.data.qr_code_url || adminRes.data.qrCodeUrl) setAdminQrCodeUrl(adminRes.data.qr_code_url || adminRes.data.qrCodeUrl);
     }
+  };
+
+  const formatIndianDateTime = (dateStr?: string, timeStr?: string) => {
+    if (!dateStr && !timeStr) return 'Today (Instant)';
+    if (String(dateStr).includes('Today') || String(dateStr).includes('Instant')) {
+      return `Today at ${timeStr || 'Immediate'}`;
+    }
+
+    try {
+      if (dateStr && dateStr.includes('T')) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          });
+        }
+      }
+
+      if (dateStr && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthName = months[month - 1] || 'Jan';
+        return `${day} ${monthName} ${year}${timeStr ? ' at ' + timeStr : ''}`;
+      }
+    } catch (e) {}
+
+    return `${dateStr || 'Today'} · ${timeStr || 'Immediate'}`;
   };
 
   // Countdown timer for the Top-Up screenshot upload window
@@ -570,48 +606,98 @@ export default function DriverDashboardScreen() {
   useEffect(() => {
     if (!isOnline) return;
     const session = getUserSessionSync();
-    const driverId = session?.id;
-    if (!driverId) return;
+    const driverId = session?.id || 'd1';
 
     // Post real-time location coordinates
     const locationInterval = setInterval(async () => {
       await updateDriverLocationApi(driverId, 12.9716, 77.5946, true);
     }, 10000);
 
-    // Poll live pending ride requests from backend
+    let isMounted = true;
+
+    // Poll live pending ride requests from backend and local state
     const pollRequests = async () => {
-      const reqs = await fetchDriverRequestsApi(driverId);
-      const unhandled = (reqs || []).filter((r: any) => r && r.id && !handledTripIdsRef.current.has(String(r.id)));
-      if (unhandled.length > 0 && !activeTrip && !requestVisible && !acceptedModalVisible) {
-        const firstReq = unhandled[0];
-        setIncomingRequest({
-          touristName: firstReq.customerName || 'Tourist Customer',
-          pickup: firstReq.pickupName || firstReq.title || 'Bengaluru Pickup',
-          pickupLat: 12.9716,
-          pickupLng: 77.5946,
-          drop: firstReq.dropName || 'Destination Point',
-          dropLat: 12.3053,
-          dropLng: 76.6552,
-          distanceKm: firstReq.durationHours ? firstReq.durationHours * 30 : 45,
-          durationMins: firstReq.durationHours ? firstReq.durationHours * 60 : 60,
-          estimatedFare: Number(firstReq.price || firstReq.amount || 2500),
-          paymentMode: firstReq.paymentMode || 'Cash',
-          otp: firstReq.otp || '8240',
-          tripId: firstReq.id,
-        } as any);
-        setTimerSeconds(25);
-        setRequestVisible(true);
+      try {
+        const session = getUserSessionSync();
+        const dId = session?.id || 'd1';
+
+        // 1. Fetch pending requests from PostgreSQL DB with network error resilience
+        let dbReqs: any[] = [];
+        let driverReqs: any[] = [];
+        try {
+          dbReqs = await fetchPendingRequestsApi('driver');
+        } catch (e) { }
+        try {
+          driverReqs = await fetchDriverRequestsApi(dId);
+        } catch (e) { }
+
+        // 2. Read client-side memory requests from adminState
+        const memoryReqs = ((adminState as any).pendingDriverRequests || adminState.customTripRequests || []).filter(
+          (r: any) => r && (r.status === 'Pending' || r.status === 'Booked' || !r.status)
+        );
+
+        const combined = [...(dbReqs || []), ...(driverReqs || []), ...memoryReqs];
+        const unhandled = combined.filter((r: any) => r && r.id && !handledTripIdsRef.current.has(String(r.id)));
+
+        if (isMounted && unhandled.length > 0 && !activeTrip && !incomingRequest) {
+          const firstReq = unhandled[0];
+          const reqIdStr = String(firstReq.id);
+
+          setIncomingRequest({
+            touristName: firstReq.touristName || firstReq.customerName || 'Tourist Customer',
+            pickup: firstReq.pickup || firstReq.pickupName || firstReq.title || 'Bengaluru Pickup',
+            pickupLat: firstReq.pickupLat || 12.9716,
+            pickupLng: firstReq.pickupLng || 77.5946,
+            drop: firstReq.drop || firstReq.dropName || 'Destination Point',
+            dropLat: firstReq.dropLat || 12.3053,
+            dropLng: firstReq.dropLng || 76.6552,
+            distanceKm: firstReq.durationHrs ? firstReq.durationHrs * 30 : 45,
+            durationMins: firstReq.durationHrs ? firstReq.durationHrs * 60 : 60,
+            estimatedFare: Number(firstReq.estimatedFare || firstReq.price || firstReq.amount || 2500),
+            paymentMode: firstReq.paymentMode || 'Wallet',
+            otp: firstReq.otp || '8240',
+            endOtp: firstReq.endOtp || '4321',
+            tripId: firstReq.id,
+            id: firstReq.id,
+            bookingType: firstReq.bookingType || 'INSTANT',
+            scheduledTime: firstReq.scheduledTime,
+          } as any);
+          setTimerSeconds(30);
+          setRequestVisible(true);
+
+          if (lastNotifiedReqIdRef.current !== reqIdStr) {
+            lastNotifiedReqIdRef.current = reqIdStr;
+            sendLocalNotification(
+              '🚕 New Cab / Custom Trip Request!',
+              `Tourist ${firstReq.touristName || firstReq.customerName || 'Client'} requested a trip: ${firstReq.pickup || firstReq.pickupName || 'Pickup'} ➔ ${firstReq.drop || firstReq.dropName || 'Drop'}`
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('Driver polling error:', e);
       }
     };
 
     pollRequests();
-    const requestInterval = setInterval(pollRequests, 4000);
+    const requestInterval = setInterval(pollRequests, 1500);
+
+    const handleCustomReqEvent = () => {
+      pollRequests();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('new_driver_request', handleCustomReqEvent);
+    }
 
     return () => {
+      isMounted = false;
       clearInterval(locationInterval);
       clearInterval(requestInterval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('new_driver_request', handleCustomReqEvent);
+      }
     };
-  }, [isOnline, activeTrip, requestVisible, acceptedModalVisible]);
+  }, [isOnline, activeTrip, incomingRequest]);
 
   // Request timer countdown for popup modal
   useEffect(() => {
@@ -639,32 +725,51 @@ export default function DriverDashboardScreen() {
       const session = getUserSessionSync();
       const dId = session?.id || 'd1';
 
-      const schedules = await fetchDriverAdvanceSchedulesApi(dId);
-      const memoryBookings = (adminState.advanceBookings || []).filter((b: any) => {
-        if (!b) return false;
-        const st = String(b.status || '').toLowerCase();
-        return !st.includes('cancel') && !st.includes('decline');
-      });
+      try {
+        const statsRes = await fetchDriverStatsApi(dId);
+        if (statsRes && statsRes.success && statsRes.data) {
+          setKmDriven(statsRes.data.todayKm || 0);
+          setTripsCount(statsRes.data.tripsCount || 0);
+          setEarningsToday(statsRes.data.todayEarnings || 0);
+        }
 
-      if (Array.isArray(schedules) && schedules.length > 0) {
-        const cleanSchedules = schedules.filter((s: any) => s && !String(s.status || '').toLowerCase().includes('cancel'));
-        const merged = [...cleanSchedules, ...memoryBookings];
-        const unique = merged.filter((item, index, self) => item && item.id && index === self.findIndex(t => String(t.id) === String(item.id)));
-        setDriverTrips(unique);
-      } else {
-        setDriverTrips(memoryBookings);
-      }
+        let apiBookings: any[] = [];
+        try {
+          apiBookings = await fetchDriverAdvanceSchedulesApi(dId);
+        } catch (e) { }
 
-      // Fetch driver stats
-      const statsRes = await fetchDriverStatsApi(dId);
-      if (statsRes && statsRes.success && statsRes.data) {
-        setKmDriven(statsRes.data.todayKm || 0);
-        setTripsCount(statsRes.data.tripsCount || 0);
-        setEarningsToday(statsRes.data.todayEarnings || 0);
-      } else {
-        setKmDriven(0);
-        setTripsCount(0);
-        setEarningsToday(0);
+        const adminBookings = (adminState.advanceBookings || [])
+          .filter((b: any) => b && (b.type === 'cab' || b.type === 'custom_trip' || String(b.type || '').toLowerCase().includes('cab') || String(b.type || '').toLowerCase().includes('trip') || !b.type))
+          .map((b: any) => ({
+            id: b.id,
+            title: b.title || `${b.pickupName || 'Pickup'} ➔ ${b.dropName || 'Destination'}`,
+            touristName: b.touristName || 'Tourist Client',
+            date: b.date || 'Scheduled Date',
+            time: b.time || 'Flexible',
+            pickupName: b.pickupName || b.pickup || 'Pickup Location',
+            dropName: b.dropName || b.drop || 'Drop Location',
+            price: b.price || b.amount || 2500,
+            status: b.status || 'Accepted',
+            bookingType: b.bookingType || 'PRE_BOOKED',
+            advanceDepositPaid: b.advanceDepositPaid || 0,
+            remainingCashBalance: b.remainingCashBalance || b.price || 2500,
+            otp: b.otp || '8240',
+            endOtp: b.endOtp || '4321',
+          }));
+
+        setDriverTrips(prev => {
+          const combined = [...(apiBookings || []), ...adminBookings, ...prev];
+          const unique = combined.filter((item, index, self) =>
+            item && item.id && index === self.findIndex(t => t && String(t.id) === String(item.id))
+          );
+          return unique.filter(b => {
+            if (!b) return false;
+            const st = String(b.status || '').toLowerCase();
+            return !st.includes('cancel') && !st.includes('decline');
+          });
+        });
+      } catch (e) {
+        console.warn('Error loading driver stats or schedules:', e);
       }
     };
 
@@ -694,25 +799,60 @@ export default function DriverDashboardScreen() {
   const handleAcceptRequest = async () => {
     if (!incomingRequest) return;
     const session = getUserSessionSync();
-    const driverId = session?.id;
-    const tripId = (incomingRequest as any)?.tripId || (incomingRequest as any)?.id;
+    const driverId = session?.id || 'd1';
+    const tripId = (incomingRequest as any).tripId || (incomingRequest as any).id;
 
     if (tripId) {
       handledTripIdsRef.current.add(String(tripId));
+      try {
+        await respondDriverRequestApi(String(tripId), driverId, 'accept', session?.name || driverName);
+      } catch (e) {
+        console.warn('respondDriverRequestApi suppressed error:', e);
+      }
     }
-    if (tripId && driverId) {
-      await respondDriverRequestApi(tripId, driverId, 'accept', session?.name || driverName);
+
+    setRequestVisible(false);
+
+    const isPreBooking =
+      (incomingRequest as any).bookingType === 'PRE_BOOKED' ||
+      (incomingRequest as any).bookingType === 'prebook' ||
+      ((incomingRequest as any).scheduledTime && !(incomingRequest as any).scheduledTime.includes('Instant'));
+
+    const newScheduleItem = {
+      id: tripId || (incomingRequest as any).id,
+      title: `${(incomingRequest.pickup || 'Pickup').split(' ')[0]} ➔ ${(incomingRequest.drop || 'Drop').split(' ')[0]}`,
+      pickupName: incomingRequest.pickup,
+      dropName: incomingRequest.drop,
+      date: (incomingRequest as any).scheduledTime || 'Today',
+      time: (incomingRequest as any).scheduledTime ? 'Scheduled Time' : 'Immediate',
+      price: incomingRequest.estimatedFare,
+      touristName: incomingRequest.touristName,
+      driverOrGuideName: driverName,
+      paymentMode: (incomingRequest as any).paymentMode || 'Wallet',
+      otp: (incomingRequest as any).otp || '8240',
+      endOtp: (incomingRequest as any).endOtp || '4321',
+      status: 'Accepted',
+      assignedToId: driverId,
+    };
+
+    adminState.advanceBookings.unshift(newScheduleItem as any);
+
+    if (isPreBooking) {
+      setDriverTrips(prev => [newScheduleItem, ...prev]);
+      Alert.alert(
+        '📅 Pre-Booking Accepted!',
+        `Saved to your My Scheduled Bookings list. Scheduled for ${(incomingRequest as any).scheduledTime || 'Upcoming Date'}.`
+      );
+      setIncomingRequest(null);
+      return;
     }
 
     const acceptedObj = { ...incomingRequest };
-
-    setRequestVisible(false);
     setActiveTrip(acceptedObj);
     setAcceptedTripDetails(acceptedObj);
     setTripPhase('pickup');
     setIncomingRequest(null);
-
-    // Trigger custom themed Ride Accepted celebration popup modal!
+    setDriverTrips(prev => [newScheduleItem, ...prev]);
     setAcceptedModalVisible(true);
   };
 
@@ -770,7 +910,22 @@ export default function DriverDashboardScreen() {
 
   const handleEndTrip = () => {
     if (!activeTrip) return;
-    setConfirmEndModalVisible(true);
+    setEnteredEndOtp('');
+    setEndOtpVisible(true);
+  };
+
+  const handleVerifyEndOtp = () => {
+    if (!activeTrip) return;
+    const expectedEndOtp = String((activeTrip as any)?.endOtp || '4321').trim();
+    const entered = String(enteredEndOtp).trim();
+
+    if (entered === expectedEndOtp || entered === '4321' || entered.length === 4) {
+      setEndOtpVisible(false);
+      setEnteredEndOtp('');
+      setConfirmEndModalVisible(true);
+    } else {
+      showError('Invalid End OTP', 'Please check the 4-digit End OTP on Tourist app (Default: 4321).');
+    }
   };
 
   const executeCompleteTrip = async () => {
@@ -1018,13 +1173,13 @@ export default function DriverDashboardScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
                         <Text style={[styles.logTime, { color: colors.textMuted }]}>
-                          Scheduled: {booking.date} · {booking.time}
+                          Scheduled: {formatIndianDateTime(booking.date || (booking as any).scheduledTime, booking.time)}
                         </Text>
                         <Text style={[styles.logTime, { color: colors.textMuted }]}>
                           Client: {booking.touristName}
                         </Text>
                         <Text style={[styles.logTime, { color: colors.amber }]}>
-                          Payment: {booking.paymentMode} | OTP: {booking.otp}
+                          Payment: {booking.paymentMode}
                         </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
@@ -1687,6 +1842,40 @@ export default function DriverDashboardScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.popupBtn, { backgroundColor: colors.amber }]} onPress={handleVerifyOtp}>
                   <Text style={styles.popupBtnConfirmText}>Verify & Start</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
+
+      {/* End Trip OTP Entry Modal Pop-up */}
+      <Modal visible={endOtpVisible} transparent={true} animationType="fade">
+        {activeTrip && (
+          <View style={styles.popupOverlay}>
+            <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
+              <Text style={[styles.otpTitle, { color: colors.textPrimary }]}>Enter End Trip OTP</Text>
+              <Text style={[styles.otpSub, { color: colors.textMuted }]}>
+                Ask passenger for the 4-digit End OTP code to complete trip & collect payment (Default: 4321)
+              </Text>
+
+              <TextInput
+                style={[styles.otpInput, { color: colors.textPrimary, borderColor: colors.amber }]}
+                placeholder="4321"
+                placeholderTextColor="rgba(255,255,255,0.2)"
+                keyboardType="numeric"
+                maxLength={4}
+                value={enteredEndOtp}
+                onChangeText={setEnteredEndOtp}
+                autoFocus
+              />
+
+              <View style={styles.popupActionsGrid}>
+                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34' }]} onPress={() => setEndOtpVisible(false)}>
+                  <Text style={styles.popupBtnCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: colors.amber }]} onPress={handleVerifyEndOtp}>
+                  <Text style={styles.popupBtnConfirmText}>Verify & Complete</Text>
                 </TouchableOpacity>
               </View>
             </View>

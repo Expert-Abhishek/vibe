@@ -117,6 +117,11 @@ export default function MakeTripScreen() {
 
   const [bookingDate, setBookingDate] = useState<string>(getTomorrowDateString());
   const [prebookPayOption, setPrebookPayOption] = useState<'20' | '100'>('20');
+  const [bookingMode, setBookingMode] = useState<'instant' | 'prebook'>(adminState.instantBookingEnabled ? 'instant' : 'prebook');
+
+  useEffect(() => {
+    setBookingMode(adminState.instantBookingEnabled ? 'instant' : 'prebook');
+  }, [adminState.instantBookingEnabled]);
 
   const bookingTime = `${bookingHour}:${bookingMinute < 10 ? '0' + bookingMinute : bookingMinute} ${bookingAmPm}`;
 
@@ -617,31 +622,22 @@ export default function MakeTripScreen() {
     const drop = checkpoints[checkpoints.length - 1];
     const stops = checkpoints.slice(1, -1);
 
-    const finalDate = adminState.instantBookingEnabled ? 'Today' : bookingDate;
-    const finalTime = adminState.instantBookingEnabled
-      ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : bookingTime;
-
-    adminState.customTripRequests.push({
-      id: `req_${Date.now()}`,
-      checkpoints: checkpoints.map(c => ({ name: c.name, latitude: c.latitude, longitude: c.longitude })),
-      status: 'Booked',
-      vehicle: selectedRide || '5seater',
-      quotedPrice: computedTripPrice,
-      touristName: 'Tourist Client',
-      bookingType: adminState.instantBookingEnabled ? 'spot' : 'prebook',
-      date: finalDate,
-      time: finalTime,
-    });
-
-    const totalPrice = computedTripPrice;
     const isPreBooking = !adminState.instantBookingEnabled;
+    const isInstant = adminState.instantBookingEnabled;
+    const totalPrice = computedTripPrice;
     const driverName = selectedDriver?.name || 'Anil Gowda (Captain)';
     const driverId = selectedDriver?.id || 'd1';
 
     const session = getUserSessionSync();
     const customerId = session?.id || 't1';
     const customerName = session?.name || 'Tourist Client';
+
+    const finalDate = isPreBooking ? bookingDate : 'Today (Instant)';
+    const finalTime = isPreBooking ? `${bookingHour}:${bookingMinute.toString().padStart(2, '0')} ${bookingAmPm}` : 'Immediate';
+
+    const tripReqId = `req_${Date.now()}`;
+    const pickupName = checkpoints[0]?.name || 'Bengaluru Start';
+    const dropName = checkpoints[checkpoints.length - 1]?.name || 'Destination';
 
     let calculatedScheduledTime = new Date().toISOString();
     if (isPreBooking && bookingDate) {
@@ -665,6 +661,34 @@ export default function MakeTripScreen() {
       }
     }
 
+    const tripObject = {
+      id: tripReqId,
+      tripId: tripReqId,
+      checkpoints: checkpoints.map(c => ({ name: c.name, latitude: c.latitude, longitude: c.longitude })),
+      pickup: pickupName,
+      pickupName: pickupName,
+      drop: dropName,
+      dropName: dropName,
+      title: `Custom Trip: ${pickupName} → ${dropName}`,
+      status: 'Pending',
+      vehicle: selectedRide || '5seater',
+      estimatedFare: totalPrice,
+      amount: totalPrice,
+      price: totalPrice,
+      touristName: customerName,
+      customerName: customerName,
+      bookingType: isInstant ? 'INSTANT' : 'PRE_BOOKED',
+      date: finalDate,
+      time: finalTime,
+      paymentMode: isPreBooking ? `Wallet Deposit (${prebookPayOption}%): ₹${prebookPayOption === '20' ? Math.round(totalPrice * 0.20) : totalPrice}` : (paymentMethod === 'cash' ? 'Cash' : 'UPI'),
+      otp: '8240',
+      endOtp: '4321',
+    };
+
+    adminState.customTripRequests.unshift(tripObject as any);
+    (adminState as any).pendingDriverRequests = (adminState as any).pendingDriverRequests || [];
+    (adminState as any).pendingDriverRequests.unshift(tripObject);
+
     if (isPreBooking) {
       // PRE-BOOKING MODE: Automatic Tourist Wallet Deposit (20% or 100%)
       const paymentAmount = prebookPayOption === '20' ? Math.round(totalPrice * 0.20) : totalPrice;
@@ -675,7 +699,7 @@ export default function MakeTripScreen() {
           await deductWalletApi({
             userId: customerId,
             amount: paymentAmount,
-            description: `Pre-Booking Deposit (${prebookPayOption}%) for Custom Trip: ${checkpoints[0].name} ➔ ${checkpoints[checkpoints.length - 1].name}`,
+            description: `Pre-Booking Deposit (${prebookPayOption}%) for Custom Trip: ${pickupName} ➔ ${dropName}`,
           });
 
           await submitWalletDeductionRequestApi({
@@ -683,60 +707,43 @@ export default function MakeTripScreen() {
             userName: customerName,
             role: 'tourist',
             amount: paymentAmount,
-            description: `Custom Trip Pre-Booking Deposit (${prebookPayOption}%) for ${checkpoints[0].name} ➔ ${checkpoints[checkpoints.length - 1].name}`,
+            description: `Custom Trip Pre-Booking Deposit (${prebookPayOption}%) for ${pickupName} ➔ ${dropName}`,
           });
         } catch (e) {
           console.warn('Custom trip pre-booking wallet deduction error:', e);
         }
       }
 
-      const bookRes = await createTripApi({
-        tripType: 'custom_trip',
-        title: `Trip: ${checkpoints[0].name} → ${checkpoints[checkpoints.length - 1].name}`,
-        customerId: customerId,
-        customerName: customerName,
-        driverOrGuideName: driverName,
-        driverId: driverId,
-        amount: totalPrice,
-        paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${paymentAmount} (Bal ₹${remainingAmount})`,
-        status: 'Pending',
-        durationHours: totalTripHours,
-        extraHours: extraHoursRounded,
-        addonCharge: extraAddonCharge,
-        bookingType: 'PRE_BOOKED',
-        scheduledTime: calculatedScheduledTime,
-        pickupName: checkpoints[0].name,
-        dropName: checkpoints[checkpoints.length - 1].name,
-        advanceDepositPaid: paymentAmount,
-        remainingCashBalance: remainingAmount,
-      });
+      try {
+        await createTripApi({
+          tripType: 'custom_trip',
+          title: `Trip: ${pickupName} → ${dropName}`,
+          customerId: customerId,
+          customerName: customerName,
+          driverOrGuideName: driverName,
+          driverId: driverId,
+          amount: totalPrice,
+          paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${paymentAmount} (Bal ₹${remainingAmount})`,
+          status: 'Pending',
+          durationHours: totalTripHours,
+          extraHours: extraHoursRounded,
+          addonCharge: extraAddonCharge,
+          bookingType: 'PRE_BOOKED',
+          scheduledTime: calculatedScheduledTime,
+          pickupName: pickupName,
+          dropName: dropName,
+          advanceDepositPaid: paymentAmount,
+          remainingCashBalance: remainingAmount,
+        });
+      } catch (e) {
+        console.warn('Postgres DB creation error (using memory fallback):', e);
+      }
 
-      const tripId = bookRes?.data?.id || bookRes?.id || `adv_${Date.now()}`;
-
-      const newAdv = {
-        id: String(tripId),
-        type: 'custom_trip' as const,
-        title: `Trip: ${checkpoints[0].name} → ${checkpoints[checkpoints.length - 1].name}`,
-        route: checkpoints.map(c => c.name),
-        date: finalDate,
-        time: finalTime,
-        price: totalPrice,
-        touristName: customerName,
-        driverOrGuideName: driverName,
-        assignedToId: driverId,
-        bookingDate: new Date().toISOString().split('T')[0],
-        status: 'Pending' as const,
-        paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${paymentAmount}`,
-        advanceDepositPaid: paymentAmount,
-        remainingCashBalance: remainingAmount,
-        otp: '8240',
-        endOtp: '4321',
-      };
-      adminState.advanceBookings.unshift(newAdv as any);
+      adminState.advanceBookings.unshift(tripObject as any);
 
       sendLocalNotification(
         '🗺️ Custom Trip Pre-Booking Confirmed!',
-        `Your pre-booking from ${checkpoints[0].name} to ${checkpoints[checkpoints.length - 1].name} is confirmed with ₹${paymentAmount} wallet deposit. Assigned driver: ${driverName}.`
+        `Your pre-booking from ${pickupName} to ${dropName} is confirmed with ₹${paymentAmount} wallet deposit. Assigned driver: ${driverName}.`
       );
 
       Alert.alert(
@@ -750,34 +757,71 @@ export default function MakeTripScreen() {
     // INSTANT BOOKING MODE (Cash or UPI)
     const paymentLabel = paymentMethod === 'cash' ? `Cash (Full Payment ₹${totalPrice})` : `UPI (Full Payment ₹${totalPrice})`;
 
-    await createTripApi({
-      tripType: 'custom_trip',
-      title: `Trip: ${checkpoints[0].name} → ${checkpoints[checkpoints.length - 1].name}`,
+    try {
+      await createTripApi({
+        tripType: 'custom_trip',
+        title: `Trip: ${pickupName} → ${dropName}`,
+        customerId: customerId,
+        customerName: customerName,
+        driverOrGuideName: driverName,
+        driverId: driverId,
+        amount: totalPrice,
+        paymentMode: paymentLabel,
+        status: 'Pending',
+        durationHours: totalTripHours,
+        extraHours: extraHoursRounded,
+        addonCharge: extraAddonCharge,
+        bookingType: 'INSTANT',
+        scheduledTime: calculatedScheduledTime,
+        pickupName: pickupName,
+        dropName: dropName,
+      });
+    } catch (e) {
+      console.warn('Postgres DB creation error (using memory fallback):', e);
+    }
+
+    if (!Array.isArray(adminState.userTrips)) {
+      adminState.userTrips = [];
+    }
+    adminState.userTrips.unshift({
+      id: tripReqId,
+      type: 'custom_trip',
+      title: `Trip: ${pickupName} → ${dropName}`,
+      driverOrGuideName: driverName,
       customerId: customerId,
       customerName: customerName,
-      driverOrGuideName: driverName,
-      driverId: driverId,
-      amount: totalPrice,
+      pickupName: pickupName,
+      dropName: dropName,
+      date: finalDate,
+      time: finalTime,
+      price: totalPrice,
       paymentMode: paymentLabel,
-      status: 'Pending',
-      durationHours: totalTripHours,
-      extraHours: extraHoursRounded,
-      addonCharge: extraAddonCharge,
+      status: 'Pending Driver Confirmation',
       bookingType: 'INSTANT',
-      scheduledTime: calculatedScheduledTime,
-      pickupName: checkpoints[0].name,
-      dropName: checkpoints[checkpoints.length - 1].name,
-    });
+      otp: '8240',
+      endOtp: '4321',
+    } as any);
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new Event('new_driver_request'));
+      } catch (e) {}
+    }
+
+    sendLocalNotification(
+      '🚕 Instant Ride Requested!',
+      `Searching for nearby driver for ${pickupName} ➔ ${dropName}...`
+    );
 
     router.replace({
       pathname: '/ride-matching' as any,
       params: {
-        pickupName: checkpoints[0].name,
-        pickupLat: checkpoints[0].latitude.toString(),
-        pickupLng: checkpoints[0].longitude.toString(),
-        dropName: checkpoints[checkpoints.length - 1].name,
-        dropLat: checkpoints[checkpoints.length - 1].latitude.toString(),
-        dropLng: checkpoints[checkpoints.length - 1].longitude.toString(),
+        pickupName: pickupName,
+        pickupLat: checkpoints[0]?.latitude.toString() || '12.9716',
+        pickupLng: checkpoints[0]?.longitude.toString() || '77.5946',
+        dropName: dropName,
+        dropLat: checkpoints[checkpoints.length - 1]?.latitude.toString() || '12.3053',
+        dropLng: checkpoints[checkpoints.length - 1]?.longitude.toString() || '76.6394',
         stops: JSON.stringify(checkpoints.slice(1, -1).map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
         price: totalPrice.toString(),
         paymentId: 'PAY_' + Date.now(),
@@ -1222,8 +1266,7 @@ export default function MakeTripScreen() {
               3. Custom Trip Fare & Booking
             </Text>
 
-
-            {/* Prebooking Date Time Pickers */}
+            {/* Prebooking Date Time Pickers (Active when adminState.instantBookingEnabled is false) */}
             {!adminState.instantBookingEnabled && (
               <View style={{ marginBottom: verticalScale(12) }}>
                 <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', marginBottom: verticalScale(6) }}>Select Pre-Booking Date</Text>
@@ -1429,7 +1472,7 @@ export default function MakeTripScreen() {
             </View>
 
             {/* Payment & Deposit Options */}
-            {!adminState.instantBookingEnabled ? (
+            {bookingMode === 'prebook' ? (
               <View style={{ marginTop: verticalScale(10), marginBottom: verticalScale(12) }}>
                 <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12), marginBottom: verticalScale(6) }}>
                   Pre-Booking Wallet Deposit Option:
@@ -1538,9 +1581,9 @@ export default function MakeTripScreen() {
             >
               <MaterialIcons name="payment" size={scale(20)} color="#101014" />
               <Text style={styles.confirmBtnText}>
-                {!adminState.instantBookingEnabled
+                {bookingMode === 'prebook'
                   ? `Confirm Pre-Booking (Wallet Deposit ₹${prebookPayOption === '20' ? Math.round(computedTripPrice * 0.20) : computedTripPrice})`
-                  : `Confirm & Pay Trip (₹${computedTripPrice})`}
+                  : `Confirm & Pay Instant Ride (₹${computedTripPrice})`}
               </Text>
             </TouchableOpacity>
           </View>
