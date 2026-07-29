@@ -76,6 +76,9 @@ export default function RideMatchingScreen() {
   const paymentMode = (params.paymentMode as 'UPI' | 'Cash') || 'UPI';
   const passengerCount = parseInt((params.passengerCount as string) || '1');
 
+  const tripIdParam = (params.tripId as string) || '';
+  const [liveDriverInfo, setLiveDriverInfo] = useState<any>(null);
+
   // Live / Server driver information
   const demoDriver = {
     name: liveDriverInfo?.name || (tripType === 'guide' ? 'Ramesh Gowda' : (vehicle === 'auto' ? 'Raju Auto' : 'Shubham (Captain)')),
@@ -153,9 +156,6 @@ export default function RideMatchingScreen() {
     }, 800);
     return () => clearInterval(interval);
   }, [status]);
-
-  const tripIdParam = (params.tripId as string) || '';
-  const [liveDriverInfo, setLiveDriverInfo] = useState<any>(null);
 
   // Poll live server status & driver location
   useEffect(() => {

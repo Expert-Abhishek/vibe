@@ -80,7 +80,7 @@ export default function ProfileScreen() {
   const loadProfileAndWalletData = async () => {
     if (session?.name) setName(session.name);
     if (session?.phone) setPhone(session.phone);
-    if (session?.photo_url) setPhotoUrl(session.photo_url);
+    if ((session as any)?.photo_url) setPhotoUrl((session as any).photo_url);
 
     const userRes = await fetchUserProfileApi(userId);
     if (userRes && userRes.success && userRes.user) {
@@ -109,7 +109,7 @@ export default function ProfileScreen() {
 
   // Client-side countdown timer for Top-Up Screenshot uploads
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: any = null;
     if (topupModalVisible && topupStep === 2 && timerSeconds > 0) {
       interval = setInterval(() => {
         setTimerSeconds(prev => {
@@ -340,14 +340,14 @@ export default function ProfileScreen() {
             ...session,
             photo_url: newPhotoUrl,
             user: {
-              ...(session.user || {}),
+              ...((session as any).user || {}),
               photo_url: newPhotoUrl,
             },
             profile: session.profile ? {
               ...session.profile,
               photo_url: newPhotoUrl,
             } : undefined,
-          });
+          } as any);
         }
         showSuccess('🎉 Success!', 'Your profile photo has been updated successfully.');
       } else {

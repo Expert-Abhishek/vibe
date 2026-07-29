@@ -1,3 +1,9 @@
+if (__DEV__) {
+  try {
+    require('../ReactotronConfig');
+  } catch (e) { }
+}
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -41,28 +47,28 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ModalProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="sign-in" />
-          <Stack.Screen name="(auth)/sign-in" />
-          <Stack.Screen name="forgot-password" />
-          <Stack.Screen name="(auth)/forgot-password" />
-          <Stack.Screen name="(auth)/verify-otp" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="guides" />
-          <Stack.Screen name="jungle-safari" />
-          <Stack.Screen name="make-trip" />
-          <Stack.Screen name="plan-route" />
-          <Stack.Screen name="book-cab" />
-          <Stack.Screen name="cars" />
-          <Stack.Screen name="search-location" />
-          <Stack.Screen name="guide-dashboard" />
-          <Stack.Screen name="driver-dashboard" />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </ModalProvider>
-  </SafeAreaProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="sign-in" />
+            <Stack.Screen name="(auth)/sign-in" />
+            <Stack.Screen name="forgot-password" />
+            <Stack.Screen name="(auth)/forgot-password" />
+            <Stack.Screen name="(auth)/verify-otp" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="guides" />
+            <Stack.Screen name="jungle-safari" />
+            <Stack.Screen name="make-trip" />
+            <Stack.Screen name="plan-route" />
+            <Stack.Screen name="book-cab" />
+            <Stack.Screen name="cars" />
+            <Stack.Screen name="search-location" />
+            <Stack.Screen name="guide-dashboard" />
+            <Stack.Screen name="driver-dashboard" />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </ModalProvider>
+    </SafeAreaProvider>
   );
 }

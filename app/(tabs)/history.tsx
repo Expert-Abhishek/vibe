@@ -103,7 +103,7 @@ export default function HistoryScreen() {
       date: t.date,
       time: t.time,
       price: t.price,
-      status: (t.status === 'Cancelled' ? 'Cancelled' : 'Completed') as const,
+      status: (t.status === 'Cancelled' ? 'Cancelled' : 'Completed') as 'Cancelled' | 'Completed',
       rating: t.rating || 5,
       passengerCount: t.passengerCount,
     }));

@@ -96,7 +96,7 @@ export default function DriverWalletScreen() {
 
   // Client-side countdown timer for Top-Up Screenshot uploads
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: any = null;
     if (topupModalVisible && topupStep === 2 && timerSeconds > 0) {
       interval = setInterval(() => {
         setTimerSeconds(prev => {
