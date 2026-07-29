@@ -1,20 +1,21 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
-  Users,
+  ArrowDownRight,
+  ArrowUpRight,
   Car,
+  ChevronRight,
   Compass,
+  Image,
+  LayoutDashboard,
   MapPin,
+  QrCode,
   Route,
   ShieldCheck,
-  ChevronRight,
-  QrCode,
-  Image,
-  ArrowUpRight,
+  Users,
 } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -26,6 +27,7 @@ const navItems = [
   { name: 'Payment Settings', href: '/payment-settings', icon: QrCode },
   { name: 'Top-Up Requests', href: '/topup-requests', icon: Image },
   { name: 'Withdrawals', href: '/withdrawals', icon: ArrowUpRight },
+  { name: 'Deductions', href: '/deductions', icon: ArrowDownRight },
 ];
 
 
@@ -62,11 +64,10 @@ export default function Sidebar() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center justify-between px-3.5 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${
-                  isActive
+                className={`flex items-center justify-between px-3.5 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${isActive
                     ? 'bg-brand-500 text-black font-bold shadow-md shadow-brand-500/20'
                     : 'text-gray-300 hover:bg-dark-hover hover:text-white'
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-3">
                   <Icon className={`w-5 h-5 ${isActive ? 'text-black' : 'text-gray-400'}`} />

@@ -212,3 +212,19 @@ CREATE TABLE IF NOT EXISTS wallet_topup_requests (
     reviewed_at TIMESTAMP WITH TIME ZONE,
     reject_reason TEXT
 );
+
+-- 16. Wallet Deduction/Payment Requests Table
+CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_name VARCHAR(255),
+    role VARCHAR(20) DEFAULT 'tourist',
+    amount NUMERIC(10,2) NOT NULL,
+    description TEXT,
+    screenshot_url TEXT,
+    status VARCHAR(20) DEFAULT 'Pending', -- 'Pending', 'Approved', 'Rejected'
+    requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by UUID,
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    reject_reason TEXT
+);
