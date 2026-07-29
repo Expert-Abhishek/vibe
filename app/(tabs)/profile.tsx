@@ -3,8 +3,8 @@ import {
   fetchUserProfileApi,
   fetchWalletBalanceApi,
   saveUserSettingsApi,
-  submitWalletDeductionRequestApi,
   submitWalletTopupRequestApi,
+  submitWithdrawalApi,
   updateProfilePhotoApi,
   updateUserProfileApi
 } from '@/constants/api';
@@ -21,7 +21,9 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -49,6 +51,7 @@ export default function ProfileScreen() {
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
   const [withdrawUpi, setWithdrawUpi] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
 
