@@ -19,7 +19,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from '@/constants/admin-state';
-import { fetchDestinationsApi, fetchDriversApi, createTripApi } from '@/constants/api';
+import { createTripApi, fetchDestinationsApi, fetchDriversApi, deductWalletApi, submitWalletDeductionRequestApi, bookTripApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { sendLocalNotification } from '@/constants/notifications';
 
@@ -115,6 +116,7 @@ export default function MakeTripScreen() {
   const [bookingAmPm, setBookingAmPm] = useState<'AM' | 'PM'>(initialTimeParts.ampm);
 
   const [bookingDate, setBookingDate] = useState<string>(getTomorrowDateString());
+  const [prebookPayOption, setPrebookPayOption] = useState<'20' | '100'>('20');
 
   const bookingTime = `${bookingHour}:${bookingMinute < 10 ? '0' + bookingMinute : bookingMinute} ${bookingAmPm}`;
 
@@ -574,7 +576,8 @@ export default function MakeTripScreen() {
 
   const extraHoursRounded = Math.max(0, Math.ceil(extraHours));
   const extraAddonCharge = extraHoursRounded * vehicleHourlyRate;
-  const computedTripPrice = baseDayRate + extraAddonCharge;
+  // Upfront booking charges baseDayRate only. Extra hours are only charged at trip completion if time exceeds 6 PM.
+  const computedTripPrice = baseDayRate;
 
 
   const handleConfirmTrip = () => {
@@ -625,7 +628,7 @@ export default function MakeTripScreen() {
       status: 'Booked',
       vehicle: selectedRide || '5seater',
       quotedPrice: computedTripPrice,
-      touristName: 'Abhishek (Tourist)',
+      touristName: 'Tourist Client',
       bookingType: adminState.instantBookingEnabled ? 'spot' : 'prebook',
       date: finalDate,
       time: finalTime,
@@ -633,179 +636,158 @@ export default function MakeTripScreen() {
 
     const totalPrice = computedTripPrice;
     const isPreBooking = !adminState.instantBookingEnabled;
-    const paymentAmount = isPreBooking ? Math.round(totalPrice * 0.20) : totalPrice;
-    const remainingAmount = isPreBooking ? totalPrice - paymentAmount : 0;
     const driverName = selectedDriver?.name || 'Anil Gowda (Captain)';
     const driverId = selectedDriver?.id || 'd1';
 
-    if (paymentMethod === 'cash') {
-      const paymentLabel = isPreBooking
-        ? `Cash (Pre-Booking Fees: ₹${paymentAmount}, Bal ₹${remainingAmount})`
-        : `Cash (Full Payment ₹${totalPrice})`;
+    const session = getUserSessionSync();
+    const customerId = session?.id || 't1';
+    const customerName = session?.name || 'Tourist Client';
 
-      let calculatedScheduledTime = new Date().toISOString();
-      if (isPreBooking && bookingDate) {
+    let calculatedScheduledTime = new Date().toISOString();
+    if (isPreBooking && bookingDate) {
+      try {
+        let hours24 = bookingHour;
+        if (bookingAmPm === 'PM' && hours24 < 12) {
+          hours24 += 12;
+        } else if (bookingAmPm === 'AM' && hours24 === 12) {
+          hours24 = 0;
+        }
+        const dateParts = bookingDate.split('-');
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[0], 10);
+          const month = parseInt(dateParts[1], 10) - 1;
+          const day = parseInt(dateParts[2], 10);
+          const localDate = new Date(year, month, day, hours24, bookingMinute, 0);
+          calculatedScheduledTime = localDate.toISOString();
+        }
+      } catch (e) {
+        console.warn('Error parsing booking date:', e);
+      }
+    }
+
+    if (isPreBooking) {
+      // PRE-BOOKING MODE: Automatic Tourist Wallet Deposit (20% or 100%)
+      const paymentAmount = prebookPayOption === '20' ? Math.round(totalPrice * 0.20) : totalPrice;
+      const remainingAmount = totalPrice - paymentAmount;
+
+      if (paymentAmount > 0) {
         try {
-          let hours24 = bookingHour;
-          if (bookingAmPm === 'PM' && hours24 < 12) {
-            hours24 += 12;
-          } else if (bookingAmPm === 'AM' && hours24 === 12) {
-            hours24 = 0;
-          }
-          const dateParts = bookingDate.split('-');
-          if (dateParts.length === 3) {
-            const year = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10) - 1;
-            const day = parseInt(dateParts[2], 10);
-            const localDate = new Date(year, month, day, hours24, bookingMinute, 0);
-            calculatedScheduledTime = localDate.toISOString();
-          }
+          await deductWalletApi({
+            userId: customerId,
+            amount: paymentAmount,
+            description: `Pre-Booking Deposit (${prebookPayOption}%) for Custom Trip: ${checkpoints[0].name} ➔ ${checkpoints[checkpoints.length - 1].name}`,
+          });
+
+          await submitWalletDeductionRequestApi({
+            userId: customerId,
+            userName: customerName,
+            role: 'tourist',
+            amount: paymentAmount,
+            description: `Custom Trip Pre-Booking Deposit (${prebookPayOption}%) for ${checkpoints[0].name} ➔ ${checkpoints[checkpoints.length - 1].name}`,
+          });
         } catch (e) {
-          console.warn('Error parsing booking date:', e);
+          console.warn('Custom trip pre-booking wallet deduction error:', e);
         }
       }
 
-      await createTripApi({
+      const bookRes = await createTripApi({
         tripType: 'custom_trip',
-        title: `Trip: ${pickup.name} → ${drop.name}`,
-        customerName: 'Abhishek (Tourist)',
+        title: `Trip: ${checkpoints[0].name} → ${checkpoints[checkpoints.length - 1].name}`,
+        customerId: customerId,
+        customerName: customerName,
         driverOrGuideName: driverName,
         driverId: driverId,
         amount: totalPrice,
-        paymentMode: paymentLabel,
+        paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${paymentAmount} (Bal ₹${remainingAmount})`,
         status: 'Pending',
         durationHours: totalTripHours,
         extraHours: extraHoursRounded,
         addonCharge: extraAddonCharge,
-        bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
+        bookingType: 'PRE_BOOKED',
         scheduledTime: calculatedScheduledTime,
-        pickupName: pickup.name,
-        dropName: drop.name,
+        pickupName: checkpoints[0].name,
+        dropName: checkpoints[checkpoints.length - 1].name,
+        advanceDepositPaid: paymentAmount,
+        remainingCashBalance: remainingAmount,
       });
 
+      const tripId = bookRes?.data?.id || bookRes?.id || `adv_${Date.now()}`;
+
+      const newAdv = {
+        id: String(tripId),
+        type: 'custom_trip' as const,
+        title: `Trip: ${checkpoints[0].name} → ${checkpoints[checkpoints.length - 1].name}`,
+        route: checkpoints.map(c => c.name),
+        date: finalDate,
+        time: finalTime,
+        price: totalPrice,
+        touristName: customerName,
+        driverOrGuideName: driverName,
+        assignedToId: driverId,
+        bookingDate: new Date().toISOString().split('T')[0],
+        status: 'Pending' as const,
+        paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${paymentAmount}`,
+        advanceDepositPaid: paymentAmount,
+        remainingCashBalance: remainingAmount,
+        otp: '8240',
+        endOtp: '4321',
+      };
+      adminState.advanceBookings.unshift(newAdv as any);
+
       sendLocalNotification(
-        '🗺️ Custom Trip Booking Submitted!',
-        `Your trip from ${pickup.name} to ${drop.name} is booked! Assigned driver: ${driverName}.`
+        '🗺️ Custom Trip Pre-Booking Confirmed!',
+        `Your pre-booking from ${checkpoints[0].name} to ${checkpoints[checkpoints.length - 1].name} is confirmed with ₹${paymentAmount} wallet deposit. Assigned driver: ${driverName}.`
       );
 
       Alert.alert(
-        '🎉 Cash Booking Confirmed!',
-        isPreBooking
-          ? `Cash Payment Mode Selected!\nPre-Booking Fees: ₹${paymentAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time to Captain)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-          : `Cash Payment Mode Selected!\nFull Payment: ₹${totalPrice} (Payable to Captain)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
+        '🎉 Pre-Booking Confirmed!',
+        `Automatic Tourist Wallet Payment Successful!\nDeposit Amount: ₹${paymentAmount} (${prebookPayOption}% Deposit)\nRemaining Balance: ₹${remainingAmount}\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`,
+        [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
       );
-
-      router.replace({
-        pathname: '/ride-matching' as any,
-        params: {
-          pickupName: pickup.name,
-          pickupLat: pickup.latitude.toString(),
-          pickupLng: pickup.longitude.toString(),
-          dropName: drop.name,
-          dropLat: drop.latitude.toString(),
-          dropLng: drop.longitude.toString(),
-          stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
-          price: totalPrice.toString(),
-          advanceAmount: paymentAmount.toString(),
-          remainingAmount: remainingAmount.toString(),
-          paymentId: 'CASH_' + Date.now(),
-          type: 'custom_trip',
-          vehicle: selectedRide || '5seater',
-          paymentMode: paymentLabel,
-          passengerCount: passengerCount.toString(),
-          date: finalDate,
-          time: finalTime,
-          driverId: selectedDriver?.id || '',
-        }
-      });
       return;
     }
 
-    const paymentLabel = isPreBooking
-      ? `UPI Pre-Booking Fees: ₹${paymentAmount} (Bal ₹${remainingAmount})`
-      : `UPI Full Payment: ₹${paymentAmount}`;
+    // INSTANT BOOKING MODE (Cash or UPI)
+    const paymentLabel = paymentMethod === 'cash' ? `Cash (Full Payment ₹${totalPrice})` : `UPI (Full Payment ₹${totalPrice})`;
 
-    openRazorpayPayment({
-      amount: paymentAmount,
-      title: `Custom Trip: ${pickup.name} → ${drop.name}`,
-      customerName: 'Abhishek (Tourist)',
-      onSuccess: async (paymentId: string) => {
-        let calculatedScheduledTime = new Date().toISOString();
-        if (isPreBooking && bookingDate) {
-          try {
-            let hours24 = bookingHour;
-            if (bookingAmPm === 'PM' && hours24 < 12) {
-              hours24 += 12;
-            } else if (bookingAmPm === 'AM' && hours24 === 12) {
-              hours24 = 0;
-            }
-            const dateParts = bookingDate.split('-');
-            if (dateParts.length === 3) {
-              const year = parseInt(dateParts[0], 10);
-              const month = parseInt(dateParts[1], 10) - 1;
-              const day = parseInt(dateParts[2], 10);
-              const localDate = new Date(year, month, day, hours24, bookingMinute, 0);
-              calculatedScheduledTime = localDate.toISOString();
-            }
-          } catch (e) {
-            console.warn('Error parsing booking date:', e);
-          }
-        }
+    await createTripApi({
+      tripType: 'custom_trip',
+      title: `Trip: ${checkpoints[0].name} → ${checkpoints[checkpoints.length - 1].name}`,
+      customerId: customerId,
+      customerName: customerName,
+      driverOrGuideName: driverName,
+      driverId: driverId,
+      amount: totalPrice,
+      paymentMode: paymentLabel,
+      status: 'Pending',
+      durationHours: totalTripHours,
+      extraHours: extraHoursRounded,
+      addonCharge: extraAddonCharge,
+      bookingType: 'INSTANT',
+      scheduledTime: calculatedScheduledTime,
+      pickupName: checkpoints[0].name,
+      dropName: checkpoints[checkpoints.length - 1].name,
+    });
 
-        // Save trip to real backend DB
-        await createTripApi({
-          tripType: 'custom_trip',
-          title: `Trip: ${pickup.name} → ${drop.name}`,
-          customerName: 'Abhishek (Tourist)',
-          driverOrGuideName: driverName,
-          amount: totalPrice,
-          paymentMode: paymentLabel,
-          status: 'Confirmed',
-          durationHours: totalTripHours,
-          extraHours: extraHoursRounded,
-          addonCharge: extraAddonCharge,
-          bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
-          scheduledTime: calculatedScheduledTime,
-          pickupName: pickup.name,
-          dropName: drop.name,
-        });
-
-        Alert.alert(
-          '🎉 UPI Booking Confirmed!',
-          isPreBooking
-            ? `Pre-Booking Fees Paid: ₹${paymentAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-            : `Full Payment Paid: ₹${paymentAmount}\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-        );
-
-        router.replace({
-          pathname: '/ride-matching' as any,
-          params: {
-            pickupName: pickup.name,
-            pickupLat: pickup.latitude.toString(),
-            pickupLng: pickup.longitude.toString(),
-            dropName: drop.name,
-            dropLat: drop.latitude.toString(),
-            dropLng: drop.longitude.toString(),
-            stops: JSON.stringify(stops.map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
-            price: totalPrice.toString(),
-            advanceAmount: paymentAmount.toString(),
-            remainingAmount: remainingAmount.toString(),
-            paymentId: paymentId,
-            type: 'custom_trip',
-            vehicle: selectedRide || '5seater',
-            paymentMode: paymentLabel,
-            passengerCount: passengerCount.toString(),
-            date: finalDate,
-            time: finalTime,
-            driverId: selectedDriver?.id || '',
-          }
-        });
-      },
-      onCancel: () => {
-        Alert.alert('Payment Cancelled', 'Razorpay payment was cancelled.');
-      },
-      onError: () => {
-        Alert.alert('Payment Error', 'Razorpay Payment Gateway error. Please check connection.');
+    router.replace({
+      pathname: '/ride-matching' as any,
+      params: {
+        pickupName: checkpoints[0].name,
+        pickupLat: checkpoints[0].latitude.toString(),
+        pickupLng: checkpoints[0].longitude.toString(),
+        dropName: checkpoints[checkpoints.length - 1].name,
+        dropLat: checkpoints[checkpoints.length - 1].latitude.toString(),
+        dropLng: checkpoints[checkpoints.length - 1].longitude.toString(),
+        stops: JSON.stringify(checkpoints.slice(1, -1).map(s => ({ name: s.name, latitude: s.latitude, longitude: s.longitude }))),
+        price: totalPrice.toString(),
+        paymentId: 'PAY_' + Date.now(),
+        type: 'custom_trip',
+        vehicle: selectedRide || '5seater',
+        paymentMode: paymentLabel,
+        passengerCount: passengerCount.toString(),
+        date: finalDate,
+        time: finalTime,
+        driverId: selectedDriver?.id || '',
       }
     });
   };
@@ -1390,12 +1372,6 @@ export default function MakeTripScreen() {
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Base Vehicle Rate</Text>
               <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>₹{baseDayRate}/Day</Text>
             </View>
-            {extraHoursRounded > 0 && (
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
-                <Text style={{ color: colors.danger, fontSize: moderateFontScale(12), fontWeight: '600' }}>Extra Hours Add-on ({extraHoursRounded} hrs)</Text>
-                <Text style={{ color: colors.danger, fontWeight: '700' }}>+₹{extraAddonCharge}</Text>
-              </View>
-            )}
 
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
 
@@ -1452,53 +1428,108 @@ export default function MakeTripScreen() {
               </Text>
             </View>
 
-            {/* Payment Method Selector (Cash vs Online UPI) */}
-            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12), marginTop: verticalScale(10), marginBottom: verticalScale(6) }}>
-              Select Payment Method
-            </Text>
-            <View style={{ flexDirection: 'row', gap: scale(8), marginBottom: verticalScale(12) }}>
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: scale(6),
-                  paddingVertical: verticalScale(10),
-                  borderRadius: scale(10),
-                  borderWidth: 1.5,
-                  borderColor: paymentMethod === 'cash' ? colors.amber : colors.border,
-                  backgroundColor: paymentMethod === 'cash' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
-                }}
-                onPress={() => setPaymentMethod('cash')}
-              >
-                <MaterialIcons name="payments" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
-                <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
-                  Cash Payment
+            {/* Payment & Deposit Options */}
+            {!adminState.instantBookingEnabled ? (
+              <View style={{ marginTop: verticalScale(10), marginBottom: verticalScale(12) }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12), marginBottom: verticalScale(6) }}>
+                  Pre-Booking Wallet Deposit Option:
                 </Text>
-              </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: scale(10), marginBottom: verticalScale(8) }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: verticalScale(10),
+                      borderRadius: scale(10),
+                      borderWidth: 1.5,
+                      borderColor: prebookPayOption === '20' ? colors.amber : colors.border,
+                      backgroundColor: prebookPayOption === '20' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setPrebookPayOption('20')}
+                  >
+                    <Text style={{ fontSize: moderateFontScale(11), fontWeight: '900', color: prebookPayOption === '20' ? colors.amber : colors.textPrimary }}>
+                      20% Minimum Deposit
+                    </Text>
+                    <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: 2 }}>
+                      ₹{Math.round(computedTripPrice * 0.20)} Now
+                    </Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: scale(6),
-                  paddingVertical: verticalScale(10),
-                  borderRadius: scale(10),
-                  borderWidth: 1.5,
-                  borderColor: paymentMethod === 'upi' ? colors.amber : colors.border,
-                  backgroundColor: paymentMethod === 'upi' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
-                }}
-                onPress={() => setPaymentMethod('upi')}
-              >
-                <MaterialIcons name="qr-code-scanner" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
-                <Text style={{ color: paymentMethod === 'upi' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
-                  Online UPI
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: verticalScale(10),
+                      borderRadius: scale(10),
+                      borderWidth: 1.5,
+                      borderColor: prebookPayOption === '100' ? colors.amber : colors.border,
+                      backgroundColor: prebookPayOption === '100' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setPrebookPayOption('100')}
+                  >
+                    <Text style={{ fontSize: moderateFontScale(11), fontWeight: '900', color: prebookPayOption === '100' ? colors.amber : colors.textPrimary }}>
+                      100% Full Payment
+                    </Text>
+                    <Text style={{ fontSize: moderateFontScale(9), color: colors.textMuted, marginTop: 2 }}>
+                      ₹{computedTripPrice} Now
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '700' }}>
+                  💳 Pre-booking automatically deducts deposit from your Tourist Wallet.
                 </Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            ) : (
+              <View style={{ marginTop: verticalScale(10), marginBottom: verticalScale(12) }}>
+                <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12), marginBottom: verticalScale(6) }}>
+                  Select Instant Payment Method
+                </Text>
+                <View style={{ flexDirection: 'row', gap: scale(8) }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: scale(6),
+                      paddingVertical: verticalScale(10),
+                      borderRadius: scale(10),
+                      borderWidth: 1.5,
+                      borderColor: paymentMethod === 'cash' ? colors.amber : colors.border,
+                      backgroundColor: paymentMethod === 'cash' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                    }}
+                    onPress={() => setPaymentMethod('cash')}
+                  >
+                    <MaterialIcons name="payments" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
+                    <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                      Cash Payment
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: scale(6),
+                      paddingVertical: verticalScale(10),
+                      borderRadius: scale(10),
+                      borderWidth: 1.5,
+                      borderColor: paymentMethod === 'upi' ? colors.amber : colors.border,
+                      backgroundColor: paymentMethod === 'upi' ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                    }}
+                    onPress={() => setPaymentMethod('upi')}
+                  >
+                    <MaterialIcons name="qr-code-scanner" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
+                    <Text style={{ color: paymentMethod === 'upi' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+                      Online UPI
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.confirmButton, { marginTop: verticalScale(4) }]}
@@ -1507,11 +1538,9 @@ export default function MakeTripScreen() {
             >
               <MaterialIcons name="payment" size={scale(20)} color="#101014" />
               <Text style={styles.confirmBtnText}>
-                {paymentMethod === 'cash'
-                  ? `Book Trip with Cash (₹${computedTripPrice})`
-                  : (!adminState.instantBookingEnabled
-                      ? `Pay Pre-Booking Fees (₹${Math.round(computedTripPrice * 0.20)})`
-                      : `Pay Total Fare (₹${computedTripPrice})`)}
+                {!adminState.instantBookingEnabled
+                  ? `Confirm Pre-Booking (Wallet Deposit ₹${prebookPayOption === '20' ? Math.round(computedTripPrice * 0.20) : computedTripPrice})`
+                  : `Confirm & Pay Trip (₹${computedTripPrice})`}
               </Text>
             </TouchableOpacity>
           </View>

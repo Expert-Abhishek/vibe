@@ -1138,6 +1138,56 @@ router.post('/book', async (req, res) => {
 });
 
 /**
+ * GET /api/trips/driver/:driverId
+ * Fetch all driver bookings (Instant & Pre-booked Scheduled) for a driver
+ */
+router.get('/driver/:driverId', async (req, res) => {
+  const { driverId } = req.params;
+
+  try {
+    const dbRes = await db.query(
+      `SELECT * FROM trips 
+       WHERE (trip_type = 'cab' OR trip_type = 'custom_trip' OR LOWER(trip_type) LIKE '%cab%' OR LOWER(trip_type) LIKE '%trip%')
+          AND (CAST(driver_id AS VARCHAR) = $1 OR driver_id IS NULL OR status = 'Pending' OR status = 'Pending Driver Confirmation')
+       ORDER BY created_at DESC`,
+      [driverId]
+    );
+
+    const formattedTrips = dbRes.rows.map(row => ({
+      id: row.id,
+      type: row.trip_type,
+      title: row.title || `${row.pickup_name || 'Pickup'} ➔ ${row.drop_name || 'Destination'}`,
+      touristName: row.customer_name || 'Tourist Client',
+      customerName: row.customer_name || 'Tourist Client',
+      pickupName: row.pickup_name || 'Pickup Location',
+      dropName: row.drop_name || 'Drop Destination',
+      pickup: row.pickup_name || 'Pickup Location',
+      price: parseFloat(row.amount || 0),
+      amount: parseFloat(row.amount || 0),
+      paymentMode: row.payment_mode || 'Wallet',
+      status: row.status || 'Pending',
+      bookingType: row.booking_type || 'INSTANT',
+      scheduledTime: row.scheduled_time,
+      date: row.scheduled_time ? new Date(row.scheduled_time).toISOString().split('T')[0] : (row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : 'Today'),
+      time: row.scheduled_time ? new Date(row.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible',
+      advanceDepositPaid: parseFloat(row.advance_deposit_paid || 0),
+      remainingCashBalance: parseFloat(row.remaining_cash_balance || 0),
+      otp: row.otp,
+      endOtp: row.end_otp,
+      createdAt: row.created_at,
+    }));
+
+    return res.json({
+      success: true,
+      data: formattedTrips,
+    });
+  } catch (err) {
+    console.error('Error fetching driver trips from backend DB:', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch driver trips', error: err.message });
+  }
+});
+
+/**
  * GET /api/trips/guide/:guideId
  * Fetch all guide bookings (Instant & Pre-booked Scheduled) for a guide
  */

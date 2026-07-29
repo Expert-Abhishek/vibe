@@ -167,12 +167,33 @@ export default function GuidesScreen() {
   );
 
   const startBookingFlow = (guide: Guide) => {
+    // Check if tourist already has an active ongoing guide tour
+    const existingActiveTrip = (adminState.userTrips || []).find((t: any) => {
+      if (!t) return false;
+      const isGuide = t.type === 'guide' || String(t.title || '').toLowerCase().includes('guide');
+      const st = String(t.status || '').toLowerCase();
+      const isActive = !st.includes('cancel') && !st.includes('decline') && st !== 'completed';
+      return isGuide && isActive;
+    });
+
+    if (existingActiveTrip) {
+      Alert.alert(
+        '⚠️ Active Guide Tour In Progress',
+        `You already have an active guide booking ("${existingActiveTrip.title}").\n\nPlease complete or cancel your current tour on the Trips screen before booking another guide.`,
+        [
+          { text: 'View Active Trip', onPress: () => router.push('/(tabs)/trips') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
     setSelectedGuide(guide);
     if (adminState.instantBookingEnabled) {
       setBookingStep('loading');
       setTimeout(() => {
         setBookingStep('map');
-      }, 1500);
+      }, 1000);
     } else {
       const tomorrow = dateOptions.length > 0 ? dateOptions[0].dateStr : new Date().toISOString().split('T')[0];
       setPrebookDate(tomorrow);
@@ -332,10 +353,11 @@ export default function GuidesScreen() {
         `Your booking request has been sent to ${selectedGuide?.name}.`
       );
 
-      setBookingStep('none');
-      setSelectedGuide(null);
+      router.push('/(tabs)/trips');
     } catch (err) {
       console.error('Error confirming prebooking:', err);
+      if (showError) showError('Booking Error', 'Failed to complete pre-booking request.');
+    } finally {
       setBookingStep('none');
       setSelectedGuide(null);
     }
@@ -343,76 +365,87 @@ export default function GuidesScreen() {
 
   const checkoutGuide = async () => {
     if (!selectedGuide) return;
-    const session = getUserSessionSync();
-    const finalDate = adminState.instantBookingEnabled ? 'Today (Instant)' : prebookDate;
-    const finalTime = adminState.instantBookingEnabled ? 'Immediate' : prebookTimeStr;
-    const fareAmt = selectedGuide.chargePerHour;
-    const customerId = session?.id || 't1';
-    const customerName = session?.name || 'Tourist Client';
+    setBookingStep('loading');
 
-    // Perform wallet deduction if paying via wallet
-    if (instantPaymentMode === 'wallet' && fareAmt > 0) {
-      try {
-        await deductWalletApi({
-          userId: customerId,
-          amount: fareAmt,
-          description: `Payment for Guided Tour with ${selectedGuide.name}`,
-        });
+    try {
+      const session = getUserSessionSync();
+      const finalDate = adminState.instantBookingEnabled ? 'Today (Instant)' : prebookDate;
+      const finalTime = adminState.instantBookingEnabled ? 'Immediate' : prebookTimeStr;
+      const fareAmt = selectedGuide.chargePerHour;
+      const customerId = session?.id || 't1';
+      const customerName = session?.name || 'Tourist Client';
 
-        await submitWalletDeductionRequestApi({
-          userId: customerId,
-          userName: customerName,
-          role: 'tourist',
-          amount: fareAmt,
-          description: `Instant Guide Booking Payment for ${selectedGuide.name}`,
-        });
-      } catch (e) {
-        console.warn('Instant guide booking wallet deduction error:', e);
+      // Perform wallet deduction if paying via wallet
+      if (instantPaymentMode === 'wallet' && fareAmt > 0) {
+        try {
+          await deductWalletApi({
+            userId: customerId,
+            amount: fareAmt,
+            description: `Payment for Guided Tour with ${selectedGuide.name}`,
+          });
+
+          await submitWalletDeductionRequestApi({
+            userId: customerId,
+            userName: customerName,
+            role: 'tourist',
+            amount: fareAmt,
+            description: `Instant Guide Booking Payment for ${selectedGuide.name}`,
+          });
+        } catch (e) {
+          console.warn('Instant guide booking wallet deduction error:', e);
+        }
       }
+
+      const bookRes = await bookTripApi({
+        tripType: 'guide',
+        title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
+        customerId: customerId,
+        customerName: customerName,
+        pickupName: `${selectedGuide.city} Landmark Center`,
+        dropName: `${selectedGuide.city} Sightseeing Spots`,
+        amount: fareAmt,
+        paymentMode: instantPaymentMode,
+        bookingType: adminState.instantBookingEnabled ? 'instant' : 'prebook',
+      });
+
+      const tripId = bookRes?.data?.id || bookRes?.id || `guide_book_${Date.now()}`;
+
+      if (showSuccess) {
+        showSuccess('Request Sent to Guide', `Instant request sent to ${selectedGuide.name}. Waiting for guide response.`);
+      }
+      sendLocalNotification(
+        '🚩 Request Sent to Guide!',
+        `Booking request sent for ${selectedGuide.name}. Waiting for guide confirmation.`
+      );
+
+      if (!Array.isArray(adminState.userTrips)) {
+        adminState.userTrips = [];
+      }
+      adminState.userTrips.unshift({
+        id: tripId,
+        type: 'guide',
+        title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
+        driverOrGuideName: selectedGuide.name,
+        customerId: session?.id || 't1',
+        customerName: session?.name || 'Tourist Client',
+        date: finalDate,
+        time: finalTime,
+        price: fareAmt,
+        paymentMode: instantPaymentMode === 'wallet' ? 'Wallet' : 'Cash',
+        status: 'Pending Guide Confirmation',
+        bookingType: adminState.instantBookingEnabled ? 'instant' : 'prebook',
+        otp: '8240',
+        endOtp: '4321',
+      });
+
+      router.push('/(tabs)/trips');
+    } catch (e) {
+      console.error('checkoutGuide error:', e);
+      if (showError) showError('Booking Error', 'Failed to complete guide booking.');
+    } finally {
+      setBookingStep('none');
+      setSelectedGuide(null);
     }
-
-    const bookRes = await bookTripApi({
-      tripType: 'guide',
-      title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
-      customerId: customerId,
-      customerName: customerName,
-      pickupName: `${selectedGuide.city} Landmark Center`,
-      dropName: `${selectedGuide.city} Sightseeing Spots`,
-      amount: fareAmt,
-      paymentMode: instantPaymentMode,
-      bookingType: adminState.instantBookingEnabled ? 'instant' : 'prebook',
-    });
-
-    const tripId = bookRes?.data?.id || bookRes?.id || `guide_book_${Date.now()}`;
-
-    if (showSuccess) {
-      showSuccess('Request Sent to Guide', `Instant request sent to ${selectedGuide.name}. Waiting for guide response.`);
-    }
-    sendLocalNotification(
-      '🚩 Request Sent to Guide!',
-      `Booking request sent for ${selectedGuide.name}. Waiting for guide confirmation.`
-    );
-
-    if (!Array.isArray(adminState.userTrips)) {
-      adminState.userTrips = [];
-    }
-    adminState.userTrips.unshift({
-      id: tripId,
-      type: 'guide',
-      title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
-      driverOrGuideName: selectedGuide.name,
-      customerId: session?.id || 't1',
-      customerName: session?.name || 'Tourist Client',
-      date: finalDate,
-      time: finalTime,
-      price: fareAmt,
-      paymentMode: instantPaymentMode === 'wallet' ? 'Wallet' : 'Cash',
-      status: 'Pending Guide Confirmation',
-      bookingType: adminState.instantBookingEnabled ? 'instant' : 'prebook',
-    });
-
-    setBookingStep('none');
-    setSelectedGuide(null);
   };
 
   return (

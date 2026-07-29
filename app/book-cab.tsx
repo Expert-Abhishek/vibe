@@ -1,4 +1,4 @@
-import { bookTripApi, createTripApi, fetchDestinationsApi } from '@/constants/api';
+import { bookTripApi, createTripApi, deductWalletApi, fetchDestinationsApi, submitWalletDeductionRequestApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { openRazorpayPayment } from '@/constants/razorpay';
@@ -75,6 +75,8 @@ export default function BookCabScreen() {
   const [bookingMode, setBookingMode] = useState<'now' | 'advance'>('now');
   const [advanceDate, setAdvanceDate] = useState('2026-07-20');
   const [advanceTime, setAdvanceTime] = useState('10:00 AM');
+  const [prebookPayOption, setPrebookPayOption] = useState<'20' | '100'>('20');
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
 
   // Voucher discount states
   const [voucherText, setVoucherText] = useState('');
@@ -311,8 +313,24 @@ export default function BookCabScreen() {
     return points;
   };
 
+  const availableAddons = [
+    { id: 'luggage', name: 'Extra Luggage Space', price: 200, icon: 'card-travel' },
+    { id: 'ac', name: 'AC Comfort Priority', price: 150, icon: 'ac-unit' },
+    { id: 'child_seat', name: 'Child Safety Seat', price: 250, icon: 'child-friendly' },
+    { id: 'pet', name: 'Pet Friendly Cab', price: 150, icon: 'pets' },
+  ];
+
+  const getAddonsCost = () => {
+    let total = 0;
+    selectedAddons.forEach(id => {
+      const item = availableAddons.find(a => a.id === id);
+      if (item) total += item.price;
+    });
+    return total;
+  };
+
   const getBasePrice = (ratePerKm: number) => {
-    let fare = distanceKm * ratePerKm;
+    let fare = distanceKm * ratePerKm + getAddonsCost();
     return Math.round(fare);
   };
 
@@ -367,18 +385,41 @@ export default function BookCabScreen() {
     const chosenRide = rides.find(r => r.key === selectedRide);
     const base = getBasePrice(chosenRide ? chosenRide.ratePerKm : 15);
     const final = getDiscountedPrice(base);
+    const session = getUserSessionSync();
+    const customerId = session?.id || 't1';
+    const customerName = session?.name || 'Tourist Client';
 
     if (bookingMode === 'advance') {
-      const advanceAmount = Math.round(final * 0.20);
+      const advanceAmount = prebookPayOption === '20' ? Math.round(final * 0.20) : final;
       const remainingAmount = final - advanceAmount;
 
-      if (paymentMethod === 'cash') {
-        const session = getUserSessionSync();
+      setBookingLoading(true);
+      try {
+        if (advanceAmount > 0) {
+          try {
+            await deductWalletApi({
+              userId: customerId,
+              amount: advanceAmount,
+              description: `Pre-Booking Deposit (${prebookPayOption}%) for ${pickup.name} ➔ ${drop.name}`,
+            });
+
+            await submitWalletDeductionRequestApi({
+              userId: customerId,
+              userName: customerName,
+              role: 'tourist',
+              amount: advanceAmount,
+              description: `Cab Pre-Booking Deposit (${prebookPayOption}%) for ${pickup.name} ➔ ${drop.name}`,
+            });
+          } catch (e) {
+            console.warn('Pre-booking wallet deduction error:', e);
+          }
+        }
+
         const bookRes = await bookTripApi({
           tripType: 'cab',
           title: `${pickup.name} ➔ ${drop.name}`,
-          customerId: session?.id || 't1',
-          customerName: session?.name || 'Abhishek (Tourist)',
+          customerId: customerId,
+          customerName: customerName,
           pickupName: pickup.name,
           dropName: drop.name,
           pickupLat: pickup.latitude || 12.9716,
@@ -386,7 +427,11 @@ export default function BookCabScreen() {
           dropLat: drop.latitude || 12.2958,
           dropLng: drop.longitude || 76.6394,
           amount: final,
-          paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
+          paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${advanceAmount} (Bal ₹${remainingAmount})`,
+          bookingType: 'PRE_BOOKED',
+          scheduledTime: `${advanceDate} ${advanceTime}`,
+          advanceDepositPaid: advanceAmount,
+          remainingCashBalance: remainingAmount,
         });
 
         const tripId = bookRes?.data?.id || bookRes?.id || `adv_${Date.now()}`;
@@ -399,81 +444,40 @@ export default function BookCabScreen() {
           date: advanceDate,
           time: advanceTime,
           price: final,
-          touristName: 'Abhishek (Tourist)',
+          touristName: customerName,
           driverOrGuideName: 'Anil Gowda (Captain)',
           assignedToId: 'd1',
           bookingDate: new Date().toISOString().split('T')[0],
           status: 'Pending' as const,
-          paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
+          paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${advanceAmount}`,
+          advanceDepositPaid: advanceAmount,
+          remainingCashBalance: remainingAmount,
+          otp: '8240',
+          endOtp: '4321',
+          addons: selectedAddons,
         };
-        adminState.advanceBookings.push(newAdv);
+        adminState.advanceBookings.unshift(newAdv as any);
+
         sendLocalNotification(
-          '🚕 Ride Booking Submitted!',
-          `Your booking (${pickup.name} ➔ ${drop.name}) is registered in backend. Assigned Captain: Anil Gowda.`
+          '🚕 Ride Pre-Booking Confirmed!',
+          `Pre-booking registered with ₹${advanceAmount} wallet deposit. Assigned Captain: Anil Gowda.`
         );
+
         Alert.alert(
-          '🎉 Cash Pre-Booking Confirmed!',
-          `Cash Payment Mode Selected!\nPre-Booking Fees: ₹${advanceAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time to Captain)\nDate: ${advanceDate} at ${advanceTime}`,
+          '🎉 Pre-Booking Confirmed!',
+          `Automatic Wallet Payment Successful!\nDeposit Amount: ₹${advanceAmount} (${prebookPayOption}% Deposit)\nRemaining Balance: ₹${remainingAmount} (Payable on trip day)\nDate: ${advanceDate} at ${advanceTime}`,
           [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
         );
-        return;
+      } catch (err) {
+        console.error('handleBookCab advance error:', err);
+        Alert.alert('Booking Error', 'Failed to complete pre-booking request.');
+      } finally {
+        setBookingLoading(false);
       }
-
-      openRazorpayPayment({
-        amount: advanceAmount,
-        title: `Pre-Booking: ${pickup.name} ➔ ${drop.name}`,
-        customerName: 'Abhishek (Tourist)',
-        onSuccess: async (paymentId: string) => {
-          const tripRes = await createTripApi({
-            tripType: 'cab',
-            title: `${pickup.name} ➔ ${drop.name}`,
-            customerName: 'Abhishek (Tourist)',
-            driverOrGuideName: 'Anil Gowda (Captain)',
-            driverId: 'd1',
-            amount: final,
-            paymentMode: `UPI Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
-            status: 'Pending',
-          });
-
-          const tripId = tripRes?.data?.id || tripRes?.id || `adv_${Date.now()}`;
-
-          const newAdv = {
-            id: String(tripId),
-            type: 'cab' as const,
-            title: `${pickup.name} ➔ ${drop.name}`,
-            route: [pickup.name, ...stops.map(s => s.name), drop.name],
-            date: advanceDate,
-            time: advanceTime,
-            price: final,
-            touristName: 'Abhishek (Tourist)',
-            driverOrGuideName: 'Anil Gowda (Captain)',
-            assignedToId: 'd1',
-            bookingDate: new Date().toISOString().split('T')[0],
-            status: 'Pending' as const,
-            paymentMode: `UPI Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
-          };
-          adminState.advanceBookings.push(newAdv);
-          sendLocalNotification(
-            '🎉 Pre-Booking Paid via UPI!',
-            `Pre-Booking fees paid: ₹${advanceAmount}. Captain assigned.`
-          );
-          Alert.alert(
-            '🎉 UPI Pre-Booking Confirmed!',
-            `Pre-Booking Fees Paid: ₹${advanceAmount}\nRemaining Balance: ₹${remainingAmount} (Payable at trip time)\nDate: ${advanceDate} at ${advanceTime}`,
-            [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
-          );
-        },
-        onCancel: () => {
-          Alert.alert('Payment Cancelled', 'Pre-Booking fee payment was cancelled.');
-        },
-        onError: () => {
-          Alert.alert('Payment Error', 'Razorpay Payment Gateway error. Please check connection.');
-        }
-      });
       return;
     }
 
-    // Redirect to the live simulator matching page
+    // Instant Booking Mode (Cash or UPI)
     router.replace({
       pathname: '/ride-matching' as any,
       params: {
@@ -488,6 +492,7 @@ export default function BookCabScreen() {
         type: 'cab',
         vehicle: selectedRide,
         paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
+        addons: JSON.stringify(selectedAddons),
       }
     });
   };
@@ -888,31 +893,47 @@ export default function BookCabScreen() {
           </View>
         )}
 
-        {/* Payment Settings Row */}
+        {/* Extra Addons & Preferences Row */}
         <View style={[styles.bookingModeContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.settingLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>
-            Payment Mode
+            Extra Addons & Options
           </Text>
-          <View style={styles.paymentSelectorRow}>
-            <TouchableOpacity
-              style={[styles.payMethodBtn, paymentMethod === 'cash' && styles.payMethodBtnActive]}
-              onPress={() => setPaymentMethod('cash')}
-            >
-              <MaterialIcons name="attach-money" size={scale(14)} color={paymentMethod === 'cash' ? '#101010' : colors.textPrimary} />
-              <Text style={[styles.payMethodText, { color: paymentMethod === 'cash' ? '#101010' : colors.textPrimary }]}>Cash</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.payMethodBtn, paymentMethod === 'upi' && styles.payMethodBtnActive]}
-              onPress={() => setPaymentMethod('upi')}
-            >
-              <FontAwesome5 name="qrcode" size={scale(11)} color={paymentMethod === 'upi' ? '#101010' : colors.textPrimary} />
-              <Text style={[styles.payMethodText, { color: paymentMethod === 'upi' ? '#101010' : colors.textPrimary }]}>UPI</Text>
-            </TouchableOpacity>
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: scale(8) }}>
+            {availableAddons.map((addon) => {
+              const isSelected = selectedAddons.includes(addon.id);
+              return (
+                <TouchableOpacity
+                  key={addon.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: scale(12),
+                    paddingVertical: verticalScale(8),
+                    borderRadius: scale(20),
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? colors.amber : colors.border,
+                    backgroundColor: isSelected ? 'rgba(245,197,24,0.15)' : 'rgba(255,255,255,0.03)',
+                    gap: scale(6),
+                  }}
+                  onPress={() => {
+                    if (isSelected) {
+                      setSelectedAddons(prev => prev.filter(id => id !== addon.id));
+                    } else {
+                      setSelectedAddons(prev => [...prev, addon.id]);
+                    }
+                  }}
+                >
+                  <MaterialIcons name={addon.icon as any} size={scale(14)} color={isSelected ? colors.amber : colors.textMuted} />
+                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '700', color: isSelected ? colors.textPrimary : colors.textMuted }}>
+                    {addon.name} (+₹{addon.price})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        {/* Advance Booking Selector */}
+        {/* Schedule Mode: Instant vs Advance */}
         <View style={[styles.bookingModeContainer, { borderBottomColor: colors.border }]}>
           <Text style={[styles.settingLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>
             Booking Schedule
@@ -923,7 +944,7 @@ export default function BookCabScreen() {
               onPress={() => setBookingMode('now')}
             >
               <MaterialIcons name="bolt" size={scale(14)} color={bookingMode === 'now' ? '#101010' : colors.textPrimary} />
-              <Text style={[styles.modeBtnText, { color: bookingMode === 'now' ? '#101010' : colors.textPrimary }]}>Book Now</Text>
+              <Text style={[styles.modeBtnText, { color: bookingMode === 'now' ? '#101010' : colors.textPrimary }]}>Book Now (Instant)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -935,27 +956,105 @@ export default function BookCabScreen() {
             </TouchableOpacity>
           </View>
 
-          {bookingMode === 'advance' && (
-            <View style={styles.datePickerInputRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.inputMicroLabel, { color: colors.textMuted }]}>TRAVEL DATE (YYYY-MM-DD)</Text>
-                <TextInput
-                  style={[styles.dateInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={advanceDate}
-                  onChangeText={setAdvanceDate}
-                  placeholder="e.g. 2026-07-20"
-                  placeholderTextColor="rgba(255,255,255,0.2)"
-                />
+          {/* INSTANT MODE: Payment Mode Options (Cash / UPI) */}
+          {bookingMode === 'now' && (
+            <View style={{ marginTop: verticalScale(10) }}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>
+                Instant Payment Mode:
+              </Text>
+              <View style={styles.paymentSelectorRow}>
+                <TouchableOpacity
+                  style={[styles.payMethodBtn, paymentMethod === 'cash' && styles.payMethodBtnActive]}
+                  onPress={() => setPaymentMethod('cash')}
+                >
+                  <MaterialIcons name="attach-money" size={scale(14)} color={paymentMethod === 'cash' ? '#101010' : colors.textPrimary} />
+                  <Text style={[styles.payMethodText, { color: paymentMethod === 'cash' ? '#101010' : colors.textPrimary }]}>Cash</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.payMethodBtn, paymentMethod === 'upi' && styles.payMethodBtnActive]}
+                  onPress={() => setPaymentMethod('upi')}
+                >
+                  <FontAwesome5 name="qrcode" size={scale(11)} color={paymentMethod === 'upi' ? '#101010' : colors.textPrimary} />
+                  <Text style={[styles.payMethodText, { color: paymentMethod === 'upi' ? '#101010' : colors.textPrimary }]}>UPI / Wallet</Text>
+                </TouchableOpacity>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.inputMicroLabel, { color: colors.textMuted }]}>TRAVEL TIME</Text>
-                <TextInput
-                  style={[styles.dateInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={advanceTime}
-                  onChangeText={setAdvanceTime}
-                  placeholder="e.g. 10:00 AM"
-                  placeholderTextColor="rgba(255,255,255,0.2)"
-                />
+            </View>
+          )}
+
+          {/* ADVANCE PRE-BOOKING MODE: 20% / 100% Deposit + Automatic Wallet Payment */}
+          {bookingMode === 'advance' && (
+            <View style={{ marginTop: verticalScale(10) }}>
+              <Text style={[styles.settingLabel, { color: colors.textPrimary, marginBottom: verticalScale(6) }]}>
+                Pre-Booking Wallet Deposit Option:
+              </Text>
+              <View style={{ flexDirection: 'row', gap: scale(10), marginBottom: verticalScale(10) }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    paddingVertical: verticalScale(10),
+                    borderRadius: scale(10),
+                    borderWidth: 1.5,
+                    borderColor: prebookPayOption === '20' ? colors.amber : colors.border,
+                    backgroundColor: prebookPayOption === '20' ? colors.amber : 'rgba(255,255,255,0.03)',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setPrebookPayOption('20')}
+                >
+                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '900', color: prebookPayOption === '20' ? '#101010' : colors.textPrimary }}>
+                    20% Minimum Deposit
+                  </Text>
+                  <Text style={{ fontSize: moderateFontScale(9), color: prebookPayOption === '20' ? '#101010' : colors.textMuted }}>
+                    ₹{Math.round(getDiscountedPrice(getBasePrice(rides.find(r => r.key === selectedRide)?.ratePerKm || 15)) * 0.20)} Now
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    paddingVertical: verticalScale(10),
+                    borderRadius: scale(10),
+                    borderWidth: 1.5,
+                    borderColor: prebookPayOption === '100' ? colors.amber : colors.border,
+                    backgroundColor: prebookPayOption === '100' ? colors.amber : 'rgba(255,255,255,0.03)',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => setPrebookPayOption('100')}
+                >
+                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '900', color: prebookPayOption === '100' ? '#101010' : colors.textPrimary }}>
+                    100% Full Payment
+                  </Text>
+                  <Text style={{ fontSize: moderateFontScale(9), color: prebookPayOption === '100' ? '#101010' : colors.textMuted }}>
+                    ₹{getDiscountedPrice(getBasePrice(rides.find(r => r.key === selectedRide)?.ratePerKm || 15))} Now
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '700', marginBottom: verticalScale(8) }}>
+                💳 Pre-booking automatically deducts deposit from your Tourist Wallet.
+              </Text>
+
+              <View style={styles.datePickerInputRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inputMicroLabel, { color: colors.textMuted }]}>TRAVEL DATE (YYYY-MM-DD)</Text>
+                  <TextInput
+                    style={[styles.dateInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                    value={advanceDate}
+                    onChangeText={setAdvanceDate}
+                    placeholder="e.g. 2026-07-20"
+                    placeholderTextColor="rgba(255,255,255,0.2)"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inputMicroLabel, { color: colors.textMuted }]}>TRAVEL TIME</Text>
+                  <TextInput
+                    style={[styles.dateInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                    value={advanceTime}
+                    onChangeText={setAdvanceTime}
+                    placeholder="e.g. 10:00 AM"
+                    placeholderTextColor="rgba(255,255,255,0.2)"
+                  />
+                </View>
               </View>
             </View>
           )}

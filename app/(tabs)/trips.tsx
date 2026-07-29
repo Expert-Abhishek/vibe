@@ -74,8 +74,8 @@ export default function TripsHistoryScreen() {
   // Convert backend database trips
   const mappedDbTrips = safeBackendTrips
     .filter(Boolean)
-    .map((bt: any) => ({
-      id: String(bt.id || `db_${Math.random()}`),
+    .map((bt: any, idx: number) => ({
+      id: String(bt.id || `db_trip_${idx}`),
       type: (bt.tripType || bt.trip_type || 'cab') as any,
       vehicleType: 'Verified Cab Partner',
       title: String(bt.title || 'Tour Booking'),
@@ -176,16 +176,76 @@ export default function TripsHistoryScreen() {
     return { bg: 'rgba(59, 130, 246, 0.12)', text: '#3B82F6' };
   };
 
+  const calculateCancellationFine = (trip: any): { feeAmount: number; feePercent: number; reasonText: string } => {
+    if (!trip) return { feeAmount: 0, feePercent: 0, reasonText: 'No cancellation fee' };
+
+    const isGuide = trip.type === 'guide' || String(trip.title || '').toLowerCase().includes('guide');
+    const price = Number(trip.price || trip.amount || 0);
+
+    if (isGuide) {
+      return { feeAmount: 100, feePercent: 0, reasonText: 'Flat ₹100 Guide Booking Cancellation Fine' };
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const bookingDateStr = trip.bookingDate || (trip.createdAt ? new Date(trip.createdAt).toISOString().split('T')[0] : todayStr);
+    let tripDateStr = todayStr;
+    if (trip.date) {
+      const rawDate = String(trip.date).replace('Upcoming - ', '').trim();
+      if (rawDate.includes('-')) {
+        tripDateStr = rawDate;
+      }
+    }
+
+    // 1. Same-day booking cancellation: ₹0 fine
+    if (todayStr === bookingDateStr) {
+      return {
+        feeAmount: 0,
+        feePercent: 0,
+        reasonText: 'Same-Day Booking Cancellation (₹0 Fine / 0% Deduction)',
+      };
+    }
+
+    // 2. Compare cancellation date vs trip start date
+    const cancellationDate = new Date(todayStr);
+    const tripStartDate = new Date(tripDateStr);
+    const diffMs = tripStartDate.getTime() - cancellationDate.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    // Cancelled on trip start day
+    if (diffDays <= 0) {
+      const fee = Math.round(price * 0.20);
+      return {
+        feeAmount: fee,
+        feePercent: 20,
+        reasonText: `Trip Start Day Cancellation (20% Fee = ₹${fee})`,
+      };
+    }
+
+    // Cancelled 1 day before trip start date
+    if (diffDays === 1) {
+      const fee = Math.round(price * 0.10);
+      return {
+        feeAmount: fee,
+        feePercent: 10,
+        reasonText: `1 Day Prior Cancellation (10% Fee = ₹${fee})`,
+      };
+    }
+
+    // Cancelled 2+ days before trip start date: ₹0 fine
+    return {
+      feeAmount: 0,
+      feePercent: 0,
+      reasonText: 'Advance Cancellation (₹0 Fine / 0% Deduction)',
+    };
+  };
+
   const handleCancelPress = (trip: any) => {
     if (!trip) return;
     cancelledTripIdsRef.current.add(String(trip.id));
-    const isGuideBooking = trip.type === 'guide' || String(trip.status || '').toLowerCase().includes('guide');
-    const isAcceptedByGuide = String(trip.status || '').toLowerCase().includes('accepted') || isGuideBooking;
-    const price = trip.price || 0;
 
-    const feeAmount = isAcceptedByGuide ? 100 : 0;
-    const alertTitle = isGuideBooking ? 'Confirm Guide Booking Cancellation' : 'Confirm Cancellation';
-    const alertMsg = `Trip: ${trip.title}\n\nCancellation Fine: ₹100 (Fine for cancelling guide booking)\n\nNote: ₹100 fine will be deducted from your wallet and recorded in Admin Panel.`;
+    const policy = calculateCancellationFine(trip);
+    const alertTitle = 'Confirm Trip Cancellation';
+    const alertMsg = `Trip: ${trip.title}\n\nCancellation Policy: ${policy.reasonText}\nFee Amount: ₹${policy.feeAmount}\n\n${policy.feeAmount > 0 ? `Note: ₹${policy.feeAmount} fee will be deducted from your wallet and logged in Admin Panel.` : 'No cancellation fee applied.'}`;
 
     Alert.alert(
       alertTitle,
@@ -199,24 +259,26 @@ export default function TripsHistoryScreen() {
             cancelledTripIdsRef.current.add(String(trip.id));
             setCancelledIds(prev => [...prev, String(trip.id)]);
 
-            try {
-              // 1. Deduct ₹100 fine from Tourist Wallet
-              await deductWalletApi({
-                userId: userId || 't1',
-                amount: 100,
-                description: `Cancellation Fine for Guide Booking #${trip.id}`,
-              });
+            if (policy.feeAmount > 0) {
+              try {
+                // 1. Deduct calculated fine from Tourist Wallet
+                await deductWalletApi({
+                  userId: userId || 't1',
+                  amount: policy.feeAmount,
+                  description: `Cancellation Fee: ${policy.reasonText} for Booking #${trip.id}`,
+                });
 
-              // 2. Submit Wallet Deduction Request for Admin Panel
-              await submitWalletDeductionRequestApi({
-                userId: userId || 't1',
-                userName: session?.name || 'Tourist Client',
-                role: 'tourist',
-                amount: 100,
-                description: `Cancellation Fine for Guide Booking #${trip.id} (${trip.title})`,
-              });
-            } catch (e) {
-              console.warn('Cancellation fine deduction warning:', e);
+                // 2. Submit Wallet Deduction Request for Admin Panel
+                await submitWalletDeductionRequestApi({
+                  userId: userId || 't1',
+                  userName: session?.name || 'Tourist Client',
+                  role: 'tourist',
+                  amount: policy.feeAmount,
+                  description: `Cancellation Fee (${policy.reasonText}) for Booking #${trip.id} (${trip.title})`,
+                });
+              } catch (e) {
+                console.warn('Cancellation fine deduction warning:', e);
+              }
             }
 
             // 3. Persist cancellation in backend PostgreSQL DB
@@ -246,7 +308,10 @@ export default function TripsHistoryScreen() {
               prev.map((t) => (String(t.id) === String(trip.id) ? { ...t, status: 'Cancelled by Tourist' } : t))
             );
 
-            Alert.alert('Trip Cancelled', 'Your trip has been cancelled and ₹100 cancellation fine was deducted from your wallet.');
+            const confirmationMsg = policy.feeAmount > 0 
+              ? `Your trip has been cancelled. ₹${policy.feeAmount} cancellation fee (${policy.reasonText}) was deducted from your wallet.`
+              : 'Your trip has been cancelled successfully with ₹0 cancellation fee.';
+            Alert.alert('Trip Cancelled', confirmationMsg);
             setCancelTrigger((prev) => prev + 1);
           },
         },
