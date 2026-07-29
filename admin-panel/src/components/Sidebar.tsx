@@ -1,18 +1,16 @@
 'use client';
 
 import {
-  ArrowDownRight,
-  ArrowUpRight,
   Car,
   ChevronRight,
   Compass,
-  Image,
   LayoutDashboard,
   MapPin,
   QrCode,
   Route,
   ShieldCheck,
   Users,
+  Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -25,9 +23,7 @@ const navItems = [
   { name: 'Destinations', href: '/destinations', icon: MapPin },
   { name: 'Plans & Packages', href: '/plans', icon: Route },
   { name: 'Payment Settings', href: '/payment-settings', icon: QrCode },
-  { name: 'Top-Up Requests', href: '/topup-requests', icon: Image },
-  { name: 'Withdrawals', href: '/withdrawals', icon: ArrowUpRight },
-  { name: 'Deductions', href: '/deductions', icon: ArrowDownRight },
+  { name: 'Wallet Transactions', href: '/transactions', icon: Wallet },
 ];
 
 

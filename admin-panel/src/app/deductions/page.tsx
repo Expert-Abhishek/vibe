@@ -3,10 +3,10 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function WithdrawalsRedirect() {
+export default function DeductionsRedirect() {
   const router = useRouter();
   useEffect(() => {
-    router.replace('/transactions?type=withdrawal');
+    router.replace('/transactions?type=deduction');
   }, [router]);
 
   return null;

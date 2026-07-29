@@ -610,7 +610,6 @@ export async function approveWithdrawalApi(id: string): Promise<boolean> {
     return false;
   }
 }
-
 export async function rejectWithdrawalApi(id: string, rejectReason: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/wallet/admin/withdrawals/${id}/reject`, {
@@ -625,5 +624,115 @@ export async function rejectWithdrawalApi(id: string, rejectReason: string): Pro
     return false;
   }
 }
+
+export interface UnifiedTransaction {
+  id: string;
+  type: 'topup' | 'withdrawal' | 'deduction';
+  user_id: string;
+  user_name: string;
+  role: string;
+  amount: number;
+  status: string;
+  created_at: string;
+  screenshot_url?: string;
+  description?: string;
+  upi_id?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  reject_reason?: string;
+  rawItem: TopupRequest | WithdrawalRequest | DeductionRequest;
+}
+
+export async function fetchAllTransactionsApi(
+  typeFilter: 'all' | 'topup' | 'withdrawal' | 'deduction' = 'all',
+  statusFilter: string = 'Pending'
+): Promise<{
+  transactions: UnifiedTransaction[];
+  stats: {
+    pendingTopupsCount: number;
+    pendingTopupsSum: number;
+    pendingWithdrawalsCount: number;
+    pendingWithdrawalsSum: number;
+    pendingDeductionsCount: number;
+    pendingDeductionsSum: number;
+  };
+}> {
+  const [topups, withdrawals, deductions] = await Promise.all([
+    fetchTopupRequestsApi(statusFilter),
+    fetchWithdrawalsApi(statusFilter),
+    fetchDeductionRequestsApi(statusFilter),
+  ]);
+
+  const normalizedTopups: UnifiedTransaction[] = topups.map((t) => ({
+    id: t.id,
+    type: 'topup',
+    user_id: t.user_id,
+    user_name: t.user_name || 'User',
+    role: t.role || 'tourist',
+    amount: parseFloat(t.amount.toString()),
+    status: t.status,
+    created_at: t.requested_at || new Date().toISOString(),
+    screenshot_url: t.screenshot_url,
+    reject_reason: t.reject_reason,
+    rawItem: t,
+  }));
+
+  const normalizedWithdrawals: UnifiedTransaction[] = withdrawals.map((w) => ({
+    id: w.id,
+    type: 'withdrawal',
+    user_id: w.user_id,
+    user_name: w.user_name || 'User',
+    role: w.role || 'driver',
+    amount: parseFloat(w.amount.toString()),
+    status: w.status,
+    created_at: w.created_at || new Date().toISOString(),
+    upi_id: w.upi_id,
+    account_number: w.account_number,
+    ifsc_code: w.ifsc_code,
+    rawItem: w,
+  }));
+
+  const normalizedDeductions: UnifiedTransaction[] = deductions.map((d) => ({
+    id: d.id,
+    type: 'deduction',
+    user_id: d.user_id,
+    user_name: d.user_name || 'Customer',
+    role: d.role || 'tourist',
+    amount: parseFloat(d.amount.toString()),
+    status: d.status,
+    created_at: d.requested_at || new Date().toISOString(),
+    description: d.description,
+    screenshot_url: d.screenshot_url,
+    reject_reason: d.reject_reason,
+    rawItem: d,
+  }));
+
+  // Calculate pending stats across all
+  const stats = {
+    pendingTopupsCount: statusFilter === 'Pending' ? normalizedTopups.length : 0,
+    pendingTopupsSum: statusFilter === 'Pending' ? normalizedTopups.reduce((acc, curr) => acc + curr.amount, 0) : 0,
+    pendingWithdrawalsCount: statusFilter === 'Pending' ? normalizedWithdrawals.length : 0,
+    pendingWithdrawalsSum: statusFilter === 'Pending' ? normalizedWithdrawals.reduce((acc, curr) => acc + curr.amount, 0) : 0,
+    pendingDeductionsCount: statusFilter === 'Pending' ? normalizedDeductions.length : 0,
+    pendingDeductionsSum: statusFilter === 'Pending' ? normalizedDeductions.reduce((acc, curr) => acc + curr.amount, 0) : 0,
+  };
+
+  let combined: UnifiedTransaction[] = [];
+  if (typeFilter === 'topup') {
+    combined = normalizedTopups;
+  } else if (typeFilter === 'withdrawal') {
+    combined = normalizedWithdrawals;
+  } else if (typeFilter === 'deduction') {
+    combined = normalizedDeductions;
+  } else {
+    combined = [...normalizedTopups, ...normalizedWithdrawals, ...normalizedDeductions];
+  }
+
+  // Sort descending by date
+  combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  return { transactions: combined, stats };
+}
+
 
 
