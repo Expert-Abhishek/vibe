@@ -640,6 +640,8 @@ export async function bookTripApi(payload: {
   paymentMode?: string;
   bookingType?: string;
   scheduledTime?: string;
+  advanceDepositPaid?: number;
+  remainingCashBalance?: number;
 }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips/book`, {
@@ -684,6 +686,27 @@ export async function acceptTripApi(tripId: string, driverId: string, driverName
   } catch (e) {
     console.warn('acceptTripApi error:', e);
     return { success: false, message: 'Failed to accept trip' };
+  }
+}
+
+/**
+ * Cancel a trip booking (tourist, driver, guide)
+ */
+export async function cancelTripApi(tripId: string, options: { reason?: string; cancelledBy?: string; role?: string } = {}): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason: options.reason || 'User cancelled',
+        cancelledBy: options.cancelledBy || 'tourist',
+        role: options.role || 'tourist',
+      }),
+    });
+    return await res.json();
+  } catch (e) {
+    console.warn('cancelTripApi error:', e);
+    return { success: false, message: 'Failed to cancel trip' };
   }
 }
 

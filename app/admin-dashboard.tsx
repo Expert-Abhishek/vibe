@@ -820,8 +820,8 @@ export default function AdminDashboardScreen() {
 
             <Text style={[styles.listHeader, { color: colors.textMuted }]}>ACTIVE PROMOTION VOUCHERS</Text>
 
-            {vouchers.map(v => (
-              <View key={v.id} style={[styles.listItemRow, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+            {vouchers.map((v, idx) => (
+              <View key={`${v.id || 'v'}_${idx}`} style={[styles.listItemRow, { backgroundColor: colors.surface, borderColor: colors.line }]}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.voucherHeader}>
                     <Text style={[styles.voucherCodeText, { color: colors.textPrimary }]}>{v.code}</Text>
@@ -852,13 +852,13 @@ export default function AdminDashboardScreen() {
           <View>
             <Text style={[styles.tabHeading, { color: colors.amber }]}>Drivers KYC & Active Controls</Text>
 
-            {drivers.map(d => {
+            {drivers.map((d, idx) => {
               const pendingKyc = d.status === 'Pending KYC';
               const isDeclined = d.status === 'KYC Declined';
               const isActive = d.status === 'Active';
 
               return (
-                <View key={d.id} style={[styles.listItemRowPartner, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+                <View key={`${d.id || 'd'}_${idx}`} style={[styles.listItemRowPartner, { backgroundColor: colors.surface, borderColor: colors.line }]}>
                   <View style={styles.partnerInfo}>
                     <View style={styles.partnerHeader}>
                       <Text style={[styles.partnerName, { color: colors.textPrimary }]}>{d.name}</Text>
@@ -937,13 +937,13 @@ export default function AdminDashboardScreen() {
           <View>
             <Text style={[styles.tabHeading, { color: colors.amber }]}>Guides KYC & Active Controls</Text>
 
-            {guides.map(g => {
+            {guides.map((g, idx) => {
               const pendingKyc = g.status === 'Pending KYC';
               const isDeclined = g.status === 'KYC Declined';
               const isActive = g.status === 'Active';
 
               return (
-                <View key={g.id} style={[styles.listItemRowPartner, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+                <View key={`${g.id || 'g'}_${idx}`} style={[styles.listItemRowPartner, { backgroundColor: colors.surface, borderColor: colors.line }]}>
                   <View style={styles.partnerInfo}>
                     <View style={styles.partnerHeader}>
                       <Text style={[styles.partnerName, { color: colors.textPrimary }]}>{g.name}</Text>
@@ -1145,7 +1145,7 @@ export default function AdminDashboardScreen() {
                 const badgeColor = isDeduction ? '#EF4444' : (isWithdrawal ? colors.amber : '#10B981');
 
                 return (
-                  <View key={txn.id || idx} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+                  <View key={`${txn.id || 'txn'}_${idx}`} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: scale(8) }}>
                       <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: scale(8), paddingVertical: verticalScale(3), borderRadius: scale(6) }}>
                         <Text style={{ color: badgeColor, fontSize: moderateFontScale(10), fontWeight: '800' }}>{typeLabel}</Text>

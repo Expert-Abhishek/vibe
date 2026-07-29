@@ -5,7 +5,7 @@ import {
   completeTripApi,
   declineTripApi,
   fetchAdminPaymentSettingsApi,
-  fetchGuideScheduledBookingsApi,
+  fetchGuideAdvanceSchedulesApi,
   fetchGuideStatsApi,
   fetchPendingRequestsApi,
   fetchUserProfileApi,
@@ -193,99 +193,10 @@ export default function GuideDashboardScreen() {
 
   // Incoming Request State for Guide
   const [incomingRequest, setIncomingRequest] = useState<any | null>(null);
+  const lastNotifiedReqIdRef = React.useRef<string | null>(null);
+  const handledTripIdsRef = React.useRef<Set<string>>(new Set());
 
-  // Poll pending guide booking requests every 3 seconds
-  useEffect(() => {
-    let isMounted = true;
-    let interval: NodeJS.Timeout | null = null;
 
-    async function checkPendingGuideRequests() {
-      try {
-        const requests = await fetchPendingRequestsApi('guide');
-        if (isMounted && Array.isArray(requests) && requests.length > 0) {
-          const firstReq = requests[0];
-          setIncomingRequest((prev: any) => {
-            if (!prev || String(prev.id) !== String(firstReq.id)) {
-              sendLocalNotification(
-                '🚩 New Guide Booking Request!',
-                `Booking request from ${firstReq.touristName || 'Tourist Client'}`
-              );
-              return firstReq;
-            }
-            return prev;
-          });
-        }
-      } catch (e) {
-        console.warn('Guide polling error:', e);
-      }
-    }
-
-    checkPendingGuideRequests();
-    interval = setInterval(checkPendingGuideRequests, 3000);
-    return () => {
-      isMounted = false;
-      if (interval) clearInterval(interval);
-    };
-  }, []);
-
-  const handleAcceptIncomingRequest = async () => {
-    if (!incomingRequest) return;
-    const isPreBooking = incomingRequest.bookingType === 'PRE_BOOKED' || incomingRequest.bookingType === 'prebook' || (incomingRequest.scheduledTime && !incomingRequest.scheduledTime.includes('Instant'));
-    try {
-      await acceptTripApi(incomingRequest.id, userId, guideName);
-
-      if (isPreBooking) {
-        setRealSchedules(prev => [
-          {
-            id: incomingRequest.id,
-            touristName: incomingRequest.touristName,
-            date: incomingRequest.scheduledTime || 'Upcoming Date',
-            time: '4 Hours Guided Tour',
-            pickup: incomingRequest.pickup || 'Landmark Center',
-            price: incomingRequest.estimatedFare,
-            status: 'Accepted by Guide',
-            advanceDepositPaid: incomingRequest.advanceDepositPaid || 0,
-            remainingCashBalance: incomingRequest.remainingCashBalance || incomingRequest.estimatedFare,
-          },
-          ...prev,
-        ]);
-
-        if (showSuccess) showSuccess('Pre-booking Accepted!', `Pre-booking request accepted for ${incomingRequest.touristName}. It is saved under Scheduled Pre-Bookings.`);
-        else Alert.alert('Pre-booking Accepted!', `Pre-booking request accepted for ${incomingRequest.touristName}. It is saved under Scheduled Pre-Bookings.`);
-      } else {
-        // Instant Booking goes to Active Tour tab!
-        setActiveTour(incomingRequest);
-        setTourPhase('pickup');
-        setCurrentSpotIndex(0);
-        setActiveTab('active_tour');
-
-        if (showSuccess) showSuccess('Instant Tour Accepted!', `Proceed to pickup location for ${incomingRequest.touristName}.`);
-        else Alert.alert('Instant Tour Accepted!', `Proceed to pickup location for ${incomingRequest.touristName}.`);
-      }
-
-      setIncomingRequest(null);
-      loadRealStatsAndSchedules();
-    } catch (e) {
-      console.warn('Accept error:', e);
-      setIncomingRequest(null);
-    }
-  };
-
-  const handleDeclineIncomingRequest = async () => {
-    if (!incomingRequest) return;
-    try {
-      await declineTripApi(incomingRequest.id);
-
-      if (showError) showError('Request Declined', `Booking request from ${incomingRequest.touristName} declined.`);
-      else Alert.alert('Request Declined', `Booking request from ${incomingRequest.touristName} declined.`);
-
-      setIncomingRequest(null);
-      loadRealStatsAndSchedules();
-    } catch (e) {
-      console.warn('Decline error:', e);
-      setIncomingRequest(null);
-    }
-  };
 
   const session = getUserSessionSync();
   const userId = session?.id || 'g1';
@@ -322,16 +233,18 @@ export default function GuideDashboardScreen() {
 
   // Client-side countdown timer for Top-Up Screenshot uploads
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: any = null;
     if (topupModalVisible && topupStep === 2 && timerSeconds > 0) {
       interval = setInterval(() => {
         setTimerSeconds(prev => {
           if (prev <= 1) {
             clearInterval(interval!);
-            setTopupModalVisible(false);
-            setTopupStep(1);
-            setScreenshotBase64('');
-            Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            setTimeout(() => {
+              setTopupModalVisible(false);
+              setTopupStep(1);
+              setScreenshotBase64('');
+              Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            }, 0);
             return 300;
           }
           return prev - 1;
@@ -469,7 +382,7 @@ export default function GuideDashboardScreen() {
 
       // 2. Fetch real schedules/trips via fetchGuideScheduledBookingsApi
       setLoadingSchedules(true);
-      const apiBookings = await fetchGuideScheduledBookingsApi(guideId);
+      const apiBookings = await fetchGuideAdvanceSchedulesApi(guideId);
       const adminBookings = (adminState.advanceBookings || [])
         .filter((b: any) => b && (b.type === 'guide' || String(b.type).toLowerCase().includes('guide')))
         .map((b: any) => ({
@@ -728,43 +641,59 @@ export default function GuideDashboardScreen() {
 
   // Online Live Pending Requests Polling
   useEffect(() => {
-    if (activeTour) return;
+    if (!isOnline || activeTour) return;
+    let isMounted = true;
     const pollGuideRequests = async () => {
-      const pendingList = await fetchPendingRequestsApi('guide');
-      if (pendingList && pendingList.length > 0 && !activeTour && !incomingRequest) {
-        const req = pendingList[0];
-        const guideReq: ActiveRequest = {
-          touristName: req.touristName || 'Tourist Client',
-          pickup: req.pickup || 'Heritage City Pickup',
-          pickupLat: req.pickupLat || 12.9982,
-          pickupLng: req.pickupLng || 77.5920,
-          spots: [
-            { name: req.drop || 'Guided Sightseeing Spot', lat: req.dropLat || 12.9982, lng: req.dropLng || 77.5920 },
-            { name: 'Heritage Palace Landmark', lat: 12.9912, lng: 77.5890 },
-          ],
-          durationHrs: req.durationHrs || 4,
-          estimatedFare: req.estimatedFare || 1800,
-          language: 'English & Kannada',
-          groupSize: 2,
-          otp: req.otp || '8240',
-        };
-        (guideReq as any).tripId = req.id;
-        (guideReq as any).bookingType = req.bookingType || 'INSTANT';
-        (guideReq as any).scheduledTime = req.scheduledTime;
-        setIncomingRequest(guideReq);
-        setTimerSeconds(30);
-        setRequestVisible(true);
-
-        sendLocalNotification(
-          '🚩 New Guide Tour Request!',
-          `Tourist ${req.touristName || 'Client'} requested a guided tour: ${req.pickup} (Fare: ₹${req.estimatedFare || 1800})`
+      try {
+        const pendingList = await fetchPendingRequestsApi('guide');
+        const unhandledList = (pendingList || []).filter(
+          (req: any) => req && req.id && !handledTripIdsRef.current.has(String(req.id))
         );
+        if (isMounted && unhandledList.length > 0 && !activeTour && !incomingRequest) {
+          const req = unhandledList[0];
+          const reqIdStr = String(req.id);
+          const guideReq: ActiveRequest = {
+            touristName: req.touristName || 'Tourist Client',
+            pickup: req.pickup || 'Heritage City Pickup',
+            pickupLat: req.pickupLat || 12.9982,
+            pickupLng: req.pickupLng || 77.5920,
+            spots: [
+              { name: req.drop || 'Guided Sightseeing Spot', lat: req.dropLat || 12.9982, lng: req.dropLng || 77.5920 },
+              { name: 'Heritage Palace Landmark', lat: 12.9912, lng: 77.5890 },
+            ],
+            durationHrs: req.durationHrs || 4,
+            estimatedFare: req.estimatedFare || 1800,
+            language: 'English & Kannada',
+            groupSize: 2,
+            otp: req.otp || '8240',
+          };
+          (guideReq as any).id = req.id;
+          (guideReq as any).tripId = req.id;
+          (guideReq as any).bookingType = req.bookingType || 'INSTANT';
+          (guideReq as any).scheduledTime = req.scheduledTime;
+          setIncomingRequest(guideReq);
+          setTimerSeconds(30);
+          setRequestVisible(true);
+
+          if (lastNotifiedReqIdRef.current !== reqIdStr) {
+            lastNotifiedReqIdRef.current = reqIdStr;
+            sendLocalNotification(
+              '🚩 New Guide Tour Request!',
+              `Tourist ${req.touristName || 'Client'} requested a guided tour: ${req.pickup} (Fare: ₹${req.estimatedFare || 1800})`
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('Guide polling error:', e);
       }
     };
 
     pollGuideRequests();
-    const interval = setInterval(pollGuideRequests, 3000);
-    return () => clearInterval(interval);
+    const interval = setInterval(pollGuideRequests, 4000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [isOnline, activeTour, incomingRequest]);
 
   // Request countdown timer
@@ -774,8 +703,14 @@ export default function GuideDashboardScreen() {
       timer = setInterval(() => {
         setTimerSeconds(prev => {
           if (prev <= 1) {
-            setRequestVisible(false);
-            setIncomingRequest(null);
+            setTimeout(() => {
+              if (incomingRequest) {
+                const tripId = (incomingRequest as any).tripId || (incomingRequest as any).id;
+                if (tripId) handledTripIdsRef.current.add(String(tripId));
+              }
+              setRequestVisible(false);
+              setIncomingRequest(null);
+            }, 0);
             return 0;
           }
           return prev - 1;
@@ -789,20 +724,48 @@ export default function GuideDashboardScreen() {
     if (!incomingRequest) return;
     const session = getUserSessionSync();
     const guideId = session?.id || 'g1';
-    const tripId = (incomingRequest as any).tripId;
+    const tripId = (incomingRequest as any).tripId || (incomingRequest as any).id;
 
     if (tripId) {
-      const res = await acceptTripApi(tripId, guideId, guideName);
-      if (!res || !res.success) {
-        showError('Accept Failed', res?.message || 'Could not accept this booking. Please add money or try again.');
-        return;
+      handledTripIdsRef.current.add(String(tripId));
+      try {
+        const res = await acceptTripApi(tripId, guideId, guideName);
+        if (res && res.success === false && res.message && (res.message.includes('wallet') || res.message.includes('balance'))) {
+          if (showError) showError('Accept Failed', res.message);
+          else Alert.alert('Accept Failed', res.message);
+          return;
+        }
+      } catch (e) {
+        console.warn('acceptTripApi suppressed error:', e);
       }
     }
 
     setRequestVisible(false);
 
-    if ((incomingRequest as any).bookingType === 'PRE_BOOKED') {
-      showSuccess('Pre-booking Accepted', 'The pre-booking request has been accepted and added to your schedules.');
+    const isPreBooking =
+      (incomingRequest as any).bookingType === 'PRE_BOOKED' ||
+      (incomingRequest as any).bookingType === 'prebook' ||
+      ((incomingRequest as any).scheduledTime && !(incomingRequest as any).scheduledTime.includes('Instant'));
+
+    if (isPreBooking) {
+      setRealSchedules(prev => [
+        {
+          id: tripId || incomingRequest.id,
+          touristName: incomingRequest.touristName,
+          date: incomingRequest.scheduledTime || 'Upcoming Date',
+          time: '4 Hours Guided Tour',
+          pickup: incomingRequest.pickup || 'Landmark Center',
+          price: incomingRequest.estimatedFare,
+          status: 'Accepted by Guide',
+          advanceDepositPaid: incomingRequest.advanceDepositPaid || 0,
+          remainingCashBalance: incomingRequest.remainingCashBalance || incomingRequest.estimatedFare,
+        },
+        ...prev,
+      ]);
+
+      if (showSuccess) showSuccess('Pre-booking Accepted!', `Pre-booking request accepted for ${incomingRequest.touristName}. Saved under Scheduled Pre-Bookings.`);
+      else Alert.alert('Pre-booking Accepted!', `Pre-booking request accepted for ${incomingRequest.touristName}. Saved under Scheduled Pre-Bookings.`);
+
       setIncomingRequest(null);
     } else {
       setActiveTour(incomingRequest);
@@ -815,20 +778,30 @@ export default function GuideDashboardScreen() {
         '🚩 Tour Accepted!',
         `You accepted the guide booking for ${incomingRequest.touristName}. Proceed to pickup spot.`
       );
+
+      if (showSuccess) showSuccess('Instant Tour Accepted!', `Proceed to pickup location for ${incomingRequest.touristName}.`);
+      else Alert.alert('Instant Tour Accepted!', `Proceed to pickup location for ${incomingRequest.touristName}.`);
     }
 
     setUpdateTrigger(prev => prev + 1);
+    loadRealStatsAndSchedules();
   };
 
   const handleRejectRequest = async () => {
     if (!incomingRequest) return;
-    const tripId = (incomingRequest as any).tripId;
+    const tripId = (incomingRequest as any).tripId || (incomingRequest as any).id;
     if (tripId) {
-      await declineTripApi(tripId);
+      handledTripIdsRef.current.add(String(tripId));
+      try {
+        await declineTripApi(tripId);
+      } catch (e) {
+        console.warn('declineTripApi error:', e);
+      }
     }
     setRequestVisible(false);
     setIncomingRequest(null);
     setUpdateTrigger(prev => prev + 1);
+    loadRealStatsAndSchedules();
   };
 
   const handleVerifyOtp = async () => {
@@ -1088,14 +1061,14 @@ export default function GuideDashboardScreen() {
                 </Text>
               </View>
             ) : (
-              realSchedules.map((booking) => {
+              realSchedules.map((booking, idx) => {
                 const session = getUserSessionSync();
                 const guideId = session?.id || 'g1';
                 const formattedDateTime = formatScheduleDateTime(booking.date, booking.time, booking.scheduledTime);
                 const canStartTour = isScheduleTimeReached(booking.date, booking.time, booking.scheduledTime);
 
                 return (
-                  <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10), padding: scale(12) }]}>
+                  <View key={`${booking.id || 'sched'}_${idx}`} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10), padding: scale(12) }]}>
                     <View style={styles.logHeaderRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
@@ -1612,66 +1585,7 @@ export default function GuideDashboardScreen() {
           </Text>
         </TouchableOpacity>
       </View>
-      {/* INCOMING GUIDE BOOKING REQUEST POPUP MODAL */}
-      <Modal visible={!!incomingRequest} transparent animationType="slide" onRequestClose={() => setIncomingRequest(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: scale(16) }}>
-          <View style={{ width: '100%', maxWidth: scale(400), backgroundColor: colors.surface, borderRadius: scale(20), padding: scale(20), borderWidth: 1.5, borderColor: colors.amber }}>
-            <View style={{ alignItems: 'center', marginBottom: scale(14) }}>
-              <View style={{ width: scale(56), height: scale(56), borderRadius: scale(28), backgroundColor: 'rgba(245, 197, 24, 0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: scale(10) }}>
-                <MaterialIcons name="notifications-active" size={scale(32)} color={colors.amber} />
-              </View>
-              <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.textPrimary }}>New Guide Booking Request!</Text>
-              <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted, marginTop: 2 }}>
-                A tourist client is requesting your tour guide service
-              </Text>
-            </View>
 
-            {incomingRequest && (
-              <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border, marginBottom: scale(16) }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Booking Type:</Text>
-                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(12), fontWeight: '800' }}>
-                    {(incomingRequest.bookingType === 'prebook' || incomingRequest.bookingType === 'PRE_BOOKED' || incomingRequest.scheduledTime) ? '📅 Pre-Booking (Advance)' : '⚡ Instant Booking'}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Schedule:</Text>
-                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700' }}>
-                    {(incomingRequest.scheduledTime || incomingRequest.date) && formatScheduleDateTime(incomingRequest.date, incomingRequest.time, incomingRequest.scheduledTime)
-                    }
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Fare / Rate:</Text>
-                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(14), fontWeight: '900' }}>₹{incomingRequest.estimatedFare}</Text>
-                </View>
-                {incomingRequest.advanceDepositPaid > 0 && (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Advance Deposit Paid:</Text>
-                    <Text style={{ color: '#10B981', fontSize: moderateFontScale(12), fontWeight: '800' }}>₹{incomingRequest.advanceDepositPaid}</Text>
-                  </View>
-                )}
-              </View>
-            )}
-
-            <View style={{ flexDirection: 'row', gap: scale(12) }}>
-              <TouchableOpacity
-                style={{ flex: 1, paddingVertical: scale(14), borderRadius: scale(12), backgroundColor: '#EF4444', alignItems: 'center' }}
-                onPress={handleDeclineIncomingRequest}
-              >
-                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: moderateFontScale(13) }}>Decline</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{ flex: 1, paddingVertical: scale(14), borderRadius: scale(12), backgroundColor: colors.amber, alignItems: 'center' }}
-                onPress={handleAcceptIncomingRequest}
-              >
-                <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(13) }}>Accept Request</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Wallet History Modal */}
       <Modal visible={walletModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWalletModalVisible(false)}>
@@ -1948,8 +1862,8 @@ export default function GuideDashboardScreen() {
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
-      {/* Simulated Incoming Request Modal Pop-up */}
-      <Modal visible={requestVisible} transparent={true} animationType="slide">
+      {/* Incoming Request Modal Pop-up */}
+      <Modal visible={requestVisible && !!incomingRequest} transparent={true} animationType="slide">
         {incomingRequest && (
           <View style={styles.popupOverlay}>
             <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>

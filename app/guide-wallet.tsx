@@ -96,16 +96,18 @@ export default function GuideWalletScreen() {
 
   // Client-side countdown timer for Top-Up Screenshot uploads
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: any = null;
     if (topupModalVisible && topupStep === 2 && timerSeconds > 0) {
       interval = setInterval(() => {
         setTimerSeconds(prev => {
           if (prev <= 1) {
             clearInterval(interval!);
-            setTopupModalVisible(false);
-            setTopupStep(1);
-            setScreenshotBase64('');
-            Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            setTimeout(() => {
+              setTopupModalVisible(false);
+              setTopupStep(1);
+              setScreenshotBase64('');
+              Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            }, 0);
             return 300;
           }
           return prev - 1;

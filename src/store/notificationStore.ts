@@ -76,6 +76,9 @@ export const notificationStore = {
       ...item,
       isRead: Boolean(item.isRead),
     }));
+    if (JSON.stringify(state.notifications) === JSON.stringify(formatted)) {
+      return;
+    }
     state = {
       notifications: formatted,
       unreadCount: computeUnreadCount(formatted),

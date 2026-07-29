@@ -89,7 +89,7 @@ export default function TripsHistoryScreen() {
 
   // Convert advanceBookings to list items
   const mappedAdvance = safeAdvanceBookings
-    .filter(b => b && b.status !== 'Cancelled' && (userId ? (String(b.assignedToId) === String(userId) || (b.touristName && String(b.touristName).includes(session?.name || ''))) : false))
+    .filter(b => b && (userId ? (String(b.assignedToId) === String(userId) || (b.touristName && String(b.touristName).includes(session?.name || ''))) : false))
     .map((b: any) => ({
       id: String(b.id),
       type: b.type === 'guide' ? ('guide' as const) : ('cab' as const),
@@ -101,7 +101,7 @@ export default function TripsHistoryScreen() {
       time: String(b.time || ''),
       price: Number(b.price) || 0,
       paymentMode: String(b.paymentMode || 'Cash'),
-      status: 'Upcoming' as const,
+      status: String(b.status || 'Upcoming') as any,
       rawBooking: b,
       passengerCount: undefined as number | undefined,
     }));
@@ -285,7 +285,7 @@ export default function TripsHistoryScreen() {
             </Text>
           </View>
         ) : (
-          filteredTrips.map((trip) => {
+          filteredTrips.map((trip, idx) => {
             if (!trip) return null;
             const isCab = trip.type === 'cab' || trip.type === 'custom_trip' || trip.type === 'plan';
             const isCompleted = String(trip.status || '').toLowerCase() === 'completed';
@@ -297,7 +297,7 @@ export default function TripsHistoryScreen() {
 
             return (
               <View
-                key={trip.id}
+                key={`${trip.id || 'trip'}_${idx}`}
                 style={[
                   styles.tripCard,
                   {

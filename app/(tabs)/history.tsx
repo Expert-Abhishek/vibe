@@ -213,9 +213,9 @@ export default function HistoryScreen() {
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>No past records found for this category.</Text>
             </View>
           ) : (
-            filteredHistory.map((item) => (
+            filteredHistory.map((item, idx) => (
               <View
-                key={item.id}
+                key={`${item.id || 'hist'}_${idx}`}
                 style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >
                 {/* Header info */}

@@ -89,9 +89,9 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
                   </Text>
                 </View>
               ) : (
-                notifications.map((item) => (
+                notifications.map((item, idx) => (
                   <View
-                    key={item.id}
+                    key={`${item.id || 'notif'}_${idx}`}
                     style={[
                       styles.notificationCard,
                       {

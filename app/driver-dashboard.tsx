@@ -154,6 +154,7 @@ export default function DriverDashboardScreen() {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawUpi, setWithdrawUpi] = useState('');
   const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
+  const handledTripIdsRef = React.useRef<Set<string>>(new Set());
 
   const loadWalletData = async () => {
     const session = getUserSessionSync();
@@ -174,16 +175,18 @@ export default function DriverDashboardScreen() {
 
   // Countdown timer for the Top-Up screenshot upload window
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: any = null;
     if (topupModalVisible && topupStep === 2 && topupTimerSeconds > 0) {
       interval = setInterval(() => {
         setTopupTimerSeconds(prev => {
           if (prev <= 1) {
             clearInterval(interval!);
-            setTopupModalVisible(false);
-            setTopupStep(1);
-            setScreenshotBase64('');
-            Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            setTimeout(() => {
+              setTopupModalVisible(false);
+              setTopupStep(1);
+              setScreenshotBase64('');
+              Alert.alert('Session Expired', 'The 5-minute window to upload your payment screenshot has expired. Please try again.');
+            }, 0);
             return 300;
           }
           return prev - 1;
@@ -578,8 +581,9 @@ export default function DriverDashboardScreen() {
     // Poll live pending ride requests from backend
     const pollRequests = async () => {
       const reqs = await fetchDriverRequestsApi(driverId);
-      if (reqs && reqs.length > 0 && !activeTrip && !requestVisible && !acceptedModalVisible) {
-        const firstReq = reqs[0];
+      const unhandled = (reqs || []).filter((r: any) => r && r.id && !handledTripIdsRef.current.has(String(r.id)));
+      if (unhandled.length > 0 && !activeTrip && !requestVisible && !acceptedModalVisible) {
+        const firstReq = unhandled[0];
         setIncomingRequest({
           touristName: firstReq.customerName || 'Tourist Customer',
           pickup: firstReq.pickupName || firstReq.title || 'Bengaluru Pickup',
@@ -616,8 +620,10 @@ export default function DriverDashboardScreen() {
       timer = setInterval(() => {
         setTimerSeconds(prev => {
           if (prev <= 1) {
-            setRequestVisible(false);
-            setIncomingRequest(null);
+            setTimeout(() => {
+              setRequestVisible(false);
+              setIncomingRequest(null);
+            }, 0);
             return 0;
           }
           return prev - 1;
@@ -680,8 +686,11 @@ export default function DriverDashboardScreen() {
     if (!incomingRequest) return;
     const session = getUserSessionSync();
     const driverId = session?.id;
-    const tripId = (incomingRequest as any).tripId;
+    const tripId = (incomingRequest as any)?.tripId || (incomingRequest as any)?.id;
 
+    if (tripId) {
+      handledTripIdsRef.current.add(String(tripId));
+    }
     if (tripId && driverId) {
       await respondDriverRequestApi(tripId, driverId, 'accept', session?.name || driverName);
     }
@@ -701,8 +710,11 @@ export default function DriverDashboardScreen() {
   const handleRejectRequest = async () => {
     const session = getUserSessionSync();
     const driverId = session?.id;
-    const tripId = (incomingRequest as any)?.tripId;
+    const tripId = (incomingRequest as any)?.tripId || (incomingRequest as any)?.id;
 
+    if (tripId) {
+      handledTripIdsRef.current.add(String(tripId));
+    }
     if (tripId && driverId) {
       await respondDriverRequestApi(tripId, driverId, 'decline');
     }
@@ -973,12 +985,12 @@ export default function DriverDashboardScreen() {
                 );
               }
 
-              return combinedList.map(booking => {
+              return combinedList.map((booking, idx) => {
                 const isAcceptedByMe = booking.driverOrGuideName?.toLowerCase().includes(driverName.toLowerCase()) || booking.assignedToId === currentSession?.id;
                 const isPending = booking.status === 'Pending' || booking.status === 'Dispatched' || booking.status === 'Confirmed';
 
                 return (
-                  <View key={booking.id} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
+                  <View key={`${booking.id || 'trip'}_${idx}`} style={[styles.dailyTripLogItem, { borderColor: colors.border, backgroundColor: isDark ? '#16161B' : '#F9F9F9', marginTop: verticalScale(10) }]}>
                     <View style={styles.logHeaderRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>

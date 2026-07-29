@@ -72,6 +72,7 @@ export default function GuidesScreen() {
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const session = getUserSessionSync();
 
   // Dynamic guides list state
   const [guidesList, setGuidesList] = useState<Guide[]>([]);
@@ -342,6 +343,7 @@ export default function GuidesScreen() {
 
   const checkoutGuide = async () => {
     if (!selectedGuide) return;
+    const session = getUserSessionSync();
     const finalDate = adminState.instantBookingEnabled ? 'Today (Instant)' : prebookDate;
     const finalTime = adminState.instantBookingEnabled ? 'Immediate' : prebookTimeStr;
     const fareAmt = selectedGuide.chargePerHour;
@@ -369,7 +371,7 @@ export default function GuidesScreen() {
       }
     }
 
-    await bookTripApi({
+    const bookRes = await bookTripApi({
       tripType: 'guide',
       title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
       customerId: customerId,
@@ -380,6 +382,8 @@ export default function GuidesScreen() {
       paymentMode: instantPaymentMode,
       bookingType: adminState.instantBookingEnabled ? 'instant' : 'prebook',
     });
+
+    const tripId = bookRes?.data?.id || bookRes?.id || `guide_book_${Date.now()}`;
 
     if (showSuccess) {
       showSuccess('Request Sent to Guide', `Instant request sent to ${selectedGuide.name}. Waiting for guide response.`);
@@ -393,7 +397,7 @@ export default function GuidesScreen() {
       adminState.userTrips = [];
     }
     adminState.userTrips.unshift({
-      id: `guide_book_${Date.now()}`,
+      id: tripId,
       type: 'guide',
       title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
       driverOrGuideName: selectedGuide.name,

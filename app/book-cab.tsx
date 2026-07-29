@@ -374,7 +374,7 @@ export default function BookCabScreen() {
 
       if (paymentMethod === 'cash') {
         const session = getUserSessionSync();
-        await bookTripApi({
+        const bookRes = await bookTripApi({
           tripType: 'cab',
           title: `${pickup.name} ➔ ${drop.name}`,
           customerId: session?.id || 't1',
@@ -389,8 +389,10 @@ export default function BookCabScreen() {
           paymentMode: `Cash Pre-Booking Fees: ₹${advanceAmount} (Bal ₹${remainingAmount})`,
         });
 
+        const tripId = bookRes?.data?.id || bookRes?.id || `adv_${Date.now()}`;
+
         const newAdv = {
-          id: `adv_${Date.now()}`,
+          id: String(tripId),
           type: 'cab' as const,
           title: `${pickup.name} ➔ ${drop.name}`,
           route: [pickup.name, ...stops.map(s => s.name), drop.name],
@@ -422,7 +424,7 @@ export default function BookCabScreen() {
         title: `Pre-Booking: ${pickup.name} ➔ ${drop.name}`,
         customerName: 'Abhishek (Tourist)',
         onSuccess: async (paymentId: string) => {
-          await createTripApi({
+          const tripRes = await createTripApi({
             tripType: 'cab',
             title: `${pickup.name} ➔ ${drop.name}`,
             customerName: 'Abhishek (Tourist)',
@@ -433,8 +435,10 @@ export default function BookCabScreen() {
             status: 'Pending',
           });
 
+          const tripId = tripRes?.data?.id || tripRes?.id || `adv_${Date.now()}`;
+
           const newAdv = {
-            id: `adv_${Date.now()}`,
+            id: String(tripId),
             type: 'cab' as const,
             title: `${pickup.name} ➔ ${drop.name}`,
             route: [pickup.name, ...stops.map(s => s.name), drop.name],
