@@ -756,42 +756,7 @@ router.get('/upcoming/:driverId', async (req, res) => {
   }
 });
 
-/**
- * POST /api/trips/:id/accept
- * Driver / Guide accepts trip booking
- */
-router.post('/:id/accept', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { driverId, driverName = 'Assigned Local Guide' } = req.body;
 
-    const result = await db.query(
-      `UPDATE trips SET status = 'Accepted by Guide', driver_or_guide_name = $2 WHERE id = $1 RETURNING *`,
-      [id, driverName]
-    );
-
-    if (result.rows.length === 0) {
-      return res.json({
-        success: true,
-        message: 'Trip accepted successfully',
-        data: { id, status: 'Accepted by Guide', driverOrGuideName: driverName }
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Trip accepted by guide successfully',
-      data: result.rows[0],
-    });
-  } catch (error) {
-    console.error('Error accepting trip:', error);
-    res.json({
-      success: true,
-      message: 'Trip accepted successfully',
-      data: { id: req.params.id, status: 'Accepted by Guide' }
-    });
-  }
-});
 
 /**
  * POST /api/trips/:id/decline
@@ -948,22 +913,29 @@ router.post('/:id/accept', async (req, res) => {
       return res.status(400).json({ success: false, message: 'driverId is required' });
     }
 
-    // 1. Fetch wallet balance and platform fee for driver or guide
+    // 1. Fetch trip details for fare calculation
+    let tripAmount = 2000;
+    const tRes = await db.query("SELECT amount, trip_type FROM trips WHERE id = $1 OR CAST(id AS VARCHAR) = $1", [id]);
+    if (tRes.rows.length > 0 && tRes.rows[0].amount) {
+      tripAmount = parseFloat(tRes.rows[0].amount);
+    }
+
+    // 2. Fetch wallet balance and platform fee for driver or guide
     const dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1", [driverId]);
     const gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1", [driverId]);
 
     let walletBalance = 0;
-    let platformFee = 10.00;
+    let feePercent = 10; // Default 10% platform fee
     let isDriver = false;
     let isGuide = false;
 
     if (dRes.rows.length > 0) {
       walletBalance = parseFloat(dRes.rows[0].wallet_balance || 0);
-      platformFee = parseFloat(dRes.rows[0].platform_fee || 10.00);
+      feePercent = parseFloat(dRes.rows[0].platform_fee || 10);
       isDriver = true;
     } else if (gRes.rows.length > 0) {
       walletBalance = parseFloat(gRes.rows[0].wallet_balance || 0);
-      platformFee = parseFloat(gRes.rows[0].platform_fee || 10.00);
+      feePercent = parseFloat(gRes.rows[0].platform_fee || 10);
       isGuide = true;
     } else {
       // Fallback: check users table role
@@ -972,16 +944,19 @@ router.post('/:id/accept', async (req, res) => {
         const uRole = uRes.rows[0].role;
         if (uRole === 'guide') isGuide = true;
         else if (uRole === 'driver') isDriver = true;
-        else isGuide = true; // default to guide for guide bookings
+        else isGuide = true; // default to guide
         if (!driverName || driverName === 'Verified Partner') {
           driverName = uRes.rows[0].name || 'Assigned Local Guide';
         }
       } else {
-        isGuide = true; // Default fallback for partner
+        isGuide = true;
       }
     }
 
-    // 2. Deduct platform fee from profile (upsert if missing)
+    // Calculate platform fee based on % of trip amount (min ₹10)
+    const platformFee = Math.max(10, Math.round((tripAmount * feePercent) / 100));
+
+    // 3. Deduct platform fee from profile (upsert if missing)
     if (isDriver) {
       await db.query(`
         INSERT INTO driver_profiles (user_id, wallet_balance) VALUES ($1, -$2)
@@ -994,13 +969,13 @@ router.post('/:id/accept', async (req, res) => {
       `, [driverId, platformFee]);
     }
 
-    // 3. Log transaction in wallet_transactions
+    // 4. Log transaction in wallet_transactions for partner history
     await db.query(
       "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
-      [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
+      [driverId, 'debit', platformFee, `Platform Fee (${feePercent}%) for Booking #${id}`]
     );
 
-    // 4. Log Platform Fee Revenue for Admin Dashboard (Flexible Guide vs Driver)
+    // 5. Log Platform Fee Revenue for Admin Dashboard
     try {
       await db.query(`
         CREATE TABLE IF NOT EXISTS platform_fee_revenue (
@@ -1017,7 +992,7 @@ router.post('/:id/accept', async (req, res) => {
       await db.query(
         `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [driverId, driverName, isGuide ? 'guide' : 'driver', id, platformFee, `Platform Fee for Booking #${id}`]
+        [driverId, driverName, isGuide ? 'guide' : 'driver', id, platformFee, `Platform Fee (${feePercent}%) for Booking #${id}`]
       );
     } catch (pErr) {
       console.warn('Failed to log platform fee revenue:', pErr.message);
@@ -1025,7 +1000,7 @@ router.post('/:id/accept', async (req, res) => {
 
     const result = await db.query(
       `UPDATE trips 
-       SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2 
+       SET status = 'Accepted by Guide', driver_or_guide_name = $1, driver_id = $2 
        WHERE id = $3 OR CAST(id AS VARCHAR) = $3
        RETURNING *`,
       [driverName, driverId || null, id]
@@ -1036,7 +1011,7 @@ router.post('/:id/accept', async (req, res) => {
       return res.json({
         success: true,
         message: 'Trip accepted successfully!',
-        data: { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId },
+        data: { id, status: 'Accepted by Guide', driver_or_guide_name: driverName, driver_id: driverId },
       });
     }
 
@@ -1050,7 +1025,7 @@ router.post('/:id/accept', async (req, res) => {
           userRes.rows[0].push_token,
           '🎉 Partner Confirmed Your Booking!',
           `${driverName} has accepted your trip request! Keep OTP ${trip.otp || '8240'} ready.`,
-          { tripId: trip.id, status: 'Accepted', driverName }
+          { tripId: trip.id, status: 'Accepted by Guide', driverName }
         );
       }
     }

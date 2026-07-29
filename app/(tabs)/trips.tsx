@@ -218,25 +218,14 @@ export default function TripsHistoryScreen() {
               });
             }
 
-            setDbTrips((prev) =>
+            setBackendTrips((prev) =>
               prev.map((t) => (String(t.id) === String(trip.id) ? { ...t, status: 'Cancelled by Tourist' } : t))
             );
 
             Alert.alert('Trip Cancelled', 'Your trip has been cancelled and ₹100 cancellation fine was deducted from your wallet.');
+            setCancelTrigger((prev) => prev + 1);
           },
         },
-      ]
-    );
-
-            Alert.alert(
-              'Booking Cancelled',
-              isAcceptedByGuide
-                ? 'Your accepted guide booking has been cancelled. A ₹100 cancellation fine has been deducted from your wallet and sent to Admin Panel for manual wallet updating.'
-                : `Your trip has been cancelled. Refund of ₹${refundAmount} will be credited shortly.`
-            );
-            setCancelTrigger(prev => prev + 1);
-          }
-        }
       ]
     );
   };
