@@ -393,7 +393,7 @@ export default function RideMatchingScreen() {
             <View style={[styles.partnerCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
               <View style={styles.partnerMain}>
                 <View style={[styles.avatarRound, { backgroundColor: colors.amber }]}>
-                  <Text style={styles.avatarInitials}>{demoDriver.name.split(' ').map(n=>n[0]).join('')}</Text>
+                  <Text style={styles.avatarInitials}>{demoDriver.name.split(' ').map((n: string) => n[0]).join('')}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.pName, { color: colors.textPrimary }]}>{demoDriver.name}</Text>
@@ -402,25 +402,29 @@ export default function RideMatchingScreen() {
                 </View>
               </View>
 
-              <View style={[styles.otpLine, { borderTopColor: colors.border }]}>
+              <View style={[styles.otpLine, { borderTopColor: colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
                 <View style={styles.otpBox}>
-                  <Text style={styles.otpLabel}>SHARE OTP TO START RIDE</Text>
-                  <Text style={[styles.otpCode, { color: colors.textPrimary }]}>{demoDriver.otp}</Text>
+                  <Text style={styles.otpLabel}>START OTP</Text>
+                  <Text style={[styles.otpCode, { color: colors.amber }]}>{(params.otp as string) || demoDriver.otp || '8240'}</Text>
                 </View>
+
+                <View style={styles.otpBox}>
+                  <Text style={styles.otpLabel}>END OTP</Text>
+                  <Text style={[styles.otpCode, { color: '#10B981' }]}>{(params.endOtp as string) || '4321'}</Text>
+                </View>
+
                 <View style={styles.fareSummary}>
-                  <Text style={[styles.fareLabel, { color: colors.textMuted }]}>EST. CHARGE</Text>
+                  <Text style={[styles.fareLabel, { color: colors.textMuted }]}>TOTAL FARE</Text>
                   <Text style={[styles.fareAmount, { color: colors.amber }]}>₹{price}</Text>
                 </View>
               </View>
             </View>
 
-            {/* Start button */}
-            <TouchableOpacity 
-              style={[styles.primaryActionBtn, { backgroundColor: colors.amber }]}
-              onPress={() => setStatus('started')}
-            >
-              <Text style={styles.actionBtnText}>Start Ride (OTP: {demoDriver.otp})</Text>
-            </TouchableOpacity>
+            <View style={{ marginTop: verticalScale(10), padding: scale(12), backgroundColor: 'rgba(245, 197, 24, 0.12)', borderRadius: scale(12), borderWidth: 1, borderColor: colors.amber, alignItems: 'center' }}>
+              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700', textAlign: 'center', lineHeight: moderateFontScale(16) }}>
+                ⏳ Captain has accepted! Please share Start OTP <Text style={{ color: colors.amber, fontWeight: '900' }}>{(params.otp as string) || demoDriver.otp || '8240'}</Text> with driver when captain arrives to start trip.
+              </Text>
+            </View>
           </View>
         )}
 
@@ -440,7 +444,7 @@ export default function RideMatchingScreen() {
             <View style={[styles.partnerCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
               <View style={styles.partnerMain}>
                 <View style={[styles.avatarRound, { backgroundColor: colors.amber }]}>
-                  <Text style={styles.avatarInitials}>{demoDriver.name.split(' ').map(n=>n[0]).join('')}</Text>
+                  <Text style={styles.avatarInitials}>{demoDriver.name.split(' ').map((n: string) => n[0]).join('')}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.pName, { color: colors.textPrimary }]}>{demoDriver.name}</Text>

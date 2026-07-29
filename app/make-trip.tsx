@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   Image,
   Modal,
   Platform,
@@ -20,6 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from '@/constants/admin-state';
 import { createTripApi, fetchDestinationsApi, fetchDriversApi, deductWalletApi, submitWalletDeductionRequestApi, bookTripApi } from '@/constants/api';
+import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { getUserSessionSync } from '@/constants/authStore';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -685,9 +687,7 @@ export default function MakeTripScreen() {
       endOtp: '4321',
     };
 
-    adminState.customTripRequests.unshift(tripObject as any);
-    (adminState as any).pendingDriverRequests = (adminState as any).pendingDriverRequests || [];
-    (adminState as any).pendingDriverRequests.unshift(tripObject);
+    broadcastNewTripRequest(tripObject);
 
     if (isPreBooking) {
       // PRE-BOOKING MODE: Automatic Tourist Wallet Deposit (20% or 100%)
@@ -757,56 +757,63 @@ export default function MakeTripScreen() {
     // INSTANT BOOKING MODE (Cash or UPI)
     const paymentLabel = paymentMethod === 'cash' ? `Cash (Full Payment ₹${totalPrice})` : `UPI (Full Payment ₹${totalPrice})`;
 
+    let serverTripId = tripReqId;
+    let generatedOtp = '8240';
+    let generatedEndOtp = '4321';
+
     try {
-      await createTripApi({
+      const bookRes = await bookTripApi({
         tripType: 'custom_trip',
         title: `Trip: ${pickupName} → ${dropName}`,
         customerId: customerId,
         customerName: customerName,
-        driverOrGuideName: driverName,
-        driverId: driverId,
-        amount: totalPrice,
-        paymentMode: paymentLabel,
-        status: 'Pending',
-        durationHours: totalTripHours,
-        extraHours: extraHoursRounded,
-        addonCharge: extraAddonCharge,
-        bookingType: 'INSTANT',
-        scheduledTime: calculatedScheduledTime,
         pickupName: pickupName,
         dropName: dropName,
+        amount: totalPrice,
+        paymentMode: paymentLabel,
+        bookingType: 'INSTANT',
+        scheduledTime: calculatedScheduledTime,
       });
+
+      if (bookRes && (bookRes.success || bookRes.data)) {
+        serverTripId = bookRes.data?.id || bookRes.id || tripReqId;
+        generatedOtp = bookRes.data?.otp || '8240';
+        generatedEndOtp = bookRes.data?.end_otp || bookRes.data?.endOtp || '4321';
+      }
     } catch (e) {
       console.warn('Postgres DB creation error (using memory fallback):', e);
     }
 
+    const instantTripObject = {
+      id: serverTripId,
+      tripId: serverTripId,
+      checkpoints: checkpoints.map(c => ({ name: c.name, latitude: c.latitude, longitude: c.longitude })),
+      pickup: pickupName,
+      pickupName: pickupName,
+      drop: dropName,
+      dropName: dropName,
+      title: `Custom Trip: ${pickupName} → ${dropName}`,
+      status: 'Pending',
+      vehicle: selectedRide || '5seater',
+      estimatedFare: totalPrice,
+      amount: totalPrice,
+      price: totalPrice,
+      touristName: customerName,
+      customerName: customerName,
+      bookingType: 'INSTANT',
+      date: finalDate,
+      time: finalTime,
+      paymentMode: paymentLabel,
+      otp: generatedOtp,
+      endOtp: generatedEndOtp,
+    };
+
+    broadcastNewTripRequest(instantTripObject);
+
     if (!Array.isArray(adminState.userTrips)) {
       adminState.userTrips = [];
     }
-    adminState.userTrips.unshift({
-      id: tripReqId,
-      type: 'custom_trip',
-      title: `Trip: ${pickupName} → ${dropName}`,
-      driverOrGuideName: driverName,
-      customerId: customerId,
-      customerName: customerName,
-      pickupName: pickupName,
-      dropName: dropName,
-      date: finalDate,
-      time: finalTime,
-      price: totalPrice,
-      paymentMode: paymentLabel,
-      status: 'Pending Driver Confirmation',
-      bookingType: 'INSTANT',
-      otp: '8240',
-      endOtp: '4321',
-    } as any);
-
-    if (typeof window !== 'undefined') {
-      try {
-        window.dispatchEvent(new Event('new_driver_request'));
-      } catch (e) {}
-    }
+    adminState.userTrips.unshift(instantTripObject as any);
 
     sendLocalNotification(
       '🚕 Instant Ride Requested!',
@@ -816,6 +823,7 @@ export default function MakeTripScreen() {
     router.replace({
       pathname: '/ride-matching' as any,
       params: {
+        tripId: serverTripId,
         pickupName: pickupName,
         pickupLat: checkpoints[0]?.latitude.toString() || '12.9716',
         pickupLng: checkpoints[0]?.longitude.toString() || '77.5946',
@@ -832,6 +840,8 @@ export default function MakeTripScreen() {
         date: finalDate,
         time: finalTime,
         driverId: selectedDriver?.id || '',
+        otp: generatedOtp,
+        endOtp: generatedEndOtp,
       }
     });
   };

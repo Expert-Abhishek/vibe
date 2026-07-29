@@ -21,6 +21,7 @@ import {
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
+import { getPendingTripRequestsSync, listenForTripRequests } from '@/constants/tripSync';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
@@ -32,6 +33,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -631,15 +633,13 @@ export default function DriverDashboardScreen() {
           driverReqs = await fetchDriverRequestsApi(dId);
         } catch (e) { }
 
-        // 2. Read client-side memory requests from adminState
-        const memoryReqs = ((adminState as any).pendingDriverRequests || adminState.customTripRequests || []).filter(
-          (r: any) => r && (r.status === 'Pending' || r.status === 'Booked' || !r.status)
-        );
+        // 2. Read client-side memory requests from adminState and localStorage cross-tab sync
+        const memoryReqs = getPendingTripRequestsSync();
 
         const combined = [...(dbReqs || []), ...(driverReqs || []), ...memoryReqs];
         const unhandled = combined.filter((r: any) => r && r.id && !handledTripIdsRef.current.has(String(r.id)));
 
-        if (isMounted && unhandled.length > 0 && !activeTrip && !incomingRequest) {
+        if (isMounted && unhandled.length > 0 && !activeTrip && !requestVisible) {
           const firstReq = unhandled[0];
           const reqIdStr = String(firstReq.id);
 
@@ -681,23 +681,17 @@ export default function DriverDashboardScreen() {
     pollRequests();
     const requestInterval = setInterval(pollRequests, 1500);
 
-    const handleCustomReqEvent = () => {
+    const cleanupSync = listenForTripRequests(() => {
       pollRequests();
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('new_driver_request', handleCustomReqEvent);
-    }
+    });
 
     return () => {
       isMounted = false;
       clearInterval(locationInterval);
       clearInterval(requestInterval);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('new_driver_request', handleCustomReqEvent);
-      }
+      cleanupSync();
     };
-  }, [isOnline, activeTrip, incomingRequest]);
+  }, [isOnline, activeTrip, requestVisible]);
 
   // Request timer countdown for popup modal
   useEffect(() => {
@@ -707,6 +701,9 @@ export default function DriverDashboardScreen() {
         setTimerSeconds(prev => {
           if (prev <= 1) {
             setTimeout(() => {
+              if (incomingRequest && (incomingRequest as any).id) {
+                handledTripIdsRef.current.add(String((incomingRequest as any).id));
+              }
               setRequestVisible(false);
               setIncomingRequest(null);
             }, 0);
@@ -717,7 +714,7 @@ export default function DriverDashboardScreen() {
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [requestVisible, timerSeconds]);
+  }, [requestVisible, timerSeconds, incomingRequest]);
 
   // Fetch real-time driver schedules & pending queries from PostgreSQL database
   useEffect(() => {
