@@ -405,7 +405,11 @@ export default function GuideDashboardScreen() {
         const unique = combined.filter((item, index, self) =>
           item && item.id && index === self.findIndex(t => t && String(t.id) === String(item.id))
         );
-        return unique;
+        return unique.filter(b => {
+          if (!b) return false;
+          const st = String(b.status || '').toLowerCase();
+          return !st.includes('cancel') && !st.includes('decline');
+        });
       });
     } catch (e) {
       console.warn('Error loading real stats or schedules:', e);

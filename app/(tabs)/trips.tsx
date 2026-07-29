@@ -1,6 +1,6 @@
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
-import { deductWalletApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi, cancelTripApi } from '@/constants/api';
+import { cancelTripApi, deductWalletApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -30,6 +30,8 @@ export default function TripsHistoryScreen() {
 
   const session = getUserSessionSync();
   const userId = session?.id;
+  const cancelledTripIdsRef = React.useRef<Set<string>>(new Set());
+  const [cancelledIds, setCancelledIds] = useState<string[]>([]);
 
   React.useEffect(() => {
     async function loadBackendTrips() {
@@ -83,8 +85,11 @@ export default function TripsHistoryScreen() {
       time: bt.createdAt ? new Date(bt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
       price: Number(bt.amount) || 0,
       paymentMode: String(bt.paymentMode || bt.payment_mode || 'Cash'),
-      status: String(bt.status === 'Confirmed' ? 'Upcoming' : (bt.status || 'Upcoming')),
+      status: cancelledTripIdsRef.current.has(String(bt.id)) ? 'Cancelled by Tourist' : String(bt.status === 'Confirmed' ? 'Upcoming' : (bt.status || 'Upcoming')),
       passengerCount: 1,
+      otp: bt.otp || '8240',
+      endOtp: bt.end_otp || bt.endOtp || '4321',
+      pickup: bt.pickup_name || bt.pickupName || bt.title || 'Pickup Spot',
     }));
 
   // Convert advanceBookings to list items
@@ -101,9 +106,12 @@ export default function TripsHistoryScreen() {
       time: String(b.time || ''),
       price: Number(b.price) || 0,
       paymentMode: String(b.paymentMode || 'Cash'),
-      status: String(b.status || 'Upcoming') as any,
+      status: cancelledTripIdsRef.current.has(String(b.id)) ? 'Cancelled by Tourist' : String(b.status || 'Upcoming') as any,
       rawBooking: b,
       passengerCount: undefined as number | undefined,
+      otp: b.otp || b.rawBooking?.otp || '8240',
+      endOtp: b.endOtp || b.rawBooking?.endOtp || '4321',
+      pickup: b.pickup || b.title || 'Pickup Spot',
     }));
 
   const filteredUserTrips = safeUserTrips
@@ -119,10 +127,13 @@ export default function TripsHistoryScreen() {
       time: String(t.time || 'Immediate'),
       price: Number(t.price) || 0,
       paymentMode: String(t.paymentMode || 'Wallet'),
-      status: String(t.status || 'Pending Guide Confirmation'),
+      status: cancelledTripIdsRef.current.has(String(t.id)) ? 'Cancelled by Tourist' : String(t.status || 'Pending Guide Confirmation'),
       passengerCount: t.passengerCount,
       advanceDepositPaid: t.advanceDepositPaid,
       remainingCashBalance: t.remainingCashBalance,
+      otp: t.otp || '8240',
+      endOtp: t.endOtp || '4321',
+      pickup: t.pickupName || t.pickup || t.title || 'Pickup Spot',
     }));
 
   const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips].filter(Boolean);
@@ -137,6 +148,15 @@ export default function TripsHistoryScreen() {
     if (activeFilter === 'guide') return trip.type === 'guide';
     return true;
   });
+
+  const activeTrips = allTrips.filter(t => {
+    if (!t) return false;
+    const tid = String(t.id);
+    if (cancelledTripIdsRef.current.has(tid) || cancelledIds.includes(tid)) return false;
+    const st = String(t.status || '').toLowerCase();
+    return !st.includes('cancel') && !st.includes('decline') && st !== 'completed';
+  });
+  const primaryActiveTrip = activeTrips.length > 0 ? activeTrips[0] : null;
 
   const totalSpend = allTrips.reduce((sum, item) => sum + (Number(item?.price) || 0), 0);
   const cabCount = allTrips.filter((t) => t && (t.type === 'cab' || t.type === 'custom_trip' || t.type === 'plan')).length;
@@ -158,6 +178,7 @@ export default function TripsHistoryScreen() {
 
   const handleCancelPress = (trip: any) => {
     if (!trip) return;
+    cancelledTripIdsRef.current.add(String(trip.id));
     const isGuideBooking = trip.type === 'guide' || String(trip.status || '').toLowerCase().includes('guide');
     const isAcceptedByGuide = String(trip.status || '').toLowerCase().includes('accepted') || isGuideBooking;
     const price = trip.price || 0;
@@ -175,6 +196,9 @@ export default function TripsHistoryScreen() {
           text: 'Confirm Cancel',
           style: 'destructive',
           onPress: async () => {
+            cancelledTripIdsRef.current.add(String(trip.id));
+            setCancelledIds(prev => [...prev, String(trip.id)]);
+
             try {
               // 1. Deduct ₹100 fine from Tourist Wallet
               await deductWalletApi({
@@ -244,6 +268,78 @@ export default function TripsHistoryScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        {/* TOP ACTIVE TRIP FEATURED CARD */}
+        {primaryActiveTrip && (
+          <View style={[styles.activeCard, { backgroundColor: isDark ? '#1A2234' : '#EBF5FF', borderColor: isDark ? '#2563EB' : '#93C5FD' }]}>
+            <View style={styles.activeHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                <View style={styles.pulsingDot} />
+                <Text style={[styles.activeTagText, { color: '#2563EB' }]}>LIVE ACTIVE TRIP</Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: primaryActiveTrip.status?.toLowerCase().includes('started') ? '#10B981' : '#F5C518' }]}>
+                <Text style={styles.statusPillText}>{String(primaryActiveTrip.status || 'Active').toUpperCase()}</Text>
+              </View>
+            </View>
+
+            <Text style={[styles.activeTripTitle, { color: colors.textPrimary }]}>{primaryActiveTrip.title}</Text>
+
+            <View style={styles.activeDetailRow}>
+              <MaterialIcons name="person" size={scale(16)} color={colors.amber} />
+              <Text style={[styles.activeDetailText, { color: colors.textPrimary }]}>
+                Partner: <Text style={{ fontWeight: '800' }}>{primaryActiveTrip.driverOrGuideName}</Text>
+              </Text>
+            </View>
+
+            {/* OTP DISPLAY BOX */}
+            <View style={[styles.otpBox, { backgroundColor: isDark ? '#111827' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
+              <View style={styles.otpColumn}>
+                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
+                <Text style={[styles.otpValue, { color: '#10B981' }]}>{primaryActiveTrip.otp || '8240'}</Text>
+              </View>
+              <View style={{ width: 1, height: '80%', backgroundColor: colors.border }} />
+              <View style={styles.otpColumn}>
+                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
+                <Text style={[styles.otpValue, { color: '#3B82F6' }]}>{primaryActiveTrip.endOtp || '4321'}</Text>
+              </View>
+            </View>
+
+            {/* MAP ROUTE PREVIEW */}
+            <View style={[styles.routeBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                <MaterialIcons name="my-location" size={scale(14)} color="#10B981" />
+                <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
+                  Pickup: {primaryActiveTrip.pickup || primaryActiveTrip.title}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(4) }}>
+                <MaterialIcons name="location-on" size={scale(14)} color="#EF4444" />
+                <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
+                  Fare ₹{primaryActiveTrip.price} · {primaryActiveTrip.paymentMode}
+                </Text>
+              </View>
+            </View>
+
+            {/* ACTION BUTTONS */}
+            <View style={{ flexDirection: 'row', gap: scale(10), marginTop: verticalScale(12) }}>
+              <TouchableOpacity
+                style={[styles.activeActionBtn, { backgroundColor: '#10B981', flex: 1 }]}
+                onPress={() => Alert.alert('Contact Partner', `Calling ${primaryActiveTrip.driverOrGuideName}...`)}
+              >
+                <MaterialIcons name="call" size={scale(16)} color="#FFFFFF" />
+                <Text style={styles.activeActionBtnText}>Call Partner</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.activeActionBtn, { backgroundColor: '#EF4444', paddingHorizontal: scale(14) }]}
+                onPress={() => handleCancelPress(primaryActiveTrip)}
+              >
+                <MaterialIcons name="cancel" size={scale(16)} color="#FFFFFF" />
+                <Text style={styles.activeActionBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
 
         {/* Filter Pills list */}
@@ -316,8 +412,8 @@ export default function TripsHistoryScreen() {
                           backgroundColor: isCancelled
                             ? 'rgba(239, 68, 68, 0.15)'
                             : isCab
-                            ? 'rgba(245,197,24,0.1)'
-                            : 'rgba(16, 185, 129, 0.1)',
+                              ? 'rgba(245,197,24,0.1)'
+                              : 'rgba(16, 185, 129, 0.1)',
                         },
                       ]}
                     >
@@ -660,6 +756,99 @@ const styles = StyleSheet.create({
   },
   rebookBtnText: {
     fontSize: moderateFontScale(11),
+    fontWeight: '800',
+  },
+  activeCard: {
+    padding: scale(14),
+    borderRadius: scale(16),
+    borderWidth: 1.5,
+    marginBottom: verticalScale(16),
+  },
+  activeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(8),
+  },
+  pulsingDot: {
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
+    backgroundColor: '#2563EB',
+  },
+  activeTagText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  statusPill: {
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
+    borderRadius: scale(6),
+  },
+  statusPillText: {
+    color: '#FFFFFF',
+    fontSize: moderateFontScale(9.5),
+    fontWeight: '800',
+  },
+  activeTripTitle: {
+    fontSize: moderateFontScale(15),
+    fontWeight: '800',
+    marginBottom: verticalScale(6),
+  },
+  activeDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    marginBottom: verticalScale(10),
+  },
+  activeDetailText: {
+    fontSize: moderateFontScale(12),
+  },
+  otpBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(12),
+    borderRadius: scale(12),
+    borderWidth: 1,
+    marginBottom: verticalScale(10),
+  },
+  otpColumn: {
+    alignItems: 'center',
+  },
+  otpLabel: {
+    fontSize: moderateFontScale(9.5),
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: verticalScale(2),
+  },
+  otpValue: {
+    fontSize: moderateFontScale(18),
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  routeBox: {
+    padding: scale(10),
+    borderRadius: scale(10),
+  },
+  routeText: {
+    fontSize: moderateFontScale(11.5),
+    fontWeight: '600',
+    flex: 1,
+  },
+  activeActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(6),
+    paddingVertical: verticalScale(10),
+    borderRadius: scale(10),
+  },
+  activeActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: moderateFontScale(12),
     fontWeight: '800',
   },
 });

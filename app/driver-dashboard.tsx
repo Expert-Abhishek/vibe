@@ -642,7 +642,7 @@ export default function DriverDashboardScreen() {
 
       const schedules = await fetchDriverAdvanceSchedulesApi(dId);
       if (Array.isArray(schedules)) {
-        setDriverTrips(schedules);
+        setDriverTrips(schedules.filter((s: any) => s && !String(s.status || '').toLowerCase().includes('cancel')));
       } else {
         setDriverTrips([]);
       }

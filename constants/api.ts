@@ -990,17 +990,34 @@ export async function declineTripApi(tripId: string, driverId?: string): Promise
   }
 }
 
+type WalletListener = () => void;
+const walletListeners = new Set<WalletListener>();
+
+export function subscribeWalletChange(listener: WalletListener) {
+  walletListeners.add(listener);
+  return () => { walletListeners.delete(listener); };
+}
+
+export function notifyWalletChanged() {
+  walletListeners.forEach(fn => {
+    try { fn(); } catch (e) { console.warn('Wallet listener error:', e); }
+  });
+}
+
 /**
  * Deduct trip payment from user wallet
  */
 export async function deductWalletApi(payload: { userId: string; amount: number; tripId?: string; description?: string }): Promise<any> {
+  notifyWalletChanged();
   try {
     const res = await fetch(`${API_BASE_URL}/api/wallet/trip-payment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    return await res.json();
+    const json = await res.json();
+    notifyWalletChanged();
+    return json;
   } catch (e) {
     console.warn('deductWalletApi error:', e);
     return { success: false, message: 'Wallet deduction failed. Check server connection.' };

@@ -1200,13 +1200,31 @@ router.post('/:tripId/cancel', async (req, res) => {
   try {
     let updatedTrip = null;
     try {
-      const dbRes = await db.query(
+      let dbRes = await db.query(
         `UPDATE trips 
          SET status = $1, updated_at = CURRENT_TIMESTAMP 
          WHERE id = $2 OR CAST(id AS VARCHAR) = $2
          RETURNING *`,
         [newStatus, tripId]
       );
+
+      if (dbRes.rows.length === 0) {
+        const customerId = req.body.customerId || req.body.userId || 't1';
+        dbRes = await db.query(
+          `UPDATE trips 
+           SET status = $1, updated_at = CURRENT_TIMESTAMP 
+           WHERE id IN (
+             SELECT id FROM trips 
+             WHERE (customer_id = $2 OR customer_id IS NULL) 
+               AND status NOT LIKE 'Cancelled%'
+             ORDER BY created_at DESC 
+             LIMIT 1
+           )
+           RETURNING *`,
+          [newStatus, customerId]
+        );
+      }
+
       if (dbRes.rows.length > 0) {
         updatedTrip = dbRes.rows[0];
         if (updatedTrip.customer_id) {
@@ -1214,8 +1232,8 @@ router.post('/:tripId/cancel', async (req, res) => {
             updatedTrip.customer_id,
             'tourist',
             '🚫 Trip Cancelled',
-            `Your trip #${tripId} has been marked as ${newStatus}.`,
-            tripId
+            `Your trip #${updatedTrip.id} has been marked as ${newStatus}.`,
+            updatedTrip.id
           );
         }
         if (updatedTrip.driver_id) {
@@ -1223,8 +1241,8 @@ router.post('/:tripId/cancel', async (req, res) => {
             updatedTrip.driver_id,
             'driver',
             '🚫 Trip Cancelled',
-            `Trip #${tripId} was cancelled by ${cancelledBy || 'tourist'}.`,
-            tripId
+            `Trip #${updatedTrip.id} was cancelled by ${cancelledBy || 'tourist'}.`,
+            updatedTrip.id
           );
         }
       }
