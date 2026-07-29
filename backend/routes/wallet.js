@@ -420,7 +420,7 @@ router.post('/trip-payment', async (req, res) => {
     } else {
       // Tourist dynamic balance
       const txSum = await db.query(
-        "SELECT COALESCE(SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
+        "SELECT COALESCE(SUM(CASE WHEN LOWER(type) = 'topup' OR LOWER(type) = 'refund' THEN amount WHEN LOWER(type) = 'withdrawal' OR LOWER(type) = 'debit' THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1",
         [userId]
       );
       balance = parseFloat(txSum.rows[0]?.total || 0);

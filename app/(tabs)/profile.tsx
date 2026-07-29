@@ -494,14 +494,13 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={[styles.primaryButton, { flex: 1, minWidth: scale(80), backgroundColor: colors.surfaceAlt, marginTop: 0, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(3) }]}
               onPress={() => {
-                setDeductAmount('');
-                setDeductDescription('');
-                setDeductScreenshotBase64('');
-                setDeductModalVisible(true);
+                setWithdrawAmount('');
+                setWithdrawUpi('');
+                setWithdrawModalVisible(true);
               }}
             >
-              <MaterialIcons name="remove-circle-outline" size={scale(14)} color={colors.amber} />
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>Pay/Deduct</Text>
+              <MaterialIcons name="payment" size={scale(14)} color={colors.amber} />
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>Withdraw</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -756,181 +755,98 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Wallet Pay / Deduct Modal */}
-      <Modal visible={deductModalVisible} animationType="slide" transparent={true} onRequestClose={() => setDeductModalVisible(false)}>
+      {/* Withdraw Funds Modal */}
+      <Modal visible={withdrawModalVisible} animationType="slide" transparent={true} onRequestClose={() => setWithdrawModalVisible(false)}>
         <TouchableOpacity
           style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}
           activeOpacity={1}
-          onPress={() => setDeductModalVisible(false)}
+          onPress={() => setWithdrawModalVisible(false)}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20), maxHeight: '90%' }}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ width: '100%' }}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>
-                📉 Request Wallet Pay/Deduct
-              </Text>
-              <TouchableOpacity onPress={() => setDeductModalVisible(false)}>
-                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              activeOpacity={1}
+              style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(20), borderTopRightRadius: scale(20), padding: scale(20) }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Withdraw Funds</Text>
+                <TouchableOpacity onPress={() => setWithdrawModalVisible(false)}>
+                  <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginBottom: verticalScale(16) }}>
-                Submit a request to pay or deduct money from your Vibe wallet. Admin will verify and update your wallet balance.
-              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(4) }}>Available Balance: ₹{walletBalance}</Text>
 
-              <Text style={[styles.label, { color: colors.textPrimary }]}>Enter Amount (₹)</Text>
+              <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>Amount (₹)</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
                 keyboardType="numeric"
-                value={deductAmount}
-                onChangeText={setDeductAmount}
-                placeholder="e.g. 250"
+                value={withdrawAmount}
+                onChangeText={setWithdrawAmount}
+                placeholder="Enter withdrawal amount"
                 placeholderTextColor={colors.textMuted}
               />
 
-              <Text style={[styles.label, { color: colors.textPrimary }]}>Description / Reason for Deduction</Text>
+              <Text style={[styles.label, { color: colors.textPrimary, marginTop: verticalScale(12) }]}>UPI ID</Text>
               <TextInput
-                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary, height: verticalScale(60), paddingTop: verticalScale(8) }]}
-                value={deductDescription}
-                onChangeText={setDeductDescription}
-                placeholder="e.g. Paid at local restaurant, transport service etc."
+                style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.line, color: colors.textPrimary }]}
+                value={withdrawUpi}
+                onChangeText={setWithdrawUpi}
+                placeholder="yourname@upi"
                 placeholderTextColor={colors.textMuted}
-                multiline
+                autoCapitalize="none"
               />
-
-              <Text style={[styles.label, { color: colors.textPrimary, textAlign: 'center', marginBottom: verticalScale(8) }]}>
-                Upload Proof Screenshot (Optional)
-              </Text>
 
               <TouchableOpacity
-                style={{ height: verticalScale(100), borderStyle: 'dashed', borderWidth: 2, borderColor: deductScreenshotBase64 ? colors.amber : colors.textMuted, borderRadius: scale(12), alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(16), overflow: 'hidden' }}
+                style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
                 onPress={async () => {
-                  Alert.alert(
-                    'Deduction Proof Screenshot',
-                    'Upload payment receipt / bill photo:',
-                    [
-                      {
-                        text: '📸 Take Photo (Camera)',
-                        onPress: async () => {
-                          const { granted } = await ImagePicker.requestCameraPermissionsAsync();
-                          if (!granted) {
-                            showError('Permission Denied', 'Camera access permission is required.');
-                            return;
-                          }
-                          const result = await ImagePicker.launchCameraAsync({
-                            allowsEditing: true,
-                            quality: 0.5,
-                            base64: true,
-                          });
-                          if (!result.canceled && result.assets && result.assets.length > 0) {
-                            const asset = result.assets[0];
-                            const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
-                            setDeductScreenshotBase64(dataUrl);
-                          }
-                        },
-                      },
-                      {
-                        text: '🖼️ Choose from Gallery',
-                        onPress: async () => {
-                          const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                          if (!granted) {
-                            showError('Permission Denied', 'Gallery access permission is required.');
-                            return;
-                          }
-                          const result = await ImagePicker.launchImageLibraryAsync({
-                            mediaTypes: ['images'],
-                            allowsEditing: true,
-                            quality: 0.5,
-                            base64: true,
-                          });
-                          if (!result.canceled && result.assets && result.assets.length > 0) {
-                            const asset = result.assets[0];
-                            const dataUrl = asset.base64 ? (asset.base64.startsWith('data:') ? asset.base64 : `data:image/jpeg;base64,${asset.base64}`) : asset.uri;
-                            setDeductScreenshotBase64(dataUrl);
-                          }
-                        },
-                      },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]
-                  );
+                  const amt = parseFloat(withdrawAmount);
+                  if (!amt || amt <= 0) {
+                    showError('Error', 'Please enter a valid withdrawal amount.');
+                    return;
+                  }
+                  if (!withdrawUpi.trim()) {
+                    showError('Error', 'Please enter your target UPI ID.');
+                    return;
+                  }
+
+                  try {
+                    setIsSubmittingWithdraw(true);
+                    const res = await submitWithdrawalApi({
+                      userId,
+                      userName: name,
+                      role: session?.role || 'tourist',
+                      amount: amt,
+                      upiId: withdrawUpi.trim(),
+                    });
+
+                    if (res && res.success) {
+                      setWithdrawModalVisible(false);
+                      setWithdrawAmount('');
+                      setWithdrawUpi('');
+                      showSuccess('🎉 Submitted!', 'Your withdrawal request was submitted. Admin will send money to your UPI ID and update your wallet.');
+                      loadProfileAndWalletData();
+                    } else {
+                      showError('Submission Failed', res?.message || 'Withdrawal submission failed.');
+                    }
+                  } catch (e: any) {
+                    showError('Error', e?.message || 'Network error occurred.');
+                  } finally {
+                    setIsSubmittingWithdraw(false);
+                  }
                 }}
+                disabled={isSubmittingWithdraw}
               >
-                {deductScreenshotBase64 ? (
-                  <Image source={{ uri: deductScreenshotBase64 }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                {isSubmittingWithdraw ? (
+                  <ActivityIndicator size="small" color="#101014" />
                 ) : (
-                  <View style={{ alignItems: 'center' }}>
-                    <MaterialIcons name="cloud-upload" size={scale(32)} color={colors.textMuted} />
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(4) }}>Tap to upload screenshot (optional)</Text>
-                  </View>
+                  <Text style={styles.primaryButtonText}>Submit Withdrawal Request</Text>
                 )}
               </TouchableOpacity>
-
-              <View style={{ flexDirection: 'row', gap: scale(10) }}>
-                <TouchableOpacity
-                  style={[styles.primaryButton, { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: colors.line, marginTop: 0 }]}
-                  onPress={() => {
-                    setDeductModalVisible(false);
-                  }}
-                >
-                  <Text style={[styles.primaryButtonText, { color: colors.textPrimary }]}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, { flex: 2, backgroundColor: colors.amber, marginTop: 0 }]}
-                  onPress={async () => {
-                    const amt = parseFloat(deductAmount);
-                    if (!amt || amt <= 0) {
-                      showError('Invalid Amount', 'Please enter a valid deduction amount.');
-                      return;
-                    }
-                    if (!deductDescription.trim()) {
-                      showError('Required', 'Please enter a description or reason for this deduction.');
-                      return;
-                    }
-
-                    try {
-                      setIsSubmittingDeduct(true);
-                      const payload = {
-                        userId,
-                        userName: name,
-                        role: session?.role || 'tourist',
-                        amount: amt,
-                        description: deductDescription.trim(),
-                        screenshotUrl: deductScreenshotBase64 || undefined,
-                      };
-
-                      const res = await submitWalletDeductionRequestApi(payload);
-
-                      if (res && res.success) {
-                        setDeductModalVisible(false);
-                        setDeductAmount('');
-                        setDeductDescription('');
-                        setDeductScreenshotBase64('');
-                        showSuccess('🎉 Submitted!', 'Your wallet deduction request has been submitted. Admin will process and update your balance.');
-                        loadProfileAndWalletData();
-                      } else {
-                        showError('Submission Failed', res?.message || 'Could not submit deduction request.');
-                      }
-                    } catch (e: any) {
-                      showError('Submission Error', e?.message || 'A network error occurred.');
-                    } finally {
-                      setIsSubmittingDeduct(false);
-                    }
-                  }}
-                  disabled={isSubmittingDeduct}
-                >
-                  {isSubmittingDeduct ? (
-                    <ActivityIndicator size="small" color="#101014" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Submit Request</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>

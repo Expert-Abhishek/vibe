@@ -345,13 +345,35 @@ export default function GuidesScreen() {
     const finalDate = adminState.instantBookingEnabled ? 'Today (Instant)' : prebookDate;
     const finalTime = adminState.instantBookingEnabled ? 'Immediate' : prebookTimeStr;
     const fareAmt = selectedGuide.chargePerHour;
-    const session = getUserSessionSync();
+    const customerId = session?.id || 't1';
+    const customerName = session?.name || 'Tourist Client';
+
+    // Perform wallet deduction if paying via wallet
+    if (instantPaymentMode === 'wallet' && fareAmt > 0) {
+      try {
+        await deductWalletApi({
+          userId: customerId,
+          amount: fareAmt,
+          description: `Payment for Guided Tour with ${selectedGuide.name}`,
+        });
+
+        await submitWalletDeductionRequestApi({
+          userId: customerId,
+          userName: customerName,
+          role: 'tourist',
+          amount: fareAmt,
+          description: `Instant Guide Booking Payment for ${selectedGuide.name}`,
+        });
+      } catch (e) {
+        console.warn('Instant guide booking wallet deduction error:', e);
+      }
+    }
 
     await bookTripApi({
       tripType: 'guide',
       title: `Guided tour of ${selectedGuide.city} with ${selectedGuide.name}`,
-      customerId: session?.id || 't1',
-      customerName: session?.name || 'Tourist Client',
+      customerId: customerId,
+      customerName: customerName,
       pickupName: `${selectedGuide.city} Landmark Center`,
       dropName: `${selectedGuide.city} Sightseeing Spots`,
       amount: fareAmt,

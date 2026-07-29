@@ -965,23 +965,36 @@ router.post('/:id/accept', async (req, res) => {
       walletBalance = parseFloat(gRes.rows[0].wallet_balance || 0);
       platformFee = parseFloat(gRes.rows[0].platform_fee || 10.00);
       isGuide = true;
+    } else {
+      // Fallback: check users table role
+      const uRes = await db.query("SELECT role, name FROM users WHERE id = $1", [driverId]);
+      if (uRes.rows.length > 0) {
+        const uRole = uRes.rows[0].role;
+        if (uRole === 'guide') isGuide = true;
+        else if (uRole === 'driver') isDriver = true;
+        else isGuide = true; // default to guide for guide bookings
+        if (!driverName || driverName === 'Verified Partner') {
+          driverName = uRes.rows[0].name || 'Assigned Local Guide';
+        }
+      } else {
+        isGuide = true; // Default fallback for partner
+      }
     }
 
-    if (walletBalance < platformFee) {
-      return res.status(400).json({
-        success: false,
-        message: `Insufficient wallet balance. You need at least ₹${platformFee} to accept this booking.`
-      });
-    }
-
-    // 2. Deduct platform fee
+    // 2. Deduct platform fee from profile (upsert if missing)
     if (isDriver) {
-      await db.query("UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
-    } else if (isGuide) {
-      await db.query("UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
+      await db.query(`
+        INSERT INTO driver_profiles (user_id, wallet_balance) VALUES ($1, -$2)
+        ON CONFLICT (user_id) DO UPDATE SET wallet_balance = driver_profiles.wallet_balance - $2
+      `, [driverId, platformFee]);
+    } else {
+      await db.query(`
+        INSERT INTO guide_profiles (user_id, wallet_balance) VALUES ($1, -$2)
+        ON CONFLICT (user_id) DO UPDATE SET wallet_balance = guide_profiles.wallet_balance - $2
+      `, [driverId, platformFee]);
     }
 
-    // 3. Log transaction
+    // 3. Log transaction in wallet_transactions
     await db.query(
       "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
       [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
