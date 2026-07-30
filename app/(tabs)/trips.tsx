@@ -262,20 +262,22 @@ export default function TripsHistoryScreen() {
             if (policy.feeAmount > 0) {
               try {
                 // 1. Deduct calculated fine from Tourist Wallet
-                await deductWalletApi({
+                const deductRes = await deductWalletApi({
                   userId: userId || 't1',
                   amount: policy.feeAmount,
                   description: `Cancellation Fee: ${policy.reasonText} for Booking #${trip.id}`,
                 });
 
-                // 2. Submit Wallet Deduction Request for Admin Panel
-                await submitWalletDeductionRequestApi({
-                  userId: userId || 't1',
-                  userName: session?.name || 'Tourist Client',
-                  role: 'tourist',
-                  amount: policy.feeAmount,
-                  description: `Cancellation Fee (${policy.reasonText}) for Booking #${trip.id} (${trip.title})`,
-                });
+                // 2. Submit Wallet Deduction Request for Admin Panel ONLY if deduction succeeded
+                if (deductRes && deductRes.success) {
+                  await submitWalletDeductionRequestApi({
+                    userId: userId || 't1',
+                    userName: session?.name || 'Tourist Client',
+                    role: 'tourist',
+                    amount: policy.feeAmount,
+                    description: `Cancellation Fee (${policy.reasonText}) for Booking #${trip.id} (${trip.title})`,
+                  });
+                }
               } catch (e) {
                 console.warn('Cancellation fine deduction warning:', e);
               }

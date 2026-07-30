@@ -14,6 +14,7 @@ import {
   saveUserSettingsApi,
   submitWalletTopupRequestApi,
   submitWithdrawalApi,
+  subscribeWalletChange,
   updateDriverLocationApi,
   updatePasswordApi,
   updateUserProfileApi,
@@ -771,8 +772,12 @@ export default function DriverDashboardScreen() {
     };
 
     loadDriverData();
-    const interval = setInterval(loadDriverData, 4000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadDriverData, 30000);
+    const unsubscribeWallet = subscribeWalletChange(loadDriverData);
+    return () => {
+      clearInterval(interval);
+      unsubscribeWallet();
+    };
   }, [updateTrigger]);
 
   const handleLogout = async () => {

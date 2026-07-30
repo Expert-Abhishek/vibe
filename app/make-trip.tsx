@@ -687,32 +687,34 @@ export default function MakeTripScreen() {
       endOtp: '4321',
     };
 
-    broadcastNewTripRequest(tripObject);
-
     if (isPreBooking) {
       // PRE-BOOKING MODE: Automatic Tourist Wallet Deposit (20% or 100%)
       const paymentAmount = prebookPayOption === '20' ? Math.round(totalPrice * 0.20) : totalPrice;
       const remainingAmount = totalPrice - paymentAmount;
 
       if (paymentAmount > 0) {
-        try {
-          await deductWalletApi({
-            userId: customerId,
-            amount: paymentAmount,
-            description: `Pre-Booking Deposit (${prebookPayOption}%) for Custom Trip: ${pickupName} ➔ ${dropName}`,
-          });
+        const deductRes = await deductWalletApi({
+          userId: customerId,
+          amount: paymentAmount,
+          description: `Pre-Booking Deposit (${prebookPayOption}%) for Custom Trip: ${pickupName} ➔ ${dropName}`,
+        });
 
-          await submitWalletDeductionRequestApi({
-            userId: customerId,
-            userName: customerName,
-            role: 'tourist',
-            amount: paymentAmount,
-            description: `Custom Trip Pre-Booking Deposit (${prebookPayOption}%) for ${pickupName} ➔ ${dropName}`,
-          });
-        } catch (e) {
-          console.warn('Custom trip pre-booking wallet deduction error:', e);
+        if (!deductRes || !deductRes.success) {
+          const errorMsg = deductRes?.message || 'Insufficient wallet balance. Please top up first.';
+          Alert.alert('Payment Failed', errorMsg);
+          return;
         }
+
+        await submitWalletDeductionRequestApi({
+          userId: customerId,
+          userName: customerName,
+          role: 'tourist',
+          amount: paymentAmount,
+          description: `Custom Trip Pre-Booking Deposit (${prebookPayOption}%) for ${pickupName} ➔ ${dropName}`,
+        });
       }
+
+      broadcastNewTripRequest(tripObject);
 
       try {
         await createTripApi({

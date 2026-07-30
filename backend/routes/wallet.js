@@ -2,8 +2,23 @@ const express = require('express');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const db = require('../config/db');
+const { emitNotification, emitWalletUpdate } = require('../config/socket');
 
 const router = express.Router();
+
+async function logWalletNotification(userId, role, title, body) {
+  try {
+    await db.query(
+      `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+      [userId || null, role || 'tourist', title, body]
+    );
+    emitNotification({ userId, role: role || 'tourist', title, body });
+    emitWalletUpdate({ userId, role: role || 'tourist', description: body });
+  } catch (err) {
+    console.warn('logWalletNotification error:', err.message);
+  }
+}
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || 'rzp_live_Cqz1hMxOW8QFj3',
@@ -760,16 +775,13 @@ router.post('/admin/topup-requests/:id/approve', async (req, res) => {
     await db.query('UPDATE driver_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2', [numAmount, topup.user_id]);
     await db.query('UPDATE guide_profiles SET wallet_balance = wallet_balance + $1 WHERE user_id = $2', [numAmount, topup.user_id]);
 
-    // 4. Notify user
-    try {
-      await db.query(
-        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
-         VALUES ($1, $2, '🎉 Wallet Top-Up Approved!', $3, CURRENT_TIMESTAMP)`,
-        [topup.user_id, topup.role || 'tourist', `₹${numAmount} credited to your wallet balance.`]
-      );
-    } catch (nErr) {
-      console.warn('Failed to notify user:', nErr);
-    }
+    // 4. Notify user & emit real-time wallet update over socket
+    await logWalletNotification(
+      topup.user_id,
+      topup.role || 'tourist',
+      '🎉 Wallet Top-Up Approved!',
+      `₹${numAmount} credited to your wallet balance.`
+    );
 
     res.json({ success: true, message: `Successfully approved top-up of ₹${numAmount}` });
   } catch (error) {
@@ -799,16 +811,13 @@ router.post('/admin/topup-requests/:id/reject', async (req, res) => {
       [rejectReason, adminId || null, id]
     );
 
-    // Notify user
-    try {
-      await db.query(
-        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
-         VALUES ($1, $2, '❌ Wallet Top-Up Rejected', $3, CURRENT_TIMESTAMP)`,
-        [topup.user_id, topup.role || 'tourist', `Reason: ${rejectReason}`]
-      );
-    } catch (nErr) {
-      console.warn('Failed to notify user:', nErr);
-    }
+    // Notify user & emit real-time wallet update over socket
+    await logWalletNotification(
+      topup.user_id,
+      topup.role || 'tourist',
+      '❌ Wallet Top-Up Rejected',
+      `Reason: ${rejectReason}`
+    );
 
     res.json({ success: true, message: 'Top-up request rejected' });
   } catch (error) {
@@ -1134,16 +1143,13 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
 
     await client.query('COMMIT');
 
-    // 4. Notify user
-    try {
-      await db.query(
-        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
-         VALUES ($1, $2, '📉 Wallet Deduction Processed', $3, CURRENT_TIMESTAMP)`,
-        [deduction.user_id, deduction.role || 'tourist', `₹${numAmount} was successfully deducted/paid from your wallet.`]
-      );
-    } catch (nErr) {
-      console.warn('Failed to notify user:', nErr);
-    }
+    // 4. Notify user & emit real-time wallet update over socket
+    await logWalletNotification(
+      deduction.user_id,
+      deduction.role || 'tourist',
+      '📉 Wallet Deduction Processed',
+      `₹${numAmount} was successfully deducted/paid from your wallet.`
+    );
 
     res.json({ success: true, message: `Successfully approved and processed deduction of ₹${numAmount}` });
   } catch (error) {

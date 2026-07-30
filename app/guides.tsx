@@ -244,36 +244,27 @@ export default function GuidesScreen() {
       const amountToDeduct = prebookPayOption === '20' ? Math.round(fareAmt * 0.20) : fareAmt;
 
       if (amountToDeduct > 0) {
-        try {
-          const balRes = await fetchWalletBalanceApi(customerId);
-          const currentBal = balRes && balRes.success && typeof balRes.balance === 'number' ? balRes.balance : 10000;
+        const deductRes = await deductWalletApi({
+          userId: customerId,
+          amount: amountToDeduct,
+          description: `Payment for Guide Tour - ${selectedGuide?.name}`,
+        });
 
-          if (currentBal < amountToDeduct && balRes?.success) {
-            setBookingStep('datetime');
-            const msg = `Required wallet deposit: ₹${amountToDeduct}. Please top-up your wallet.`;
-            if (showError) showError('Insufficient Wallet Balance', msg);
-            else Alert.alert('Insufficient Wallet Balance', msg);
-            return;
-          }
-
-          // 1. Deduct from Tourist Wallet
-          await deductWalletApi({
-            userId: customerId,
-            amount: amountToDeduct,
-            description: `Payment for Guide Tour - ${selectedGuide?.name}`,
-          });
-
-          // 2. Submit Wallet Deduction Request to Backend for Admin Panel (/deductions)
-          await submitWalletDeductionRequestApi({
-            userId: customerId,
-            userName: customerName,
-            role: 'tourist',
-            amount: amountToDeduct,
-            description: `Guide Pre-Booking Deposit for ${selectedGuide?.name} (${prebookPayOption}% Advance)`,
-          });
-        } catch (err) {
-          console.warn('Wallet deduction warning:', err);
+        if (!deductRes || !deductRes.success) {
+          setBookingStep('datetime');
+          const errorMsg = deductRes?.message || 'Insufficient wallet balance. Please top up first.';
+          if (showError) showError('Payment Failed', errorMsg);
+          else Alert.alert('Payment Failed', errorMsg);
+          return;
         }
+
+        await submitWalletDeductionRequestApi({
+          userId: customerId,
+          userName: customerName,
+          role: 'tourist',
+          amount: amountToDeduct,
+          description: `Guide Pre-Booking Deposit for ${selectedGuide?.name} (${prebookPayOption}% Advance)`,
+        });
       }
 
       // Construct scheduled time safely
@@ -377,23 +368,27 @@ export default function GuidesScreen() {
 
       // Perform wallet deduction if paying via wallet
       if (instantPaymentMode === 'wallet' && fareAmt > 0) {
-        try {
-          await deductWalletApi({
-            userId: customerId,
-            amount: fareAmt,
-            description: `Payment for Guided Tour with ${selectedGuide.name}`,
-          });
+        const deductRes = await deductWalletApi({
+          userId: customerId,
+          amount: fareAmt,
+          description: `Payment for Guided Tour with ${selectedGuide.name}`,
+        });
 
-          await submitWalletDeductionRequestApi({
-            userId: customerId,
-            userName: customerName,
-            role: 'tourist',
-            amount: fareAmt,
-            description: `Instant Guide Booking Payment for ${selectedGuide.name}`,
-          });
-        } catch (e) {
-          console.warn('Instant guide booking wallet deduction error:', e);
+        if (!deductRes || !deductRes.success) {
+          const errorMsg = deductRes?.message || 'Insufficient wallet balance. Please top up first.';
+          if (showError) showError('Payment Failed', errorMsg);
+          else Alert.alert('Payment Failed', errorMsg);
+          setBookingStep('none');
+          return;
         }
+
+        await submitWalletDeductionRequestApi({
+          userId: customerId,
+          userName: customerName,
+          role: 'tourist',
+          amount: fareAmt,
+          description: `Instant Guide Booking Payment for ${selectedGuide.name}`,
+        });
       }
 
       const bookRes = await bookTripApi({

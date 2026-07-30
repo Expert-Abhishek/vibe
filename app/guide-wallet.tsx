@@ -4,6 +4,7 @@ import {
   fetchWalletBalanceApi,
   submitWalletTopupRequestApi,
   submitWithdrawalApi,
+  subscribeWalletChange,
 } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -92,6 +93,8 @@ export default function GuideWalletScreen() {
 
   useEffect(() => {
     loadWalletData();
+    const unsub = subscribeWalletChange(loadWalletData);
+    return () => unsub();
   }, [userId]);
 
   // Client-side countdown timer for Top-Up Screenshot uploads

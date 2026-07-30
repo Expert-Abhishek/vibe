@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
+const { emitNotification } = require('../config/socket');
 
 const router = express.Router();
 
@@ -82,6 +83,15 @@ async function logActivityNotification(userId, role, title, body, tripId = null)
        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
       [userId || null, role || 'tourist', title, body, tripId || null]
     );
+
+    // Real-time WebSocket event emission
+    emitNotification({
+      userId,
+      role: role || 'tourist',
+      title,
+      body,
+      tripId,
+    });
 
     if (userId) {
       const userRes = await db.query('SELECT push_token FROM users WHERE id = $1', [userId]);

@@ -5,6 +5,7 @@ import {
   saveUserSettingsApi,
   submitWalletTopupRequestApi,
   submitWithdrawalApi,
+  subscribeWalletChange,
   updateProfilePhotoApi,
   updateUserProfileApi
 } from '@/constants/api';
@@ -105,6 +106,8 @@ export default function ProfileScreen() {
 
   React.useEffect(() => {
     loadProfileAndWalletData();
+    const unsub = subscribeWalletChange(loadProfileAndWalletData);
+    return () => unsub();
   }, [userId]);
 
   // Client-side countdown timer for Top-Up Screenshot uploads

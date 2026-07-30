@@ -396,23 +396,26 @@ export default function BookCabScreen() {
       setBookingLoading(true);
       try {
         if (advanceAmount > 0) {
-          try {
-            await deductWalletApi({
-              userId: customerId,
-              amount: advanceAmount,
-              description: `Pre-Booking Deposit (${prebookPayOption}%) for ${pickup.name} ➔ ${drop.name}`,
-            });
+          const deductRes = await deductWalletApi({
+            userId: customerId,
+            amount: advanceAmount,
+            description: `Pre-Booking Deposit (${prebookPayOption}%) for ${pickup.name} ➔ ${drop.name}`,
+          });
 
-            await submitWalletDeductionRequestApi({
-              userId: customerId,
-              userName: customerName,
-              role: 'tourist',
-              amount: advanceAmount,
-              description: `Cab Pre-Booking Deposit (${prebookPayOption}%) for ${pickup.name} ➔ ${drop.name}`,
-            });
-          } catch (e) {
-            console.warn('Pre-booking wallet deduction error:', e);
+          if (!deductRes || !deductRes.success) {
+            const errorMsg = deductRes?.message || 'Insufficient wallet balance. Please top up first.';
+            Alert.alert('Payment Failed', errorMsg);
+            setBookingLoading(false);
+            return;
           }
+
+          await submitWalletDeductionRequestApi({
+            userId: customerId,
+            userName: customerName,
+            role: 'tourist',
+            amount: advanceAmount,
+            description: `Cab Pre-Booking Deposit (${prebookPayOption}%) for ${pickup.name} ➔ ${drop.name}`,
+          });
         }
 
         const bookRes = await bookTripApi({

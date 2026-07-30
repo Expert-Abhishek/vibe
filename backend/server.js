@@ -3,7 +3,9 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const db = require('./config/db');
+const { initSocket } = require('./config/socket');
 const authRoutes = require('./routes/auth');
 const destinationsRoutes = require('./routes/destinations');
 const plansRoutes = require('./routes/plans');
@@ -14,6 +16,8 @@ const notificationsRoutes = require('./routes/notifications');
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
+initSocket(server);
 const PORT = process.env.PORT || 5000;
 
 // Middleware
@@ -522,10 +526,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Internal Server Error', error: err.message });
 });
 
-// Start Server
-app.listen(PORT, async () => {
+// Start Server with Socket.io WebSockets Support
+server.listen(PORT, async () => {
   console.log(`===================================================`);
   console.log(`🚀 Vibe Registration Backend running on port ${PORT}`);
+  console.log(`🔌 WebSockets / Socket.io initialized on port ${PORT}`);
   console.log(`👉 Health check: http://localhost:${PORT}/health`);
   console.log(`👉 Live DB Viewer in Chrome: http://localhost:${PORT}/view-db`);
   console.log(`👉 Register API: http://localhost:${PORT}/api/auth/register`);

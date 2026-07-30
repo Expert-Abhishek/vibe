@@ -69,11 +69,15 @@ export default function AdminDashboardScreen() {
           description: manualReason || 'Admin Manual Balance Credit',
         });
       } else {
-        await deductWalletApi({
+        const deductRes = await deductWalletApi({
           userId: manualUserPhone.trim(),
           amount: amt,
           description: manualReason || 'Admin Manual Balance Deduction',
         });
+        if (deductRes && !deductRes.success) {
+          Alert.alert('Deduction Failed', deductRes.message || 'Failed to deduct wallet balance.');
+          return;
+        }
       }
 
       if (!Array.isArray((adminState as any).walletDeductions)) (adminState as any).walletDeductions = [];

@@ -16,6 +16,7 @@ import { getUserSessionSync } from '@/constants/authStore';
 import { getExpoPushToken } from '@/constants/notifications';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ModalProvider } from '@src/context/ModalContext';
+import { initSocketService } from '@src/services/socketService';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -25,12 +26,16 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
+    const session = getUserSessionSync();
+    if (session?.id) {
+      initSocketService(session.id, session.role || 'tourist');
+    }
+
     async function configurePushNotifications() {
       try {
         const token = await getExpoPushToken();
         if (token) {
           console.log('🎉 Expo Push Token:', token);
-          const session = getUserSessionSync();
           if (session?.id) {
             await savePushTokenApi(session.id, token);
             console.log('✅ Push Token registered to backend DB.');

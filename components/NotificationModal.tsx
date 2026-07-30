@@ -15,6 +15,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import NotificationIcon from '@src/components/NotificationIcon';
 import { notificationStore, useNotificationStore } from '@src/store/notificationStore';
+import { initSocketService } from '@src/services/socketService';
 
 interface Props {
   role?: 'tourist' | 'driver' | 'guide';
@@ -37,7 +38,8 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
 
   const loadNotifications = async () => {
     const session = getUserSessionSync();
-    const userId = session?.id || 'guest';
+    const userId = session?.id;
+    if (!userId || userId === 'guest') return;
     const list = await fetchNotificationsApi(userId, role);
 
     if (Array.isArray(list) && list.length > 0) {
@@ -47,8 +49,10 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 5000);
-    return () => clearInterval(interval);
+    const session = getUserSessionSync();
+    if (session?.id) {
+      initSocketService(session.id, role);
+    }
   }, [role]);
 
   const handleOpen = () => {
