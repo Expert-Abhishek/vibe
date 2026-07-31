@@ -303,6 +303,36 @@ function emitTripDeclined(tripObject) {
   io.emit('RIDE_DECLINED', declinePayload);
 }
 
+/**
+ * Emit real-time trip cancellation event to rider, driver, and global rooms
+ */
+function emitTripCancelled(tripObject) {
+  if (!io || !tripObject) return;
+  const tripId = tripObject.id || tripObject.tripId;
+  const customerId = tripObject.customerId || tripObject.customer_id;
+  const driverId = tripObject.driverId || tripObject.driver_id;
+
+  const cancelPayload = {
+    ...tripObject,
+    id: tripId,
+    tripId: tripId,
+    status: 'CANCELLED',
+    cancelledAt: new Date().toISOString(),
+  };
+
+  console.log(`[Socket.io] ❌ Emitting trip_cancelled & RIDE_CANCELLED for trip ${tripId}`);
+
+  if (tripId) io.to(`trip:${tripId}`).emit('trip_cancelled', cancelPayload);
+  if (customerId) io.to(`user:${customerId}`).emit('trip_cancelled', cancelPayload);
+  if (driverId) io.to(`user:${driverId}`).emit('trip_cancelled', cancelPayload);
+
+  io.to('role:driver').emit('trip_cancelled', cancelPayload);
+  io.to('role:guide').emit('trip_cancelled', cancelPayload);
+  io.to('role:tourist').emit('trip_cancelled', cancelPayload);
+  io.emit('trip_cancelled', cancelPayload);
+  io.emit('RIDE_CANCELLED', cancelPayload);
+}
+
 module.exports = {
   initSocket,
   getIO,
@@ -311,4 +341,5 @@ module.exports = {
   emitTripRequest,
   emitTripAccepted,
   emitTripDeclined,
+  emitTripCancelled,
 };

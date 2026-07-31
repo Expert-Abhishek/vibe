@@ -353,6 +353,8 @@ export default function RideMatchingScreen() {
           });
         }
         setStatus('matched');
+        const activeTripId = String(data.id || data.tripId || tripIdParam || 'active_trip_1');
+        router.push({ pathname: '/trip-status', params: { tripId: activeTripId } });
       }
     };
 

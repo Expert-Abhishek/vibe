@@ -1,6 +1,6 @@
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
-import { cancelTripApi, deductWalletApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi } from '@/constants/api';
+import { cancelTripApi, deductWalletApi, fetchActiveTripApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -27,6 +27,7 @@ export default function TripsHistoryScreen() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'cab' | 'guide'>('all');
   const [cancelTrigger, setCancelTrigger] = useState(0);
   const [backendTrips, setBackendTrips] = useState<any[]>([]);
+  const [hasActiveTripState, setHasActiveTripState] = useState<boolean | null>(null);
 
   const session = getUserSessionSync();
   const userId = session?.id;
@@ -38,8 +39,12 @@ export default function TripsHistoryScreen() {
       try {
         if (!userId) {
           setBackendTrips([]);
+          setHasActiveTripState(false);
           return;
         }
+        const activeRes = await fetchActiveTripApi(userId);
+        setHasActiveTripState(activeRes.hasActiveTrip);
+
         const data = await fetchCustomerTripsApi(userId);
         if (Array.isArray(data) && data.length > 0) {
           const filtered = data.filter((bt: any) => bt && (!bt.customerId || String(bt.customerId) === String(userId)));
@@ -156,7 +161,7 @@ export default function TripsHistoryScreen() {
     const st = String(t.status || '').toLowerCase();
     return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish');
   });
-  const primaryActiveTrip = activeTrips.length > 0 ? activeTrips[0] : null;
+  const primaryActiveTrip = (hasActiveTripState !== false && activeTrips.length > 0) ? activeTrips[0] : null;
 
   const totalSpend = allTrips.reduce((sum, item) => sum + (Number(item?.price) || 0), 0);
   const cabCount = allTrips.filter((t) => t && (t.type === 'cab' || t.type === 'custom_trip' || t.type === 'plan')).length;

@@ -843,8 +843,19 @@ export default function DriverDashboardScreen() {
         }
       };
 
+      const handleTripCancelled = (cancelData: any) => {
+        console.log('[DriverDashboard] ❌ Received real-time trip_cancelled event:', cancelData);
+        setActiveTrip(null);
+        setIncomingRequest(null);
+        setRequestVisible(false);
+        sendLocalNotification('Trip Cancelled', 'The tourist has cancelled the trip request.');
+        showError('Trip Cancelled', 'The trip was cancelled by tourist.');
+      };
+
       socket.on('trip_request', handleIncomingTripData);
       socket.on('notification:new', handleIncomingTripData);
+      socket.on('trip_cancelled', handleTripCancelled);
+      socket.on('RIDE_CANCELLED', handleTripCancelled);
     }
 
     const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {

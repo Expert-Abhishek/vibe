@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined } = require('../config/socket');
+const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined, emitTripCancelled } = require('../config/socket');
 
 const router = express.Router();
 
@@ -179,6 +179,91 @@ router.post('/admin-notify', async (req, res) => {
   } catch (error) {
     console.error('Error in admin-notify endpoint:', error);
     res.status(500).json({ success: false, message: 'Failed to broadcast notification' });
+  }
+});
+
+/**
+ * GET /api/trips/active-trip/:customerId
+ * Check PostgreSQL for any non-completed, non-cancelled trip for rider
+ */
+router.get('/active-trip/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const result = await db.query(
+      `SELECT * FROM trips
+       WHERE (customer_id = $1 OR CAST(customer_id AS VARCHAR) = $1)
+         AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [customerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ success: true, hasActiveTrip: false, trip: null });
+    }
+
+    const t = result.rows[0];
+    const activeTripData = {
+      id: t.id,
+      tripId: t.id,
+      customerId: t.customer_id,
+      customerName: t.customer_name,
+      driverId: t.driver_id,
+      driverName: t.driver_or_guide_name || 'Assigned Partner',
+      pickup: t.pickup_name || t.title,
+      drop: t.drop_name || t.title,
+      amount: parseFloat(t.amount || 0),
+      status: t.status,
+      bookingType: t.booking_type || 'INSTANT',
+      otp: t.otp || '8240',
+      endOtp: t.end_otp || t.endOtp || '4321',
+      pickupLat: parseFloat(t.pickup_lat || 12.9716),
+      pickupLng: parseFloat(t.pickup_lng || 77.5946),
+      dropLat: parseFloat(t.drop_lat || 12.9716),
+      dropLng: parseFloat(t.drop_lng || 77.5946),
+      createdAt: t.created_at,
+    };
+
+    res.json({
+      success: true,
+      hasActiveTrip: true,
+      trip: activeTripData,
+    });
+  } catch (error) {
+    console.error('Error fetching active trip:', error);
+    res.status(500).json({ success: false, hasActiveTrip: false, message: 'Failed to fetch active trip' });
+  }
+});
+
+/**
+ * POST /api/trips/:id/cancel
+ * Cancel trip, update status strictly to CANCELLED in DB & emit socket event
+ */
+router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cancelledBy = 'tourist', role = 'tourist', reason = 'Cancelled by user' } = req.body || {};
+
+    const result = await db.query(
+      `UPDATE trips
+       SET status = 'CANCELLED'
+       WHERE id = $1 OR CAST(id AS VARCHAR) = $1
+       RETURNING *`,
+      [id]
+    );
+
+    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'CANCELLED' };
+    emitTripCancelled(trip);
+
+    res.json({
+      success: true,
+      message: 'Trip cancelled successfully',
+      data: trip,
+    });
+  } catch (error) {
+    console.error('Error cancelling trip:', error);
+    res.status(500).json({ success: false, message: 'Failed to cancel trip', error: error.message });
   }
 });
 

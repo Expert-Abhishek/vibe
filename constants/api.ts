@@ -244,6 +244,22 @@ export async function createTripApi(payload: {
 }
 
 /**
+ * Check backend for active non-completed, non-cancelled trip for customer
+ */
+export async function fetchActiveTripApi(customerId: string): Promise<{ hasActiveTrip: boolean; trip: any }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/active-trip/${customerId}`);
+    const data = await res.json();
+    if (data.success) {
+      return { hasActiveTrip: !!data.hasActiveTrip, trip: data.trip || null };
+    }
+  } catch (e) {
+    console.warn('fetchActiveTripApi error:', e);
+  }
+  return { hasActiveTrip: false, trip: null };
+}
+
+/**
  * Fetch Customer Trip History from backend
  */
 export async function fetchCustomerTripsApi(customerId: string): Promise<any[]> {
