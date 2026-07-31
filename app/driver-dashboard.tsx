@@ -1900,10 +1900,10 @@ export default function DriverDashboardScreen() {
             {incomingRequest && (
               <View style={styles.popupOverlay}>
                 <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
-                  {/* Persistent Header & Timer */}
+                  {/* Persistent Header */}
                   <View style={styles.popupTimerHeader}>
                     <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
-                    <Text style={styles.popupTimerText}>INCOMING TRIP REQUEST ({timerSeconds}s)</Text>
+                    <Text style={styles.popupTimerText}>INCOMING TRIP REQUEST</Text>
                   </View>
 
                   <ScrollView

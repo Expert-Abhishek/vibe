@@ -126,6 +126,18 @@ function emitWalletUpdate(payload) {
   }
 }
 
+function calculateHaversineKm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 14.5;
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return parseFloat((R * c).toFixed(1));
+}
+
 /**
  * Emit trip request: Direct Targeted vs Role Broadcast with notification:new fallback
  */
@@ -137,11 +149,21 @@ function emitTripRequest(tripObject) {
   const driverId = rawDriverId ? String(rawDriverId) : null;
   const vehicleType = tripObject.vehicleType || tripObject.vehicle;
 
+  const computedDistance = tripObject.distanceKm || tripObject.distance_km || tripObject.distance || tripObject.dist ||
+    calculateHaversineKm(
+      parseFloat(tripObject.pickupLat || tripObject.pickup_lat),
+      parseFloat(tripObject.pickupLng || tripObject.pickup_lng),
+      parseFloat(tripObject.dropLat || tripObject.drop_lat),
+      parseFloat(tripObject.dropLng || tripObject.drop_lng)
+    );
+
   const normalizedTrip = {
     ...tripObject,
     id: tripObject.id || tripObject.tripId,
     driverId: driverId,
     driver_id: driverId,
+    distanceKm: computedDistance,
+    distance_km: computedDistance,
     status: 'Pending',
     createdAt: tripObject.createdAt || new Date().toISOString(),
   };
@@ -215,6 +237,40 @@ function emitTripAccepted(tripObject) {
   io.emit('RIDE_ACCEPTED', acceptancePayload);
 }
 
+/**
+ * Emit real-time trip decline/rejection event to rider and global rooms
+ */
+function emitTripDeclined(tripObject) {
+  if (!io || !tripObject) return;
+  const tripId = tripObject.id || tripObject.tripId;
+  const customerId = tripObject.customerId || tripObject.customer_id;
+  const driverId = tripObject.driverId || tripObject.driver_id;
+  const driverName = tripObject.driverName || tripObject.driver_or_guide_name || 'Captain';
+
+  const declinePayload = {
+    ...tripObject,
+    id: tripId,
+    tripId: tripId,
+    status: 'Declined',
+    driverName: driverName,
+    driver_or_guide_name: driverName,
+    driverId: driverId,
+    declinedAt: new Date().toISOString(),
+  };
+
+  console.log(`[Socket.io] 🛑 Emitting trip_declined & RIDE_DECLINED for trip ${tripId} by driver ${driverName}`);
+
+  if (tripId) io.to(`trip:${tripId}`).emit('trip_declined', declinePayload);
+  if (customerId) io.to(`user:${customerId}`).emit('trip_declined', declinePayload);
+  if (driverId) io.to(`user:${driverId}`).emit('trip_declined', declinePayload);
+
+  io.to('role:driver').emit('trip_declined', declinePayload);
+  io.to('role:guide').emit('trip_declined', declinePayload);
+  io.to('role:tourist').emit('trip_declined', declinePayload);
+  io.emit('trip_declined', declinePayload);
+  io.emit('RIDE_DECLINED', declinePayload);
+}
+
 module.exports = {
   initSocket,
   getIO,
@@ -222,4 +278,5 @@ module.exports = {
   emitWalletUpdate,
   emitTripRequest,
   emitTripAccepted,
+  emitTripDeclined,
 };

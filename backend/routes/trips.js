@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { emitNotification, emitTripRequest, emitTripAccepted } = require('../config/socket');
+const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined } = require('../config/socket');
 
 const router = express.Router();
 
@@ -1050,6 +1050,37 @@ router.post('/:id/accept', async (req, res) => {
   } catch (error) {
     console.error('Error accepting trip:', error);
     res.status(500).json({ success: false, message: 'Failed to accept trip', error: error.message });
+  }
+});
+
+/**
+ * POST /api/trips/:id/decline or /reject
+ * Driver / Guide declines booking request
+ */
+router.post(['/:id/decline', '/:id/reject'], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { driverId, driverName = 'Captain' } = req.body;
+
+    const result = await db.query(
+      `UPDATE trips
+       SET status = 'Declined'
+       WHERE id = $1 OR CAST(id AS VARCHAR) = $1
+       RETURNING *`,
+      [id]
+    );
+
+    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Declined', driver_or_guide_name: driverName, driver_id: driverId };
+    emitTripDeclined(trip);
+
+    res.json({
+      success: true,
+      message: 'Trip request declined',
+      data: trip,
+    });
+  } catch (error) {
+    console.error('Error declining trip:', error);
+    res.status(500).json({ success: false, message: 'Failed to decline trip', error: error.message });
   }
 });
 /**

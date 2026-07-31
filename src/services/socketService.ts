@@ -85,6 +85,51 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       }
     });
 
+    // 4. Real-time trip acceptance & decline events
+    socket.off('trip_accepted');
+    socket.on('trip_accepted', (data: any) => {
+      console.log('[SocketService] 🚀 Received real-time trip_accepted event:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_accepted', data);
+          DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
+        } catch (e) {}
+      }
+    });
+
+    socket.off('RIDE_ACCEPTED');
+    socket.on('RIDE_ACCEPTED', (data: any) => {
+      console.log('[SocketService] 🚀 Received real-time RIDE_ACCEPTED event:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_accepted', data);
+          DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
+        } catch (e) {}
+      }
+    });
+
+    socket.off('trip_declined');
+    socket.on('trip_declined', (data: any) => {
+      console.log('[SocketService] 🛑 Received real-time trip_declined event:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_declined', data);
+          DeviceEventEmitter.emit('RIDE_DECLINED', data);
+        } catch (e) {}
+      }
+    });
+
+    socket.off('RIDE_DECLINED');
+    socket.on('RIDE_DECLINED', (data: any) => {
+      console.log('[SocketService] 🛑 Received real-time RIDE_DECLINED event:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_declined', data);
+          DeviceEventEmitter.emit('RIDE_DECLINED', data);
+        } catch (e) {}
+      }
+    });
+
     return socket;
   } catch (err) {
     console.warn('[SocketService] Failed to initialize socket connection:', err);

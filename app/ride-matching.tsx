@@ -1,3 +1,4 @@
+import { initSocketService } from '@src/services/socketService';
 import { adminState, TripRecord } from '@/constants/admin-state';
 import { fetchDriversApi, fetchGuidesApi, fetchLiveLocationApi } from '@/constants/api';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -319,6 +320,8 @@ export default function RideMatchingScreen() {
         }
         if (res.data.status === 'Accepted' || res.data.status === 'Arrived') {
           setStatus('matched');
+        } else if (res.data.status === 'Declined' || res.data.status === 'Rejected') {
+          setIsDriverTimeout(true);
         } else if (res.data.status === 'Active') {
           setStatus('started');
         } else if (res.data.status === 'Completed') {
@@ -332,29 +335,16 @@ export default function RideMatchingScreen() {
     return () => clearInterval(interval);
   }, [tripIdParam]);
 
-  // Listen for real-time driver acceptance events via WebSockets & DeviceEventEmitter
+  // Listen for real-time driver acceptance & decline events via WebSockets & DeviceEventEmitter
   useEffect(() => {
-    const subAccepted = DeviceEventEmitter.addListener('trip_accepted', (data: any) => {
-      console.log('[RideMatchingScreen] 🚀 Received real-time trip_accepted event:', data);
-      if (data) {
-        if (data.driverName || data.driver_or_guide_name) {
-          setLiveDriverInfo({
-            name: data.driverName || data.driver_or_guide_name,
-            phone: data.driverPhone || '+91 99000 82400',
-            vehicleModel: data.vehicleModel || 'Innova / Thar 4x4',
-            vehicleNumber: data.vehicleNumber || 'KA-03-EX-8240',
-            rating: 4.9,
-          });
-        }
-        setStatus('matched');
-      }
-    });
+    initSocketService();
 
-    const subRideAccepted = DeviceEventEmitter.addListener('RIDE_ACCEPTED', (data: any) => {
-      console.log('[RideMatchingScreen] 🚀 Received real-time RIDE_ACCEPTED event:', data);
+    const handleAcceptedData = (data: any) => {
+      console.log('[RideMatchingScreen] 🚀 Received real-time acceptance event:', data);
       if (data) {
         if (data.driverName || data.driver_or_guide_name) {
           setLiveDriverInfo({
+            id: data.driverId || data.driver_id || 'd1',
             name: data.driverName || data.driver_or_guide_name,
             phone: data.driverPhone || '+91 99000 82400',
             vehicleModel: data.vehicleModel || 'Innova / Thar 4x4',
@@ -364,11 +354,23 @@ export default function RideMatchingScreen() {
         }
         setStatus('matched');
       }
-    });
+    };
+
+    const handleDeclinedData = (data: any) => {
+      console.log('[RideMatchingScreen] 🛑 Received real-time decline event:', data);
+      setIsDriverTimeout(true);
+    };
+
+    const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleAcceptedData);
+    const subRideAccepted = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleAcceptedData);
+    const subDeclined = DeviceEventEmitter.addListener('trip_declined', handleDeclinedData);
+    const subRideDeclined = DeviceEventEmitter.addListener('RIDE_DECLINED', handleDeclinedData);
 
     return () => {
       subAccepted.remove();
       subRideAccepted.remove();
+      subDeclined.remove();
+      subRideDeclined.remove();
     };
   }, []);
 

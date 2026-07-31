@@ -17,6 +17,8 @@ import {
   updateUserProfileApi,
   verifyTripOtpApi
 } from '@/constants/api';
+import { initSocketService } from '@src/services/socketService';
+import { listenForTripRequests } from '@/constants/tripSync';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { useLanguage } from '@/hooks/use-language';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -30,6 +32,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -72,14 +75,18 @@ interface TourSpot {
 interface ActiveRequest {
   touristName: string;
   pickup: string;
-  pickupLat: number;
-  pickupLng: number;
-  spots: TourSpot[];
-  durationHrs: number;
+  pickupLat?: number;
+  pickupLng?: number;
+  drop?: string;
+  distanceKm?: number;
+  spots?: TourSpot[];
+  checkpoints?: string[];
+  durationHrs?: number;
   estimatedFare: number;
-  language: string;
-  groupSize: number;
+  language?: string;
+  groupSize?: number;
   otp: string;
+  endOtp?: string;
 }
 
 function formatScheduleDateTime(dateVal?: any, timeVal?: any, scheduledTimeVal?: any): string {
@@ -699,29 +706,107 @@ export default function GuideDashboardScreen() {
     };
   }, [isOnline, activeTour, incomingRequest]);
 
-  // Request countdown timer
+  // Ensure Guide Socket.io Connection & Trip Request Event Listeners
   useEffect(() => {
-    let timer: any;
-    if (requestVisible && timerSeconds > 0) {
-      timer = setInterval(() => {
-        setTimerSeconds(prev => {
-          if (prev <= 1) {
-            setTimeout(() => {
-              if (incomingRequest) {
-                const tripId = (incomingRequest as any).tripId || (incomingRequest as any).id;
-                if (tripId) handledTripIdsRef.current.add(String(tripId));
-              }
-              setRequestVisible(false);
-              setIncomingRequest(null);
-            }, 0);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    const session = getUserSessionSync();
+    const guideId = session?.id || (session as any)?.guideId || 'g1';
+
+    if (!guideId) {
+      console.error('[GuideDashboard] ❌ Guide ID missing in session!');
+      return;
     }
-    return () => clearInterval(timer);
-  }, [requestVisible, timerSeconds]);
+
+    console.log('[GuideDashboard] 🔌 Initializing Socket for Guide ID:', guideId);
+    const socket = initSocketService(String(guideId), 'guide');
+
+    if (socket) {
+      const joinData = {
+        userId: String(guideId),
+        role: session?.role || 'guide',
+        vehicleType: 'guide',
+      };
+
+      if (socket.connected) {
+        socket.emit('join_room', joinData);
+        console.log('[GuideDashboard] 🟢 Emitted join_room on mount:', joinData);
+      }
+
+      socket.on('connect', () => {
+        console.log('[GuideDashboard] ✅ Socket Connected! Emitting join_room...');
+        socket.emit('join_room', joinData);
+      });
+
+      const handleIncomingTripData = (tripData: any) => {
+        if (!tripData) return;
+        const payload = tripData.trip || tripData;
+        const incomingTripId = String(payload.id || payload.tripId || payload.id);
+
+        console.log('[GuideDashboard] 🔔 Socket trip_request received:', payload);
+
+        if (payload && incomingTripId && !handledTripIdsRef.current.has(incomingTripId)) {
+          setIncomingRequest({
+            id: incomingTripId,
+            tripId: incomingTripId,
+            touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
+            pickup: payload.pickupName || payload.pickup || 'Heritage City Pickup',
+            drop: payload.dropName || payload.drop || payload.title || 'Sightseeing Spot',
+            distanceKm: parseFloat(payload.distanceKm || payload.distance_km || payload.distance || payload.dist || 12.5),
+            estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || 1800),
+            checkpoints: payload.checkpoints || payload.stops || [],
+            scheduledTime: payload.scheduledTime,
+            bookingType: payload.bookingType || 'INSTANT',
+            otp: payload.otp || '1234',
+            endOtp: payload.endOtp || '4321',
+          });
+          setRequestVisible(true);
+        }
+      };
+
+      socket.on('trip_request', handleIncomingTripData);
+      socket.on('notification:new', handleIncomingTripData);
+    }
+
+    const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
+      if (data) {
+        const payload = data.trip || data;
+        const incId = String(payload.id || payload.tripId);
+        if (incId && !handledTripIdsRef.current.has(incId)) {
+          setIncomingRequest({
+            id: incId,
+            tripId: incId,
+            touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
+            pickup: payload.pickupName || payload.pickup || 'Heritage City Pickup',
+            drop: payload.dropName || payload.drop || payload.title || 'Sightseeing Spot',
+            distanceKm: parseFloat(payload.distanceKm || payload.distance_km || payload.distance || payload.dist || 12.5),
+            estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || 1800),
+            checkpoints: payload.checkpoints || payload.stops || [],
+            scheduledTime: payload.scheduledTime,
+            bookingType: payload.bookingType || 'INSTANT',
+            otp: payload.otp || '1234',
+            endOtp: payload.endOtp || '4321',
+          });
+          setRequestVisible(true);
+        }
+      }
+    });
+
+    const unsubRequests = listenForTripRequests((tripData: any) => {
+      if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
+        setIncomingRequest({ ...tripData });
+        setRequestVisible(true);
+      }
+    });
+
+    return () => {
+      subReq1.remove();
+      unsubRequests();
+      if (socket) {
+        socket.off('connect');
+        socket.off('trip_request');
+        socket.off('notification:new');
+      }
+    };
+  }, []);
 
   const handleAcceptRequest = async () => {
     if (!incomingRequest) return;
@@ -842,11 +927,11 @@ export default function GuideDashboardScreen() {
   };
 
   const handleNextSpot = () => {
-    if (!activeTour) return;
+    if (!activeTour || !activeTour.spots || activeTour.spots.length === 0) return;
     if (currentSpotIndex < activeTour.spots.length - 1) {
       const nextIdx = currentSpotIndex + 1;
       setCurrentSpotIndex(nextIdx);
-      Alert.alert('Spot Reached!', `Proceeding to next stop: ${activeTour.spots[nextIdx].name}.`);
+      Alert.alert('Spot Reached!', `Proceeding to next stop: ${activeTour.spots[nextIdx]?.name || 'Next Spot'}.`);
     } else {
       Alert.alert('Final Spot Reached!', 'All itinerary points are covered. You can now complete the tour.');
     }
@@ -1175,7 +1260,7 @@ export default function GuideDashboardScreen() {
                       {tourPhase === 'pickup' ? (
                         <Text style={styles.hudNavText}>Pickup Target: {activeTour.pickup}</Text>
                       ) : (
-                        <Text style={styles.hudNavText}>Spot {currentSpotIndex + 1}: {activeTour.spots[currentSpotIndex].name}</Text>
+                        <Text style={styles.hudNavText}>Spot {currentSpotIndex + 1}: {activeTour.spots?.[currentSpotIndex]?.name || activeTour.drop || 'Sightseeing Spot'}</Text>
                       )}
                     </View>
                   </View>
@@ -1191,7 +1276,7 @@ export default function GuideDashboardScreen() {
                     }}
                   >
                     <Marker
-                      coordinate={{ latitude: activeTour.pickupLat, longitude: activeTour.pickupLng }}
+                      coordinate={{ latitude: activeTour.pickupLat || 12.9982, longitude: activeTour.pickupLng || 77.5920 }}
                       title="Tourist Pickup Location"
                       pinColor={colors.amber}
                     />
@@ -1207,7 +1292,7 @@ export default function GuideDashboardScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.touristProfileName, { color: colors.textPrimary }]}>{activeTour.touristName}</Text>
                     <Text style={[styles.touristProfileMeta, { color: colors.textMuted }]}>
-                      Language: {activeTour.language}
+                      Language: {activeTour.language || 'English'}
                     </Text>
                   </View>
                 </View>
@@ -1232,17 +1317,17 @@ export default function GuideDashboardScreen() {
                 ) : (
                   <View style={styles.phasePanelBlock}>
                     <Text style={[styles.phaseTitleText, { color: colors.textPrimary }]}>
-                      Phase 2: Tour in Progress (Spot {currentSpotIndex + 1}/{activeTour.spots.length})
+                      Phase 2: Tour in Progress (Spot {currentSpotIndex + 1}/{(activeTour.spots || []).length || 1})
                     </Text>
                     <View style={styles.phaseAddressCard}>
                       <MaterialIcons name="assistant-photo" size={scale(16)} color={colors.amber} style={{ marginRight: scale(6) }} />
                       <Text style={[styles.phaseAddressVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                        Targeting: {activeTour.spots[currentSpotIndex].name}
+                        Targeting: {activeTour.spots?.[currentSpotIndex]?.name || activeTour.drop || 'Sightseeing Spot'}
                       </Text>
                     </View>
 
                     <View style={styles.actionBtnGrid}>
-                      {currentSpotIndex < activeTour.spots.length - 1 ? (
+                      {currentSpotIndex < (activeTour.spots || []).length - 1 ? (
                         <TouchableOpacity style={[styles.navActionBtn, { backgroundColor: '#2C2C34' }]} onPress={handleNextSpot}>
                           <Text style={styles.navActionTextCancel}>Next Spot</Text>
                         </TouchableOpacity>
@@ -1879,7 +1964,7 @@ export default function GuideDashboardScreen() {
               <View style={styles.popupTimerHeader}>
                 <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
                 <Text style={styles.popupTimerText}>
-                  INCOMING {((incomingRequest as any).bookingType || 'INSTANT') === 'PRE_BOOKED' ? 'PRE-BOOKING' : 'INSTANT BOOKING'} ({timerSeconds}s)
+                  INCOMING {((incomingRequest as any).bookingType || 'INSTANT') === 'PRE_BOOKED' ? 'PRE-BOOKING' : 'TOUR REQUEST'}
                 </Text>
               </View>
 
@@ -1888,7 +1973,7 @@ export default function GuideDashboardScreen() {
                   <MaterialIcons name="person-pin" size={scale(22)} color={colors.amber} style={{ marginRight: scale(8) }} />
                   <View>
                     <Text style={[styles.touristNameVal, { color: colors.textPrimary }]}>{incomingRequest.touristName}</Text>
-                    <Text style={[styles.touristMetaVal, { color: colors.textMuted }]}>Prefer: {incomingRequest.language} · {incomingRequest.groupSize} Pax</Text>
+                    <Text style={[styles.touristMetaVal, { color: colors.textMuted }]}>Prefer: {incomingRequest.language || 'English & Kannada'} · {incomingRequest.groupSize || 2} Pax</Text>
                   </View>
                 </View>
 
@@ -1900,14 +1985,19 @@ export default function GuideDashboardScreen() {
                 <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Spots to Tour</Text>
                   <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {Array.isArray(incomingRequest.spots) ? incomingRequest.spots.map((s: any) => s.name).join(' ➔ ') : 'Local Sightseeing'}
+                    {Array.isArray(incomingRequest.spots) ? incomingRequest.spots.map((s: any) => s.name).join(' ➔ ') : (incomingRequest.drop || 'Local Sightseeing')}
                   </Text>
                 </View>
 
                 <View style={styles.popupFareStats}>
                   <View style={styles.fareCell}>
+                    <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Distance</Text>
+                    <Text style={[styles.payoutTextHighlight, { color: colors.textPrimary }]}>{incomingRequest.distanceKm || 12.5} km</Text>
+                  </View>
+                  <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />
+                  <View style={styles.fareCell}>
                     <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Duration</Text>
-                    <Text style={[styles.payoutTextHighlight, { color: colors.textPrimary }]}>{incomingRequest.durationHrs} Hours</Text>
+                    <Text style={[styles.payoutTextHighlight, { color: colors.textPrimary }]}>{incomingRequest.durationHrs || 4} Hours</Text>
                   </View>
                   <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />
                   <View style={styles.fareCell}>
