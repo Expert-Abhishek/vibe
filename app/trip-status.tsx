@@ -38,11 +38,11 @@ if (Platform.OS !== 'web') {
 
 export default function TripStatusScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams<{ tripId?: string; id?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const tripIdParam = (params.tripId as string) || (params.id as string) || 'active_trip_1';
+  const tripIdParam = (params.tripId as string) || (params.id as string) || '';
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);

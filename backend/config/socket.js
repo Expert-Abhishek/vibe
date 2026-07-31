@@ -164,8 +164,8 @@ function calculateHaversineKm(lat1, lon1, lat2, lon2) {
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return parseFloat((R * c).toFixed(1));
 }
@@ -238,34 +238,39 @@ function emitTripRequest(tripObject) {
 /**
  * Emit real-time trip acceptance event to rider, driver, and global rooms
  */
+// File: backend/config/socket.js
+
 function emitTripAccepted(tripObject) {
   if (!io || !tripObject) return;
-  const tripId = tripObject.id || tripObject.tripId;
-  const customerId = tripObject.customerId || tripObject.customer_id;
-  const driverId = tripObject.driverId || tripObject.driver_id;
-  const driverName = tripObject.driverName || tripObject.driver_or_guide_name || 'Captain';
+
+  // Normalize IDs & Extract Customer ID properly
+  const tripId = String(tripObject.id || tripObject.tripId);
+  const customerId = String(tripObject.customer_id || tripObject.customerId);
+  const driverId = String(tripObject.driver_id || tripObject.driverId);
 
   const acceptancePayload = {
-    ...tripObject,
-    id: tripId,
     tripId: tripId,
-    status: 'Accepted',
-    driverName: driverName,
-    driver_or_guide_name: driverName,
+    customerId: customerId,
     driverId: driverId,
-    acceptedAt: new Date().toISOString(),
+    status: 'Accepted',
+    driverName: tripObject.driverName || tripObject.driver_or_guide_name || 'Driver Partner',
+    driverPhone: tripObject.driverPhone || '+91 99000 82400',
+    vehicleModel: tripObject.vehicleModel || '5 Seater Cab',
+    vehicleNumber: tripObject.vehicleNumber || 'HR-51-AB-1234',
+    otp: tripObject.otp || '8240',
+    endOtp: tripObject.endOtp || '4321',
   };
 
-  console.log(`[Socket.io] 🚀 Emitting trip_accepted & RIDE_ACCEPTED for trip ${tripId} by driver ${driverName} (${driverId})`);
+  // 1. Emit to Rider's personal socket room (CRITICAL FIX: Ensure customerId is valid string)
+  if (customerId && customerId !== 'null') {
+    io.to(`user:${customerId}`).emit('trip_accepted', acceptancePayload);
+    console.log(`[SOCKET] 🎯 Sent trip_accepted to user room: user:${customerId}`);
+  }
 
-  if (tripId) io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
-  if (customerId) io.to(`user:${customerId}`).emit('trip_accepted', acceptancePayload);
-  if (driverId) io.to(`user:${driverId}`).emit('trip_accepted', acceptancePayload);
+  // 2. Emit to Trip room
+  io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
 
-  io.to('role:driver').emit('trip_accepted', acceptancePayload);
-  io.to('role:guide').emit('trip_accepted', acceptancePayload);
-  io.to('role:tourist').emit('trip_accepted', acceptancePayload);
-  io.emit('trip_accepted', acceptancePayload);
+  // 3. Global Broadcast Fallback
   io.emit('RIDE_ACCEPTED', acceptancePayload);
 }
 

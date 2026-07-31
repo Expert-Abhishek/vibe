@@ -1,4 +1,4 @@
-import { initSocketService } from '@src/services/socketService';
+import { initSocketService, getSocket } from '@src/services/socketService';
 import { adminState, TripRecord } from '@/constants/admin-state';
 import { fetchDriversApi, fetchGuidesApi, fetchLiveLocationApi } from '@/constants/api';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
@@ -6,7 +6,7 @@ import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -77,7 +77,9 @@ export default function RideMatchingScreen() {
   const paymentMode = (params.paymentMode as 'UPI' | 'Cash') || 'UPI';
   const passengerCount = parseInt((params.passengerCount as string) || '1');
 
-  const tripIdParam = (params.tripId as string) || '';
+  const tripIdParam = (params.tripId as string) || (params.id as string) || '';
+  const pollIntervalRef = useRef<any>(null);
+  const isNavigatedRef = useRef(false);
   const [liveDriverInfo, setLiveDriverInfo] = useState<any>(null);
 
   // Live / Server driver information
@@ -308,55 +310,65 @@ export default function RideMatchingScreen() {
     resolveSpecificDriver();
   }, [tripIdParam, tripType, vehicle]);
 
-  // Poll live server status & driver location
-  useEffect(() => {
-    if (!tripIdParam) return;
+  const handleAcceptedData = (data: any) => {
+    if (isNavigatedRef.current) return;
 
-    async function pollLiveLocation() {
-      const res = await fetchLiveLocationApi(tripIdParam);
-      if (res && res.success && res.data) {
-        if (res.data.driver) {
-          setLiveDriverInfo(res.data.driver);
-        }
-        if (res.data.status === 'Accepted' || res.data.status === 'Arrived') {
-          setStatus('matched');
-        } else if (res.data.status === 'Declined' || res.data.status === 'Rejected') {
-          setIsDriverTimeout(true);
-        } else if (res.data.status === 'Active') {
-          setStatus('started');
-        } else if (res.data.status === 'Completed') {
-          setStatus('completed');
-        }
+    if (data && (String(data.tripId || data.id) === String(tripIdParam) || !tripIdParam || data.status === 'Accepted')) {
+      console.log('[RideMatchingScreen] 🚀 Trip Accepted Received:', data);
+      isNavigatedRef.current = true;
+      setIsDriverTimeout(false);
+
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
       }
+
+      if (data.driverName || data.driver_or_guide_name) {
+        setLiveDriverInfo({
+          id: data.driverId || data.driver_id || 'd1',
+          name: data.driverName || data.driver_or_guide_name,
+          phone: data.driverPhone || '+91 99000 82400',
+          vehicleModel: data.vehicleModel || 'Innova / Thar 4x4',
+          vehicleNumber: data.vehicleNumber || 'KA-03-EX-8240',
+          rating: 4.9,
+        });
+      }
+
+      setStatus('matched');
+      const activeTripId = String(data.tripId || data.id || tripIdParam || 'active_trip_1');
+
+      // 🔥 Use replace instead of push to prevent back navigation stack duplicate
+      router.replace({
+        pathname: '/trip-status',
+        params: { tripId: activeTripId },
+      });
     }
+  };
 
-    pollLiveLocation();
-    const interval = setInterval(pollLiveLocation, 3000);
-    return () => clearInterval(interval);
-  }, [tripIdParam]);
-
-  // Listen for real-time driver acceptance & decline events via WebSockets & DeviceEventEmitter
   useEffect(() => {
     initSocketService();
+    const socket = getSocket();
 
-    const handleAcceptedData = (data: any) => {
-      console.log('[RideMatchingScreen] 🚀 Received real-time acceptance event:', data);
-      if (data) {
-        if (data.driverName || data.driver_or_guide_name) {
-          setLiveDriverInfo({
-            id: data.driverId || data.driver_id || 'd1',
-            name: data.driverName || data.driver_or_guide_name,
-            phone: data.driverPhone || '+91 99000 82400',
-            vehicleModel: data.vehicleModel || 'Innova / Thar 4x4',
-            vehicleNumber: data.vehicleNumber || 'KA-03-EX-8240',
-            rating: 4.9,
-          });
+    // 1. Direct Socket Event Listeners
+    if (socket) {
+      socket.on('trip_accepted', handleAcceptedData);
+      socket.on('RIDE_ACCEPTED', handleAcceptedData);
+    }
+
+    // 2. Backup HTTP Polling (Runs every 3 seconds)
+    pollIntervalRef.current = setInterval(async () => {
+      if (isNavigatedRef.current) return;
+
+      try {
+        const res = await fetchLiveLocationApi(tripIdParam);
+        if (res?.data && (res.data.status === 'Accepted' || res.data.status === 'Arrived')) {
+          handleAcceptedData(res.data);
+        } else if (res?.data?.status === 'Declined' || res?.data?.status === 'Rejected') {
+          setIsDriverTimeout(true);
         }
-        setStatus('matched');
-        const activeTripId = String(data.id || data.tripId || tripIdParam || 'active_trip_1');
-        router.push({ pathname: '/trip-status', params: { tripId: activeTripId } });
+      } catch (err) {
+        console.error('Polling error:', err);
       }
-    };
+    }, 3000);
 
     const handleDeclinedData = (data: any) => {
       console.log('[RideMatchingScreen] 🛑 Received real-time decline event:', data);
@@ -380,13 +392,20 @@ export default function RideMatchingScreen() {
     const subLocation = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
 
     return () => {
+      if (socket) {
+        socket.off('trip_accepted', handleAcceptedData);
+        socket.off('RIDE_ACCEPTED', handleAcceptedData);
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
       subAccepted.remove();
       subRideAccepted.remove();
       subDeclined.remove();
       subRideDeclined.remove();
       subLocation.remove();
     };
-  }, []);
+  }, [tripIdParam]);
 
   // Drive marker simulation along the points list when started
   useEffect(() => {

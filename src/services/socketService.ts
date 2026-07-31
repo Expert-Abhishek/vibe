@@ -192,6 +192,10 @@ export function emitDriverLocationSocket(locationData: { driverId: string; tripI
 /**
  * Disconnect socket connection
  */
+export function getSocket(): Socket | null {
+  return socket;
+}
+
 export function disconnectSocketService() {
   if (socket) {
     socket.disconnect();
