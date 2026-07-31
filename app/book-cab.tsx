@@ -487,6 +487,8 @@ export default function BookCabScreen() {
     const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
     const generatedEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
+    const targetDriverId = (searchParams.driverId as string) || (searchParams.selectedDriverId as string) || '';
+
     try {
       const bookRes = await bookTripApi({
         tripType: 'cab',
@@ -502,6 +504,7 @@ export default function BookCabScreen() {
         amount: final,
         paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
         bookingType: 'INSTANT',
+        selectedDriverId: targetDriverId ? String(targetDriverId) : undefined,
       });
       if (bookRes?.data?.id || bookRes?.id) {
         serverTripId = String(bookRes?.data?.id || bookRes?.id);
@@ -513,6 +516,9 @@ export default function BookCabScreen() {
     const instantTripObject = {
       id: serverTripId,
       tripId: serverTripId,
+      selectedDriverId: targetDriverId ? String(targetDriverId) : undefined,
+      driverId: targetDriverId ? String(targetDriverId) : undefined,
+      driver_id: targetDriverId ? String(targetDriverId) : undefined,
       tripType: 'cab',
       vehicleType: selectedRide,
       title: `${pickup.name} ➔ ${drop.name}`,

@@ -758,30 +758,52 @@ export default function DriverDashboardScreen() {
   // Ensure Driver Socket.io Connection & Trip Request Event Listeners
   useEffect(() => {
     const session = getUserSessionSync();
-    const driverId = session?.id || 'd1';
+    const driverId = session?.id || (session as any)?.driverId || 'd1';
 
-    console.log('[DriverDashboard] 🔌 Initializing Driver Socket Service for user:', driverId);
-    const socket = initSocketService(driverId, 'driver');
+    if (!driverId) {
+      console.error('[DriverDashboard] ❌ Driver ID missing in session!');
+      return;
+    }
+
+    console.log('[DriverDashboard] 🔌 Initializing Socket for Driver ID:', driverId);
+    const socket = initSocketService(String(driverId), 'driver');
 
     if (socket) {
+      const joinData = {
+        userId: String(driverId), // String normalization is critical
+        role: session?.role || 'driver',
+        vehicleType: (session as any)?.vehicleType || '5seater',
+      };
+
+      // Emit join_room immediately if already connected
+      if (socket.connected) {
+        socket.emit('join_room', joinData);
+        console.log('[DriverDashboard] 🟢 Emitted join_room on mount:', joinData);
+      }
+
+      // Emit join_room on every new connection/reconnection
       socket.on('connect', () => {
-        console.log('[DriverDashboard] ✅ Driver Socket Connected! Socket ID:', socket.id);
+        console.log('[DriverDashboard] ✅ Socket Connected! Emitting join_room...');
+        socket.emit('join_room', joinData);
       });
 
+      // Listen for targeted and broadcast trip requests
       socket.on('trip_request', (tripData: any) => {
         console.log('[DriverDashboard] 🔔 Socket trip_request received:', tripData);
-        if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
+        const incomingTripId = String(tripData.id || tripData.tripId);
+
+        if (tripData && !handledTripIdsRef.current.has(incomingTripId)) {
           setIncomingRequest({
-            id: tripData.id || tripData.tripId,
-            tripId: tripData.id || tripData.tripId,
-            touristName: tripData.touristName || tripData.customerName || 'Tourist Client',
+            id: incomingTripId,
+            tripId: incomingTripId,
+            touristName: tripData.customerName || tripData.customer_name || tripData.touristName || 'Tourist Client',
             pickup: tripData.pickupName || tripData.pickup || 'Pickup Point',
             drop: tripData.dropName || tripData.drop || tripData.title || 'Drop Location',
-            estimatedFare: parseFloat(tripData.price || tripData.amount || tripData.estimatedFare || 1500),
-            checkpoints: tripData.checkpoints || tripData.stops || tripData.route || [],
+            estimatedFare: parseFloat(tripData.amount || tripData.price || tripData.estimatedFare || 0),
+            checkpoints: tripData.checkpoints || tripData.stops || [],
             scheduledTime: tripData.scheduledTime,
             bookingType: tripData.bookingType || 'INSTANT',
-            otp: tripData.otp || '8240',
+            otp: tripData.otp || '1234',
             endOtp: tripData.endOtp || '4321',
           });
           setTimerSeconds(45);
@@ -790,22 +812,10 @@ export default function DriverDashboardScreen() {
       });
     }
 
+    // Fallback sync listener
     const unsubRequests = listenForTripRequests((tripData) => {
-      console.log('[DriverDashboard] 🔔 Real-time trip request sync received:', tripData);
       if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
-        setIncomingRequest({
-          id: tripData.id || tripData.tripId,
-          tripId: tripData.id || tripData.tripId,
-          touristName: tripData.touristName || tripData.customerName || 'Tourist Client',
-          pickup: tripData.pickupName || tripData.pickup || 'Pickup Point',
-          drop: tripData.dropName || tripData.drop || tripData.title || 'Drop Location',
-          estimatedFare: parseFloat(tripData.price || tripData.amount || tripData.estimatedFare || 1500),
-          checkpoints: tripData.checkpoints || tripData.stops || tripData.route || [],
-          scheduledTime: tripData.scheduledTime,
-          bookingType: tripData.bookingType || 'INSTANT',
-          otp: tripData.otp || '8240',
-          endOtp: tripData.endOtp || '4321',
-        });
+        setIncomingRequest({ ...tripData });
         setTimerSeconds(45);
         setRequestVisible(true);
       }
@@ -813,6 +823,10 @@ export default function DriverDashboardScreen() {
 
     return () => {
       unsubRequests();
+      if (socket) {
+        socket.off('connect');
+        socket.off('trip_request');
+      }
     };
   }, []);
 

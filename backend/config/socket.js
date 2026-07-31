@@ -21,30 +21,32 @@ function initSocket(server) {
   io.on('connection', (socket) => {
     console.log(`[Socket.io] Client connected: ${socket.id}`);
 
-    // Client registers its user & role rooms
+    // Driver/Guide room join listener
     socket.on('join_room', (data) => {
       const { userId, role, vehicleType } = data || {};
+
       if (userId) {
-        const userRoom = `user:${userId}`;
-        socket.join(userRoom);
-        console.log(`[Socket.io] Socket ${socket.id} joined room ${userRoom}`);
+        const userRoom = `user:${String(userId)}`;
+        socket.join(userRoom); // Driver's personal socket room
+        console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined personal room [${userRoom}]`);
       }
+
       if (role) {
         const roleRoom = `role:${role}`;
         socket.join(roleRoom);
-        console.log(`[Socket.io] Socket ${socket.id} joined room ${roleRoom}`);
+        console.log(`[Socket.io] Socket ${socket.id} joined role room [${roleRoom}]`);
       }
+
       if (vehicleType) {
         const vehicleRoom = `role:${vehicleType}`;
         socket.join(vehicleRoom);
-        console.log(`[Socket.io] Socket ${socket.id} joined vehicle room ${vehicleRoom}`);
+        console.log(`[Socket.io] Socket ${socket.id} joined vehicle room [${vehicleRoom}]`);
       }
     });
 
-    // Real-time client trip request relay over WebSockets
+    // Client relay broadcast fallback
     socket.on('broadcast_trip_request', (tripObject) => {
       if (!tripObject) return;
-      console.log(`[Socket.io] Client socket ${socket.id} relayed broadcast_trip_request:`, tripObject.id);
       emitTripRequest(tripObject);
     });
 
@@ -86,7 +88,7 @@ function emitNotification(payload) {
 
   // Broadcast to specific user room if userId exists
   if (userId) {
-    io.to(`user:${userId}`).emit('notification:new', notificationItem);
+    io.to(`user:${String(userId)}`).emit('notification:new', notificationItem);
   }
   // Broadcast to specific role room
   if (role) {
@@ -116,8 +118,8 @@ function emitWalletUpdate(payload) {
   };
 
   if (userId) {
-    io.to(`user:${userId}`).emit('wallet:updated', walletPayload);
-    console.log(`[Socket.io] Emitted wallet:updated to user:${userId}`);
+    io.to(`user:${String(userId)}`).emit('wallet:updated', walletPayload);
+    console.log(`[Socket.io] Emitted wallet:updated to user:${String(userId)}`);
   }
   if (role) {
     io.to(`role:${role}`).emit('wallet:updated', walletPayload);
@@ -125,35 +127,38 @@ function emitWalletUpdate(payload) {
 }
 
 /**
- * Emit real-time trip request event to targeted driver user room OR broadcast role rooms
+ * Emit trip request: Direct Targeted vs Role Broadcast
  */
 function emitTripRequest(tripObject) {
   if (!io || !tripObject) return;
-  const driverId = tripObject.selectedDriverId || tripObject.driverId || tripObject.driver_id || tripObject.assignedDriverId || tripObject.guideId || tripObject.assignedToId;
-  const vehicleType = tripObject.vehicleType || tripObject.vehicle || 'driver';
+
+  // Extract & normalize Driver ID to String
+  const rawDriverId = tripObject.selectedDriverId || tripObject.driverId || tripObject.driver_id || tripObject.assignedDriverId || tripObject.guideId || tripObject.assignedToId;
+  const driverId = rawDriverId ? String(rawDriverId) : null;
+  const vehicleType = tripObject.vehicleType || tripObject.vehicle;
 
   const normalizedTrip = {
     ...tripObject,
-    driverId: driverId || null,
-    driver_id: driverId || null,
+    id: tripObject.id || tripObject.tripId,
+    driverId: driverId,
+    driver_id: driverId,
     status: 'Pending',
     createdAt: tripObject.createdAt || new Date().toISOString(),
   };
 
   if (driverId) {
-    // Targeted Direct Request: Send ONLY to specific driver's user room
-    io.to(`user:${driverId}`).emit('trip_request', normalizedTrip);
-    console.log(`[DIRECT REQUEST] Request sent directly to driver socket room: user:${driverId}`);
+    // TARGETED DIRECT REQUEST: Emit STRICTLY to specific driver/guide room
+    const targetRoom = `user:${driverId}`;
+    io.to(targetRoom).emit('trip_request', normalizedTrip);
+    console.log(`🎯 [DIRECT TARGETED REQUEST] Sent strictly to room: [${targetRoom}] for Trip ID: ${normalizedTrip.id}`);
   } else {
-    // General Broadcast Request: Send to role and vehicle rooms
+    // GENERAL BROADCAST
     if (vehicleType) {
       io.to(`role:${vehicleType}`).emit('trip_request', normalizedTrip);
-      console.log(`[SOCKET] Trip request emitted to room: role:${vehicleType} for Trip ID: ${normalizedTrip.id}`);
     }
     io.to('role:driver').emit('trip_request', normalizedTrip);
     io.to('role:guide').emit('trip_request', normalizedTrip);
-    io.emit('trip_request', normalizedTrip);
-    console.log(`[SOCKET] Trip request emitted to room: role:driver for Trip ID: ${normalizedTrip.id}`);
+    console.log(`📢 [BROADCAST REQUEST] Emitted to all drivers/guides for Trip ID: ${normalizedTrip.id}`);
   }
 }
 

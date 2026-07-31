@@ -683,6 +683,8 @@ export async function bookTripApi(payload: {
   scheduledTime?: string;
   advanceDepositPaid?: number;
   remainingCashBalance?: number;
+  selectedDriverId?: string;
+  driverId?: string;
 }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips/book`, {
