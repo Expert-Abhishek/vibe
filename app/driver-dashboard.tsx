@@ -1,3 +1,4 @@
+import { initSocketService, emitDriverLocationSocket } from '@src/services/socketService';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import {
@@ -29,7 +30,7 @@ import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { useAppModal } from '@src/context/ModalContext';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { rideStateService } from '@src/services/rideStateService';
-import { initSocketService, emitAcceptRideSocket } from '@src/services/socketService';
+import { emitAcceptRideSocket } from '@src/services/socketService';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -781,11 +782,39 @@ export default function DriverDashboardScreen() {
         console.log('[DriverDashboard] 🟢 Emitted join_room on mount:', joinData);
       }
 
-      // Emit join_room on every new connection/reconnection
-      socket.on('connect', () => {
-        console.log('[DriverDashboard] ✅ Socket Connected! Emitting join_room...');
+      // Emit join_room and trigger HTTP fallback polling on connection/reconnection
+      const onSocketConnect = async () => {
+        console.log('[DriverDashboard] ✅ Socket Connected/Reconnected! Emitting join_room & fetching pending DB trips...');
         socket.emit('join_room', joinData);
-      });
+        try {
+          const pendingList = await fetchPendingRequestsApi(driverId);
+          const unhandledList = (pendingList || []).filter(
+            (req: any) => req && req.id && !handledTripIdsRef.current.has(String(req.id))
+          );
+          if (unhandledList.length > 0 && !activeTrip && !incomingRequest) {
+            const req = unhandledList[0];
+            setIncomingRequest({
+              id: req.id,
+              tripId: req.id,
+              touristName: req.touristName || 'Tourist Client',
+              pickup: req.pickup || 'Pickup Location',
+              drop: req.drop || 'Drop Location',
+              estimatedFare: parseFloat(req.estimatedFare || req.amount || 0),
+              checkpoints: req.checkpoints || req.stops || [],
+              scheduledTime: req.scheduledTime,
+              bookingType: req.bookingType || 'INSTANT',
+              otp: req.otp || '8240',
+              endOtp: req.endOtp || '4321',
+            });
+            setRequestVisible(true);
+          }
+        } catch (e) {
+          console.warn('[DriverDashboard] Reconnect polling fallback error:', e);
+        }
+      };
+
+      socket.on('connect', onSocketConnect);
+      socket.on('reconnect', onSocketConnect);
 
       // Listen for targeted and broadcast trip requests
       const handleIncomingTripData = (tripData: any) => {
@@ -862,6 +891,26 @@ export default function DriverDashboardScreen() {
       }
     };
   }, []);
+
+  // Real-Time GPS Location Streaming over Socket.io
+  useEffect(() => {
+    if (!isOnline) return;
+    const session = getUserSessionSync();
+    const dId = session?.id || 'd1';
+
+    const locationTimer = setInterval(() => {
+      const activeTripId = (activeTrip as any)?.tripId || (activeTrip as any)?.id || null;
+      emitDriverLocationSocket({
+        driverId: String(dId),
+        tripId: activeTripId ? String(activeTripId) : undefined,
+        latitude: activeTrip ? (activeTrip.pickupLat || 12.9716) : 12.9716,
+        longitude: activeTrip ? (activeTrip.pickupLng || 77.5946) : 77.5946,
+        heading: 45,
+      });
+    }, 3000);
+
+    return () => clearInterval(locationTimer);
+  }, [isOnline, activeTrip]);
 
   // Fetch real-time driver schedules & pending queries from PostgreSQL database
   useEffect(() => {
@@ -1231,6 +1280,45 @@ export default function DriverDashboardScreen() {
         {/* Bell Notification Icon */}
         <NotificationModal role="driver" />
       </View>
+
+      {/* Low Wallet Balance Warning Banner */}
+      {earningsBalance < 50 && (
+        <View style={{
+          backgroundColor: 'rgba(245, 197, 24, 0.12)',
+          borderWidth: 1,
+          borderColor: colors.amber,
+          marginHorizontal: scale(16),
+          marginTop: verticalScale(10),
+          marginBottom: verticalScale(2),
+          padding: scale(10),
+          borderRadius: scale(10),
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <MaterialIcons name="warning" size={scale(20)} color={colors.amber} style={{ marginRight: scale(8) }} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
+              Low Wallet Balance (₹{earningsBalance})
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: 2 }}>
+              Recharge soon to avoid ride rejection (Min ₹10 platform fee required).
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.amber,
+              paddingHorizontal: scale(10),
+              paddingVertical: verticalScale(6),
+              borderRadius: scale(6),
+              marginLeft: scale(8),
+            }}
+            onPress={() => router.push('/driver-wallet')}
+          >
+            <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(11) }}>Top Up</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tab Switchboard Body */}
       {activeTab === 'duty' && (

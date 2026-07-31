@@ -361,16 +361,28 @@ export default function RideMatchingScreen() {
       setIsDriverTimeout(true);
     };
 
+    const handleLocationStream = (data: any) => {
+      if (data && (data.latitude || data.lat)) {
+        setLiveDriverInfo((prev: any) => ({
+          ...prev,
+          latitude: parseFloat(data.latitude || data.lat),
+          longitude: parseFloat(data.longitude || data.lng),
+        }));
+      }
+    };
+
     const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleAcceptedData);
     const subRideAccepted = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleAcceptedData);
     const subDeclined = DeviceEventEmitter.addListener('trip_declined', handleDeclinedData);
     const subRideDeclined = DeviceEventEmitter.addListener('RIDE_DECLINED', handleDeclinedData);
+    const subLocation = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
 
     return () => {
       subAccepted.remove();
       subRideAccepted.remove();
       subDeclined.remove();
       subRideDeclined.remove();
+      subLocation.remove();
     };
   }, []);
 

@@ -130,6 +130,16 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       }
     });
 
+    // 5. Real-time GPS location stream listener
+    socket.off('driver_location_stream');
+    socket.on('driver_location_stream', (data: any) => {
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('driver_location_stream', data);
+        } catch (e) {}
+      }
+    });
+
     return socket;
   } catch (err) {
     console.warn('[SocketService] Failed to initialize socket connection:', err);
@@ -167,6 +177,15 @@ export function emitAcceptRideSocket(tripData: any) {
   if (socket && socket.connected) {
     socket.emit('accept_ride', tripData);
     console.log('[SocketService] Emitted accept_ride over WebSockets:', tripData?.id || tripData?.tripId);
+  }
+}
+
+/**
+ * Emit real-time driver GPS location update to backend WebSocket server
+ */
+export function emitDriverLocationSocket(locationData: { driverId: string; tripId?: string; latitude: number; longitude: number; heading?: number }) {
+  if (socket && socket.connected) {
+    socket.emit('driver_location_update', locationData);
   }
 }
 

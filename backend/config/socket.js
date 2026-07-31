@@ -23,12 +23,18 @@ function initSocket(server) {
 
     // Driver/Guide room join listener
     socket.on('join_room', (data) => {
-      const { userId, role, vehicleType } = data || {};
+      const { userId, role, vehicleType, tripId } = data || {};
 
       if (userId) {
         const userRoom = `user:${String(userId)}`;
         socket.join(userRoom); // Driver's personal socket room
         console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined personal room [${userRoom}]`);
+      }
+
+      if (tripId) {
+        const tripRoom = `trip:${String(tripId)}`;
+        socket.join(tripRoom); // Join specific trip tracking room
+        console.log(`[Socket.io] Socket ${socket.id} joined trip room [${tripRoom}]`);
       }
 
       if (role) {
@@ -48,6 +54,32 @@ function initSocket(server) {
     socket.on('broadcast_trip_request', (tripObject) => {
       if (!tripObject) return;
       emitTripRequest(tripObject);
+    });
+
+    // Real-time GPS Location Streaming listener from Driver App
+    socket.on('driver_location_update', (locationData) => {
+      if (!locationData) return;
+      const { driverId, tripId, latitude, longitude, heading } = locationData;
+
+      if (!latitude || !longitude) return;
+
+      const payload = {
+        driverId: String(driverId),
+        tripId: tripId ? String(tripId) : null,
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        heading: heading ? parseFloat(heading) : 0,
+        timestamp: new Date().toISOString(),
+      };
+
+      if (tripId) {
+        io.to(`trip:${String(tripId)}`).emit('driver_location_stream', payload);
+      }
+      if (driverId) {
+        io.to(`driver:${String(driverId)}`).emit('driver_location_stream', payload);
+      }
+      io.to('role:tourist').emit('driver_location_stream', payload);
+      io.emit('driver_location_stream', payload);
     });
 
     socket.on('disconnect', () => {
