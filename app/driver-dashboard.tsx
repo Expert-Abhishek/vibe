@@ -556,14 +556,14 @@ export default function DriverDashboardScreen() {
   };
 
   const colors = {
-    background: isDark ? '#101014' : '#F5F5F7',
-    surface: isDark ? 'rgba(26, 26, 32, 0.9)' : 'rgba(255, 255, 255, 0.92)',
+    background: isDark ? '#101014' : '#FAF8F5',
+    surface: isDark ? 'rgba(26, 26, 32, 0.9)' : 'rgba(255, 255, 255, 0.94)',
     surfaceCard: isDark ? '#1E1E24' : '#FFFFFF',
-    surfaceAlt: isDark ? '#212129' : '#EFEFF4',
-    textPrimary: isDark ? '#ffffff' : '#1C1C1E',
-    textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
-    border: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-    amber: '#F5C518',
+    surfaceAlt: isDark ? '#212129' : '#F4F0E8',
+    textPrimary: isDark ? '#ffffff' : '#1E293B',
+    textMuted: isDark ? 'rgba(255,255,255,0.45)' : '#64748B',
+    border: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E8E3DA',
+    amber: isDark ? '#F5C518' : '#D97706',
     danger: '#ef4444',
   };
 
@@ -614,7 +614,7 @@ export default function DriverDashboardScreen() {
     // Post real-time location coordinates
     const locationInterval = setInterval(async () => {
       await updateDriverLocationApi(driverId, 12.9716, 77.5946, true);
-    }, 10000);
+    }, 30000);
 
     let isMounted = true;
 
@@ -680,7 +680,7 @@ export default function DriverDashboardScreen() {
     };
 
     pollRequests();
-    const requestInterval = setInterval(pollRequests, 1500);
+    const requestInterval = setInterval(pollRequests, 15000);
 
     const cleanupSync = listenForTripRequests(() => {
       pollRequests();

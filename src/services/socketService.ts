@@ -22,11 +22,12 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     currentRole = role;
 
     socket = io(API_BASE_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 5000,
+      timeout: 10000,
     });
 
     socket.on('connect', () => {
@@ -41,7 +42,13 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     });
 
     socket.on('connect_error', (error: Error) => {
-      console.warn('[SocketService] Connection error:', error?.message || error);
+      // Quietly notice connection error without spamming Reactotron
+      if (socket && !socket.connected) {
+        if (String(error?.message || '').includes('404') || String(error || '').includes('404')) {
+          console.log('[SocketService] Endpoint unreachable (404). Socket polling paused.');
+          socket.disconnect();
+        }
+      }
     });
 
     // 1. Real-time notification push events from backend

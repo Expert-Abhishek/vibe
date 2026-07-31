@@ -91,13 +91,13 @@ export default function BookCabScreen() {
   const [loadingRoute, setLoadingRoute] = useState(false);
 
   const colors = {
-    background: isDark ? '#101014' : '#F5F5F7',
+    background: isDark ? '#101014' : '#FAF8F5',
     surface: isDark ? '#1E1E24' : '#FFFFFF',
     surfaceCard: isDark ? '#16161B' : '#FFFFFF',
-    textPrimary: isDark ? '#ffffff' : '#1C1C1E',
-    textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
-    border: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)',
-    amber: '#F5C518',
+    textPrimary: isDark ? '#ffffff' : '#1E293B',
+    textMuted: isDark ? 'rgba(255,255,255,0.45)' : '#64748B',
+    border: isDark ? 'rgba(255, 255, 255, 0.05)' : '#E8E3DA',
+    amber: isDark ? '#F5C518' : '#D97706',
   };
 
   const rides = [

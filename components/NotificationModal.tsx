@@ -25,12 +25,12 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = {
-    background: isDark ? '#101014' : '#F4F5F8',
+    background: isDark ? '#101014' : '#FAF8F5',
     surface: isDark ? '#1C1C22' : '#FFFFFF',
-    textPrimary: isDark ? '#FFFFFF' : '#111827',
-    textMuted: isDark ? '#9CA3AF' : '#6B7280',
-    amber: '#F5C518',
-    border: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+    textPrimary: isDark ? '#FFFFFF' : '#1E293B',
+    textMuted: isDark ? '#9CA3AF' : '#64748B',
+    amber: isDark ? '#F5C518' : '#D97706',
+    border: isDark ? 'rgba(255,255,255,0.08)' : '#E8E3DA',
   };
 
   const [visible, setVisible] = useState(false);

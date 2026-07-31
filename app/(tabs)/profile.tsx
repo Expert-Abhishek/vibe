@@ -223,13 +223,13 @@ export default function ProfileScreen() {
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   const colors = {
-    background: isDark ? '#101014' : '#F5F5F7',
+    background: isDark ? '#101014' : '#FAF8F5',
     surface: isDark ? '#1A1A20' : '#FFFFFF',
-    surfaceAlt: isDark ? '#212129' : '#EFEFF4',
-    line: isDark ? '#2C2C34' : '#E5E5EA',
-    textPrimary: isDark ? '#F5F4F0' : '#1C1C1E',
-    textMuted: isDark ? '#8D8D97' : '#8E8E93',
-    amber: '#F5C518',
+    surfaceAlt: isDark ? '#212129' : '#F4F0E8',
+    line: isDark ? '#2C2C34' : '#E8E3DA',
+    textPrimary: isDark ? '#F5F4F0' : '#1E293B',
+    textMuted: isDark ? '#8D8D97' : '#64748B',
+    amber: isDark ? '#F5C518' : '#D97706',
     danger: '#F0555F',
   };
 

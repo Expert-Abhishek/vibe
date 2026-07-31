@@ -595,17 +595,17 @@ export default function GuideDashboardScreen() {
   const [payoutLoading, setPayoutLoading] = useState(false);
 
   const colors = {
-    background: isDark ? '#101014' : '#F5F5F7',
-    surface: isDark ? 'rgba(26, 26, 32, 0.9)' : 'rgba(255, 255, 255, 0.92)',
+    background: isDark ? '#101014' : '#FAF8F5',
+    surface: isDark ? 'rgba(26, 26, 32, 0.9)' : 'rgba(255, 255, 255, 0.94)',
     surfaceCard: isDark ? '#1E1E24' : '#FFFFFF',
-    textPrimary: isDark ? '#ffffff' : '#1C1C1E',
-    textMuted: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)',
-    border: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-    amber: '#F5C518',
+    textPrimary: isDark ? '#ffffff' : '#1E293B',
+    textMuted: isDark ? 'rgba(255,255,255,0.45)' : '#64748B',
+    border: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E8E3DA',
+    amber: isDark ? '#F5C518' : '#D97706',
     danger: '#ef4444',
 
-    surfaceAlt: isDark ? '#212129' : '#EFEFF4',
-    line: isDark ? '#2C2C34' : '#E5E5EA',
+    surfaceAlt: isDark ? '#212129' : '#F4F0E8',
+    line: isDark ? '#2C2C34' : '#E8E3DA',
 
   };
 
