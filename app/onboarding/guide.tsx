@@ -65,7 +65,7 @@ export default function GuideRegister() {
 
   const pickDocument = (docKey: DocKey) => {
     if (docKey === 'photo') {
-      // Profile Photo: Camera ONLY
+      // Profile Picture MUST be camera-captured live photo ONLY. Gallery upload is strictly prohibited.
       captureFromCamera('photo');
       return;
     }
@@ -103,32 +103,40 @@ export default function GuideRegister() {
   };
 
   const captureFromCamera = async (docKey: DocKey) => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Camera access needed', 'Turn on camera permission from Settings to take a photo.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.3, base64: true });
-    if (!result.canceled && result.assets?.[0]) {
-      const img = await convertUriToBase64(result.assets[0]);
-      setDocs(prev => ({ ...prev, [docKey]: img }));
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Camera access needed', 'Turn on camera permission from Settings to take a live photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.3, base64: true });
+      if (!result.canceled && result.assets?.[0]) {
+        const img = await convertUriToBase64(result.assets[0]);
+        setDocs(prev => ({ ...prev, [docKey]: img }));
+      }
+    } catch (err: any) {
+      Alert.alert('Camera Error', err?.message || 'Could not open camera to capture live photo.');
     }
   };
 
   const captureFromLibrary = async (docKey: DocKey) => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Photo access needed', 'Turn on photo library permission from Settings to attach a file.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.3,
-      base64: true,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    });
-    if (!result.canceled && result.assets?.[0]) {
-      const img = await convertUriToBase64(result.assets[0]);
-      setDocs(prev => ({ ...prev, [docKey]: img }));
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Photo access needed', 'Turn on photo library permission from Settings to attach a file.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.3,
+        base64: true,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        const img = await convertUriToBase64(result.assets[0]);
+        setDocs(prev => ({ ...prev, [docKey]: img }));
+      }
+    } catch (err: any) {
+      Alert.alert('File Picker Error', err?.message || 'Could not select photo.');
     }
   };
 
@@ -144,7 +152,7 @@ export default function GuideRegister() {
     const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
 
     if (currentStep === 1) {
-      if (!formData.name) stepErrors.name = 'Enter your full name';
+      if (!formData.name.trim()) stepErrors.name = 'Enter your full name';
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
       if (!cleanAltPhone) {
         stepErrors.altPhone = 'Alternate phone number is required';
@@ -154,7 +162,8 @@ export default function GuideRegister() {
 
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
     } else if (currentStep === 2) {
-      if (!formData.expertise) stepErrors.expertise = 'Enter your expertise';
+      if (!formData.expertise.trim()) stepErrors.expertise = 'Enter your expertise / specialization';
+      if (!formData.experience.trim()) stepErrors.experience = 'Enter your years of experience';
       if (!docs.photo || !docs.aadhar) stepErrors.docs = 'Upload profile photo and Aadhar card to continue';
     }
 
@@ -171,18 +180,22 @@ export default function GuideRegister() {
             alternate_phone: cleanAltPhone,
             password: formData.password,
             role: 'guide',
-            expertise: formData.expertise,
+            expertise: formData.expertise.trim(),
             license_id: formData.licenseId || 'KA-GUIDE-CERT',
-            bio: formData.bio || 'Tour guide profile',
+            bio: formData.bio || `${formData.experience} years experienced tour guide`,
             photo_url: docs.photo || undefined,
             id_proof_url: docs.aadhar || undefined,
           });
 
           setLoading(false);
-          setKycSubmitted(true);
-        } catch (err) {
+          if (res.success) {
+            setKycSubmitted(true);
+          } else {
+            Alert.alert('Registration Failed', res.message || 'Something went wrong during registration.');
+          }
+        } catch (err: any) {
           setLoading(false);
-          setKycSubmitted(true);
+          Alert.alert('Registration Error', err?.message || 'Failed to connect to backend server.');
         }
       }
     }
@@ -322,12 +335,21 @@ export default function GuideRegister() {
           {currentStep === 2 && (
             <View style={styles.formSection}>
               <Field
+                label="Expertise / Specialization" required
+                placeholder="e.g. History & Heritage Walks, Trekking"
+                value={formData.expertise}
+                onChangeText={(t: string) => setFormData({ ...formData, expertise: t })}
+                onFocus={() => scrollToInput(50)}
+                error={errors.expertise}
+              />
+
+              <Field
                 label="Years of experience" required
                 placeholder="e.g. 3"
                 keyboardType="numeric"
                 value={formData.experience}
                 onChangeText={(t: string) => setFormData({ ...formData, experience: t })}
-                onFocus={() => scrollToInput(80)}
+                onFocus={() => scrollToInput(120)}
                 error={errors.experience}
               />
 

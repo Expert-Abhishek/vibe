@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -8,7 +8,7 @@ import { LogoHeader } from '@/components/auth/logo-header';
 import { LoginForm } from '@/components/auth/login-form';
 import { SocialLogin } from '@/components/auth/social-login';
 import { FooterLink } from '@/components/auth/footer-link';
-import { scale, verticalScale } from '@/constants/responsive';
+import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { loginUserApi } from '@/constants/api';
 import { saveUserSession } from '@/constants/authStore';
 
@@ -16,9 +16,11 @@ import { setAppTheme } from '@/hooks/use-color-scheme';
 
 export default function SignInScreen() {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async (phone: string, pass: string) => {
-    console.log('Logging in with:', phone, pass);
+    if (loading) return;
+    setLoading(true);
     const cleanPhone = phone.trim();
 
     try {
@@ -44,6 +46,7 @@ export default function SignInScreen() {
         // Strict status verification check
         if (apiRes.user.role === 'driver' || apiRes.user.role === 'guide') {
           if (apiRes.user.status !== 'Active') {
+            setLoading(false);
             const title = apiRes.user.status === 'Pending KYC' ? 'KYC Pending Verification' : 'Account Restricted';
             const msg = apiRes.message || `Your account is currently ${apiRes.user.status}. Please wait for admin verification.`;
             Alert.alert(title, msg);
@@ -51,6 +54,7 @@ export default function SignInScreen() {
           }
         }
 
+        setLoading(false);
         if (apiRes.user.role === 'driver') {
           router.replace('/driver-dashboard');
           return;
@@ -62,14 +66,19 @@ export default function SignInScreen() {
           return;
         }
       } else if (apiRes.message) {
-        Alert.alert('Access Restricted', apiRes.message);
+        setLoading(false);
+        Alert.alert('Login Failed', apiRes.message);
         return;
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Backend login attempt failed:', e);
+      setLoading(false);
+      Alert.alert('Login Error', e?.message || 'Failed to authenticate. Please check network connectivity.');
+      return;
     }
 
     // Fallback role routing if backend is offline
+    setLoading(false);
     const lowerPhone = cleanPhone.toLowerCase();
     if (lowerPhone.includes('guide')) {
       router.replace('/guide-dashboard');
@@ -96,12 +105,22 @@ export default function SignInScreen() {
             automaticallyAdjustKeyboardInsets={true}
           >
             <LogoHeader />
-            <LoginForm onLogin={handleLogin} />
+            <LoginForm onLogin={handleLogin} isLoading={loading} />
             <SocialLogin />
             <FooterLink />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Clean Fullscreen Loader Overlay */}
+      {loading && (
+        <View style={styles.overlayContainer}>
+          <View style={styles.loaderCard}>
+            <ActivityIndicator size="large" color="#F5C518" />
+            <Text style={styles.loaderText}>Authenticating credentials...</Text>
+          </View>
+        </View>
+      )}
     </ThemedView>
   );
 }
@@ -123,5 +142,32 @@ const styles = StyleSheet.create({
     paddingBottom: verticalScale(20),
     flexGrow: 1,
     justifyContent: 'center',
+  },
+  overlayContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  loaderCard: {
+    backgroundColor: '#1A1A20',
+    paddingHorizontal: scale(24),
+    paddingVertical: verticalScale(20),
+    borderRadius: scale(16),
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  loaderText: {
+    color: '#ffffff',
+    marginTop: verticalScale(12),
+    fontSize: moderateFontScale(14),
+    fontWeight: '600',
   },
 });

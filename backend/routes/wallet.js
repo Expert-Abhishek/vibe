@@ -918,6 +918,118 @@ router.get('/admin/withdrawals', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/users/:userId/wallet-history
+ * GET /api/wallet/admin/users/:userId/wallet-history
+ * Fetch full paginated & filterable wallet history for a specific user
+ */
+router.get('/admin/users/:userId/wallet-history', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.max(1, parseInt(req.query.limit || '20', 10));
+    const typeFilter = (req.query.type || 'all').toLowerCase();
+    const searchQuery = (req.query.search || '').trim();
+
+    const offset = (page - 1) * limit;
+
+    // Verify user exists and get current wallet balance
+    const userRes = await db.query(
+      `SELECT u.id, u.name, u.phone, u.email, u.role, u.status,
+              COALESCE(d.wallet_balance, g.wallet_balance, 0.00) AS wallet_balance
+       FROM users u
+       LEFT JOIN driver_profiles d ON u.id = d.user_id
+       LEFT JOIN guide_profiles g ON u.id = g.user_id
+       WHERE u.id = $1`,
+      [userId]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const userInfo = userRes.rows[0];
+
+    // Build SQL query conditions dynamically
+    let whereClause = 'WHERE wt.user_id = $1';
+    const params = [userId];
+
+    if (typeFilter !== 'all') {
+      params.push(`%${typeFilter}%`);
+      whereClause += ` AND LOWER(wt.type) LIKE $${params.length}`;
+    }
+
+    if (searchQuery) {
+      params.push(`%${searchQuery.toLowerCase()}%`);
+      whereClause += ` AND (LOWER(wt.description) LIKE $${params.length} OR LOWER(COALESCE(wt.payment_id, '')) LIKE $${params.length} OR CAST(wt.id AS TEXT) LIKE $${params.length})`;
+    }
+
+    // Get total count for pagination metadata
+    const countResult = await db.query(
+      `SELECT COUNT(*) FROM wallet_transactions wt ${whereClause}`,
+      params
+    );
+    const totalRecords = parseInt(countResult.rows[0]?.count || '0', 10);
+
+    // Get paginated transaction list
+    const dataParams = [...params, limit, offset];
+    const dataQuery = `
+      SELECT 
+        wt.id,
+        wt.user_id,
+        wt.type,
+        wt.amount,
+        COALESCE(wt.payment_id, wt.trip_id::text, 'N/A') AS payment_id,
+        wt.description,
+        wt.created_at,
+        CASE 
+          WHEN LOWER(wt.type) IN ('withdrawal', 'debit', 'platform_fee') THEN 'Debit'
+          ELSE 'Credit'
+        END AS transaction_direction,
+        'Completed' AS status
+      FROM wallet_transactions wt
+      ${whereClause}
+      ORDER BY wt.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+
+    const txResult = await db.query(dataQuery, dataParams);
+
+    res.json({
+      success: true,
+      user: {
+        id: userInfo.id,
+        name: userInfo.name,
+        phone: userInfo.phone,
+        email: userInfo.email,
+        role: userInfo.role,
+        status: userInfo.status,
+        walletBalance: parseFloat(userInfo.wallet_balance || 0),
+      },
+      pagination: {
+        total: totalRecords,
+        page,
+        limit,
+        totalPages: Math.ceil(totalRecords / limit) || 1,
+      },
+      transactions: txResult.rows.map(tx => ({
+        id: tx.id,
+        userId: tx.user_id,
+        type: tx.type,
+        direction: tx.transaction_direction,
+        amount: parseFloat(tx.amount),
+        paymentId: tx.payment_id,
+        description: tx.description || 'Wallet Transaction',
+        status: tx.status,
+        createdAt: tx.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching admin user wallet history:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch wallet history', error: error.message });
+  }
+});
+
+/**
  * POST /api/wallet/admin/withdrawals/:id/approve
  * Admin approves withdrawal request
  */

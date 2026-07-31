@@ -1,7 +1,8 @@
+// Optional dev logging config
 if (__DEV__) {
   try {
-    require('../ReactotronConfig');
-  } catch (e) { }
+    // require('../ReactotronConfig');
+  } catch (e) {}
 }
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';

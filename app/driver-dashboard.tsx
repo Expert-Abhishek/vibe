@@ -22,6 +22,7 @@ import {
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
+import { useLanguage } from '@/hooks/use-language';
 import { getPendingTripRequestsSync, listenForTripRequests } from '@/constants/tripSync';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
@@ -77,6 +78,12 @@ interface ActiveRequest {
   durationMins: number;
   estimatedFare: number;
   otp: string;
+  bookingType?: string;
+  checkpoints?: string[];
+  paymentMode?: string;
+  scheduledTime?: string;
+  id?: string;
+  tripId?: string;
 }
 
 export default function DriverDashboardScreen() {
@@ -87,7 +94,7 @@ export default function DriverDashboardScreen() {
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(true);
-  const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
+  const [appLang, setAppLang] = useLanguage();
 
   // Stats state
   const [kmDriven, setKmDriven] = useState(0);
@@ -660,6 +667,7 @@ export default function DriverDashboardScreen() {
             id: firstReq.id,
             bookingType: firstReq.bookingType || 'INSTANT',
             scheduledTime: firstReq.scheduledTime,
+            checkpoints: firstReq.checkpoints || firstReq.stops || firstReq.route || firstReq.destinations || [],
           } as any);
           setTimerSeconds(30);
           setRequestVisible(true);
@@ -700,6 +708,7 @@ export default function DriverDashboardScreen() {
           id: trip.id,
           bookingType: trip.bookingType || 'INSTANT',
           scheduledTime: trip.scheduledTime,
+          checkpoints: trip.checkpoints || trip.stops || trip.route || trip.destinations || [],
         } as any);
         setTimerSeconds(30);
         setRequestVisible(true);
@@ -1082,8 +1091,29 @@ export default function DriverDashboardScreen() {
           </Text>
         </View>
 
-        {/* Bell Notification Icon */}
-        <NotificationModal role="driver" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+          {/* History Screen Button */}
+          <TouchableOpacity
+            style={{
+              paddingHorizontal: scale(10),
+              paddingVertical: verticalScale(5),
+              borderRadius: scale(8),
+              backgroundColor: 'rgba(245, 197, 24, 0.12)',
+              borderWidth: 1,
+              borderColor: colors.amber,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: scale(4),
+            }}
+            onPress={() => router.push('/driver-history' as any)}
+          >
+            <MaterialIcons name="history" size={scale(16)} color={colors.amber} />
+            <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800' }}>History</Text>
+          </TouchableOpacity>
+
+          {/* Bell Notification Icon */}
+          <NotificationModal role="driver" />
+        </View>
       </View>
 
       {/* Tab Switchboard Body */}
@@ -1726,67 +1756,182 @@ export default function DriverDashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Simulated Incoming Request Modal Pop-up */}
-      <Modal visible={requestVisible} transparent={true} animationType="slide">
-        {incomingRequest && (
-          <View style={styles.popupOverlay}>
-            <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
-              <View style={styles.popupTimerHeader}>
-                <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
-                <Text style={styles.popupTimerText}>INCOMING INSTANT CAB PING ({timerSeconds}s)</Text>
-              </View>
+      {/* Driver Incoming Request Modal Pop-up (Non-Dismissible Persistent Modal) */}
+      {(() => {
+        const requestCheckpoints: string[] = (() => {
+          if (!incomingRequest) return [];
+          const raw = (incomingRequest as any).checkpoints || (incomingRequest as any).stops || (incomingRequest as any).route || (incomingRequest as any).destinations || [];
+          if (Array.isArray(raw)) {
+            return raw
+              .map((item: any) => {
+                if (typeof item === 'string') return item.trim();
+                if (item && typeof item === 'object') return item.name || item.title || item.location || 'Checkpoint';
+                return null;
+              })
+              .filter((item: string | null): item is string => Boolean(item && item.length > 0));
+          }
+          if (typeof raw === 'string' && raw.trim().length > 0) {
+            return raw.split(',').map(s => s.trim()).filter(Boolean);
+          }
+          return [];
+        })();
 
-              <View style={styles.popupMainDetails}>
-                <View style={styles.touristNameBadge}>
-                  <MaterialIcons name="person-pin" size={scale(22)} color={colors.amber} style={{ marginRight: scale(8) }} />
-                  <View>
-                    <Text style={[styles.touristNameVal, { color: colors.textPrimary }]}>{incomingRequest.touristName}</Text>
-                    <Text style={[styles.touristMetaVal, { color: colors.textMuted }]}>Pickup Distance: 1.2 km away</Text>
+        return (
+          <Modal
+            visible={requestVisible}
+            transparent={true}
+            animationType="slide"
+            hardwareAccelerated={true}
+            statusBarTranslucent={true}
+            onRequestClose={() => {
+              // Non-dismissible persistent popup: prevents hardware back button on Android from closing modal.
+              // Modal will ONLY dismiss on Accept, Decline, or Timer expiration / backend revoke event.
+            }}
+          >
+            {incomingRequest && (
+              <View style={styles.popupOverlay}>
+                <View style={[styles.popupContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
+                  {/* Persistent Header & Timer */}
+                  <View style={styles.popupTimerHeader}>
+                    <MaterialIcons name="warning" size={scale(18)} color={colors.amber} />
+                    <Text style={styles.popupTimerText}>INCOMING TRIP REQUEST ({timerSeconds}s)</Text>
+                  </View>
+
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={{ maxHeight: verticalScale(380) }}
+                    contentContainerStyle={{ paddingBottom: verticalScale(10) }}
+                  >
+                    <View style={styles.popupMainDetails}>
+                      {/* Tourist Client Badge */}
+                      <View style={styles.touristNameBadge}>
+                        <MaterialIcons name="person-pin" size={scale(22)} color={colors.amber} style={{ marginRight: scale(8) }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.touristNameVal, { color: colors.textPrimary }]}>{incomingRequest.touristName}</Text>
+                          <Text style={[styles.touristMetaVal, { color: colors.textMuted }]}>
+                            Pickup Distance: 1.2 km away • {incomingRequest.bookingType || 'INSTANT RIDE'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Route Plan & Custom Trip Checkpoints Timeline */}
+                      <View style={[styles.timelineContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8F9FA', borderColor: colors.border }]}>
+                        <Text style={[styles.timelineHeaderTitle, { color: colors.amber }]}>
+                          🗺️ ROUTE PLAN & CHECKPOINTS ({requestCheckpoints.length > 0 ? `${requestCheckpoints.length} STOPS` : 'DIRECT ROUTE'})
+                        </Text>
+
+                        {/* 1. Pickup Location */}
+                        <View style={styles.timelineNodeRow}>
+                          <View style={styles.nodeIconCol}>
+                            <View style={[styles.nodeDot, { backgroundColor: '#10B981', borderColor: '#10B981' }]} />
+                            <View style={[styles.nodeVerticalLine, { backgroundColor: '#10B981' }]} />
+                          </View>
+
+                          <View style={styles.nodeDetailsCol}>
+                            <Text style={[styles.nodeTypeLabel, { color: '#10B981' }]}>START • PICKUP LOCATION</Text>
+                            <Text style={[styles.nodeAddressVal, { color: colors.textPrimary }]} numberOfLines={2}>
+                              {incomingRequest.pickup}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* 2. Checkpoints / Intermediate Stops */}
+                        {requestCheckpoints.length > 0 ? (
+                          requestCheckpoints.map((cp, idx) => (
+                            <View key={`cp_${idx}`} style={styles.timelineNodeRow}>
+                              <View style={styles.nodeIconCol}>
+                                <View style={[styles.stopBadgeCircle, { backgroundColor: '#F5C518', borderColor: '#F5C518' }]}>
+                                  <Text style={styles.stopBadgeNumber}>{idx + 1}</Text>
+                                </View>
+                                <View style={[styles.nodeVerticalLine, { backgroundColor: colors.border }]} />
+                              </View>
+
+                              <View style={styles.nodeDetailsCol}>
+                                <Text style={[styles.nodeTypeLabel, { color: colors.amber }]}>
+                                  STOP {idx + 1} • CHECKPOINT
+                                </Text>
+                                <Text style={[styles.nodeAddressVal, { color: colors.textPrimary }]} numberOfLines={2}>
+                                  {cp}
+                                </Text>
+                              </View>
+                            </View>
+                          ))
+                        ) : (
+                          <View style={styles.timelineNodeRow}>
+                            <View style={styles.nodeIconCol}>
+                              <View style={[styles.directRouteBadge, { backgroundColor: 'rgba(245, 197, 24, 0.15)', borderColor: '#F5C518' }]}>
+                                <MaterialIcons name="navigation" size={scale(12)} color="#F5C518" />
+                              </View>
+                              <View style={[styles.nodeVerticalLine, { backgroundColor: colors.border }]} />
+                            </View>
+
+                            <View style={styles.nodeDetailsCol}>
+                              <Text style={[styles.nodeTypeLabel, { color: colors.textMuted }]}>
+                                EXPRESS ROUTE (NO INTERMEDIATE STOPS)
+                              </Text>
+                              <Text style={[styles.nodeAddressVal, { color: colors.textMuted, fontStyle: 'italic' }]}>
+                                Direct Point-to-Point Express Trip
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+
+                        {/* 3. Dropoff Location */}
+                        <View style={styles.timelineNodeRow}>
+                          <View style={styles.nodeIconCol}>
+                            <View style={[styles.nodeDotEnd, { backgroundColor: '#EF4444', borderColor: '#EF4444' }]}>
+                              <MaterialIcons name="place" size={scale(10)} color="#FFFFFF" />
+                            </View>
+                          </View>
+
+                          <View style={styles.nodeDetailsCol}>
+                            <Text style={[styles.nodeTypeLabel, { color: '#EF4444' }]}>DESTINATION • DROP-OFF LOCATION</Text>
+                            <Text style={[styles.nodeAddressVal, { color: colors.textPrimary }]} numberOfLines={2}>
+                              {incomingRequest.drop}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Payment & Fare Stats */}
+                      <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
+                        <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Payment Mode</Text>
+                        <Text style={[styles.popupVal, { color: colors.amber, fontWeight: '800' }]} numberOfLines={1}>
+                          {(incomingRequest as any).paymentMode || 'Wallet / Online'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.popupFareStats}>
+                        <View style={styles.fareCell}>
+                          <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Distance / Time</Text>
+                          <Text style={[styles.payoutTextHighlight, { color: colors.textPrimary }]}>
+                            {incomingRequest.distanceKm} km ({incomingRequest.durationMins} mins)
+                          </Text>
+                        </View>
+                        <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />
+                        <View style={styles.fareCell}>
+                          <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Estimated Earnings</Text>
+                          <Text style={[styles.payoutTextHighlight, { color: colors.amber }]}>₹{incomingRequest.estimatedFare}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </ScrollView>
+
+                  {/* Actions Grid */}
+                  <View style={styles.popupActionsGrid}>
+                    <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34' }]} onPress={handleRejectRequest}>
+                      <Text style={styles.popupBtnCancelText}>Decline</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.popupBtn, { backgroundColor: colors.amber }]} onPress={handleAcceptRequest}>
+                      <Text style={styles.popupBtnConfirmText}>Accept Trip</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-
-                <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Pickup Location</Text>
-                  <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>{incomingRequest.pickup}</Text>
-                </View>
-
-                <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Dropoff Location</Text>
-                  <Text style={[styles.popupVal, { color: colors.textPrimary }]} numberOfLines={1}>{incomingRequest.drop}</Text>
-                </View>
-
-                <View style={[styles.popupDetailRow, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Payment Mode</Text>
-                  <Text style={[styles.popupVal, { color: colors.amber, fontWeight: '800' }]} numberOfLines={1}>
-                    {(incomingRequest as any).paymentMode || 'Cash'}
-                  </Text>
-                </View>
-
-                <View style={styles.popupFareStats}>
-                  <View style={styles.fareCell}>
-                    <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Distance / Time</Text>
-                    <Text style={[styles.payoutTextHighlight, { color: colors.textPrimary }]}>{incomingRequest.distanceKm} km ({incomingRequest.durationMins} mins)</Text>
-                  </View>
-                  <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.fareCell}>
-                    <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Estimated Earnings</Text>
-                    <Text style={[styles.payoutTextHighlight, { color: colors.amber }]}>₹{incomingRequest.estimatedFare}</Text>
-                  </View>
-                </View>
               </View>
-
-              <View style={styles.popupActionsGrid}>
-                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: '#2C2C34' }]} onPress={handleRejectRequest}>
-                  <Text style={styles.popupBtnCancelText}>Decline</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.popupBtn, { backgroundColor: colors.amber }]} onPress={handleAcceptRequest}>
-                  <Text style={styles.popupBtnConfirmText}>Accept Trip</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
-      </Modal>
+            )}
+          </Modal>
+        );
+      })()}
 
       {/* Ride Accepted Celebration Modal Pop-up */}
       <Modal visible={acceptedModalVisible} transparent={true} animationType="slide">
@@ -2976,5 +3121,78 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(14),
     fontWeight: '900',
     color: '#101014',
+  },
+  timelineContainer: {
+    borderRadius: scale(16),
+    padding: scale(14),
+    marginVertical: verticalScale(12),
+    borderWidth: 1.2,
+  },
+  timelineHeaderTitle: {
+    fontSize: moderateFontScale(10),
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: verticalScale(12),
+  },
+  timelineNodeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  nodeIconCol: {
+    width: scale(26),
+    alignItems: 'center',
+  },
+  nodeDot: {
+    width: scale(14),
+    height: scale(14),
+    borderRadius: scale(7),
+    borderWidth: 2,
+  },
+  nodeDotEnd: {
+    width: scale(18),
+    height: scale(18),
+    borderRadius: scale(9),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stopBadgeCircle: {
+    width: scale(18),
+    height: scale(18),
+    borderRadius: scale(9),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stopBadgeNumber: {
+    color: '#101010',
+    fontSize: moderateFontScale(10),
+    fontWeight: '900',
+  },
+  directRouteBadge: {
+    width: scale(18),
+    height: scale(18),
+    borderRadius: scale(9),
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeVerticalLine: {
+    width: 2,
+    height: verticalScale(24),
+    marginVertical: verticalScale(2),
+  },
+  nodeDetailsCol: {
+    flex: 1,
+    paddingLeft: scale(8),
+    paddingBottom: verticalScale(6),
+  },
+  nodeTypeLabel: {
+    fontSize: moderateFontScale(9),
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  nodeAddressVal: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '700',
+    marginTop: verticalScale(2),
   },
 });

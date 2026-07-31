@@ -321,16 +321,25 @@ export async function fetchGuidesApi(): Promise<any[]> {
  * Login user (Tourist, Driver, Guide) via phone/email & password
  */
 export async function loginUserApi(payload: { identifier: string; password: string }): Promise<any> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     return await res.json();
-  } catch (e) {
+  } catch (e: any) {
+    clearTimeout(timeoutId);
     console.warn('loginUserApi error:', e);
-    return { success: false, message: 'Server connection error' };
+    if (e?.name === 'AbortError') {
+      return { success: false, message: 'Login request timed out. Please check network connection and try again.' };
+    }
+    return { success: false, message: e?.message || 'Server connection error. Please try again.' };
   }
 }
 
@@ -425,6 +434,25 @@ export async function topupWalletApi(payload: { userId: string; amount: number; 
   } catch (e) {
     console.warn('topupWalletApi error:', e);
     return { success: false, message: 'Wallet top-up failed' };
+  }
+}
+
+/**
+ * Fetch User Wallet History (Admin API)
+ */
+export async function fetchUserWalletHistoryApi(userId: string, page = 1, limit = 20, type = 'all', search = ''): Promise<any> {
+  try {
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      type,
+      search,
+    });
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/wallet-history?${queryParams.toString()}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchUserWalletHistoryApi error:', e);
+    return { success: false, message: 'Failed to fetch user wallet history' };
   }
 }
 
@@ -559,6 +587,19 @@ export async function fetchDriverAdvanceSchedulesApi(driverId: string): Promise<
     console.warn('fetchDriverAdvanceSchedulesApi error:', e);
   }
   return [];
+}
+
+/**
+ * Fetch Driver Trip History (Scheduled vs Completed)
+ */
+export async function fetchDriverTripHistoryApi(driverId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/driver-history/${driverId}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchDriverTripHistoryApi error:', e);
+    return { success: false, data: { scheduled: [], completed: [], all: [] } };
+  }
 }
 
 /**

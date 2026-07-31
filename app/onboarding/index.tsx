@@ -1,7 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useState } from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -75,10 +75,16 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<RoleKey | null>(null);
 
-  const player = useVideoPlayer(require('../../assets/screen.mp4'), (playerInstance) => {
-    playerInstance.loop = true;
-    playerInstance.muted = true;
-    playerInstance.play();
+  const videoSource = Platform.OS === 'web'
+    ? { uri: '/assets/screen.mp4' }
+    : require('../../assets/screen.mp4');
+
+  const player = useVideoPlayer(videoSource, (playerInstance) => {
+    try {
+      playerInstance.loop = true;
+      playerInstance.muted = true;
+      playerInstance.play();
+    } catch (e) {}
   });
 
   const handleContinue = () => {

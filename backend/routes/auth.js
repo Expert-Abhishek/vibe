@@ -301,14 +301,24 @@ router.post('/login', async (req, res) => {
       }
     }
 
-    // Fetch profile details based on role
+    // Fetch light profile details based on role (excluding heavy base64 strings for maximum speed)
     let profileData = null;
     const userRole = (user.role || '').toLowerCase();
     if (userRole === 'driver' || userRole === 'captain') {
-      const driverRes = await db.query('SELECT * FROM driver_profiles WHERE user_id = $1', [user.id]);
+      const driverRes = await db.query(
+        `SELECT id, user_id, vehicle_type, vehicle_model, vehicle_number, license_number, 
+                alternate_phone, is_active, rating, wallet_balance, daily_rate, hourly_addon_rate, upi_id
+         FROM driver_profiles WHERE user_id = $1`,
+        [user.id]
+      );
       profileData = driverRes.rows[0] || null;
     } else if (userRole === 'guide') {
-      const guideRes = await db.query('SELECT * FROM guide_profiles WHERE user_id = $1', [user.id]);
+      const guideRes = await db.query(
+        `SELECT id, user_id, expertise, license_id, alternate_phone, bio, 
+                rating, is_active, wallet_balance, daily_rate, upi_id
+         FROM guide_profiles WHERE user_id = $1`,
+        [user.id]
+      );
       profileData = guideRes.rows[0] || null;
     }
 

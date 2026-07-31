@@ -35,6 +35,8 @@ app.use((req, res, next) => {
     req.url = req.url.replace('/api/admin/wallet/deduction-requests', '/api/wallet/admin/deduction-requests');
   } else if (req.url.startsWith('/api/admin/wallet/reconciliation')) {
     req.url = req.url.replace('/api/admin/wallet/reconciliation', '/api/wallet/admin/reconciliation');
+  } else if (req.url.startsWith('/api/admin/users/') && req.url.includes('/wallet-history')) {
+    req.url = req.url.replace('/api/admin/users/', '/api/wallet/admin/users/');
   } else if (req.url.startsWith('/api/users/') && req.url.includes('/photo')) {
     req.url = req.url.replace('/api/users/', '/api/auth/users/');
   }

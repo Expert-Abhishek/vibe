@@ -770,6 +770,67 @@ export async function fetchPlatformFeeRevenueApi(): Promise<PlatformFeeRevenueDa
   };
 }
 
+export interface WalletHistoryTransaction {
+  id: string;
+  userId: string;
+  type: string;
+  direction: 'Credit' | 'Debit';
+  amount: number;
+  paymentId: string;
+  description: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface UserWalletHistoryResponse {
+  success: boolean;
+  user?: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string;
+    role: string;
+    status: string;
+    walletBalance: number;
+  };
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+  transactions: WalletHistoryTransaction[];
+}
+
+export async function fetchUserWalletHistoryApi(
+  userId: string,
+  page: number = 1,
+  limit: number = 10,
+  typeFilter: string = 'all',
+  search: string = ''
+): Promise<UserWalletHistoryResponse> {
+  try {
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      type: typeFilter,
+      search: search,
+    });
+    const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/wallet-history?${queryParams.toString()}`);
+    const data = await res.json();
+    if (data.success) {
+      return data;
+    }
+  } catch (e) {
+    console.warn('Error fetching user wallet history:', e);
+  }
+  return {
+    success: false,
+    pagination: { total: 0, page: 1, limit, totalPages: 1 },
+    transactions: [],
+  };
+}
+
 
 
 

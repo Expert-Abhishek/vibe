@@ -16,6 +16,7 @@ import {
   Star as StarIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import UserWalletHistorySection from '@/components/UserWalletHistorySection';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -486,6 +487,9 @@ function GuideDetailModal({
               </p>
             )}
           </div>
+
+          {/* Dedicated Wallet History Section */}
+          <UserWalletHistorySection userId={guide.id} userName={guide.name} />
 
           {/* Bio & Specialty */}
           <div className="p-4 rounded-xl bg-dark-hover/60 border border-dark-border/80 space-y-2">

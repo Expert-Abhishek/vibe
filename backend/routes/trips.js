@@ -1681,6 +1681,83 @@ router.get('/driver-advance-schedules/:driverId', async (req, res) => {
 });
 
 /**
+ * GET /api/trips/driver-history/:driverId
+ * Fetch full trip history for a driver split into Scheduled vs Completed
+ */
+router.get('/driver-history/:driverId', async (req, res) => {
+  try {
+    const { driverId } = req.params;
+
+    const userRes = await db.query('SELECT name FROM users WHERE id = $1', [driverId]);
+    const driverName = userRes.rows.length > 0 ? userRes.rows[0].name : '';
+
+    let queryText;
+    let queryParams;
+
+    if (driverName && driverName.trim().length > 2) {
+      queryText = `
+        SELECT * FROM trips 
+        WHERE (driver_id = $1 OR LOWER(driver_or_guide_name) = LOWER($2)) 
+        ORDER BY created_at DESC LIMIT 100
+      `;
+      queryParams = [driverId, driverName.trim()];
+    } else {
+      queryText = `
+        SELECT * FROM trips 
+        WHERE driver_id = $1 
+        ORDER BY created_at DESC LIMIT 100
+      `;
+      queryParams = [driverId];
+    }
+
+    const result = await db.query(queryText, queryParams);
+
+    const formattedTrips = result.rows.map(t => {
+      const isCompleted = String(t.status || '').toLowerCase() === 'completed' || String(t.status || '').toLowerCase() === 'finished';
+      const isScheduled = ['accepted', 'active', 'arrived', 'confirmed', 'pending', 'scheduled', 'booked'].includes(String(t.status || '').toLowerCase());
+
+      const totalFare = parseFloat(t.amount || 0);
+      const platformFeePct = parseFloat(t.platform_fee_percent || 10);
+      const platformFeeAmt = (totalFare * platformFeePct) / 100;
+      const driverEarnings = Math.max(0, totalFare - platformFeeAmt);
+
+      return {
+        id: t.id,
+        title: t.title || `${t.pickup_name || 'Pickup'} ➔ ${t.drop_name || 'Destination'}`,
+        pickupName: t.pickup_name || 'Pickup Point',
+        dropName: t.drop_name || 'Drop Point',
+        date: new Date(t.created_at).toISOString().split('T')[0],
+        time: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: t.created_at,
+        amount: totalFare,
+        commission: platformFeeAmt,
+        driverEarnings: driverEarnings,
+        touristName: t.customer_name || 'Passenger Customer',
+        status: isCompleted ? 'COMPLETED' : isScheduled ? 'SCHEDULED' : (t.status || 'SCHEDULED').toUpperCase(),
+        rawStatus: t.status,
+        paymentMode: t.payment_mode || 'Wallet',
+        tripType: t.trip_type || 'cab',
+      };
+    });
+
+    const scheduled = formattedTrips.filter(t => t.status === 'SCHEDULED');
+    const completed = formattedTrips.filter(t => t.status === 'COMPLETED');
+
+    res.json({
+      success: true,
+      data: {
+        scheduled,
+        completed,
+        all: formattedTrips,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching driver trip history:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch driver trip history' });
+  }
+});
+
+/**
  * GET /api/trips/guide-stats/:guideId
  * Fetch real-time statistics for guide (Trips Count, Today Earnings, wallet balance)
  */

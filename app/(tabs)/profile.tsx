@@ -35,9 +35,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useLanguage } from '@/hooks/use-language';
+
 export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
+  const [appLang, setAppLang] = useLanguage();
   const isDark = colorScheme === 'dark';
   const { showError, showSuccess } = useAppModal();
 
@@ -219,8 +222,6 @@ export default function ProfileScreen() {
       setIsSubmittingTopup(false);
     }
   };
-
-  const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   const colors = {
     background: isDark ? '#101014' : '#F4EFE6',

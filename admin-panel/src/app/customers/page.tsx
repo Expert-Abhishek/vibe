@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { initialCustomers, fetchCustomersApi, adjustWalletBalanceApi } from '@/lib/api';
 import { Customer } from '@/lib/types';
+import UserWalletHistorySection from '@/components/UserWalletHistorySection';
 
 export default function CustomersPage() {
   const [customersList, setCustomersList] = useState<Customer[]>([]);
@@ -302,6 +303,9 @@ export default function CustomersPage() {
                 )}
               </div>
 
+              {/* Dedicated Wallet History Section */}
+              <UserWalletHistorySection userId={selectedCustomer.id} userName={selectedCustomer.name} />
+
               {/* Trip History Section */}
               <div>
                 <h3 className="text-sm font-bold text-white mb-3 flex items-center space-x-2">
@@ -310,7 +314,7 @@ export default function CustomersPage() {
                 </h3>
 
                 <div className="space-y-3">
-                  {selectedCustomer.recentTrips.map((trip) => (
+                  {selectedCustomer.recentTrips.map((trip: any) => (
                     <div
                       key={trip.id}
                       className="p-4 rounded-xl bg-dark-hover/40 border border-dark-border flex flex-col sm:flex-row sm:items-center justify-between gap-3"

@@ -18,6 +18,7 @@ import {
   verifyTripOtpApi
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
+import { useLanguage } from '@/hooks/use-language';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -162,7 +163,7 @@ export default function GuideDashboardScreen() {
   const [activeTab, setActiveTab] = useState<'duty' | 'active_tour' | 'profile'>('duty');
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
-  const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
+  const [appLang, setAppLang] = useLanguage();
 
 
   const [name, setName] = useState('Partner');

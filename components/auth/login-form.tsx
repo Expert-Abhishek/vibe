@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View, Text } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -7,9 +7,10 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 
 interface LoginFormProps {
   onLogin: (phone: string, pass: string) => void;
+  isLoading?: boolean;
 }
 
-export function LoginForm({ onLogin }: LoginFormProps) {
+export function LoginForm({ onLogin, isLoading = false }: LoginFormProps) {
   const router = useRouter();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +18,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   const [errors, setErrors] = useState<{ phone?: string; password?: string }>({});
 
   const handleLoginSubmit = () => {
+    if (isLoading) return;
     const nextErrors: { phone?: string; password?: string } = {};
     const isNumeric = /^\d+$/.test(phone);
 
@@ -51,6 +53,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
             placeholderTextColor="rgba(255,255,255,0.3)"
             keyboardType="default"
             value={phone}
+            editable={!isLoading}
             onChangeText={(t) => {
               setPhone(t);
               if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }));
@@ -64,7 +67,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       <View style={styles.fieldContainer}>
         <View style={styles.labelRow}>
           <ThemedText style={styles.label}>Password</ThemedText>
-          <TouchableOpacity onPress={() => router.push('/forgot-password')}>
+          <TouchableOpacity onPress={() => router.push('/forgot-password')} disabled={isLoading}>
             <ThemedText style={styles.forgotText}>Forgot Password?</ThemedText>
           </TouchableOpacity>
         </View>
@@ -75,13 +78,14 @@ export function LoginForm({ onLogin }: LoginFormProps) {
             placeholder="••••••••"
             placeholderTextColor="rgba(255,255,255,0.3)"
             secureTextEntry={secureText}
+            editable={!isLoading}
             value={password}
             onChangeText={(t) => {
               setPassword(t);
               if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
             }}
           />
-          <TouchableOpacity onPress={() => setSecureText((prev) => !prev)} style={styles.eyeIconWrapper}>
+          <TouchableOpacity onPress={() => setSecureText((prev) => !prev)} style={styles.eyeIconWrapper} disabled={isLoading}>
             <IconSymbol
               name={secureText ? 'eye.slash.fill' : 'eye.fill'}
               size={scale(18)}
@@ -93,11 +97,23 @@ export function LoginForm({ onLogin }: LoginFormProps) {
       </View>
 
       {/* Login Button */}
-      <TouchableOpacity style={styles.loginButton} onPress={handleLoginSubmit} activeOpacity={0.9}>
-        <View style={styles.buttonRow}>
-          <Text style={styles.loginButtonText}>Login</Text>
-          <IconSymbol name="chevron.right" size={scale(18)} color="#101010" />
-        </View>
+      <TouchableOpacity
+        style={[styles.loginButton, isLoading && { opacity: 0.7 }]}
+        onPress={handleLoginSubmit}
+        activeOpacity={0.8}
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <View style={styles.buttonRow}>
+            <ActivityIndicator size="small" color="#101010" style={{ marginRight: 8 }} />
+            <Text style={styles.loginButtonText}>Signing in...</Text>
+          </View>
+        ) : (
+          <View style={styles.buttonRow}>
+            <Text style={styles.loginButtonText}>Login</Text>
+            <IconSymbol name="chevron.right" size={scale(18)} color="#101010" />
+          </View>
+        )}
       </TouchableOpacity>
       <Text style={styles.tipText}>Tip: Enter password {"\""}guide{"\""} or {"\""}driver{"\""} to sign in to their respective partner dashboards.</Text>
     </View>

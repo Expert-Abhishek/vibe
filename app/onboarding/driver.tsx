@@ -242,11 +242,11 @@ export default function DriverRegister() {
         } else if (res.message && res.message.includes('already registered')) {
           Alert.alert('Already Registered', res.message);
         } else {
-          setKycStatus('pending');
+          Alert.alert('Registration Failed', res.message || 'Driver registration failed. Please try again.');
         }
       } catch (err: any) {
         setLoading(false);
-        setKycStatus('pending');
+        Alert.alert('Error', err?.message || 'Failed to connect to backend server.');
       }
     }
   };
