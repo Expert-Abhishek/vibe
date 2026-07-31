@@ -809,6 +809,7 @@ export async function fetchUserWalletHistoryApi(
   typeFilter: string = 'all',
   search: string = ''
 ): Promise<UserWalletHistoryResponse> {
+  // 1. Try Primary Admin User Wallet History Endpoint
   try {
     const queryParams = new URLSearchParams({
       page: page.toString(),
@@ -818,12 +819,116 @@ export async function fetchUserWalletHistoryApi(
     });
     const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/wallet-history?${queryParams.toString()}`);
     const data = await res.json();
-    if (data.success) {
+    if (data.success && Array.isArray(data.transactions) && data.transactions.length > 0) {
       return data;
     }
   } catch (e) {
-    console.warn('Error fetching user wallet history:', e);
+    console.warn('Primary admin user wallet history fetch failed, trying fallback:', e);
   }
+
+  // 2. Fallback: Query direct /api/wallet/:userId endpoint used by mobile app
+  try {
+    const walletRes = await fetch(`${API_BASE_URL}/api/wallet/${userId}`);
+    const walletData = await walletRes.json();
+    if (walletData.success && Array.isArray(walletData.transactions) && walletData.transactions.length > 0) {
+      const formattedTx: WalletHistoryTransaction[] = walletData.transactions.map((tx: any) => ({
+        id: tx.id || `tx_${Math.random()}`,
+        userId: tx.user_id || userId,
+        type: tx.type || 'transaction',
+        direction: ['withdrawal', 'debit', 'platform_fee'].includes((tx.type || '').toLowerCase()) ? 'Debit' : 'Credit',
+        amount: parseFloat(tx.amount || 0),
+        paymentId: tx.payment_id || tx.trip_id || 'N/A',
+        description: tx.description || 'Wallet Transaction',
+        status: 'Completed',
+        createdAt: tx.created_at || new Date().toISOString(),
+      }));
+
+      // Apply client-side search and type filters if necessary
+      let filtered = formattedTx;
+      if (typeFilter !== 'all') {
+        filtered = filtered.filter((t) => t.type.toLowerCase().includes(typeFilter.toLowerCase()));
+      }
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        filtered = filtered.filter(
+          (t) =>
+            t.description.toLowerCase().includes(q) ||
+            t.paymentId.toLowerCase().includes(q) ||
+            t.id.toLowerCase().includes(q)
+        );
+      }
+
+      const total = filtered.length;
+      const startIdx = (page - 1) * limit;
+      const paginated = filtered.slice(startIdx, startIdx + limit);
+
+      return {
+        success: true,
+        user: {
+          id: userId,
+          name: 'User',
+          phone: userId,
+          role: 'user',
+          status: 'Active',
+          walletBalance: parseFloat(walletData.balance || 0),
+        },
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit) || 1,
+        },
+        transactions: paginated,
+      };
+    }
+  } catch (e) {
+    console.warn('Fallback /api/wallet/:userId fetch failed, trying unified admin feed:', e);
+  }
+
+  // 3. Secondary Fallback: Filter from Unified Admin Transactions Feed
+  try {
+    const unified = await fetchAllTransactionsApi(typeFilter === 'all' ? 'all' : (typeFilter as any), 'All');
+    if (unified && Array.isArray(unified.transactions)) {
+      const userTx = unified.transactions.filter(
+        (tx: any) =>
+          tx.user_id === userId ||
+          tx.rawItem?.user_id === userId ||
+          (tx.user_name && tx.user_name.toLowerCase().includes(userId.toLowerCase()))
+      );
+
+      if (userTx.length > 0) {
+        const formattedTx: WalletHistoryTransaction[] = userTx.map((tx: any) => ({
+          id: tx.id,
+          userId: tx.user_id || userId,
+          type: tx.type || 'transaction',
+          direction: tx.type === 'withdrawal' || tx.type === 'deduction' ? 'Debit' : 'Credit',
+          amount: parseFloat(tx.amount || 0),
+          paymentId: tx.rawItem?.payment_id || tx.id,
+          description: tx.description || `${tx.type} transaction`,
+          status: tx.status || 'Completed',
+          createdAt: tx.created_at || new Date().toISOString(),
+        }));
+
+        const total = formattedTx.length;
+        const startIdx = (page - 1) * limit;
+        const paginated = formattedTx.slice(startIdx, startIdx + limit);
+
+        return {
+          success: true,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit) || 1,
+          },
+          transactions: paginated,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('Secondary fallback failed:', e);
+  }
+
   return {
     success: false,
     pagination: { total: 0, page: 1, limit, totalPages: 1 },

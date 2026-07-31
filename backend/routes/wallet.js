@@ -932,26 +932,32 @@ router.get('/admin/users/:userId/wallet-history', async (req, res) => {
 
     const offset = (page - 1) * limit;
 
-    // Verify user exists and get current wallet balance
+    // Find user profile by ID or phone number
     const userRes = await db.query(
       `SELECT u.id, u.name, u.phone, u.email, u.role, u.status,
               COALESCE(d.wallet_balance, g.wallet_balance, 0.00) AS wallet_balance
        FROM users u
        LEFT JOIN driver_profiles d ON u.id = d.user_id
        LEFT JOIN guide_profiles g ON u.id = g.user_id
-       WHERE u.id = $1`,
+       WHERE u.id = $1 OR u.phone = $1 OR d.id = $1 OR g.id = $1`,
       [userId]
     );
 
-    if (userRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
+    const userInfo = userRes.rows.length > 0 ? userRes.rows[0] : {
+      id: userId,
+      name: 'User',
+      phone: userId,
+      email: '',
+      role: 'user',
+      status: 'Active',
+      wallet_balance: 0,
+    };
 
-    const userInfo = userRes.rows[0];
+    const actualUserId = userInfo.id || userId;
 
     // Build SQL query conditions dynamically
-    let whereClause = 'WHERE wt.user_id = $1';
-    const params = [userId];
+    let whereClause = 'WHERE (wt.user_id = $1 OR wt.user_id = $2)';
+    const params = [userId, actualUserId];
 
     if (typeFilter !== 'all') {
       params.push(`%${typeFilter}%`);
