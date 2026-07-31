@@ -127,7 +127,7 @@ function emitWalletUpdate(payload) {
 }
 
 /**
- * Emit trip request: Direct Targeted vs Role Broadcast
+ * Emit trip request: Direct Targeted vs Role Broadcast with notification:new fallback
  */
 function emitTripRequest(tripObject) {
   if (!io || !tripObject) return;
@@ -146,18 +146,37 @@ function emitTripRequest(tripObject) {
     createdAt: tripObject.createdAt || new Date().toISOString(),
   };
 
+  const notificationPayload = {
+    id: `notif_trip_${normalizedTrip.id}_${Date.now()}`,
+    title: '🚖 New Ride Request!',
+    body: `New ride request: ${normalizedTrip.pickupName || normalizedTrip.pickup || 'Pickup Point'} ➔ ${normalizedTrip.dropName || normalizedTrip.drop || normalizedTrip.title || 'Drop Location'} (₹${normalizedTrip.amount || normalizedTrip.price || 0})`,
+    tripId: normalizedTrip.id,
+    trip: normalizedTrip,
+    role: 'driver',
+    userId: driverId || null,
+    createdAt: new Date().toISOString(),
+  };
+
   if (driverId) {
     // TARGETED DIRECT REQUEST: Emit STRICTLY to specific driver/guide room
     const targetRoom = `user:${driverId}`;
     io.to(targetRoom).emit('trip_request', normalizedTrip);
+    io.to(targetRoom).emit('notification:new', notificationPayload);
+    io.emit('trip_request', normalizedTrip);
+    io.emit('notification:new', notificationPayload);
     console.log(`🎯 [DIRECT TARGETED REQUEST] Sent strictly to room: [${targetRoom}] for Trip ID: ${normalizedTrip.id}`);
   } else {
     // GENERAL BROADCAST
     if (vehicleType) {
       io.to(`role:${vehicleType}`).emit('trip_request', normalizedTrip);
+      io.to(`role:${vehicleType}`).emit('notification:new', notificationPayload);
     }
     io.to('role:driver').emit('trip_request', normalizedTrip);
+    io.to('role:driver').emit('notification:new', notificationPayload);
     io.to('role:guide').emit('trip_request', normalizedTrip);
+    io.to('role:guide').emit('notification:new', notificationPayload);
+    io.emit('trip_request', normalizedTrip);
+    io.emit('notification:new', notificationPayload);
     console.log(`📢 [BROADCAST REQUEST] Emitted to all drivers/guides for Trip ID: ${normalizedTrip.id}`);
   }
 }

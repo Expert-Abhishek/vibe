@@ -57,6 +57,12 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       console.log('[SocketService] Received real-time push notification:', data);
       if (data) {
         notificationStore.addNotification(data);
+        if (data.trip || data.tripId) {
+          try {
+            DeviceEventEmitter.emit('new_driver_request', data.trip || data);
+            DeviceEventEmitter.emit('trip_request', data.trip || data);
+          } catch (e) {}
+        }
       }
     });
 
@@ -74,6 +80,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       if (data) {
         try {
           DeviceEventEmitter.emit('new_driver_request', data);
+          DeviceEventEmitter.emit('trip_request', data);
         } catch (e) {}
       }
     });

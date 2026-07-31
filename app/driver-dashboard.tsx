@@ -788,29 +788,60 @@ export default function DriverDashboardScreen() {
       });
 
       // Listen for targeted and broadcast trip requests
-      socket.on('trip_request', (tripData: any) => {
-        console.log('[DriverDashboard] 🔔 Socket trip_request received:', tripData);
-        const incomingTripId = String(tripData.id || tripData.tripId);
+      const handleIncomingTripData = (tripData: any) => {
+        if (!tripData) return;
+        const payload = tripData.trip || tripData;
+        const incomingTripId = String(payload.id || payload.tripId || payload.id);
 
-        if (tripData && !handledTripIdsRef.current.has(incomingTripId)) {
+        console.log('[DriverDashboard] 🔔 Socket trip_request received:', payload);
+
+        if (payload && incomingTripId && !handledTripIdsRef.current.has(incomingTripId)) {
           setIncomingRequest({
             id: incomingTripId,
             tripId: incomingTripId,
-            touristName: tripData.customerName || tripData.customer_name || tripData.touristName || 'Tourist Client',
-            pickup: tripData.pickupName || tripData.pickup || 'Pickup Point',
-            drop: tripData.dropName || tripData.drop || tripData.title || 'Drop Location',
-            estimatedFare: parseFloat(tripData.amount || tripData.price || tripData.estimatedFare || 0),
-            checkpoints: tripData.checkpoints || tripData.stops || [],
-            scheduledTime: tripData.scheduledTime,
-            bookingType: tripData.bookingType || 'INSTANT',
-            otp: tripData.otp || '1234',
-            endOtp: tripData.endOtp || '4321',
+            touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
+            pickup: payload.pickupName || payload.pickup || 'Pickup Point',
+            drop: payload.dropName || payload.drop || payload.title || 'Drop Location',
+            estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || 0),
+            checkpoints: payload.checkpoints || payload.stops || [],
+            scheduledTime: payload.scheduledTime,
+            bookingType: payload.bookingType || 'INSTANT',
+            otp: payload.otp || '1234',
+            endOtp: payload.endOtp || '4321',
           });
           setTimerSeconds(45);
           setRequestVisible(true);
         }
-      });
+      };
+
+      socket.on('trip_request', handleIncomingTripData);
+      socket.on('notification:new', handleIncomingTripData);
     }
+
+    const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
+      console.log('[DriverDashboard] 🔔 DeviceEventEmitter new_driver_request:', data);
+      if (data) {
+        const payload = data.trip || data;
+        const incId = String(payload.id || payload.tripId);
+        if (incId && !handledTripIdsRef.current.has(incId)) {
+          setIncomingRequest({
+            id: incId,
+            tripId: incId,
+            touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
+            pickup: payload.pickupName || payload.pickup || 'Pickup Point',
+            drop: payload.dropName || payload.drop || payload.title || 'Drop Location',
+            estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || 0),
+            checkpoints: payload.checkpoints || payload.stops || [],
+            scheduledTime: payload.scheduledTime,
+            bookingType: payload.bookingType || 'INSTANT',
+            otp: payload.otp || '1234',
+            endOtp: payload.endOtp || '4321',
+          });
+          setTimerSeconds(45);
+          setRequestVisible(true);
+        }
+      }
+    });
 
     // Fallback sync listener
     const unsubRequests = listenForTripRequests((tripData) => {
@@ -822,10 +853,12 @@ export default function DriverDashboardScreen() {
     });
 
     return () => {
+      subReq1.remove();
       unsubRequests();
       if (socket) {
         socket.off('connect');
         socket.off('trip_request');
+        socket.off('notification:new');
       }
     };
   }, []);
