@@ -182,15 +182,22 @@ export default function RideMatchingScreen() {
     return () => clearInterval(interval);
   }, [tripIdParam]);
 
-  // Transition searching -> matched after 3.5 seconds automatically
+  // Direct Driver Selection Override & Auto-match Transition
   useEffect(() => {
-    if (status === 'searching' && !tripIdParam) {
-      const timer = setTimeout(() => {
+    const selectedDriverIdParam = (params.driverId as string) || (params.selectedDriverId as string) || '';
+
+    if (status === 'searching') {
+      if (selectedDriverIdParam) {
+        // Direct Driver Selection Override: Bypass general search algorithm & immediately match assigned driver!
         setStatus('matched');
-      }, 3500);
-      return () => clearTimeout(timer);
+      } else if (!tripIdParam) {
+        const timer = setTimeout(() => {
+          setStatus('matched');
+        }, 3500);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [status, tripIdParam]);
+  }, [status, tripIdParam, params.driverId, params.selectedDriverId]);
 
   // Drive marker simulation along the points list when started
   useEffect(() => {

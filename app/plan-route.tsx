@@ -47,6 +47,7 @@ export default function PlanRouteScreen() {
   const [bookingPax, setBookingPax] = useState(1);
   const [bookingVehicle, setBookingVehicle] = useState<'5seater' | '7seater' | '4x4jeep' | 'auto'>('5seater');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('upi');
+  const [preBookingPaymentChoice, setPreBookingPaymentChoice] = useState<'advance_20' | 'full_100'>('advance_20');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
 
   const getInitialTimeParts = () => {
@@ -133,20 +134,29 @@ export default function PlanRouteScreen() {
       const planId = params.selectedPlanId ? String(params.selectedPlanId) : '';
       const planName = params.selectedPlanName ? String(params.selectedPlanName) : '';
 
-      if (planId || planName) {
-        const match = displayPackagePlans.find((p: any) =>
-          (planId && String(p.id) === planId) ||
-          (planName && p.name.toLowerCase() === planName.toLowerCase())
-        ) || displayPackagePlans[0];
+      let match = displayPackagePlans.find((p: any) =>
+        (planId && String(p.id) === planId) ||
+        (planName && p.name.toLowerCase() === planName.toLowerCase())
+      );
 
-        if (match) {
-          setSelectedPlan(match);
-          setBookingStep('form');
-        }
+      if (!match) {
+        match = {
+          id: planId || `plan_${Date.now()}`,
+          name: planName || 'Karnataka Package Tour',
+          checkpoints: ['Bengaluru City Tour', 'Heritage Stops', 'Local Showcase'],
+          travelHours: 8,
+          distanceKm: 150,
+          price: 4999,
+          image: 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
+        };
       }
+
+      setSelectedPlan(match);
+      setBookingStep('form');
+
       router.setParams({ fromVehicle: undefined });
     }
-  }, [params.fromVehicle, params.selectedDriverId, params.selectedPlanId, params.selectedPlanName]);
+  }, [params.fromVehicle, params.selectedDriverId, params.selectedPlanId, params.selectedPlanName, livePlans]);
 
   const jeepCarouselData = [
     {
@@ -197,20 +207,10 @@ export default function PlanRouteScreen() {
     const startHourDec = h + (bookingMinute / 60);
     const endHourDec = startHourDec + totalTripHours;
 
-    let extraHours = 0;
-    if (startHourDec < 6) {
-      extraHours += (6 - startHourDec);
-    }
-    if (endHourDec > 18) {
-      extraHours += (endHourDec - 18);
-    }
-    if (totalTripHours > 12 && extraHours < (totalTripHours - 12)) {
-      extraHours = totalTripHours - 12;
-    }
-
-    const extraHoursRounded = Math.max(0, Math.ceil(extraHours));
-    const extraAddonCharge = extraHoursRounded * vehicleHourlyRate;
-    const computedPrice = baseDayRate + extraAddonCharge;
+    // Initial booking fare is strictly baseDayRate without pre-added extra hours charges
+    const extraHoursRounded = 0;
+    const extraAddonCharge = 0;
+    const computedPrice = baseDayRate;
 
     return {
       computedPrice,
@@ -300,8 +300,9 @@ export default function PlanRouteScreen() {
     const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
     const totalPrice = priceInfo.computedPrice;
     const isPreBooking = !adminState.instantBookingEnabled;
-    const paymentAmount = isPreBooking ? Math.round(totalPrice * 0.20) : totalPrice;
-    const remainingBalance = isPreBooking ? totalPrice - paymentAmount : 0;
+    const is20Percent = isPreBooking && preBookingPaymentChoice === 'advance_20';
+    const paymentAmount = is20Percent ? Math.round(totalPrice * 0.20) : totalPrice;
+    const remainingBalance = is20Percent ? totalPrice - paymentAmount : 0;
     const totalHours = priceInfo.totalTripHours;
 
     const finalDate = adminState.instantBookingEnabled ? 'Today' : bookingDate;
@@ -561,33 +562,21 @@ export default function PlanRouteScreen() {
             {/* PLAN DETAILS HEADER */}
             <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
 
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(10), padding: scale(12), marginVertical: verticalScale(10) }}>
-              <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', marginBottom: verticalScale(6) }}>CHECKPOINTS</Text>
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), lineHeight: moderateFontScale(18) }}>
-                {selectedPlan.checkpoints.join('\n• ')}
-              </Text>
-            </View>
-
-            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginVertical: verticalScale(8) }}>Gallery</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), justifyContent: 'space-between', marginBottom: verticalScale(14) }}>
-              {['https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=150', 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=150', 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=150', 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=150'].map((imgUrl, i) => (
-                <Image key={i} source={{ uri: imgUrl }} style={{ width: '48%', height: verticalScale(80), borderRadius: scale(10) }} />
-              ))}
-            </View>
-
-            {/* VEHICLE SELECTION BLOCK (CHOOSE CAR) */}
+            {/* STEP 1: VEHICLE SELECTION BLOCK (CHOOSE CAR FIRST) */}
             {selectedDriver === null ? (
               <View style={{
-                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F9F9FB',
-                borderWidth: 1,
-                borderColor: colors.border,
+                backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : '#FEF3C7',
+                borderWidth: 2,
+                borderColor: colors.amber,
                 borderRadius: scale(14),
                 padding: scale(14),
-                marginVertical: verticalScale(12),
+                marginVertical: verticalScale(10),
               }}>
-                <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(4) }]}>Vehicle Selection</Text>
-                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(12) }}>
-                  Vehicle base fare is included in your Tour Plan Package price. Tap below to pick a car from Fleet Showcase.
+                <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(14), marginBottom: verticalScale(4) }}>
+                  STEP 1: CHOOSE YOUR CAR FIRST
+                </Text>
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11.5), marginBottom: verticalScale(12), lineHeight: moderateFontScale(16) }}>
+                  Select your preferred vehicle from Fleet Showcase to unlock booking options and pricing.
                 </Text>
 
                 <TouchableOpacity
@@ -615,7 +604,7 @@ export default function PlanRouteScreen() {
                   }}
                 >
                   <MaterialIcons name="directions-car" size={scale(20)} color="#101014" />
-                  <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(13) }}>
+                  <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(13.5) }}>
                     Choose Car / Select Vehicle
                   </Text>
                   <MaterialIcons name="arrow-forward" size={scale(18)} color="#101014" />
@@ -628,7 +617,7 @@ export default function PlanRouteScreen() {
                 borderColor: colors.amber,
                 borderRadius: scale(14),
                 padding: scale(12),
-                marginVertical: verticalScale(12),
+                marginVertical: verticalScale(10),
                 flexDirection: 'row',
                 alignItems: 'center',
               }}>
@@ -648,7 +637,7 @@ export default function PlanRouteScreen() {
                     Driver: {selectedDriver.name} ({selectedDriver.vehicle_number || 'KA-01-EX-0000'})
                   </Text>
                   <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '900', marginTop: 2 }}>
-                    Included in Plan Package (+ ₹{selectedDriver.hourly_addon_rate || 150}/hr addon)
+                    ✓ Vehicle Selected (Included in Plan Package)
                   </Text>
                 </View>
 
@@ -679,187 +668,257 @@ export default function PlanRouteScreen() {
               </View>
             )}
 
-            {/* CHECKOUT INFO SECTION */}
-            <View style={styles.counterRow}>
-              <Text style={[styles.selectorLabel, { color: colors.textPrimary }]}>Number of Passengers</Text>
-              <View style={styles.counterControls}>
-                <TouchableOpacity style={styles.counterBtn} onPress={() => setBookingPax(Math.max(1, bookingPax - 1))}>
-                  <Text style={styles.counterBtnText}>-</Text>
-                </TouchableOpacity>
-                <Text style={[styles.counterVal, { color: colors.textPrimary }]}>{bookingPax}</Text>
-                <TouchableOpacity style={styles.counterBtn} onPress={() => setBookingPax(Math.min(10, bookingPax + 1))}>
-                  <Text style={styles.counterBtnText}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            {/* EVERYTHING ELSE IS HIDDEN UNTIL A CAR/VEHICLE IS SELECTED */}
+            {selectedDriver !== null && (
+              <View style={{ width: '100%' }}>
+                <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(10), padding: scale(12), marginVertical: verticalScale(10) }}>
+                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', marginBottom: verticalScale(6) }}>CHECKPOINTS</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), lineHeight: moderateFontScale(18) }}>
+                    {selectedPlan.checkpoints.join('\n• ')}
+                  </Text>
+                </View>
 
-            {/* Pre-Booking Date & Time Pickers */}
-            {!adminState.instantBookingEnabled && (
-              <View style={{ marginTop: verticalScale(14) }}>
-                <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Pre-Booking Date</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(12) }}>
-                  {dateOptions.map((opt) => {
-                    const isSelected = bookingDate === opt.dateStr;
-                    return (
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginVertical: verticalScale(8) }}>Gallery</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), justifyContent: 'space-between', marginBottom: verticalScale(14) }}>
+                  {['https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=150', 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=150', 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=150', 'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=150'].map((imgUrl, i) => (
+                    <Image key={i} source={{ uri: imgUrl }} style={{ width: '48%', height: verticalScale(80), borderRadius: scale(10) }} />
+                  ))}
+                </View>
+                <View style={styles.counterRow}>
+                  <Text style={[styles.selectorLabel, { color: colors.textPrimary }]}>Number of Passengers</Text>
+                  <View style={styles.counterControls}>
+                    <TouchableOpacity style={styles.counterBtn} onPress={() => setBookingPax(Math.max(1, bookingPax - 1))}>
+                      <Text style={styles.counterBtnText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.counterVal, { color: colors.textPrimary }]}>{bookingPax}</Text>
+                    <TouchableOpacity style={styles.counterBtn} onPress={() => setBookingPax(Math.min(10, bookingPax + 1))}>
+                      <Text style={styles.counterBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Pre-Booking Date & Time Pickers */}
+                {!adminState.instantBookingEnabled && (
+                  <View style={{ marginTop: verticalScale(14) }}>
+                    <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Pre-Booking Date</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: verticalScale(12) }}>
+                      {dateOptions.map((opt) => {
+                        const isSelected = bookingDate === opt.dateStr;
+                        return (
+                          <TouchableOpacity
+                            key={opt.dateStr}
+                            style={{
+                              width: scale(50),
+                              height: verticalScale(52),
+                              borderRadius: scale(10),
+                              borderWidth: 1.5,
+                              borderColor: isSelected ? colors.amber : colors.border,
+                              backgroundColor: isSelected ? colors.amber : 'rgba(255,255,255,0.03)',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: scale(8),
+                            }}
+                            onPress={() => setBookingDate(opt.dateStr)}
+                          >
+                            <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.dayName.toUpperCase()}</Text>
+                            <Text style={{ fontSize: moderateFontScale(12), fontWeight: '900', color: isSelected ? '#101014' : colors.textPrimary, marginVertical: verticalScale(1) }}>{opt.dayNum}</Text>
+                            <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.monthName.toUpperCase()}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+
+                    <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Booking Time</Text>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(8), borderRadius: scale(12), borderWidth: 1.5, borderColor: colors.border }}>
+                      {/* Hour Selection */}
+                      <View style={{ alignItems: 'center', flex: 1.2 }}>
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>HOUR</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                          <TouchableOpacity
+                            style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                            onPress={() => setBookingHour(prev => prev === 1 ? 12 : prev - 1)}
+                          >
+                            <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                          </TouchableOpacity>
+                          <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                            {bookingHour < 10 ? '0' + bookingHour : bookingHour}
+                          </Text>
+                          <TouchableOpacity
+                            style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                            onPress={() => setBookingHour(prev => prev === 12 ? 1 : prev + 1)}
+                          >
+                            <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(18), fontWeight: '900' }}>:</Text>
+
+                      {/* Minute Selection */}
+                      <View style={{ alignItems: 'center', flex: 1.2 }}>
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>MINUTE</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                          <TouchableOpacity
+                            style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                            onPress={() => setBookingMinute(prev => prev === 0 ? 55 : prev - 5)}
+                          >
+                            <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
+                          </TouchableOpacity>
+                          <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
+                            {bookingMinute < 10 ? '0' + bookingMinute : bookingMinute}
+                          </Text>
+                          <TouchableOpacity
+                            style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
+                            onPress={() => setBookingMinute(prev => prev === 55 ? 0 : prev + 5)}
+                          >
+                            <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* AM/PM Switch */}
+                      <View style={{ flexDirection: 'row', gap: scale(4), marginLeft: scale(10), flex: 1.3 }}>
+                        {(['AM', 'PM'] as const).map((period) => {
+                          const isSelected = bookingAmPm === period;
+                          return (
+                            <TouchableOpacity
+                              key={period}
+                              style={{
+                                flex: 1,
+                                height: scale(28),
+                                borderRadius: scale(6),
+                                borderWidth: 1.5,
+                                borderColor: isSelected ? colors.amber : colors.border,
+                                backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                              onPress={() => setBookingAmPm(period)}
+                            >
+                              <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '900' }}>
+                                {period}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </View>
+                )}
+
+                {/* PAYMENT METHOD SELECTOR (CASH vs UPI) - ONLY SHOW FOR INSTANT BOOKINGS */}
+                {adminState.instantBookingEnabled && (
+                  <View style={{ marginTop: verticalScale(14), marginBottom: verticalScale(6) }}>
+                    <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>
+                      Select Payment Mode
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: scale(10) }}>
                       <TouchableOpacity
-                        key={opt.dateStr}
                         style={{
-                          width: scale(50),
-                          height: verticalScale(52),
-                          borderRadius: scale(10),
-                          borderWidth: 1.5,
-                          borderColor: isSelected ? colors.amber : colors.border,
-                          backgroundColor: isSelected ? colors.amber : 'rgba(255,255,255,0.03)',
+                          flex: 1,
+                          flexDirection: 'row',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          marginRight: scale(8),
+                          paddingVertical: verticalScale(10),
+                          borderRadius: scale(12),
+                          borderWidth: 1.5,
+                          borderColor: paymentMethod === 'cash' ? colors.amber : colors.border,
+                          backgroundColor: paymentMethod === 'cash' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                          gap: scale(6),
                         }}
-                        onPress={() => setBookingDate(opt.dateStr)}
+                        onPress={() => setPaymentMethod('cash')}
                       >
-                        <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.dayName.toUpperCase()}</Text>
-                        <Text style={{ fontSize: moderateFontScale(12), fontWeight: '900', color: isSelected ? '#101014' : colors.textPrimary, marginVertical: verticalScale(1) }}>{opt.dayNum}</Text>
-                        <Text style={{ fontSize: moderateFontScale(8), fontWeight: '800', color: isSelected ? '#101014' : colors.textMuted }}>{opt.monthName.toUpperCase()}</Text>
+                        <MaterialIcons name="attach-money" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
+                        <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
+                          Cash
+                        </Text>
                       </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
 
-                <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>Select Booking Time</Text>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.02)', padding: scale(8), borderRadius: scale(12), borderWidth: 1.5, borderColor: colors.border }}>
-                  {/* Hour Selection */}
-                  <View style={{ alignItems: 'center', flex: 1.2 }}>
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>HOUR</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
                       <TouchableOpacity
-                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
-                        onPress={() => setBookingHour(prev => prev === 1 ? 12 : prev - 1)}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          paddingVertical: verticalScale(10),
+                          borderRadius: scale(12),
+                          borderWidth: 1.5,
+                          borderColor: paymentMethod === 'upi' ? colors.amber : colors.border,
+                          backgroundColor: paymentMethod === 'upi' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                          gap: scale(6),
+                        }}
+                        onPress={() => setPaymentMethod('upi')}
                       >
-                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
-                      </TouchableOpacity>
-                      <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
-                        {bookingHour < 10 ? '0' + bookingHour : bookingHour}
-                      </Text>
-                      <TouchableOpacity
-                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
-                        onPress={() => setBookingHour(prev => prev === 12 ? 1 : prev + 1)}
-                      >
-                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
+                        <MaterialIcons name="qr-code" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
+                        <Text style={{ color: paymentMethod === 'upi' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
+                          UPI / Online
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </View>
+                )}
 
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(18), fontWeight: '900' }}>:</Text>
+            {/* PRE-BOOKING PAYMENT CHOICE (20% ADVANCE vs 100% FULL) */}
+            {!adminState.instantBookingEnabled && (
+              <View style={{ marginTop: verticalScale(12), marginBottom: verticalScale(6) }}>
+                <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>
+                  Payment Option (Pre-Booking)
+                </Text>
+                <View style={{ flexDirection: 'row', gap: scale(10) }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: verticalScale(10),
+                      paddingHorizontal: scale(10),
+                      borderRadius: scale(12),
+                      borderWidth: 1.5,
+                      borderColor: preBookingPaymentChoice === 'advance_20' ? colors.amber : colors.border,
+                      backgroundColor: preBookingPaymentChoice === 'advance_20' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setPreBookingPaymentChoice('advance_20')}
+                  >
+                    <Text style={{ color: preBookingPaymentChoice === 'advance_20' ? colors.amber : colors.textPrimary, fontWeight: '900', fontSize: moderateFontScale(12.5) }}>
+                      20% Advance
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: 2, textAlign: 'center' }}>
+                      Pay 20% now, 80% to driver
+                    </Text>
+                  </TouchableOpacity>
 
-                  {/* Minute Selection */}
-                  <View style={{ alignItems: 'center', flex: 1.2 }}>
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '800', marginBottom: verticalScale(4) }}>MINUTE</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-                      <TouchableOpacity
-                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
-                        onPress={() => setBookingMinute(prev => prev === 0 ? 55 : prev - 5)}
-                      >
-                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>-</Text>
-                      </TouchableOpacity>
-                      <Text style={{ fontSize: moderateFontScale(15), fontWeight: '900', color: colors.textPrimary, width: scale(22), textAlign: 'center' }}>
-                        {bookingMinute < 10 ? '0' + bookingMinute : bookingMinute}
-                      </Text>
-                      <TouchableOpacity
-                        style={{ width: scale(26), height: scale(26), borderRadius: scale(6), backgroundColor: '#3A3A40', justifyContent: 'center', alignItems: 'center' }}
-                        onPress={() => setBookingMinute(prev => prev === 55 ? 0 : prev + 5)}
-                      >
-                        <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: moderateFontScale(14) }}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* AM/PM Switch */}
-                  <View style={{ flexDirection: 'row', gap: scale(4), marginLeft: scale(10), flex: 1.3 }}>
-                    {(['AM', 'PM'] as const).map((period) => {
-                      const isSelected = bookingAmPm === period;
-                      return (
-                        <TouchableOpacity
-                          key={period}
-                          style={{
-                            flex: 1,
-                            height: scale(28),
-                            borderRadius: scale(6),
-                            borderWidth: 1.5,
-                            borderColor: isSelected ? colors.amber : colors.border,
-                            backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.1)' : 'transparent',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                          onPress={() => setBookingAmPm(period)}
-                        >
-                          <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '900' }}>
-                            {period}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: verticalScale(10),
+                      paddingHorizontal: scale(10),
+                      borderRadius: scale(12),
+                      borderWidth: 1.5,
+                      borderColor: preBookingPaymentChoice === 'full_100' ? colors.amber : colors.border,
+                      backgroundColor: preBookingPaymentChoice === 'full_100' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setPreBookingPaymentChoice('full_100')}
+                  >
+                    <Text style={{ color: preBookingPaymentChoice === 'full_100' ? colors.amber : colors.textPrimary, fontWeight: '900', fontSize: moderateFontScale(12.5) }}>
+                      100% Full Payment
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: 2, textAlign: 'center' }}>
+                      Pay 100% full fare now
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
-
-            {/* PAYMENT METHOD SELECTOR (CASH vs UPI) */}
-            <View style={{ marginTop: verticalScale(14), marginBottom: verticalScale(6) }}>
-              <Text style={[styles.selectorLabel, { color: colors.textPrimary, marginBottom: verticalScale(8) }]}>
-                Select Payment Mode
-              </Text>
-              <View style={{ flexDirection: 'row', gap: scale(10) }}>
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: verticalScale(10),
-                    borderRadius: scale(12),
-                    borderWidth: 1.5,
-                    borderColor: paymentMethod === 'cash' ? colors.amber : colors.border,
-                    backgroundColor: paymentMethod === 'cash' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
-                    gap: scale(6),
-                  }}
-                  onPress={() => setPaymentMethod('cash')}
-                >
-                  <MaterialIcons name="attach-money" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
-                  <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
-                    Cash
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingVertical: verticalScale(10),
-                    borderRadius: scale(12),
-                    borderWidth: 1.5,
-                    borderColor: paymentMethod === 'upi' ? colors.amber : colors.border,
-                    backgroundColor: paymentMethod === 'upi' ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
-                    gap: scale(6),
-                  }}
-                  onPress={() => setPaymentMethod('upi')}
-                >
-                  <MaterialIcons name="qr-code" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
-                  <Text style={{ color: paymentMethod === 'upi' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
-                    UPI / Online
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
 
             {/* PRE-BOOKING FEES BREAKDOWN CARD */}
             {(() => {
               const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
               const { computedPrice, baseDayRate, extraHoursRounded, extraAddonCharge, vehicleHourlyRate, totalTripHours } = priceInfo;
               const isPreBooking = !adminState.instantBookingEnabled;
-              const advancePayable = isPreBooking ? Math.round(computedPrice * 0.20) : computedPrice;
-              const remainingBalance = isPreBooking ? (computedPrice - advancePayable) : 0;
+              const is20Percent = isPreBooking && preBookingPaymentChoice === 'advance_20';
+              const advancePayable = is20Percent ? Math.round(computedPrice * 0.20) : computedPrice;
+              const remainingBalance = is20Percent ? (computedPrice - advancePayable) : 0;
 
               return (
                 <>
@@ -968,6 +1027,8 @@ export default function PlanRouteScreen() {
             </TouchableOpacity>
 
             <View style={{ height: verticalScale(30) }} />
+              </View>
+            )}
           </ScrollView>
         </>
       )}

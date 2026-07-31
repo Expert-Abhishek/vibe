@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { emitNotification } = require('../config/socket');
+const { emitNotification, emitTripRequest } = require('../config/socket');
 
 const router = express.Router();
 
@@ -20,6 +20,7 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lat NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lng NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id VARCHAR(255);
     `);
   } catch (e) {
     console.warn('Trips table auto-migration warning:', e.message);
@@ -633,6 +634,7 @@ router.post('/book', async (req, res) => {
     }
 
     const newTrip = result.rows[0];
+    emitTripRequest(newTrip);
 
     // Query all driver / guide tokens to send push notification!
     const targetRole = tripType === 'guide' ? 'guide' : 'driver';
@@ -827,14 +829,16 @@ router.post('/', async (req, res) => {
     const advanceDepositPaid = isPreBooked ? Math.round(totalAmount * 0.20) : 0;
     const remainingCashBalance = isPreBooked ? totalAmount - advanceDepositPaid : totalAmount;
 
+    const targetDriverId = req.body.driverId || req.body.selectedDriverId || req.body.driver_id || req.body.assignedToId || null;
+
     const result = await db.query(
       `INSERT INTO trips (
         trip_type, title, customer_id, customer_name, driver_or_guide_name,
         plan_id, destination_ids, amount, payment_mode, status,
         duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
-        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance
+        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
        RETURNING *`,
       [
         tripType,
@@ -858,10 +862,16 @@ router.post('/', async (req, res) => {
         scheduledTime ? new Date(scheduledTime) : null,
         advanceDepositPaid,
         remainingCashBalance,
+        targetDriverId || null,
       ]
     );
 
     const t = result.rows[0];
+    if (targetDriverId) {
+      t.driverId = targetDriverId;
+      t.driver_id = targetDriverId;
+    }
+    emitTripRequest(t);
 
     // Notify drivers / guides via push notifications
     const targetRole = tripType === 'guide' ? 'guide' : 'driver';

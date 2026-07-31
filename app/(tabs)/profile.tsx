@@ -223,10 +223,10 @@ export default function ProfileScreen() {
   const [appLang, setAppLang] = useState<'en' | 'kn'>('en');
 
   const colors = {
-    background: isDark ? '#101014' : '#FAF8F5',
-    surface: isDark ? '#1A1A20' : '#FFFFFF',
-    surfaceAlt: isDark ? '#212129' : '#F4F0E8',
-    line: isDark ? '#2C2C34' : '#E8E3DA',
+    background: isDark ? '#101014' : '#F4EFE6',
+    surface: isDark ? '#1A1A20' : '#FAF7F0',
+    surfaceAlt: isDark ? '#212129' : '#EFEAE0',
+    line: isDark ? '#2C2C34' : '#E2DCD0',
     textPrimary: isDark ? '#F5F4F0' : '#1E293B',
     textMuted: isDark ? '#8D8D97' : '#64748B',
     amber: isDark ? '#F5C518' : '#D97706',
@@ -865,6 +865,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: scale(20),
+    paddingBottom: verticalScale(140),
   },
   header: {
     alignItems: 'center',

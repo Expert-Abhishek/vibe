@@ -611,10 +611,8 @@ export default function DriverDashboardScreen() {
     const session = getUserSessionSync();
     const driverId = session?.id || 'd1';
 
-    // Post real-time location coordinates
-    const locationInterval = setInterval(async () => {
-      await updateDriverLocationApi(driverId, 12.9716, 77.5946, true);
-    }, 30000);
+    // Send initial location post on going online
+    updateDriverLocationApi(driverId, 12.9716, 77.5946, true).catch(() => {});
 
     let isMounted = true;
 
@@ -680,16 +678,45 @@ export default function DriverDashboardScreen() {
     };
 
     pollRequests();
-    const requestInterval = setInterval(pollRequests, 15000);
 
-    const cleanupSync = listenForTripRequests(() => {
+    const cleanupSync = listenForTripRequests((trip) => {
+      if (trip && trip.id && !handledTripIdsRef.current.has(String(trip.id))) {
+        const reqIdStr = String(trip.id);
+        setIncomingRequest({
+          touristName: trip.touristName || trip.customerName || 'Tourist Customer',
+          pickup: trip.pickup || trip.pickupName || trip.title || 'Bengaluru Pickup',
+          pickupLat: trip.pickupLat || 12.9716,
+          pickupLng: trip.pickupLng || 77.5946,
+          drop: trip.drop || trip.dropName || 'Destination Point',
+          dropLat: trip.dropLat || 12.3053,
+          dropLng: trip.dropLng || 76.6552,
+          distanceKm: trip.durationHrs ? trip.durationHrs * 30 : 45,
+          durationMins: trip.durationHrs ? trip.durationHrs * 60 : 60,
+          estimatedFare: Number(trip.estimatedFare || trip.price || trip.amount || 2500),
+          paymentMode: trip.paymentMode || 'Wallet',
+          otp: trip.otp || '8240',
+          endOtp: trip.endOtp || '4321',
+          tripId: trip.id,
+          id: trip.id,
+          bookingType: trip.bookingType || 'INSTANT',
+          scheduledTime: trip.scheduledTime,
+        } as any);
+        setTimerSeconds(30);
+        setRequestVisible(true);
+
+        if (lastNotifiedReqIdRef.current !== reqIdStr) {
+          lastNotifiedReqIdRef.current = reqIdStr;
+          sendLocalNotification(
+            '🚕 Real-Time Ride / Pre-Booking Request!',
+            `Tourist ${trip.touristName || trip.customerName || 'Client'} requested a trip: ${trip.pickup || trip.pickupName || 'Pickup'} ➔ ${trip.drop || trip.dropName || 'Drop'}`
+          );
+        }
+      }
       pollRequests();
     });
 
     return () => {
       isMounted = false;
-      clearInterval(locationInterval);
-      clearInterval(requestInterval);
       cleanupSync();
     };
   }, [isOnline, activeTrip, requestVisible]);
@@ -772,10 +799,8 @@ export default function DriverDashboardScreen() {
     };
 
     loadDriverData();
-    const interval = setInterval(loadDriverData, 30000);
     const unsubscribeWallet = subscribeWalletChange(loadDriverData);
     return () => {
-      clearInterval(interval);
       unsubscribeWallet();
     };
   }, [updateTrigger]);

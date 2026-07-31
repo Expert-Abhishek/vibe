@@ -693,10 +693,8 @@ export default function GuideDashboardScreen() {
     };
 
     pollGuideRequests();
-    const interval = setInterval(pollGuideRequests, 4000);
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
   }, [isOnline, activeTour, incomingRequest]);
 

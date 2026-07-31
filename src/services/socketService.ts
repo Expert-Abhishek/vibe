@@ -1,3 +1,4 @@
+import { DeviceEventEmitter } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL, notifyWalletChanged } from '@/constants/api';
 import { notificationStore } from '../store/notificationStore';
@@ -42,7 +43,6 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     });
 
     socket.on('connect_error', (error: Error) => {
-      // Quietly notice connection error without spamming Reactotron
       if (socket && !socket.connected) {
         if (String(error?.message || '').includes('404') || String(error || '').includes('404')) {
           console.log('[SocketService] Endpoint unreachable (404). Socket polling paused.');
@@ -67,10 +67,31 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       notifyWalletChanged();
     });
 
+    // 3. Real-time trip request broadcast event
+    socket.off('trip_request');
+    socket.on('trip_request', (data: any) => {
+      console.log('[SocketService] Received real-time trip request via WebSockets:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('new_driver_request', data);
+        } catch (e) {}
+      }
+    });
+
     return socket;
   } catch (err) {
     console.warn('[SocketService] Failed to initialize socket connection:', err);
     return null;
+  }
+}
+
+/**
+ * Emit real-time trip request to backend WebSocket server
+ */
+export function emitTripRequestSocket(tripObject: any) {
+  if (socket && socket.connected) {
+    socket.emit('broadcast_trip_request', tripObject);
+    console.log('[SocketService] Emitted broadcast_trip_request over WebSockets:', tripObject?.id);
   }
 }
 

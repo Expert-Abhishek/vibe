@@ -36,6 +36,13 @@ function initSocket(server) {
       }
     });
 
+    // Real-time client trip request relay over WebSockets
+    socket.on('broadcast_trip_request', (tripObject) => {
+      if (!tripObject) return;
+      console.log(`[Socket.io] Client socket ${socket.id} relayed broadcast_trip_request:`, tripObject.id);
+      emitTripRequest(tripObject);
+    });
+
     socket.on('disconnect', () => {
       console.log(`[Socket.io] Client disconnected: ${socket.id}`);
     });
@@ -112,9 +119,37 @@ function emitWalletUpdate(payload) {
   }
 }
 
+/**
+ * Emit real-time trip request event to targeted driver user room and role rooms
+ */
+function emitTripRequest(tripObject) {
+  if (!io || !tripObject) return;
+  const driverId = tripObject.driverId || tripObject.driver_id || tripObject.assignedDriverId || tripObject.guideId || tripObject.assignedToId || tripObject.selectedDriverId;
+
+  const normalizedTrip = {
+    ...tripObject,
+    driverId: driverId || null,
+    driver_id: driverId || null,
+    status: tripObject.status || 'Pending',
+    createdAt: tripObject.createdAt || new Date().toISOString(),
+  };
+
+  if (driverId) {
+    io.to(`user:${driverId}`).emit('trip_request', normalizedTrip);
+    console.log(`[Socket.io] Emitted targeted trip_request to user:${driverId}`);
+  }
+  
+  io.to('role:driver').emit('trip_request', normalizedTrip);
+  io.to('role:guide').emit('trip_request', normalizedTrip);
+  io.emit('trip_request', normalizedTrip);
+
+  console.log(`[Socket.io] Broadcasted real-time trip_request globally for trip:`, tripObject.id || tripObject.title);
+}
+
 module.exports = {
   initSocket,
   getIO,
   emitNotification,
   emitWalletUpdate,
+  emitTripRequest,
 };

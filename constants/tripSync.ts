@@ -10,6 +10,8 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'BroadcastChannel'
   } catch (e) {}
 }
 
+import { emitTripRequestSocket } from '@/src/services/socketService';
+
 export function broadcastNewTripRequest(tripObject: any) {
   if (!tripObject || !tripObject.id) return;
 
@@ -19,9 +21,10 @@ export function broadcastNewTripRequest(tripObject: any) {
   (adminState as any).pendingDriverRequests = (adminState as any).pendingDriverRequests || [];
   (adminState as any).pendingDriverRequests.unshift(tripObject);
 
-  // 2. React Native Local Event
+  // 2. React Native Local Event & WebSockets Emission
   try {
     DeviceEventEmitter.emit('new_driver_request', tripObject);
+    emitTripRequestSocket(tripObject);
   } catch (e) {}
 
   // 3. Web localStorage & BroadcastChannel (Cross-Tab Real-Time Sync)
