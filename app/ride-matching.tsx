@@ -312,14 +312,22 @@ export default function RideMatchingScreen() {
 
   const handleAcceptedData = (data: any) => {
     if (isNavigatedRef.current) return;
+    if (!data) return;
 
-    if (data && (String(data.tripId || data.id) === String(tripIdParam) || !tripIdParam || data.status === 'Accepted')) {
-      console.log('[RideMatchingScreen] 🚀 Trip Accepted Received:', data);
+    const eventTripId = String(data.tripId || data.id || '');
+    const currentTripId = String(tripIdParam || '');
+
+    const isMatch = !currentTripId || !eventTripId || eventTripId === currentTripId;
+    const isAccepted = String(data.status || '').toLowerCase() === 'accepted';
+
+    if (isMatch && isAccepted) {
+      console.log('[RideMatchingScreen] 🚀 Trip Accepted Event Received:', data);
       isNavigatedRef.current = true;
       setIsDriverTimeout(false);
 
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
 
       if (data.driverName || data.driver_or_guide_name) {
@@ -327,8 +335,8 @@ export default function RideMatchingScreen() {
           id: data.driverId || data.driver_id || 'd1',
           name: data.driverName || data.driver_or_guide_name,
           phone: data.driverPhone || '+91 99000 82400',
-          vehicleModel: data.vehicleModel || 'Innova / Thar 4x4',
-          vehicleNumber: data.vehicleNumber || 'KA-03-EX-8240',
+          vehicleModel: data.vehicleModel || data.vehicle_model || 'Innova / Thar 4x4',
+          vehicleNumber: data.vehicleNumber || data.vehicle_number || 'KA-03-EX-8240',
           rating: 4.9,
         });
       }
@@ -347,14 +355,24 @@ export default function RideMatchingScreen() {
   useEffect(() => {
     initSocketService();
     const socket = getSocket();
+    const customerIdParam = (params.customerId as string) || (params.userId as string) || '';
+
+    if (socket) {
+      socket.emit('join_room', {
+        userId: customerIdParam,
+        tripId: tripIdParam,
+        role: 'tourist',
+      });
+    }
 
     const handleTripStatusUpdated = (data: any) => {
       console.log('[RideMatchingScreen] 📢 Received trip_status_updated event:', data);
       if (!data) return;
 
-      if (data.status === 'Accepted') {
+      const currentStatus = String(data.status || '').toLowerCase();
+      if (currentStatus === 'accepted') {
         handleAcceptedData(data);
-      } else if (data.status === 'Declined' || data.status === 'Rejected') {
+      } else if (currentStatus === 'declined' || currentStatus === 'rejected') {
         setIsDriverTimeout(true);
         Alert.alert(
           'Driver Busy',
@@ -419,6 +437,7 @@ export default function RideMatchingScreen() {
       }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
       subStatus.remove();
       subAccepted.remove();

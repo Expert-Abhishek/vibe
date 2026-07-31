@@ -243,10 +243,10 @@ function emitTripRequest(tripObject) {
 function emitTripAccepted(tripObject) {
   if (!io || !tripObject) return;
 
-  // Normalize IDs & Extract Customer ID properly
-  const tripId = String(tripObject.id || tripObject.tripId);
-  const customerId = String(tripObject.customer_id || tripObject.customerId);
-  const driverId = String(tripObject.driver_id || tripObject.driverId);
+  // Normalize IDs & Extract Customer ID properly as clean strings
+  const tripId = String(tripObject.id || tripObject.tripId || '');
+  const customerId = String(tripObject.customer_id || tripObject.customerId || '');
+  const driverId = String(tripObject.driver_id || tripObject.driverId || '');
 
   const acceptancePayload = {
     tripId: tripId,
@@ -255,20 +255,24 @@ function emitTripAccepted(tripObject) {
     status: 'Accepted',
     driverName: tripObject.driverName || tripObject.driver_or_guide_name || 'Driver Partner',
     driverPhone: tripObject.driverPhone || '+91 99000 82400',
-    vehicleModel: tripObject.vehicleModel || '5 Seater Cab',
-    vehicleNumber: tripObject.vehicleNumber || 'HR-51-AB-1234',
+    vehicleModel: tripObject.vehicleModel || tripObject.vehicle_model || '5 Seater Cab',
+    vehicleNumber: tripObject.vehicleNumber || tripObject.vehicle_number || 'HR-51-AB-1234',
     otp: tripObject.otp || '8240',
-    endOtp: tripObject.endOtp || '4321',
+    endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
   };
 
   // 1. Emit to Rider's personal socket room (CRITICAL FIX: Ensure customerId is valid string)
-  if (customerId && customerId !== 'null') {
+  if (customerId && customerId !== 'null' && customerId !== 'undefined') {
     io.to(`user:${customerId}`).emit('trip_accepted', acceptancePayload);
-    console.log(`[SOCKET] 🎯 Sent trip_accepted to user room: user:${customerId}`);
+    io.to(`user:${customerId}`).emit('trip_status_updated', acceptancePayload);
+    console.log(`[SOCKET] Broadcasted trip_accepted to user:${customerId}`);
   }
 
   // 2. Emit to Trip room
-  io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
+  if (tripId && tripId !== 'null' && tripId !== 'undefined') {
+    io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
+    io.to(`trip:${tripId}`).emit('trip_status_updated', acceptancePayload);
+  }
 
   // 3. Global Broadcast Fallback
   io.emit('RIDE_ACCEPTED', acceptancePayload);
@@ -353,13 +357,15 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
     id: driverId,
     name: tripObject.driverName || tripObject.driver_or_guide_name || 'Captain',
     phone: tripObject.driverPhone || '+91 99000 82400',
-    vehicleModel: tripObject.vehicleModel || 'Innova / Thar 4x4',
-    vehicleNumber: tripObject.vehicleNumber || 'KA-03-EX-8240',
+    vehicleModel: tripObject.vehicleModel || tripObject.vehicle_model || 'Innova / Thar 4x4',
+    vehicleNumber: tripObject.vehicleNumber || tripObject.vehicle_number || 'KA-03-EX-8240',
   };
 
   const payload = {
     tripId: tripId,
     id: tripId,
+    customerId: customerId,
+    driverId: driverId,
     status: status,
     driverDetails: driverDetails,
     driverName: driverDetails.name,
@@ -373,13 +379,20 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
 
   console.log(`[SOCKET] 📢 Trip status [${status}] sent to Rider Room: user:${customerId}`);
 
-  if (customerId && customerId !== 'null') {
+  if (customerId && customerId !== 'null' && customerId !== 'undefined') {
     io.to(`user:${customerId}`).emit('trip_status_updated', payload);
+    if (status === 'Accepted') {
+      io.to(`user:${customerId}`).emit('trip_accepted', payload);
+      console.log(`[SOCKET] Broadcasted trip_accepted to user:${customerId}`);
+    }
   }
-  if (tripId) {
+  if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_status_updated', payload);
+    if (status === 'Accepted') {
+      io.to(`trip:${tripId}`).emit('trip_accepted', payload);
+    }
   }
-  if (driverId) {
+  if (driverId && driverId !== 'null' && driverId !== 'undefined') {
     io.to(`user:${driverId}`).emit('trip_status_updated', payload);
   }
 

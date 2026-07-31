@@ -1124,7 +1124,13 @@ router.post('/:id/accept', async (req, res) => {
       [driverName, driverId || null, id]
     );
 
-    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId };
+    let trip = result.rows.length > 0 ? result.rows[0] : null;
+    if (!trip) {
+      const fetchRes = await db.query(`SELECT * FROM trips WHERE id = $1 OR CAST(id AS VARCHAR) = $1`, [id]);
+      trip = fetchRes.rows.length > 0 ? fetchRes.rows[0] : { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId };
+    }
+
+    emitTripAccepted(trip);
     emitTripStatusUpdated(trip, 'Accepted');
 
     // Notify tourist
