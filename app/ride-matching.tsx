@@ -356,6 +356,11 @@ export default function RideMatchingScreen() {
         handleAcceptedData(data);
       } else if (data.status === 'Declined' || data.status === 'Rejected') {
         setIsDriverTimeout(true);
+        Alert.alert(
+          'Driver Busy',
+          'The selected driver is currently unavailable. Please choose another driver or broadcast to all.',
+          [{ text: 'OK' }]
+        );
       }
     };
 

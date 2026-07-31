@@ -371,7 +371,7 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
     updatedAt: new Date().toISOString(),
   };
 
-  console.log(`[Socket.io] 📢 Emitting trip_status_updated (${status}) for trip ${tripId} to user:${customerId}`);
+  console.log(`[SOCKET] 📢 Trip status [${status}] sent to Rider Room: user:${customerId}`);
 
   if (customerId && customerId !== 'null') {
     io.to(`user:${customerId}`).emit('trip_status_updated', payload);
@@ -401,4 +401,5 @@ module.exports = {
   emitTripDeclined,
   emitTripCancelled,
   emitTripStatusUpdated,
+  emitTripStatusUpdate: emitTripStatusUpdated,
 };
