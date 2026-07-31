@@ -311,6 +311,7 @@ export default function RideMatchingScreen() {
   }, [tripIdParam, tripType, vehicle]);
 
   const handleAcceptedData = (data: any) => {
+    console.log('[RIDER] Event received:', data);
     if (isNavigatedRef.current) return;
     if (!data) return;
 
@@ -321,7 +322,7 @@ export default function RideMatchingScreen() {
     const isAccepted = String(data.status || '').toLowerCase() === 'accepted';
 
     if (isMatch && isAccepted) {
-      console.log('[RideMatchingScreen] 🚀 Trip Accepted Event Received:', data);
+      console.log('[RIDER] ✅ Valid Acceptance Event! Navigating to /trip-status with tripId:', eventTripId || currentTripId);
       isNavigatedRef.current = true;
       setIsDriverTimeout(false);
 
@@ -355,18 +356,31 @@ export default function RideMatchingScreen() {
   useEffect(() => {
     initSocketService();
     const socket = getSocket();
-    const customerIdParam = (params.customerId as string) || (params.userId as string) || '';
+    const customerIdParam = (params.customerId as string) || (params.userId as string) || 't1';
 
-    if (socket) {
-      socket.emit('join_room', {
-        userId: customerIdParam,
-        tripId: tripIdParam,
-        role: 'tourist',
-      });
-    }
+    const joinRiderRooms = () => {
+      if (socket) {
+        const payload = {
+          userId: customerIdParam,
+          tripId: tripIdParam,
+          room: `user:${customerIdParam}`,
+          role: 'tourist',
+        };
+        socket.emit('join_room', payload);
+        if (customerIdParam) {
+          socket.emit('join_room', { room: `user:${customerIdParam}` });
+        }
+        if (tripIdParam) {
+          socket.emit('join_room', { room: `trip:${tripIdParam}` });
+        }
+        console.log(`[RIDER] Emitted join_room for user:${customerIdParam} and trip:${tripIdParam}`);
+      }
+    };
+
+    joinRiderRooms();
 
     const handleTripStatusUpdated = (data: any) => {
-      console.log('[RideMatchingScreen] 📢 Received trip_status_updated event:', data);
+      console.log('[RIDER] Received trip_status_updated event:', data);
       if (!data) return;
 
       const currentStatus = String(data.status || '').toLowerCase();
@@ -382,11 +396,18 @@ export default function RideMatchingScreen() {
       }
     };
 
+    const handleDirectAccepted = (data: any) => {
+      console.log('[RIDER] Received direct trip_accepted event:', data);
+      handleAcceptedData(data);
+    };
+
     // 1. Direct Socket Event Listeners
     if (socket) {
+      socket.on('connect', joinRiderRooms);
+      socket.on('reconnect', joinRiderRooms);
       socket.on('trip_status_updated', handleTripStatusUpdated);
-      socket.on('trip_accepted', handleAcceptedData);
-      socket.on('RIDE_ACCEPTED', handleAcceptedData);
+      socket.on('trip_accepted', handleDirectAccepted);
+      socket.on('RIDE_ACCEPTED', handleDirectAccepted);
       socket.on('trip_declined', () => setIsDriverTimeout(true));
     }
 

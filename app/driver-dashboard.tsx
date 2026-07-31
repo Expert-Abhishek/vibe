@@ -1010,12 +1010,23 @@ export default function DriverDashboardScreen() {
 
     if (tripId) {
       handledTripIdsRef.current.add(String(tripId));
+
+      try {
+        // 1. Call API POST /api/trips/:id/accept and wait for 200 OK
+        const apiRes = await acceptTripApi(String(tripId), driverId, session?.name || driverName);
+        console.log('[DriverDashboard] 🟢 acceptTripApi 200 OK response:', apiRes);
+      } catch (e) {
+        console.warn('[DriverDashboard] acceptTripApi error:', e);
+      }
+
       try {
         await respondDriverRequestApi(String(tripId), driverId, 'accept', session?.name || driverName);
       } catch (e) {
-        console.warn('respondDriverRequestApi suppressed error:', e);
+        console.warn('respondDriverRequestApi error:', e);
       }
+
       try {
+        // 2. Emit socket event
         emitAcceptRideSocket({
           tripId,
           id: tripId,

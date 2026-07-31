@@ -23,18 +23,24 @@ function initSocket(server) {
 
     // Driver/Guide room join listener
     socket.on('join_room', (data) => {
-      const { userId, role, vehicleType, tripId } = data || {};
+      const { userId, role, vehicleType, tripId, room } = data || {};
+
+      if (room) {
+        const customRoom = String(room);
+        socket.join(customRoom);
+        console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined custom room [${customRoom}]`);
+      }
 
       if (userId) {
         const userRoom = `user:${String(userId)}`;
-        socket.join(userRoom); // Driver's personal socket room
+        socket.join(userRoom); // Driver/Rider personal socket room
         console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined personal room [${userRoom}]`);
       }
 
       if (tripId) {
         const tripRoom = `trip:${String(tripId)}`;
         socket.join(tripRoom); // Join specific trip tracking room
-        console.log(`[Socket.io] Socket ${socket.id} joined trip room [${tripRoom}]`);
+        console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined trip room [${tripRoom}]`);
       }
 
       if (role) {
@@ -48,6 +54,14 @@ function initSocket(server) {
         socket.join(vehicleRoom);
         console.log(`[Socket.io] Socket ${socket.id} joined vehicle room [${vehicleRoom}]`);
       }
+    });
+
+    // Accept ride listener from driver app
+    socket.on('accept_ride', (data) => {
+      if (!data) return;
+      console.log('[Socket.io] 🟢 Received accept_ride socket event from driver:', data);
+      emitTripAccepted(data);
+      emitTripStatusUpdated(data, 'Accepted');
     });
 
     // Client relay broadcast fallback
@@ -261,6 +275,14 @@ function emitTripAccepted(tripObject) {
     endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
   };
 
+  console.log('[DEBUG] Driver accepted trip:', tripId, 'for Customer:', customerId);
+  if (io && io.sockets && io.sockets.adapter && io.sockets.adapter.rooms) {
+    const userRoomSockets = io.sockets.adapter.rooms.get(`user:${customerId}`);
+    const tripRoomSockets = io.sockets.adapter.rooms.get(`trip:${tripId}`);
+    console.log('[DEBUG] Active Sockets in room user:' + customerId + ':', userRoomSockets ? Array.from(userRoomSockets) : 'EMPTY / NONE');
+    console.log('[DEBUG] Active Sockets in room trip:' + tripId + ':', tripRoomSockets ? Array.from(tripRoomSockets) : 'EMPTY / NONE');
+  }
+
   // 1. Emit to Rider's personal socket room (CRITICAL FIX: Ensure customerId is valid string)
   if (customerId && customerId !== 'null' && customerId !== 'undefined') {
     io.to(`user:${customerId}`).emit('trip_accepted', acceptancePayload);
@@ -272,6 +294,7 @@ function emitTripAccepted(tripObject) {
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
     io.to(`trip:${tripId}`).emit('trip_status_updated', acceptancePayload);
+    console.log(`[SOCKET] Broadcasted trip_accepted to trip:${tripId}`);
   }
 
   // 3. Global Broadcast Fallback
