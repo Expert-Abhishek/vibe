@@ -1125,6 +1125,23 @@ export default function DriverDashboardScreen() {
       extraHoursFee: extraHoursFee,
     };
 
+    const completedHistoryRecord = {
+      id: tripId || `ride_${Date.now()}`,
+      title: summary.title,
+      pickupName: activeTrip.pickup,
+      dropName: activeTrip.drop,
+      date: 'Today',
+      time: 'Just Now',
+      amount: fareEarned,
+      price: fareEarned,
+      commission: (fareEarned * 0.1),
+      driverEarnings: (fareEarned * 0.9),
+      touristName: activeTrip.touristName || 'Passenger',
+      status: 'COMPLETED',
+      paymentMode: (activeTrip as any).paymentMode || 'Wallet',
+    };
+    adminState.advanceBookings.unshift(completedHistoryRecord as any);
+
     setLastCompletedTrip(summary);
     setDriverTrips(prev => [
       {

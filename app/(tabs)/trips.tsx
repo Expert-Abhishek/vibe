@@ -154,7 +154,7 @@ export default function TripsHistoryScreen() {
     const tid = String(t.id);
     if (cancelledTripIdsRef.current.has(tid) || cancelledIds.includes(tid)) return false;
     const st = String(t.status || '').toLowerCase();
-    return !st.includes('cancel') && !st.includes('decline') && st !== 'completed';
+    return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish');
   });
   const primaryActiveTrip = activeTrips.length > 0 ? activeTrips[0] : null;
 

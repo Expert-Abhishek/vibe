@@ -21,6 +21,8 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lng NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id VARCHAR(255);
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
+      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
     `);
   } catch (e) {
     console.warn('Trips table auto-migration warning:', e.message);
@@ -188,7 +190,7 @@ router.get('/live-location/:tripId', async (req, res) => {
   try {
     const { tripId } = req.params;
 
-    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [tripId]);
+    const tripRes = await db.query('SELECT * FROM trips WHERE CAST(id AS VARCHAR) = $1 OR id::text = $1', [tripId]);
     if (tripRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
@@ -941,8 +943,19 @@ router.post('/:id/accept', async (req, res) => {
     }
 
     // 2. Fetch wallet balance and platform fee for driver or guide
-    const dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1", [driverId]);
-    const gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1", [driverId]);
+    let dRes = { rows: [] };
+    try {
+      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+    } catch (e) {
+      dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+    }
+
+    let gRes = { rows: [] };
+    try {
+      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+    } catch (e) {
+      gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+    }
 
     let walletBalance = 0;
     let feePercent = 10; // Default 10% platform fee
@@ -1518,8 +1531,19 @@ router.post('/:id/respond', async (req, res) => {
       }
 
       // 1. Fetch wallet balance and platform fee
-      const dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1", [driverId]);
-      const gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1", [driverId]);
+      let dRes = { rows: [] };
+      try {
+        dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      } catch (e) {
+        dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      }
+
+      let gRes = { rows: [] };
+      try {
+        gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      } catch (e) {
+        gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      }
 
       let walletBalance = 0;
       let platformFee = 10.00;
