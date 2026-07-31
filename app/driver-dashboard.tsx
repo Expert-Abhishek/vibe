@@ -26,9 +26,10 @@ import { useLanguage } from '@/hooks/use-language';
 import { getPendingTripRequestsSync, listenForTripRequests } from '@/constants/tripSync';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
-import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useAppModal } from '@src/context/ModalContext';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { rideStateService } from '@src/services/rideStateService';
+import { initSocketService, emitAcceptRideSocket } from '@src/services/socketService';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -69,15 +70,16 @@ if (Platform.OS !== 'web') {
 interface ActiveRequest {
   touristName: string;
   pickup: string;
-  pickupLat: number;
-  pickupLng: number;
+  pickupLat?: number;
+  pickupLng?: number;
   drop: string;
-  dropLat: number;
-  dropLng: number;
-  distanceKm: number;
-  durationMins: number;
+  dropLat?: number;
+  dropLng?: number;
+  distanceKm?: number;
+  durationMins?: number;
   estimatedFare: number;
   otp: string;
+  endOtp?: string;
   bookingType?: string;
   checkpoints?: string[];
   paymentMode?: string;
@@ -753,6 +755,67 @@ export default function DriverDashboardScreen() {
     return () => clearInterval(timer);
   }, [requestVisible, timerSeconds, incomingRequest]);
 
+  // Ensure Driver Socket.io Connection & Trip Request Event Listeners
+  useEffect(() => {
+    const session = getUserSessionSync();
+    const driverId = session?.id || 'd1';
+
+    console.log('[DriverDashboard] 🔌 Initializing Driver Socket Service for user:', driverId);
+    const socket = initSocketService(driverId, 'driver');
+
+    if (socket) {
+      socket.on('connect', () => {
+        console.log('[DriverDashboard] ✅ Driver Socket Connected! Socket ID:', socket.id);
+      });
+
+      socket.on('trip_request', (tripData: any) => {
+        console.log('[DriverDashboard] 🔔 Socket trip_request received:', tripData);
+        if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
+          setIncomingRequest({
+            id: tripData.id || tripData.tripId,
+            tripId: tripData.id || tripData.tripId,
+            touristName: tripData.touristName || tripData.customerName || 'Tourist Client',
+            pickup: tripData.pickupName || tripData.pickup || 'Pickup Point',
+            drop: tripData.dropName || tripData.drop || tripData.title || 'Drop Location',
+            estimatedFare: parseFloat(tripData.price || tripData.amount || tripData.estimatedFare || 1500),
+            checkpoints: tripData.checkpoints || tripData.stops || tripData.route || [],
+            scheduledTime: tripData.scheduledTime,
+            bookingType: tripData.bookingType || 'INSTANT',
+            otp: tripData.otp || '8240',
+            endOtp: tripData.endOtp || '4321',
+          });
+          setTimerSeconds(45);
+          setRequestVisible(true);
+        }
+      });
+    }
+
+    const unsubRequests = listenForTripRequests((tripData) => {
+      console.log('[DriverDashboard] 🔔 Real-time trip request sync received:', tripData);
+      if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
+        setIncomingRequest({
+          id: tripData.id || tripData.tripId,
+          tripId: tripData.id || tripData.tripId,
+          touristName: tripData.touristName || tripData.customerName || 'Tourist Client',
+          pickup: tripData.pickupName || tripData.pickup || 'Pickup Point',
+          drop: tripData.dropName || tripData.drop || tripData.title || 'Drop Location',
+          estimatedFare: parseFloat(tripData.price || tripData.amount || tripData.estimatedFare || 1500),
+          checkpoints: tripData.checkpoints || tripData.stops || tripData.route || [],
+          scheduledTime: tripData.scheduledTime,
+          bookingType: tripData.bookingType || 'INSTANT',
+          otp: tripData.otp || '8240',
+          endOtp: tripData.endOtp || '4321',
+        });
+        setTimerSeconds(45);
+        setRequestVisible(true);
+      }
+    });
+
+    return () => {
+      unsubRequests();
+    };
+  }, []);
+
   // Fetch real-time driver schedules & pending queries from PostgreSQL database
   useEffect(() => {
     const loadDriverData = async () => {
@@ -845,6 +908,16 @@ export default function DriverDashboardScreen() {
       } catch (e) {
         console.warn('respondDriverRequestApi suppressed error:', e);
       }
+      try {
+        emitAcceptRideSocket({
+          tripId,
+          id: tripId,
+          driverId,
+          driverName: session?.name || driverName,
+          status: 'Accepted',
+          ...incomingRequest,
+        });
+      } catch (e) {}
     }
 
     setRequestVisible(false);
@@ -979,7 +1052,7 @@ export default function DriverDashboardScreen() {
 
     const baseFare = activeTrip.estimatedFare;
     const fareEarned = baseFare + extraHoursFee;
-    const distCovered = activeTrip.distanceKm;
+    const distCovered = activeTrip.distanceKm || 12.5;
 
     const session = getUserSessionSync();
     const driverId = session?.id;
@@ -1091,29 +1164,8 @@ export default function DriverDashboardScreen() {
           </Text>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-          {/* History Screen Button */}
-          <TouchableOpacity
-            style={{
-              paddingHorizontal: scale(10),
-              paddingVertical: verticalScale(5),
-              borderRadius: scale(8),
-              backgroundColor: 'rgba(245, 197, 24, 0.12)',
-              borderWidth: 1,
-              borderColor: colors.amber,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: scale(4),
-            }}
-            onPress={() => router.push('/driver-history' as any)}
-          >
-            <MaterialIcons name="history" size={scale(16)} color={colors.amber} />
-            <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800' }}>History</Text>
-          </TouchableOpacity>
-
-          {/* Bell Notification Icon */}
-          <NotificationModal role="driver" />
-        </View>
+        {/* Bell Notification Icon */}
+        <NotificationModal role="driver" />
       </View>
 
       {/* Tab Switchboard Body */}
@@ -1746,12 +1798,22 @@ export default function DriverDashboardScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* History Tab Button */}
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => router.push('/driver-history' as any)}>
+          <View style={styles.tabIconWrapper}>
+            <MaterialIcons name="history" size={scale(22)} color={colors.textMuted} />
+          </View>
+          <Text style={[styles.tabBarLabel, { color: colors.textMuted }]}>
+            {appLang === 'kn' ? 'ಇತಿಹಾಸ' : 'History'}
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('profile')}>
           <View style={[styles.tabIconWrapper, activeTab === 'profile' && styles.tabIconWrapperActive]}>
             <MaterialIcons name="person" size={scale(22)} color={activeTab === 'profile' ? '#101010' : colors.textMuted} />
           </View>
           <Text style={[styles.tabBarLabel, { color: activeTab === 'profile' ? colors.amber : colors.textMuted }]}>
-            {appLang === 'kn' ? 'ಖಾತೆ & ಸೆಟ್ಟಿಂಗ್ಸ್' : 'Account & Settings'}
+            {appLang === 'kn' ? 'ಖಾತೆ' : 'Account'}
           </Text>
         </TouchableOpacity>
       </View>

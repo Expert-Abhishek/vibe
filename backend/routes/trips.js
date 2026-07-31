@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { emitNotification, emitTripRequest } = require('../config/socket');
+const { emitNotification, emitTripRequest, emitTripAccepted } = require('../config/socket');
 
 const router = express.Router();
 
@@ -1020,22 +1020,14 @@ router.post('/:id/accept', async (req, res) => {
 
     const result = await db.query(
       `UPDATE trips 
-       SET status = 'Accepted by Guide', driver_or_guide_name = $1, driver_id = $2 
+       SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2 
        WHERE id = $3 OR CAST(id AS VARCHAR) = $3
        RETURNING *`,
       [driverName, driverId || null, id]
     );
 
-    if (result.rows.length === 0) {
-      // Fallback response for memory/demo trips
-      return res.json({
-        success: true,
-        message: 'Trip accepted successfully!',
-        data: { id, status: 'Accepted by Guide', driver_or_guide_name: driverName, driver_id: driverId },
-      });
-    }
-
-    const trip = result.rows[0];
+    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId };
+    emitTripAccepted(trip);
 
     // Notify tourist
     if (trip.customer_id) {
@@ -1045,7 +1037,7 @@ router.post('/:id/accept', async (req, res) => {
           userRes.rows[0].push_token,
           '🎉 Partner Confirmed Your Booking!',
           `${driverName} has accepted your trip request! Keep OTP ${trip.otp || '8240'} ready.`,
-          { tripId: trip.id, status: 'Accepted by Guide', driverName }
+          { tripId: trip.id, status: 'Accepted', driverName }
         );
       }
     }

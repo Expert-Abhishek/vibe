@@ -23,7 +23,7 @@ function initSocket(server) {
 
     // Client registers its user & role rooms
     socket.on('join_room', (data) => {
-      const { userId, role } = data || {};
+      const { userId, role, vehicleType } = data || {};
       if (userId) {
         const userRoom = `user:${userId}`;
         socket.join(userRoom);
@@ -33,6 +33,11 @@ function initSocket(server) {
         const roleRoom = `role:${role}`;
         socket.join(roleRoom);
         console.log(`[Socket.io] Socket ${socket.id} joined room ${roleRoom}`);
+      }
+      if (vehicleType) {
+        const vehicleRoom = `role:${vehicleType}`;
+        socket.join(vehicleRoom);
+        console.log(`[Socket.io] Socket ${socket.id} joined vehicle room ${vehicleRoom}`);
       }
     });
 
@@ -120,30 +125,70 @@ function emitWalletUpdate(payload) {
 }
 
 /**
- * Emit real-time trip request event to targeted driver user room and role rooms
+ * Emit real-time trip request event to targeted driver user room OR broadcast role rooms
  */
 function emitTripRequest(tripObject) {
   if (!io || !tripObject) return;
-  const driverId = tripObject.driverId || tripObject.driver_id || tripObject.assignedDriverId || tripObject.guideId || tripObject.assignedToId || tripObject.selectedDriverId;
+  const driverId = tripObject.selectedDriverId || tripObject.driverId || tripObject.driver_id || tripObject.assignedDriverId || tripObject.guideId || tripObject.assignedToId;
+  const vehicleType = tripObject.vehicleType || tripObject.vehicle || 'driver';
 
   const normalizedTrip = {
     ...tripObject,
     driverId: driverId || null,
     driver_id: driverId || null,
-    status: tripObject.status || 'Pending',
+    status: 'Pending',
     createdAt: tripObject.createdAt || new Date().toISOString(),
   };
 
   if (driverId) {
+    // Targeted Direct Request: Send ONLY to specific driver's user room
     io.to(`user:${driverId}`).emit('trip_request', normalizedTrip);
-    console.log(`[Socket.io] Emitted targeted trip_request to user:${driverId}`);
+    console.log(`[DIRECT REQUEST] Request sent directly to driver socket room: user:${driverId}`);
+  } else {
+    // General Broadcast Request: Send to role and vehicle rooms
+    if (vehicleType) {
+      io.to(`role:${vehicleType}`).emit('trip_request', normalizedTrip);
+      console.log(`[SOCKET] Trip request emitted to room: role:${vehicleType} for Trip ID: ${normalizedTrip.id}`);
+    }
+    io.to('role:driver').emit('trip_request', normalizedTrip);
+    io.to('role:guide').emit('trip_request', normalizedTrip);
+    io.emit('trip_request', normalizedTrip);
+    console.log(`[SOCKET] Trip request emitted to room: role:driver for Trip ID: ${normalizedTrip.id}`);
   }
-  
-  io.to('role:driver').emit('trip_request', normalizedTrip);
-  io.to('role:guide').emit('trip_request', normalizedTrip);
-  io.emit('trip_request', normalizedTrip);
+}
 
-  console.log(`[Socket.io] Broadcasted real-time trip_request globally for trip:`, tripObject.id || tripObject.title);
+/**
+ * Emit real-time trip acceptance event to rider, driver, and global rooms
+ */
+function emitTripAccepted(tripObject) {
+  if (!io || !tripObject) return;
+  const tripId = tripObject.id || tripObject.tripId;
+  const customerId = tripObject.customerId || tripObject.customer_id;
+  const driverId = tripObject.driverId || tripObject.driver_id;
+  const driverName = tripObject.driverName || tripObject.driver_or_guide_name || 'Captain';
+
+  const acceptancePayload = {
+    ...tripObject,
+    id: tripId,
+    tripId: tripId,
+    status: 'Accepted',
+    driverName: driverName,
+    driver_or_guide_name: driverName,
+    driverId: driverId,
+    acceptedAt: new Date().toISOString(),
+  };
+
+  console.log(`[Socket.io] 🚀 Emitting trip_accepted & RIDE_ACCEPTED for trip ${tripId} by driver ${driverName} (${driverId})`);
+
+  if (tripId) io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
+  if (customerId) io.to(`user:${customerId}`).emit('trip_accepted', acceptancePayload);
+  if (driverId) io.to(`user:${driverId}`).emit('trip_accepted', acceptancePayload);
+
+  io.to('role:driver').emit('trip_accepted', acceptancePayload);
+  io.to('role:guide').emit('trip_accepted', acceptancePayload);
+  io.to('role:tourist').emit('trip_accepted', acceptancePayload);
+  io.emit('trip_accepted', acceptancePayload);
+  io.emit('RIDE_ACCEPTED', acceptancePayload);
 }
 
 module.exports = {
@@ -152,4 +197,5 @@ module.exports = {
   emitNotification,
   emitWalletUpdate,
   emitTripRequest,
+  emitTripAccepted,
 };

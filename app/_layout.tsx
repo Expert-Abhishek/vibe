@@ -5,6 +5,24 @@ if (__DEV__) {
   } catch (e) {}
 }
 
+import { Platform } from 'react-native';
+
+// Safeguard for Web browser WakeLock / KeepAwake permission errors
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  try {
+    window.addEventListener('unhandledrejection', (event) => {
+      if (
+        event.reason &&
+        (String(event.reason?.message || '').includes('keep awake') ||
+          String(event.reason || '').includes('keep awake') ||
+          String(event.reason?.message || '').includes('WakeLock'))
+      ) {
+        event.preventDefault();
+      }
+    });
+  } catch (e) {}
+}
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -70,6 +88,7 @@ export default function RootLayout() {
             <Stack.Screen name="search-location" />
             <Stack.Screen name="guide-dashboard" />
             <Stack.Screen name="driver-dashboard" />
+            <Stack.Screen name="driver-history" options={{ animation: 'none' }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           </Stack>
           <StatusBar style="auto" />

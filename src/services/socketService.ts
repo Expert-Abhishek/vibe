@@ -109,6 +109,16 @@ export function joinUserRoom(userId?: string, role: string = 'tourist') {
 }
 
 /**
+ * Emit real-time ride acceptance event to backend WebSocket server
+ */
+export function emitAcceptRideSocket(tripData: any) {
+  if (socket && socket.connected) {
+    socket.emit('accept_ride', tripData);
+    console.log('[SocketService] Emitted accept_ride over WebSockets:', tripData?.id || tripData?.tripId);
+  }
+}
+
+/**
  * Disconnect socket connection
  */
 export function disconnectSocketService() {

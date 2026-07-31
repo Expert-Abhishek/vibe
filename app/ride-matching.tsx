@@ -1,24 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { adminState, TripRecord } from '@/constants/admin-state';
+import { fetchDriversApi, fetchGuidesApi, fetchLiveLocationApi } from '@/constants/api';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { broadcastNewTripRequest } from '@/constants/tripSync';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  DeviceEventEmitter,
+  Modal,
+  Platform,
+  StatusBar,
   StyleSheet,
-  View,
   Text,
   TouchableOpacity,
-  ActivityIndicator,
-  Platform,
-  Alert,
-  Modal,
-  StatusBar,
-  ScrollView,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import NotificationModal from '@/components/NotificationModal';
-import { fetchLiveLocationApi } from '@/constants/api';
-import { adminState, TripRecord } from '@/constants/admin-state';
 
 let MapView: any = null;
 let Marker: any = null;
@@ -95,6 +95,54 @@ export default function RideMatchingScreen() {
 
   // Wiggling cars coords for searching phase
   const [wiggleCars, setWiggleCars] = useState<Coordinate[]>([]);
+  const [searchingTimer, setSearchingTimer] = useState(45);
+  const [isDriverTimeout, setIsDriverTimeout] = useState(false);
+
+  // 45-second targeted searching timer countdown
+  useEffect(() => {
+    let interval: any = null;
+    if (status === 'searching' && searchingTimer > 0) {
+      interval = setInterval(() => {
+        setSearchingTimer(prev => {
+          if (prev <= 1) {
+            clearInterval(interval!);
+            setIsDriverTimeout(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [status, searchingTimer]);
+
+  const handleBroadcastToAll = () => {
+    setIsDriverTimeout(false);
+    setSearchingTimer(45);
+    const broadcastObj = {
+      id: tripIdParam || `trip_${Date.now()}`,
+      tripId: tripIdParam || `trip_${Date.now()}`,
+      tripType: tripType,
+      vehicleType: vehicle,
+      title: `${pickupName} ➔ ${dropName}`,
+      pickup: pickupName,
+      drop: dropName,
+      estimatedFare: price,
+      price: price,
+      paymentMode: paymentMode,
+      passengerCount: passengerCount,
+      customerName: 'Tourist Client',
+      status: 'Pending',
+      bookingType: 'INSTANT',
+      otp: (params.otp as string) || '8240',
+      endOtp: (params.endOtp as string) || '4321',
+      createdAt: new Date().toISOString(),
+    };
+    broadcastNewTripRequest(broadcastObj);
+    Alert.alert('Broadcast Dispatched!', 'Your ride request has been broadcasted to all nearby available drivers.');
+  };
 
   const colors = {
     background: isDark ? '#101014' : '#F5F5F7',
@@ -157,6 +205,108 @@ export default function RideMatchingScreen() {
     return () => clearInterval(interval);
   }, [status]);
 
+  // Fetch real matching driver/guide from API & dispatch targeted ride request
+  useEffect(() => {
+    async function resolveSpecificDriver() {
+      try {
+        const selectedDriverId = (params.driverId as string) || (params.selectedDriverId as string) || '';
+
+        if (tripType === 'guide') {
+          const guides = await fetchGuidesApi();
+          let matched = guides.find((g: any) => g.user_id === selectedDriverId || g.id === selectedDriverId);
+          if (!matched && guides.length > 0) matched = guides[0];
+
+          if (matched) {
+            const driverInfo = {
+              id: matched.user_id || matched.id || 'g1',
+              name: matched.name || 'Ramesh Gowda',
+              phone: matched.phone || '+91 99000 82400',
+              vehicleModel: matched.experience_years ? `Certified Tour Guide (${matched.experience_years} yrs exp)` : 'Government Certified Tour Guide',
+              vehicleNumber: matched.languages ? `Lang: ${matched.languages}` : 'GUIDE-ID-8240',
+              rating: matched.rating ? parseFloat(matched.rating) : 4.9,
+            };
+            setLiveDriverInfo(driverInfo);
+            dispatchTargetedRequest(driverInfo.id, driverInfo);
+          }
+        } else {
+          const drivers = await fetchDriversApi();
+          let matched: any = null;
+
+          if (selectedDriverId) {
+            matched = drivers.find((d: any) => d.user_id === selectedDriverId || d.id === selectedDriverId);
+          }
+
+          if (!matched && drivers.length > 0) {
+            // Match driver based on chosen vehicle category
+            const vLower = vehicle.toLowerCase();
+            if (vLower.includes('auto')) {
+              matched = drivers.find((d: any) => (d.vehicle_model || '').toLowerCase().includes('auto') || (d.vehicle_type || '').toLowerCase().includes('auto')) || drivers[0];
+            } else if (vLower.includes('sedan')) {
+              matched = drivers.find((d: any) => (d.vehicle_model || '').toLowerCase().includes('sedan') || (d.vehicle_model || '').toLowerCase().includes('dzire')) || drivers[0];
+            } else if (vLower.includes('7') || vLower.includes('suv') || vLower.includes('thar')) {
+              matched = drivers.find((d: any) => (d.vehicle_model || '').toLowerCase().includes('innova') || (d.vehicle_model || '').toLowerCase().includes('thar') || (d.vehicle_model || '').toLowerCase().includes('suv')) || drivers[0];
+            } else {
+              matched = drivers[0];
+            }
+          }
+
+          if (matched) {
+            const driverInfo = {
+              id: matched.user_id || matched.id || 'd1',
+              name: matched.name || 'Shubham (Captain)',
+              phone: matched.phone || '+91 99000 82400',
+              vehicleModel: matched.vehicle_model || matched.vehicleModel || (vehicle === 'auto' ? 'Bajaj RE Auto' : 'Mahindra Thar 4x4 / Innova'),
+              vehicleNumber: matched.vehicle_number || matched.vehicleNumber || (vehicle === 'auto' ? 'KA-02-AU-9912' : 'KA-03-EX-8240'),
+              rating: matched.rating ? parseFloat(matched.rating) : 4.9,
+            };
+            setLiveDriverInfo(driverInfo);
+            dispatchTargetedRequest(driverInfo.id, driverInfo);
+          }
+        }
+      } catch (e) {
+        console.warn('Error resolving specific driver from API:', e);
+      }
+    }
+
+    function dispatchTargetedRequest(targetDriverId: string, driverObj: any) {
+      const tripObj = {
+        id: tripIdParam || `trip_${Date.now()}`,
+        tripId: tripIdParam || `trip_${Date.now()}`,
+        driverId: targetDriverId,
+        driver_id: targetDriverId,
+        selectedDriverId: targetDriverId,
+        tripType: tripType,
+        vehicleType: vehicle,
+        title: `${pickupName} ➔ ${dropName}`,
+        pickup: pickupName,
+        pickupName: pickupName,
+        pickupLat: pickupLat,
+        pickupLng: pickupLng,
+        drop: dropName,
+        dropName: dropName,
+        dropLat: dropLat,
+        dropLng: dropLng,
+        checkpoints: [pickupName, ...parsedStops.map(s => s.name || s.title || 'Stop'), dropName],
+        estimatedFare: price,
+        price: price,
+        paymentMode: paymentMode,
+        passengerCount: passengerCount,
+        touristName: 'Tourist Client',
+        customerName: 'Tourist Client',
+        status: 'Pending',
+        bookingType: 'INSTANT',
+        otp: (params.otp as string) || '8240',
+        endOtp: (params.endOtp as string) || '4321',
+        createdAt: new Date().toISOString(),
+      };
+
+      console.log(`[RideMatching] 🚀 Dispatching targeted ride request to driver ${targetDriverId} (${driverObj.name})`);
+      broadcastNewTripRequest(tripObj);
+    }
+
+    resolveSpecificDriver();
+  }, [tripIdParam, tripType, vehicle]);
+
   // Poll live server status & driver location
   useEffect(() => {
     if (!tripIdParam) return;
@@ -182,22 +332,45 @@ export default function RideMatchingScreen() {
     return () => clearInterval(interval);
   }, [tripIdParam]);
 
-  // Direct Driver Selection Override & Auto-match Transition
+  // Listen for real-time driver acceptance events via WebSockets & DeviceEventEmitter
   useEffect(() => {
-    const selectedDriverIdParam = (params.driverId as string) || (params.selectedDriverId as string) || '';
-
-    if (status === 'searching') {
-      if (selectedDriverIdParam) {
-        // Direct Driver Selection Override: Bypass general search algorithm & immediately match assigned driver!
+    const subAccepted = DeviceEventEmitter.addListener('trip_accepted', (data: any) => {
+      console.log('[RideMatchingScreen] 🚀 Received real-time trip_accepted event:', data);
+      if (data) {
+        if (data.driverName || data.driver_or_guide_name) {
+          setLiveDriverInfo({
+            name: data.driverName || data.driver_or_guide_name,
+            phone: data.driverPhone || '+91 99000 82400',
+            vehicleModel: data.vehicleModel || 'Innova / Thar 4x4',
+            vehicleNumber: data.vehicleNumber || 'KA-03-EX-8240',
+            rating: 4.9,
+          });
+        }
         setStatus('matched');
-      } else if (!tripIdParam) {
-        const timer = setTimeout(() => {
-          setStatus('matched');
-        }, 3500);
-        return () => clearTimeout(timer);
       }
-    }
-  }, [status, tripIdParam, params.driverId, params.selectedDriverId]);
+    });
+
+    const subRideAccepted = DeviceEventEmitter.addListener('RIDE_ACCEPTED', (data: any) => {
+      console.log('[RideMatchingScreen] 🚀 Received real-time RIDE_ACCEPTED event:', data);
+      if (data) {
+        if (data.driverName || data.driver_or_guide_name) {
+          setLiveDriverInfo({
+            name: data.driverName || data.driver_or_guide_name,
+            phone: data.driverPhone || '+91 99000 82400',
+            vehicleModel: data.vehicleModel || 'Innova / Thar 4x4',
+            vehicleNumber: data.vehicleNumber || 'KA-03-EX-8240',
+            rating: 4.9,
+          });
+        }
+        setStatus('matched');
+      }
+    });
+
+    return () => {
+      subAccepted.remove();
+      subRideAccepted.remove();
+    };
+  }, []);
 
   // Drive marker simulation along the points list when started
   useEffect(() => {
@@ -277,12 +450,12 @@ export default function RideMatchingScreen() {
           // Web Fallback HUD
           <View style={styles.webHud}>
             <View style={styles.gridsDesign} />
-            
+
             <View style={styles.hudOverlay}>
               <Text style={styles.hudMetaText}>SIMULATOR HUD ACTIVE ({status.toUpperCase()})</Text>
               <Text style={[styles.hudPoint, { color: colors.textPrimary }]}>Pickup: {pickupName}</Text>
               {parsedStops.map((s, idx) => (
-                <Text key={idx} style={[styles.hudPoint, { color: colors.textPrimary }]}>Stop {idx+1}: {s.name}</Text>
+                <Text key={idx} style={[styles.hudPoint, { color: colors.textPrimary }]}>Stop {idx + 1}: {s.name}</Text>
               ))}
               <Text style={[styles.hudPoint, { color: colors.textPrimary }]}>Drop: {dropName}</Text>
             </View>
@@ -290,14 +463,14 @@ export default function RideMatchingScreen() {
             {/* Simulating vehicle traveling legs index */}
             <View style={styles.progressBarWrapper}>
               <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
-                <View 
+                <View
                   style={[
-                    styles.progressBarFill, 
-                    { 
-                      backgroundColor: colors.amber, 
-                      width: status === 'started' ? `${(progressIndex / (routeCoords.length - 1)) * 100}%` : status === 'completed' ? '100%' : '0%' 
+                    styles.progressBarFill,
+                    {
+                      backgroundColor: colors.amber,
+                      width: status === 'started' ? `${(progressIndex / (routeCoords.length - 1)) * 100}%` : status === 'completed' ? '100%' : '0%'
                     }
-                  ]} 
+                  ]}
                 />
               </View>
               <Text style={[styles.progressLabelText, { color: colors.textPrimary }]}>
@@ -338,7 +511,7 @@ export default function RideMatchingScreen() {
 
             {/* Intermediate Stops Markers */}
             {parsedStops.map((stop, idx) => (
-              <Marker key={idx} coordinate={{ latitude: stop.latitude, longitude: stop.longitude }} title={`Stop ${idx+1}: ${stop.name}`}>
+              <Marker key={idx} coordinate={{ latitude: stop.latitude, longitude: stop.longitude }} title={`Stop ${idx + 1}: ${stop.name}`}>
                 <View style={[styles.markerRound, { backgroundColor: '#F5C518' }]}>
                   <Text style={styles.markerLetter}>{idx + 1}</Text>
                 </View>
@@ -376,15 +549,46 @@ export default function RideMatchingScreen() {
 
       {/* Floating Status / Bottom Card Controls Drawer */}
       <View style={[styles.bottomCard, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-        
+
         {/* Searching Status Panel */}
         {status === 'searching' && (
           <View style={styles.searchingCol}>
-            <ActivityIndicator size="large" color={colors.amber} />
-            <Text style={[styles.searchingTitleText, { color: colors.textPrimary }]}>Searching for Nearby Partners</Text>
-            <Text style={[styles.searchingSubText, { color: colors.textMuted }]}>
-              {tripType === 'guide' ? 'Contacting certified local guides...' : 'Reaching out to vehicle captains...'}
-            </Text>
+            {!isDriverTimeout ? (
+              <>
+                <ActivityIndicator size="large" color={colors.amber} style={{ marginBottom: verticalScale(8) }} />
+                <Text style={[styles.searchingTitleText, { color: colors.textPrimary }]}>
+                  {liveDriverInfo?.name
+                    ? `Waiting for ${liveDriverInfo.name} to accept... (${searchingTimer}s)`
+                    : `Searching for Nearby Partners (${searchingTimer}s)`}
+                </Text>
+                <Text style={[styles.searchingSubText, { color: colors.textMuted }]}>
+                  {liveDriverInfo?.name
+                    ? `Request sent directly to ${liveDriverInfo.name} (${liveDriverInfo.vehicleModel || 'Captain'}).`
+                    : (tripType === 'guide' ? 'Contacting certified local guides...' : 'Reaching out to vehicle captains...')}
+                </Text>
+              </>
+            ) : (
+              <View style={{ alignItems: 'center', width: '100%' }}>
+                <MaterialIcons name="person-off" size={scale(36)} color={colors.amber} style={{ marginBottom: verticalScale(6) }} />
+                <Text style={[styles.searchingTitleText, { color: colors.textPrimary, textAlign: 'center' }]}>
+                  Driver is busy or not responding
+                </Text>
+                <Text style={[styles.searchingSubText, { color: colors.textMuted, textAlign: 'center', marginBottom: verticalScale(14) }]}>
+                  {liveDriverInfo?.name ? `${liveDriverInfo.name} didn't respond in time.` : 'No driver accepted within the timer window.'} Please choose another driver or broadcast to all.
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: scale(8), width: '100%' }}>
+
+
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: colors.surfaceCard, borderWidth: 1, borderColor: colors.border, paddingVertical: verticalScale(12), borderRadius: scale(10), alignItems: 'center' }}
+                    onPress={() => router.back()}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>Choose Another</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -426,12 +630,6 @@ export default function RideMatchingScreen() {
                 </View>
               </View>
             </View>
-
-            <View style={{ marginTop: verticalScale(10), padding: scale(12), backgroundColor: 'rgba(245, 197, 24, 0.12)', borderRadius: scale(12), borderWidth: 1, borderColor: colors.amber, alignItems: 'center' }}>
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700', textAlign: 'center', lineHeight: moderateFontScale(16) }}>
-                ⏳ Captain has accepted! Please share Start OTP <Text style={{ color: colors.amber, fontWeight: '900' }}>{(params.otp as string) || demoDriver.otp || '8240'}</Text> with driver when captain arrives to start trip.
-              </Text>
-            </View>
           </View>
         )}
 
@@ -469,7 +667,7 @@ export default function RideMatchingScreen() {
             </View>
 
             {/* Force End Booking early option */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.primaryActionBtn, { backgroundColor: colors.amber }]}
               onPress={() => setStatus('completed')}
             >
@@ -490,7 +688,7 @@ export default function RideMatchingScreen() {
               You have safely completed your custom route checkpoints. Click below to confirm completion.
             </Text>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.primaryActionBtn, { backgroundColor: colors.amber }]}
               onPress={handleCompleteTripSim}
             >
@@ -499,60 +697,60 @@ export default function RideMatchingScreen() {
           </View>
         )}
 
-      {/* Custom Celebration "Trip Completed!" Modal */}
-      <Modal visible={completedModalVisible} transparent={true} animationType="slide">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: scale(18) }}>
-          <View style={{ backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', borderRadius: scale(24), padding: scale(22), alignItems: 'center', borderWidth: 1.5, borderColor: '#F5C518' }}>
-            <View style={{ width: scale(64), height: scale(64), borderRadius: scale(32), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14), elevation: 6 }}>
-              <MaterialIcons name="check-circle" size={scale(38)} color="#101010" />
-            </View>
-
-            <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900', marginBottom: verticalScale(4), textAlign: 'center' }}>
-              🎉 Trip Completed!
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(16) }}>
-              Thank you for riding with VIBE! Your trip details have been saved to your Trips History.
-            </Text>
-
-            <View style={{ width: '100%', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', borderRadius: scale(14), padding: scale(14), borderWidth: 1, borderColor: colors.border, marginBottom: verticalScale(18) }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(8) }}>
-                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>AMOUNT PAID</Text>
-                <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900' }}>
-                  ₹{price}
-                </Text>
+        {/* Custom Celebration "Trip Completed!" Modal */}
+        <Modal visible={completedModalVisible} transparent={true} animationType="slide">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: scale(18) }}>
+            <View style={{ backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', borderRadius: scale(24), padding: scale(22), alignItems: 'center', borderWidth: 1.5, borderColor: '#F5C518' }}>
+              <View style={{ width: scale(64), height: scale(64), borderRadius: scale(32), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14), elevation: 6 }}>
+                <MaterialIcons name="check-circle" size={scale(38)} color="#101010" />
               </View>
 
-              <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(6) }} />
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginTop: verticalScale(4) }}>
-                <MaterialIcons name="navigation" size={scale(16)} color="#F5C518" />
-                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', flex: 1 }} numberOfLines={1}>
-                  {pickupName} ➔ {dropName}
-                </Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(8) }}>
-                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Payment Mode:</Text>
-                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>
-                  {paymentMode}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={{ width: '100%', height: verticalScale(46), borderRadius: scale(14), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => {
-                setCompletedModalVisible(false);
-                router.replace('/(tabs)/trips');
-              }}
-            >
-              <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(13) }}>
-                View Trips History
+              <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900', marginBottom: verticalScale(4), textAlign: 'center' }}>
+                🎉 Trip Completed!
               </Text>
-            </TouchableOpacity>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), textAlign: 'center', marginBottom: verticalScale(16) }}>
+                Thank you for riding with VIBE! Your trip details have been saved to your Trips History.
+              </Text>
+
+              <View style={{ width: '100%', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F5F5F7', borderRadius: scale(14), padding: scale(14), borderWidth: 1, borderColor: colors.border, marginBottom: verticalScale(18) }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(8) }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), fontWeight: '600' }}>AMOUNT PAID</Text>
+                  <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900' }}>
+                    ₹{price}
+                  </Text>
+                </View>
+
+                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(6) }} />
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginTop: verticalScale(4) }}>
+                  <MaterialIcons name="navigation" size={scale(16)} color="#F5C518" />
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                    {pickupName} ➔ {dropName}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: verticalScale(8) }}>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Payment Mode:</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>
+                    {paymentMode}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={{ width: '100%', height: verticalScale(46), borderRadius: scale(14), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => {
+                  setCompletedModalVisible(false);
+                  router.replace('/(tabs)/trips');
+                }}
+              >
+                <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(13) }}>
+                  View Trips History
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
       </View>
     </SafeAreaView>

@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from '@/constants/admin-state';
+import { broadcastNewTripRequest } from '@/constants/tripSync';
 
 // Dynamically require maps for web safety
 let MapView: any = null;
@@ -481,9 +482,68 @@ export default function BookCabScreen() {
     }
 
     // Instant Booking Mode (Cash or UPI)
+    setBookingLoading(true);
+    let serverTripId = `cab_${Date.now()}`;
+    const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    const generatedEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    try {
+      const bookRes = await bookTripApi({
+        tripType: 'cab',
+        title: `${pickup.name} ➔ ${drop.name}`,
+        customerId: customerId,
+        customerName: customerName,
+        pickupName: pickup.name,
+        dropName: drop.name,
+        pickupLat: pickup.latitude || 12.9716,
+        pickupLng: pickup.longitude || 77.5946,
+        dropLat: drop.latitude || 12.2958,
+        dropLng: drop.longitude || 76.6394,
+        amount: final,
+        paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
+        bookingType: 'INSTANT',
+      });
+      if (bookRes?.data?.id || bookRes?.id) {
+        serverTripId = String(bookRes?.data?.id || bookRes?.id);
+      }
+    } catch (e) {
+      console.warn('bookTripApi failed, using generated ID:', e);
+    }
+
+    const instantTripObject = {
+      id: serverTripId,
+      tripId: serverTripId,
+      tripType: 'cab',
+      vehicleType: selectedRide,
+      title: `${pickup.name} ➔ ${drop.name}`,
+      pickup: pickup.name,
+      pickupName: pickup.name,
+      pickupLat: pickup.latitude || 12.9716,
+      pickupLng: pickup.longitude || 77.5946,
+      drop: drop.name,
+      dropName: drop.name,
+      dropLat: drop.latitude || 12.2958,
+      dropLng: drop.longitude || 76.6394,
+      checkpoints: [pickup.name, ...stops.map(s => s.name), drop.name],
+      estimatedFare: final,
+      price: final,
+      paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
+      touristName: customerName,
+      customerName: customerName,
+      status: 'Pending',
+      bookingType: 'INSTANT',
+      otp: generatedOtp,
+      endOtp: generatedEndOtp,
+      createdAt: new Date().toISOString(),
+    };
+
+    broadcastNewTripRequest(instantTripObject);
+    setBookingLoading(false);
+
     router.replace({
       pathname: '/ride-matching' as any,
       params: {
+        tripId: serverTripId,
         pickupName: pickup.name,
         pickupLat: pickup.latitude.toString(),
         pickupLng: pickup.longitude.toString(),
@@ -496,6 +556,8 @@ export default function BookCabScreen() {
         vehicle: selectedRide,
         paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
         addons: JSON.stringify(selectedAddons),
+        otp: generatedOtp,
+        endOtp: generatedEndOtp,
       }
     });
   };
