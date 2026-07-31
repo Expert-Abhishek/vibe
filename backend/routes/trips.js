@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined, emitTripCancelled } = require('../config/socket');
+const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined, emitTripCancelled, emitTripStatusUpdated } = require('../config/socket');
 
 const router = express.Router();
 
@@ -254,7 +254,7 @@ router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
     );
 
     const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'CANCELLED' };
-    emitTripCancelled(trip);
+    emitTripStatusUpdated(trip, 'CANCELLED');
 
     res.json({
       success: true,
@@ -1125,7 +1125,7 @@ router.post('/:id/accept', async (req, res) => {
     );
 
     const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId };
-    emitTripAccepted(trip);
+    emitTripStatusUpdated(trip, 'Accepted');
 
     // Notify tourist
     if (trip.customer_id) {
@@ -1169,7 +1169,7 @@ router.post(['/:id/decline', '/:id/reject'], async (req, res) => {
     );
 
     const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Declined', driver_or_guide_name: driverName, driver_id: driverId };
-    emitTripDeclined(trip);
+    emitTripStatusUpdated(trip, 'Declined');
 
     res.json({
       success: true,

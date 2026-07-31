@@ -348,10 +348,23 @@ export default function RideMatchingScreen() {
     initSocketService();
     const socket = getSocket();
 
+    const handleTripStatusUpdated = (data: any) => {
+      console.log('[RideMatchingScreen] 📢 Received trip_status_updated event:', data);
+      if (!data) return;
+
+      if (data.status === 'Accepted') {
+        handleAcceptedData(data);
+      } else if (data.status === 'Declined' || data.status === 'Rejected') {
+        setIsDriverTimeout(true);
+      }
+    };
+
     // 1. Direct Socket Event Listeners
     if (socket) {
+      socket.on('trip_status_updated', handleTripStatusUpdated);
       socket.on('trip_accepted', handleAcceptedData);
       socket.on('RIDE_ACCEPTED', handleAcceptedData);
+      socket.on('trip_declined', () => setIsDriverTimeout(true));
     }
 
     // 2. Backup HTTP Polling (Runs every 3 seconds)
@@ -385,6 +398,7 @@ export default function RideMatchingScreen() {
       }
     };
 
+    const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleTripStatusUpdated);
     const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleAcceptedData);
     const subRideAccepted = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleAcceptedData);
     const subDeclined = DeviceEventEmitter.addListener('trip_declined', handleDeclinedData);
@@ -393,12 +407,15 @@ export default function RideMatchingScreen() {
 
     return () => {
       if (socket) {
+        socket.off('trip_status_updated', handleTripStatusUpdated);
         socket.off('trip_accepted', handleAcceptedData);
         socket.off('RIDE_ACCEPTED', handleAcceptedData);
+        socket.off('trip_declined');
       }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
+      subStatus.remove();
       subAccepted.remove();
       subRideAccepted.remove();
       subDeclined.remove();

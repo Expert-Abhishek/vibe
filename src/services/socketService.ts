@@ -86,6 +86,26 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     });
 
     // 4. Real-time trip acceptance & decline events
+    socket.off('trip_status_updated');
+    socket.on('trip_status_updated', (data: any) => {
+      console.log('[SocketService] 📢 Received real-time trip_status_updated event:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_status_updated', data);
+          if (data.status === 'Accepted') {
+            DeviceEventEmitter.emit('trip_accepted', data);
+            DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
+          } else if (data.status === 'Declined') {
+            DeviceEventEmitter.emit('trip_declined', data);
+            DeviceEventEmitter.emit('RIDE_DECLINED', data);
+          } else if (data.status === 'CANCELLED' || data.status === 'Cancelled') {
+            DeviceEventEmitter.emit('trip_cancelled', data);
+            DeviceEventEmitter.emit('RIDE_CANCELLED', data);
+          }
+        } catch (e) {}
+      }
+    });
+
     socket.off('trip_accepted');
     socket.on('trip_accepted', (data: any) => {
       console.log('[SocketService] 🚀 Received real-time trip_accepted event:', data);

@@ -338,6 +338,59 @@ function emitTripCancelled(tripObject) {
   io.emit('RIDE_CANCELLED', cancelPayload);
 }
 
+/**
+ * Emit unified 'trip_status_updated' event to specific rider room, trip room & globally
+ */
+function emitTripStatusUpdated(tripObject, statusOverride) {
+  if (!io || !tripObject) return;
+
+  const tripId = String(tripObject.id || tripObject.tripId || '');
+  const customerId = String(tripObject.customer_id || tripObject.customerId || '');
+  const driverId = String(tripObject.driver_id || tripObject.driverId || '');
+  const status = statusOverride || tripObject.status || 'Accepted';
+
+  const driverDetails = {
+    id: driverId,
+    name: tripObject.driverName || tripObject.driver_or_guide_name || 'Captain',
+    phone: tripObject.driverPhone || '+91 99000 82400',
+    vehicleModel: tripObject.vehicleModel || 'Innova / Thar 4x4',
+    vehicleNumber: tripObject.vehicleNumber || 'KA-03-EX-8240',
+  };
+
+  const payload = {
+    tripId: tripId,
+    id: tripId,
+    status: status,
+    driverDetails: driverDetails,
+    driverName: driverDetails.name,
+    driverPhone: driverDetails.phone,
+    vehicleModel: driverDetails.vehicleModel,
+    vehicleNumber: driverDetails.vehicleNumber,
+    otp: tripObject.otp || '8240',
+    endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
+    updatedAt: new Date().toISOString(),
+  };
+
+  console.log(`[Socket.io] 📢 Emitting trip_status_updated (${status}) for trip ${tripId} to user:${customerId}`);
+
+  if (customerId && customerId !== 'null') {
+    io.to(`user:${customerId}`).emit('trip_status_updated', payload);
+  }
+  if (tripId) {
+    io.to(`trip:${tripId}`).emit('trip_status_updated', payload);
+  }
+  if (driverId) {
+    io.to(`user:${driverId}`).emit('trip_status_updated', payload);
+  }
+
+  io.emit('trip_status_updated', payload);
+
+  // Legacy helper calls for backward compatibility
+  if (status === 'Accepted') emitTripAccepted(tripObject);
+  else if (status === 'Declined') emitTripDeclined(tripObject);
+  else if (status === 'CANCELLED' || status === 'Cancelled') emitTripCancelled(tripObject);
+}
+
 module.exports = {
   initSocket,
   getIO,
@@ -347,4 +400,5 @@ module.exports = {
   emitTripAccepted,
   emitTripDeclined,
   emitTripCancelled,
+  emitTripStatusUpdated,
 };
