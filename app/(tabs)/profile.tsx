@@ -9,7 +9,7 @@ import {
   updateProfilePhotoApi,
   updateUserProfileApi
 } from '@/constants/api';
-import { getUserSessionSync, saveUserSession } from '@/constants/authStore';
+import { getUserSessionSync, saveUserSession, clearUserSession } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -393,7 +393,14 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => router.replace('/(auth)/sign-in') },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          await clearUserSession();
+          router.replace('/(auth)/sign-in');
+        },
+      },
     ]);
   };
 

@@ -156,6 +156,17 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       if (data) {
         try {
           DeviceEventEmitter.emit('driver_location_stream', data);
+          DeviceEventEmitter.emit('driver_location_update', data);
+        } catch (e) {}
+      }
+    });
+
+    socket.off('driver_location_update');
+    socket.on('driver_location_update', (data: any) => {
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('driver_location_stream', data);
+          DeviceEventEmitter.emit('driver_location_update', data);
         } catch (e) {}
       }
     });
@@ -164,6 +175,24 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
   } catch (err) {
     console.warn('[SocketService] Failed to initialize socket connection:', err);
     return null;
+  }
+}
+
+/**
+ * Join a specific trip room for real-time location streaming & status updates
+ */
+export function joinTripRoom(tripId: string, role: string = 'tourist', userId?: string) {
+  if (socket && socket.connected) {
+    socket.emit('join_room', { tripId: String(tripId), role, userId: userId || null });
+    console.log(`[SocketService] 🟢 Joined trip room: trip:${tripId} (role: ${role})`);
+  } else {
+    initSocketService(userId, role);
+    setTimeout(() => {
+      if (socket && socket.connected) {
+        socket.emit('join_room', { tripId: String(tripId), role, userId: userId || null });
+        console.log(`[SocketService] 🟢 Joined trip room on delayed connect: trip:${tripId}`);
+      }
+    }, 1000);
   }
 }
 
@@ -203,14 +232,14 @@ export function emitAcceptRideSocket(tripData: any) {
 /**
  * Emit real-time driver GPS location update to backend WebSocket server
  */
-export function emitDriverLocationSocket(locationData: { driverId: string; tripId?: string; latitude: number; longitude: number; heading?: number }) {
+export function emitDriverLocationSocket(locationData: { driverId: string; tripId?: string; latitude: number; longitude: number; heading?: number; speed?: number }) {
   if (socket && socket.connected) {
     socket.emit('driver_location_update', locationData);
   }
 }
 
 /**
- * Disconnect socket connection
+ * Get Socket.io instance
  */
 export function getSocket(): Socket | null {
   return socket;
@@ -222,3 +251,4 @@ export function disconnectSocketService() {
     socket = null;
   }
 }
+

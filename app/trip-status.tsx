@@ -43,6 +43,7 @@ export default function TripStatusScreen() {
   const isDark = colorScheme === 'dark';
 
   const tripIdParam = (params.tripId as string) || (params.id as string) || '';
+  const mapRef = React.useRef<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -55,6 +56,7 @@ export default function TripStatusScreen() {
     rating: 4.9,
     latitude: 12.9716,
     longitude: 77.5946,
+    heading: 0,
   });
 
   const [pickupLocation, setPickupLocation] = useState('Heritage City Palace, Mysore');
@@ -104,7 +106,14 @@ export default function TripStatusScreen() {
 
   // Socket & DeviceEventEmitter listeners
   useEffect(() => {
-    initSocketService();
+    const session = getUserSessionSync();
+    initSocketService(session?.id, session?.role || 'tourist');
+
+    if (tripIdParam) {
+      joinTripRoom(tripIdParam, 'tourist', session?.id);
+    }
+
+    const socket = getSocket();
 
     const handleAccepted = (data: any) => {
       if (data) {
@@ -137,26 +146,53 @@ export default function TripStatusScreen() {
 
     const handleLocationStream = (data: any) => {
       if (data && (data.latitude || data.lat)) {
+        const newLat = parseFloat(data.latitude || data.lat);
+        const newLng = parseFloat(data.longitude || data.lng);
+        const newHeading = data.heading ? parseFloat(data.heading) : 0;
+
         setDriverInfo((prev: any) => ({
           ...prev,
-          latitude: parseFloat(data.latitude || data.lat),
-          longitude: parseFloat(data.longitude || data.lng),
+          latitude: newLat,
+          longitude: newLng,
+          heading: newHeading,
         }));
+
+        if (mapRef.current && mapRef.current.animateToRegion) {
+          try {
+            mapRef.current.animateToRegion({
+              latitude: newLat,
+              longitude: newLng,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }, 1000);
+          } catch (e) {}
+        }
       }
     };
+
+    if (socket) {
+      socket.on('driver_location_stream', handleLocationStream);
+      socket.on('driver_location_update', handleLocationStream);
+    }
 
     const sub1 = DeviceEventEmitter.addListener('trip_accepted', handleAccepted);
     const sub2 = DeviceEventEmitter.addListener('trip_declined', handleDeclined);
     const sub3 = DeviceEventEmitter.addListener('trip_cancelled', handleCancelled);
     const sub4 = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
+    const sub5 = DeviceEventEmitter.addListener('driver_location_update', handleLocationStream);
 
     return () => {
+      if (socket) {
+        socket.off('driver_location_stream', handleLocationStream);
+        socket.off('driver_location_update', handleLocationStream);
+      }
       sub1.remove();
       sub2.remove();
       sub3.remove();
       sub4.remove();
+      sub5.remove();
     };
-  }, []);
+  }, [tripIdParam]);
 
   const handleCancelTrip = () => {
     Alert.alert(

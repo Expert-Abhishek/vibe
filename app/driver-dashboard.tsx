@@ -621,8 +621,30 @@ export default function DriverDashboardScreen() {
     const session = getUserSessionSync();
     const driverId = session?.id || 'd1';
 
-    // Send initial location post on going online
-    updateDriverLocationApi(driverId, 12.9716, 77.5946, true).catch(() => {});
+    // Start geolocation watcher whenever driver is online
+    let watchId: number | null = null;
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (pos && pos.coords) {
+              const { latitude, longitude, heading, speed } = pos.coords;
+              emitDriverLocationSocket({
+                driverId: String(driverId),
+                tripId: activeTrip?.id ? String(activeTrip.id) : undefined,
+                latitude,
+                longitude,
+                heading: heading || 0,
+                speed: speed || 0,
+              });
+              updateDriverLocationApi(driverId, latitude, longitude, true).catch(() => {});
+            }
+          },
+          (err) => console.warn('[DriverDashboard] Geolocation watch error:', err),
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+        );
+      } catch (e) {}
+    }
 
     let isMounted = true;
 
@@ -730,6 +752,11 @@ export default function DriverDashboardScreen() {
     return () => {
       isMounted = false;
       cleanupSync();
+      if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        try {
+          navigator.geolocation.clearWatch(watchId);
+        } catch (e) {}
+      }
     };
   }, [isOnline, activeTrip, requestVisible]);
 

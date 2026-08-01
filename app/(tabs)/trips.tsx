@@ -5,6 +5,8 @@ import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { initSocketService, getSocket } from '@src/services/socketService';
+import { calculateTripFare, validatePreBookedDispatch, formatScheduledDateTime } from '@src/services/fareCalculator';
+import { useAppModal } from '@src/context/ModalContext';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -29,6 +31,7 @@ export default function TripsHistoryScreen() {
   const [cancelTrigger, setCancelTrigger] = useState(0);
   const [backendTrips, setBackendTrips] = useState<any[]>([]);
   const [hasActiveTripState, setHasActiveTripState] = useState<boolean | null>(null);
+  const [activeTripData, setActiveTripData] = useState<any>(null);
 
   const session = getUserSessionSync();
   const userId = session?.id;
@@ -44,10 +47,16 @@ export default function TripsHistoryScreen() {
         if (!userId) {
           setBackendTrips([]);
           setHasActiveTripState(false);
+          setActiveTripData(null);
           return;
         }
         const activeRes = await fetchActiveTripApi(userId);
         setHasActiveTripState(activeRes.hasActiveTrip);
+        if (activeRes.hasActiveTrip && activeRes.trip) {
+          setActiveTripData(activeRes.trip);
+        } else {
+          setActiveTripData(null);
+        }
 
         const data = await fetchCustomerTripsApi(userId);
         if (Array.isArray(data) && data.length > 0) {
@@ -59,6 +68,7 @@ export default function TripsHistoryScreen() {
       } catch (e) {
         console.warn('loadBackendTrips error:', e);
         setBackendTrips([]);
+        setActiveTripData(null);
       }
     }
     loadBackendTrips();
@@ -347,6 +357,35 @@ export default function TripsHistoryScreen() {
     );
   };
 
+  // Parse fields for the active trip details card
+  const activeTripObj = activeTripData || primaryActiveTrip;
+  const activeBookingType = activeTripObj
+    ? (activeTripObj.booking_type || activeTripObj.bookingType || (activeTripObj.time && !activeTripObj.time.includes('Immediate') ? 'PRE_BOOKED' : 'INSTANT'))
+    : 'INSTANT';
+  const activeDistanceKm = Number(activeTripObj?.distance_km || activeTripObj?.distanceKm || 38.5);
+  const activeDurationMins = Number(activeTripObj?.duration_mins || activeTripObj?.durationMins || 52);
+  const activeVehicleType = activeTripObj?.type === 'guide' ? 'sedan' : (activeTripObj?.vehicle_type || activeTripObj?.vehicleType || activeTripObj?.type || 'sedan');
+  const activeSurgeMultiplier = Number(activeTripObj?.surge_multiplier || activeTripObj?.surgeMultiplier || 1.2);
+  const activeScheduledTime = activeTripObj?.created_at || activeTripObj?.createdAt || new Date().toISOString();
+
+  // Compute Fare Breakdown & Dispatch Guard
+  const fareBreakdown = activeTripObj
+    ? calculateTripFare({
+        bookingType: activeBookingType as any,
+        distanceKm: activeDistanceKm,
+        durationMins: activeDurationMins,
+        vehicleType: activeVehicleType as any,
+        surgeMultiplier: activeSurgeMultiplier,
+        scheduledTime: activeScheduledTime,
+      })
+    : null;
+
+  const dispatchGuard = activeTripObj
+    ? validatePreBookedDispatch(activeScheduledTime)
+    : null;
+  const canStart = dispatchGuard ? dispatchGuard.canStart : true;
+  const unlockBadgeText = dispatchGuard ? dispatchGuard.unlockBadgeText : '';
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -362,30 +401,129 @@ export default function TripsHistoryScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* TOP ACTIVE TRIP FEATURED CARD */}
-        {primaryActiveTrip && (
-          <View style={[styles.activeCard, { backgroundColor: isDark ? '#1A2234' : '#EBF5FF', borderColor: isDark ? '#2563EB' : '#93C5FD' }]}>
-            <View style={styles.activeHeader}>
+        {/* TOP ACTIVE TRIP FEATURED CARD (Ported from TripDetails.tsx) */}
+        {primaryActiveTrip && fareBreakdown && (
+          <View style={[styles.card, { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.border, marginBottom: verticalScale(20) }]}>
+            {/* Header / Title Row */}
+            <View style={[styles.activeHeader, { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: verticalScale(10), marginBottom: verticalScale(12) }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
                 <View style={styles.pulsingDot} />
-                <Text style={[styles.activeTagText, { color: '#2563EB' }]}>LIVE ACTIVE TRIP</Text>
+                <Text style={[styles.activeTagText, { color: colors.amber }]}>LIVE ACTIVE TRIP</Text>
               </View>
-              <View style={[styles.statusPill, { backgroundColor: primaryActiveTrip.status?.toLowerCase().includes('started') ? '#10B981' : '#F5C518' }]}>
-                <Text style={styles.statusPillText}>{String(primaryActiveTrip.status || 'Active').toUpperCase()}</Text>
+              {/* Booking Type Badge */}
+              <View
+                style={[
+                  styles.typeBadge,
+                  {
+                    backgroundColor:
+                      activeBookingType === 'PRE_BOOKED'
+                        ? 'rgba(16, 185, 129, 0.15)'
+                        : 'rgba(245, 197, 24, 0.15)',
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.typeBadgeText,
+                    { color: activeBookingType === 'PRE_BOOKED' ? '#10B981' : colors.amber },
+                  ]}
+                >
+                  {activeBookingType === 'PRE_BOOKED' ? '📅 PRE-BOOKED' : '⚡ INSTANT'}
+                </Text>
               </View>
             </View>
 
-            <Text style={[styles.activeTripTitle, { color: colors.textPrimary }]}>{primaryActiveTrip.title}</Text>
-
-            <View style={styles.activeDetailRow}>
-              <MaterialIcons name="person" size={scale(16)} color={colors.amber} />
-              <Text style={[styles.activeDetailText, { color: colors.textPrimary }]}>
-                Partner: <Text style={{ fontWeight: '800' }}>{primaryActiveTrip.driverOrGuideName}</Text>
+            {/* Schedule & Time Banner */}
+            <View style={{ marginBottom: verticalScale(14) }}>
+              <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>
+                {activeBookingType === 'PRE_BOOKED' ? 'SCHEDULED PICKUP TIME' : 'DISPATCH TIME'}
               </Text>
+              <Text style={[styles.dateTimeText, { color: colors.textPrimary }]}>
+                {fareBreakdown.scheduledTimeFormatted}
+              </Text>
+
+              {/* Time-Gate Activation Badge */}
+              {activeBookingType === 'PRE_BOOKED' && (
+                <View
+                  style={[
+                    styles.guardStatusBanner,
+                    {
+                      backgroundColor: canStart ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                      borderColor: canStart ? '#10B981' : '#EF4444',
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={canStart ? 'lock-open' : 'lock'}
+                    size={scale(16)}
+                    color={canStart ? '#10B981' : '#EF4444'}
+                  />
+                  <Text
+                    style={[
+                      styles.guardStatusText,
+                      { color: canStart ? '#10B981' : '#EF4444', fontSize: moderateFontScale(11) },
+                    ]}
+                  >
+                    {unlockBadgeText}
+                  </Text>
+                </View>
+              )}
             </View>
 
-            {/* OTP DISPLAY BOX */}
-            <View style={[styles.otpBox, { backgroundColor: isDark ? '#111827' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
+            {/* Passenger / Driver & Vehicle Info */}
+            <View style={{ marginBottom: verticalScale(14) }}>
+              <View style={styles.passengerRow}>
+                <View style={styles.avatar}>
+                  <FontAwesome5 name="user-alt" size={scale(14)} color={colors.amber} />
+                </View>
+                <View style={{ flex: 1, marginLeft: scale(10) }}>
+                  <Text style={[styles.passengerName, { color: colors.textPrimary }]}>
+                    {primaryActiveTrip.driverOrGuideName || 'Assigned Driver'}
+                  </Text>
+                  <Text style={[styles.passengerSub, { color: colors.textMuted }]}>
+                    {session?.phone || '+91 99000 82400'}
+                  </Text>
+                </View>
+                <View style={styles.vehicleChip}>
+                  <Text style={[styles.vehicleChipText, { color: colors.textPrimary }]}>
+                    {activeVehicleType.toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Route & Distance Plan */}
+            <View style={{ marginBottom: verticalScale(14) }}>
+              <View style={styles.routeHeader}>
+                <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>ROUTE PLAN</Text>
+                <Text style={[styles.distanceBadge, { color: colors.amber }]}>
+                  {activeDistanceKm} km ({activeDurationMins} mins)
+                </Text>
+              </View>
+
+              <View style={styles.locationBlock}>
+                <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
+                <View style={styles.locationTextWrap}>
+                  <Text style={[styles.locLabel, { color: colors.textMuted }]}>PICKUP</Text>
+                  <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {primaryActiveTrip.pickup || 'Current Location'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.locationBlock}>
+                <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
+                <View style={styles.locationTextWrap}>
+                  <Text style={[styles.locLabel, { color: colors.textMuted }]}>DROPOFF</Text>
+                  <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {primaryActiveTrip.route?.[0] || 'Destination Address'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* OTP DISPLAY BOX (CRITICAL FOR VIBE) */}
+            <View style={[styles.otpBox, { backgroundColor: isDark ? '#111827' : '#FFFFFF', borderColor: colors.border, marginBottom: verticalScale(14) }]}>
               <View style={styles.otpColumn}>
                 <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
                 <Text style={[styles.otpValue, { color: '#10B981' }]}>{primaryActiveTrip.otp || '8240'}</Text>
@@ -397,24 +535,53 @@ export default function TripsHistoryScreen() {
               </View>
             </View>
 
-            {/* MAP ROUTE PREVIEW */}
-            <View style={[styles.routeBox, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC' }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-                <MaterialIcons name="my-location" size={scale(14)} color="#10B981" />
-                <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
-                  Pickup: {primaryActiveTrip.pickup || primaryActiveTrip.title}
-                </Text>
+            {/* Itemized Fare Breakdown */}
+            <View style={{ marginBottom: verticalScale(14) }}>
+              <Text style={[styles.cardHeaderTitle, { color: colors.textMuted, marginBottom: verticalScale(8) }]}>
+                ITEMIZED FARE BREAKDOWN
+              </Text>
+
+              <View style={styles.fareRow}>
+                <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Base Fare</Text>
+                <Text style={[styles.fareVal, { color: colors.textPrimary }]}>₹{fareBreakdown.baseFare}</Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(4) }}>
-                <MaterialIcons name="location-on" size={scale(14)} color="#EF4444" />
-                <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
-                  Fare ₹{primaryActiveTrip.price} · {primaryActiveTrip.paymentMode}
-                </Text>
+
+              <View style={styles.fareRow}>
+                <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Distance Charge ({activeDistanceKm} km)</Text>
+                <Text style={[styles.fareVal, { color: colors.textPrimary }]}>₹{fareBreakdown.distanceFare}</Text>
+              </View>
+
+              <View style={styles.fareRow}>
+                <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Time Charge ({activeDurationMins} mins)</Text>
+                <Text style={[styles.fareVal, { color: colors.textPrimary }]}>₹{fareBreakdown.durationFare}</Text>
+              </View>
+
+              {fareBreakdown.surgeAmount > 0 && (
+                <View style={styles.fareRow}>
+                  <Text style={[styles.fareLabel, { color: colors.amber }]}>
+                    Surge Fee ({fareBreakdown.surgeMultiplier}x)
+                  </Text>
+                  <Text style={[styles.fareVal, { color: colors.amber }]}>+₹{fareBreakdown.surgeAmount}</Text>
+                </View>
+              )}
+
+              {fareBreakdown.preBookingFee > 0 && (
+                <View style={styles.fareRow}>
+                  <Text style={[styles.fareLabel, { color: '#10B981' }]}>Pre-Booking Reservation Fee</Text>
+                  <Text style={[styles.fareVal, { color: '#10B981' }]}>+₹{fareBreakdown.preBookingFee}</Text>
+                </View>
+              )}
+
+              <View style={[styles.cardDivider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.fareRow}>
+                <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>Total Fare Estimate</Text>
+                <Text style={[styles.totalVal, { color: '#10B981' }]}>₹{fareBreakdown.totalFare}</Text>
               </View>
             </View>
 
             {/* ACTION BUTTONS */}
-            <View style={{ flexDirection: 'row', gap: scale(8), marginTop: verticalScale(12) }}>
+            <View style={{ flexDirection: 'row', gap: scale(8), marginTop: verticalScale(4) }}>
               <TouchableOpacity
                 style={[styles.activeActionBtn, { backgroundColor: '#F5C518', flex: 1.2 }]}
                 onPress={() => router.push({ pathname: '/trip-status', params: { tripId: primaryActiveTrip.id } })}
@@ -951,5 +1118,133 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: moderateFontScale(12),
     fontWeight: '800',
+  },
+  card: {
+    borderRadius: scale(16),
+    borderWidth: 1,
+    padding: scale(16),
+  },
+  typeBadge: {
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(5),
+    borderRadius: scale(12),
+  },
+  typeBadgeText: {
+    fontSize: moderateFontScale(10),
+    fontWeight: '900',
+  },
+  guardStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(8),
+    borderWidth: 1,
+    borderRadius: scale(10),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    marginTop: verticalScale(10),
+  },
+  guardStatusText: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '800',
+  },
+  passengerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
+    width: scale(38),
+    height: scale(38),
+    borderRadius: scale(19),
+    backgroundColor: 'rgba(245, 197, 24, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passengerName: {
+    fontSize: moderateFontScale(15),
+    fontWeight: '800',
+  },
+  passengerSub: {
+    fontSize: moderateFontScale(11),
+    marginTop: verticalScale(2),
+  },
+  vehicleChip: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(5),
+    borderRadius: scale(8),
+  },
+  vehicleChipText: {
+    fontSize: moderateFontScale(10),
+    fontWeight: '800',
+  },
+  routeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(12),
+  },
+  distanceBadge: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '800',
+  },
+  locationBlock: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: verticalScale(10),
+  },
+  locationTextWrap: {
+    marginLeft: scale(10),
+    flex: 1,
+  },
+  locLabel: {
+    fontSize: moderateFontScale(9),
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  locVal: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '600',
+    marginTop: verticalScale(2),
+  },
+  fareRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: verticalScale(8),
+  },
+  fareLabel: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '500',
+  },
+  fareVal: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '700',
+  },
+  totalLabel: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  totalVal: {
+    fontSize: moderateFontScale(18),
+    fontWeight: '900',
+  },
+  lockedSub: {
+    fontSize: moderateFontScale(10),
+    fontWeight: '600',
+    marginTop: verticalScale(4),
+  },
+  cardHeaderTitle: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  dateTimeText: {
+    fontSize: moderateFontScale(18),
+    fontWeight: '900',
+    marginVertical: verticalScale(4),
+  },
+  cardDivider: {
+    height: 1,
+    marginVertical: verticalScale(10),
   },
 });

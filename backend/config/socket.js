@@ -73,27 +73,34 @@ function initSocket(server) {
     // Real-time GPS Location Streaming listener from Driver App
     socket.on('driver_location_update', (locationData) => {
       if (!locationData) return;
-      const { driverId, tripId, latitude, longitude, heading } = locationData;
+      const { driverId, tripId, latitude, longitude, heading, speed } = locationData;
 
       if (!latitude || !longitude) return;
 
       const payload = {
-        driverId: String(driverId),
+        driverId: driverId ? String(driverId) : 'driver_unknown',
         tripId: tripId ? String(tripId) : null,
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
         heading: heading ? parseFloat(heading) : 0,
+        speed: speed ? parseFloat(speed) : 0,
         timestamp: new Date().toISOString(),
       };
 
+      console.log(`[Socket.io] 📍 Broadcast location stream for trip [trip:${tripId || 'global'}] lat:${latitude} lng:${longitude}`);
+
       if (tripId) {
         io.to(`trip:${String(tripId)}`).emit('driver_location_stream', payload);
+        io.to(`trip:${String(tripId)}`).emit('driver_location_update', payload);
       }
       if (driverId) {
-        io.to(`driver:${String(driverId)}`).emit('driver_location_stream', payload);
+        io.to(`user:${String(driverId)}`).emit('driver_location_stream', payload);
+        io.to(`user:${String(driverId)}`).emit('driver_location_update', payload);
       }
       io.to('role:tourist').emit('driver_location_stream', payload);
+      io.to('role:tourist').emit('driver_location_update', payload);
       io.emit('driver_location_stream', payload);
+      io.emit('driver_location_update', payload);
     });
 
     socket.on('disconnect', () => {

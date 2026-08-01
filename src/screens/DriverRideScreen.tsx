@@ -17,9 +17,9 @@ import {
   rideStateService,
   useRideState,
 } from '../services/rideStateService';
-import { useAppModal } from '@src/context/ModalContext';
-import { BookingType, validatePreBookedDispatch } from '../services/fareCalculator';
-import CashCollectionModal from '../components/modals/CashCollectionModal';
+import { getUserSessionSync } from '@/constants/authStore';
+import { updateDriverLocationApi } from '@/constants/api';
+import { emitDriverLocationSocket, joinTripRoom } from '@src/services/socketService';
 
 interface DriverRideScreenProps {
   tripId?: string;
@@ -52,6 +52,79 @@ export default function DriverRideScreen({
   const [cashModalVisible, setCashModalVisible] = useState(false);
 
   const currentRideStatus = useRideState(tripId);
+
+  // Join trip room and watch GPS location during active trip
+  React.useEffect(() => {
+    const session = getUserSessionSync();
+    const driverId = session?.id || 'd1';
+
+    if (tripId) {
+      joinTripRoom(tripId, 'driver', driverId);
+    }
+
+    const isActive = ['ACCEPTED', 'EN_ROUTE_TO_PICKUP', 'STARTED', 'TRIP_STARTED', 'ARRIVED'].includes(currentRideStatus);
+    if (!isActive) return;
+
+    let watchId: number | null = null;
+    let intervalId: any = null;
+
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (pos && pos.coords) {
+              const { latitude, longitude, heading, speed } = pos.coords;
+              emitDriverLocationSocket({
+                driverId: String(driverId),
+                tripId: String(tripId),
+                latitude,
+                longitude,
+                heading: heading || 0,
+                speed: speed || 0,
+              });
+              updateDriverLocationApi(driverId, latitude, longitude, true).catch(() => {});
+            }
+          },
+          (err) => console.warn('[DriverRideScreen] Geolocation watch error:', err),
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+        );
+      } catch (e) {
+        console.warn('[DriverRideScreen] Could not start geolocation watch:', e);
+      }
+    }
+
+    // Fallback interval for steady location streaming
+    intervalId = setInterval(() => {
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (pos && pos.coords) {
+              const { latitude, longitude, heading, speed } = pos.coords;
+              emitDriverLocationSocket({
+                driverId: String(driverId),
+                tripId: String(tripId),
+                latitude,
+                longitude,
+                heading: heading || 0,
+                speed: speed || 0,
+              });
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true }
+        );
+      }
+    }, 4000);
+
+    return () => {
+      if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        try {
+          navigator.geolocation.clearWatch(watchId);
+        } catch (e) {}
+      }
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [tripId, currentRideStatus]);
 
   // Button Guard Constraint safety check logic
   const canArrive =
