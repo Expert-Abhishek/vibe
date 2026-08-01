@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import UserWalletHistorySection from '@/components/UserWalletHistorySection';
+import UserTripHistorySection from '@/components/UserTripHistorySection';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -490,6 +491,9 @@ function GuideDetailModal({
 
           {/* Dedicated Wallet History Section */}
           <UserWalletHistorySection userId={guide.id} userName={guide.name} />
+
+          {/* Dedicated Trip History Section */}
+          <UserTripHistorySection userId={guide.id} role="guide" userName={guide.name} />
 
           {/* Bio & Specialty */}
           <div className="p-4 rounded-xl bg-dark-hover/60 border border-dark-border/80 space-y-2">

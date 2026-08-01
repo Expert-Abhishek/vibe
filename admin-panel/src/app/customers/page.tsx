@@ -17,6 +17,7 @@ import {
 import { initialCustomers, fetchCustomersApi, adjustWalletBalanceApi } from '@/lib/api';
 import { Customer } from '@/lib/types';
 import UserWalletHistorySection from '@/components/UserWalletHistorySection';
+import UserTripHistorySection from '@/components/UserTripHistorySection';
 
 export default function CustomersPage() {
   const [customersList, setCustomersList] = useState<Customer[]>([]);
@@ -306,51 +307,8 @@ export default function CustomersPage() {
               {/* Dedicated Wallet History Section */}
               <UserWalletHistorySection userId={selectedCustomer.id} userName={selectedCustomer.name} />
 
-              {/* Trip History Section */}
-              <div>
-                <h3 className="text-sm font-bold text-white mb-3 flex items-center space-x-2">
-                  <Car className="w-4 h-4 text-brand-500" />
-                  <span>Trip & Booking History</span>
-                </h3>
-
-                <div className="space-y-3">
-                  {selectedCustomer.recentTrips.map((trip: any) => (
-                    <div
-                      key={trip.id}
-                      className="p-4 rounded-xl bg-dark-hover/40 border border-dark-border flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          {trip.type === 'cab' ? (
-                            <Car className="w-4 h-4 text-blue-400" />
-                          ) : (
-                            <Compass className="w-4 h-4 text-emerald-400" />
-                          )}
-                          <span className="text-xs font-bold text-white">{trip.title}</span>
-                        </div>
-                        <p className="text-[11px] text-dark-textMuted">
-                          Assigned: {trip.driverOrGuideName || 'N/A'} • {trip.date} • {trip.paymentMode}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between sm:justify-end space-x-3">
-                        <span className="text-xs font-bold text-brand-500">
-                          ₹{trip.amount.toLocaleString('en-IN')}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-green-500/10 text-green-400 text-[10px] font-bold">
-                          {trip.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {selectedCustomer.recentTrips.length === 0 && (
-                    <p className="text-xs text-dark-textMuted italic py-4 text-center">
-                      No trip history recorded yet for this customer.
-                    </p>
-                  )}
-                </div>
-              </div>
+              {/* Dedicated Trip History Section */}
+              <UserTripHistorySection userId={selectedCustomer.id} role="tourist" userName={selectedCustomer.name} />
             </div>
 
             {/* Footer */}

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import UserWalletHistorySection from '@/components/UserWalletHistorySection';
+import UserTripHistorySection from '@/components/UserTripHistorySection';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -525,6 +526,9 @@ function DriverDetailModal({
 
           {/* Dedicated Wallet History Section */}
           <UserWalletHistorySection userId={driver.id} userName={driver.name} />
+
+          {/* Dedicated Trip History Section */}
+          <UserTripHistorySection userId={driver.id} role="driver" userName={driver.name} />
 
           {/* Quick Info Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
