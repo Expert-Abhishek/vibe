@@ -84,7 +84,7 @@ export const adminState = {
   userTrips: [] as TripRecord[],
   customTripRequests: [] as CustomTripRequest[],
   advanceBookings: [] as AdvanceBooking[],
-  instantBookingEnabled: false,
+  instantBookingEnabled: true,
   vehicleRatesPerHour: {
     '5seater': 150,
     '7seater': 220,

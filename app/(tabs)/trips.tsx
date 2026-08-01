@@ -5,11 +5,10 @@ import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { initSocketService, getSocket } from '@src/services/socketService';
-import { calculateTripFare, validatePreBookedDispatch, formatScheduledDateTime } from '@src/services/fareCalculator';
-import { useAppModal } from '@src/context/ModalContext';
+import { calculateTripFare, validatePreBookedDispatch } from '@src/services/fareCalculator';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Alert,
   ScrollView,
@@ -21,9 +20,30 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+export interface TripItem {
+  id: string;
+  type: 'cab' | 'guide' | 'custom_trip' | 'plan' | 'auto';
+  vehicleType?: string;
+  title: string;
+  route?: string[];
+  driverOrGuideName?: string;
+  date: string;
+  time: string;
+  price: number;
+  paymentMode?: string;
+  status: string;
+  passengerCount?: number;
+  advanceDepositPaid?: number;
+  remainingCashBalance?: number;
+  otp?: string;
+  endOtp?: string;
+  pickup?: string;
+  createdAt?: string;
+  bookingType?: 'INSTANT' | 'PRE_BOOKED';
+}
+
 export default function TripsHistoryScreen() {
   const router = useRouter();
-
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -35,11 +55,11 @@ export default function TripsHistoryScreen() {
 
   const session = getUserSessionSync();
   const userId = session?.id;
-  const cancelledTripIdsRef = React.useRef<Set<string>>(new Set());
+  const cancelledTripIdsRef = useRef<Set<string>>(new Set());
   const [cancelledIds, setCancelledIds] = useState<string[]>([]);
 
-  React.useEffect(() => {
-    initSocketService();
+  useEffect(() => {
+    initSocketService(userId, session?.role || 'tourist');
     const socket = getSocket();
 
     async function loadBackendTrips() {
@@ -108,53 +128,54 @@ export default function TripsHistoryScreen() {
   const safeUserTrips = Array.isArray(adminState.userTrips) ? adminState.userTrips : [];
 
   // Convert backend database trips
-  const mappedDbTrips = safeBackendTrips
+  const mappedDbTrips: TripItem[] = safeBackendTrips
     .filter(Boolean)
     .map((bt: any, idx: number) => ({
       id: String(bt.id || `db_trip_${idx}`),
       type: (bt.tripType || bt.trip_type || 'cab') as any,
-      vehicleType: 'Verified Cab Partner',
+      vehicleType: 'Verified Partner',
       title: String(bt.title || 'Tour Booking'),
-      route: Array.isArray(bt.destinationIds) ? bt.destinationIds : [],
+      route: Array.isArray(bt.destinationIds) ? bt.destinationIds : (bt.pickup_name && bt.drop_name ? [bt.pickup_name, bt.drop_name] : []),
       driverOrGuideName: String(bt.driverOrGuideName || bt.driver_or_guide_name || 'Assigned Partner'),
-      date: bt.createdAt ? new Date(bt.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'Today',
+      date: bt.createdAt ? new Date(bt.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Today',
       time: bt.createdAt ? new Date(bt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
       price: Number(bt.amount) || 0,
       paymentMode: String(bt.paymentMode || bt.payment_mode || 'Cash'),
-      status: cancelledTripIdsRef.current.has(String(bt.id)) ? 'Cancelled by Tourist' : String(bt.status === 'Confirmed' ? 'Upcoming' : (bt.status || 'Upcoming')),
+      status: String(bt.status || 'Scheduled'),
       passengerCount: 1,
-      otp: bt.otp || '8240',
-      endOtp: bt.end_otp || bt.endOtp || '4321',
+      otp: bt.otp,
+      endOtp: bt.end_otp || bt.endOtp,
       pickup: bt.pickup_name || bt.pickupName || bt.title || 'Pickup Spot',
+      createdAt: bt.createdAt,
+      bookingType: bt.booking_type || bt.bookingType || 'INSTANT',
     }));
 
-  // Convert advanceBookings to list items
-  const mappedAdvance = safeAdvanceBookings
+  // Convert advanceBookings
+  const mappedAdvance: TripItem[] = safeAdvanceBookings
     .filter(b => b && (userId ? (String(b.assignedToId) === String(userId) || (b.touristName && String(b.touristName).includes(session?.name || ''))) : false))
     .map((b: any) => ({
       id: String(b.id),
-      type: b.type === 'guide' ? ('guide' as const) : ('cab' as const),
-      vehicleType: undefined as string | undefined,
+      type: b.type === 'guide' ? 'guide' : 'cab',
       title: String(b.title || 'Advance Booking'),
       route: Array.isArray(b.route) ? b.route : [],
       driverOrGuideName: String(b.driverOrGuideName || 'Captain'),
-      date: `Upcoming - ${b.date || ''}`,
+      date: `${b.date || 'Upcoming'}`,
       time: String(b.time || ''),
       price: Number(b.price) || 0,
       paymentMode: String(b.paymentMode || 'Cash'),
-      status: cancelledTripIdsRef.current.has(String(b.id)) ? 'Cancelled by Tourist' : String(b.status || 'Upcoming') as any,
-      rawBooking: b,
-      passengerCount: undefined as number | undefined,
-      otp: b.otp || b.rawBooking?.otp || '8240',
-      endOtp: b.endOtp || b.rawBooking?.endOtp || '4321',
+      status: String(b.status || 'Pre-Booked'),
+      passengerCount: 1,
+      otp: b.otp,
+      endOtp: b.endOtp,
       pickup: b.pickup || b.title || 'Pickup Spot',
+      bookingType: 'PRE_BOOKED',
     }));
 
-  const filteredUserTrips = safeUserTrips
+  const filteredUserTrips: TripItem[] = safeUserTrips
     .filter(t => t && (!userId || !t.customerId || String(t.customerId) === String(userId)))
     .map((t: any) => ({
       id: String(t.id),
-      type: String(t.type || 'guide'),
+      type: String(t.type || 'guide') as any,
       vehicleType: t.vehicleType,
       title: String(t.title || 'Tour Request'),
       route: Array.isArray(t.route) ? t.route : [],
@@ -163,128 +184,87 @@ export default function TripsHistoryScreen() {
       time: String(t.time || 'Immediate'),
       price: Number(t.price) || 0,
       paymentMode: String(t.paymentMode || 'Wallet'),
-      status: cancelledTripIdsRef.current.has(String(t.id)) ? 'Cancelled by Tourist' : String(t.status || 'Pending Guide Confirmation'),
+      status: String(t.status || 'Pending'),
       passengerCount: t.passengerCount,
       advanceDepositPaid: t.advanceDepositPaid,
       remainingCashBalance: t.remainingCashBalance,
-      otp: t.otp || '8240',
-      endOtp: t.endOtp || '4321',
+      otp: t.otp,
+      endOtp: t.endOtp,
       pickup: t.pickupName || t.pickup || t.title || 'Pickup Spot',
+      bookingType: t.bookingType || 'INSTANT',
     }));
 
   const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips].filter(Boolean);
-  const allTrips = rawAllTrips.filter(
-    (item, index, self) => item && item.id && index === self.findIndex(t => t && String(t.id) === String(item.id))
-  );
+  
+  // Deduplicate and filter out cancelled & completed trips
+  const validTrips = rawAllTrips
+    .filter((item, index, self) => item && item.id && index === self.findIndex(t => t && String(t.id) === String(item.id)))
+    .filter((t) => {
+      if (!t) return false;
+      const tid = String(t.id);
+      if (cancelledTripIdsRef.current.has(tid) || cancelledIds.includes(tid)) return false;
+      const st = String(t.status || '').toLowerCase();
+      return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish');
+    });
 
-  const filteredTrips = allTrips.filter((trip) => {
-    if (!trip) return false;
+  // Separate Active Live Trip vs Scheduled / Upcoming Trips
+  const isLiveStatus = (statusStr: string) => {
+    const st = String(statusStr || '').toLowerCase();
+    return st.includes('accepted') || st.includes('active') || st.includes('started') || st.includes('arrived') || st.includes('confirmed') || st.includes('en_route');
+  };
+
+  const activeTripObj = activeTripData || validTrips.find(t => isLiveStatus(t.status)) || null;
+
+  const scheduledTrips = validTrips.filter(t => {
+    if (activeTripObj && String(t.id) === String(activeTripObj.id)) return false;
+    return true;
+  }).filter(t => {
     if (activeFilter === 'all') return true;
-    if (activeFilter === 'cab') return trip.type === 'cab' || trip.type === 'custom_trip' || trip.type === 'plan';
-    if (activeFilter === 'guide') return trip.type === 'guide';
+    if (activeFilter === 'cab') return t.type === 'cab' || t.type === 'custom_trip' || t.type === 'plan';
+    if (activeFilter === 'guide') return t.type === 'guide';
     return true;
   });
 
-  const activeTrips = allTrips.filter(t => {
-    if (!t) return false;
-    const tid = String(t.id);
-    if (cancelledTripIdsRef.current.has(tid) || cancelledIds.includes(tid)) return false;
-    const st = String(t.status || '').toLowerCase();
-    return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish');
-  });
-  const primaryActiveTrip = (hasActiveTripState !== false && activeTrips.length > 0) ? activeTrips[0] : null;
-
-  const totalSpend = allTrips.reduce((sum, item) => sum + (Number(item?.price) || 0), 0);
-  const cabCount = allTrips.filter((t) => t && (t.type === 'cab' || t.type === 'custom_trip' || t.type === 'plan')).length;
-  const guideCount = allTrips.filter((t) => t && t.type === 'guide').length;
-
-  const getStatusBadgeColors = (statusStr?: string) => {
-    const st = String(statusStr || '').toLowerCase();
-    if (st.includes('accepted')) {
-      return { bg: 'rgba(16, 185, 129, 0.12)', text: '#10B981' };
-    }
-    if (st.includes('declined') || st.includes('cancelled')) {
-      return { bg: 'rgba(239, 68, 68, 0.12)', text: '#EF4444' };
-    }
-    if (st.includes('pending')) {
-      return { bg: 'rgba(245, 197, 24, 0.12)', text: '#F5C518' };
-    }
-    return { bg: 'rgba(59, 130, 246, 0.12)', text: '#3B82F6' };
-  };
-
   const calculateCancellationFine = (trip: any): { feeAmount: number; feePercent: number; reasonText: string } => {
     if (!trip) return { feeAmount: 0, feePercent: 0, reasonText: 'No cancellation fee' };
-
     const isGuide = trip.type === 'guide' || String(trip.title || '').toLowerCase().includes('guide');
     const price = Number(trip.price || trip.amount || 0);
 
     if (isGuide) {
-      return { feeAmount: 100, feePercent: 0, reasonText: 'Flat ₹100 Guide Booking Cancellation Fine' };
+      return { feeAmount: 100, feePercent: 0, reasonText: 'Flat ₹100 Guide Cancellation Fine' };
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
     const bookingDateStr = trip.bookingDate || (trip.createdAt ? new Date(trip.createdAt).toISOString().split('T')[0] : todayStr);
-    let tripDateStr = todayStr;
-    if (trip.date) {
-      const rawDate = String(trip.date).replace('Upcoming - ', '').trim();
-      if (rawDate.includes('-')) {
-        tripDateStr = rawDate;
-      }
-    }
 
-    // 1. Same-day booking cancellation: ₹0 fine
     if (todayStr === bookingDateStr) {
-      return {
-        feeAmount: 0,
-        feePercent: 0,
-        reasonText: 'Same-Day Booking Cancellation (₹0 Fine / 0% Deduction)',
-      };
+      return { feeAmount: 0, feePercent: 0, reasonText: 'Same-Day Booking Cancellation (₹0 Fine)' };
     }
 
-    // 2. Compare cancellation date vs trip start date
     const cancellationDate = new Date(todayStr);
-    const tripStartDate = new Date(tripDateStr);
+    const tripStartDate = new Date(trip.date || todayStr);
     const diffMs = tripStartDate.getTime() - cancellationDate.getTime();
     const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
-    // Cancelled on trip start day
     if (diffDays <= 0) {
       const fee = Math.round(price * 0.20);
-      return {
-        feeAmount: fee,
-        feePercent: 20,
-        reasonText: `Trip Start Day Cancellation (20% Fee = ₹${fee})`,
-      };
+      return { feeAmount: fee, feePercent: 20, reasonText: `Same-Day Start Cancellation (20% Fee = ₹${fee})` };
     }
-
-    // Cancelled 1 day before trip start date
     if (diffDays === 1) {
       const fee = Math.round(price * 0.10);
-      return {
-        feeAmount: fee,
-        feePercent: 10,
-        reasonText: `1 Day Prior Cancellation (10% Fee = ₹${fee})`,
-      };
+      return { feeAmount: fee, feePercent: 10, reasonText: `1 Day Prior Cancellation (10% Fee = ₹${fee})` };
     }
 
-    // Cancelled 2+ days before trip start date: ₹0 fine
-    return {
-      feeAmount: 0,
-      feePercent: 0,
-      reasonText: 'Advance Cancellation (₹0 Fine / 0% Deduction)',
-    };
+    return { feeAmount: 0, feePercent: 0, reasonText: 'Advance Cancellation (₹0 Fine)' };
   };
 
   const handleCancelPress = (trip: any) => {
     if (!trip) return;
-    cancelledTripIdsRef.current.add(String(trip.id));
-
     const policy = calculateCancellationFine(trip);
-    const alertTitle = 'Confirm Trip Cancellation';
-    const alertMsg = `Trip: ${trip.title}\n\nCancellation Policy: ${policy.reasonText}\nFee Amount: ₹${policy.feeAmount}\n\n${policy.feeAmount > 0 ? `Note: ₹${policy.feeAmount} fee will be deducted from your wallet and logged in Admin Panel.` : 'No cancellation fee applied.'}`;
+    const alertMsg = `Booking: ${trip.title}\n\nCancellation Policy: ${policy.reasonText}\nFee Amount: ₹${policy.feeAmount}`;
 
     Alert.alert(
-      alertTitle,
+      'Confirm Trip Cancellation',
       alertMsg,
       [
         { text: 'Keep Booking', style: 'cancel' },
@@ -297,527 +277,285 @@ export default function TripsHistoryScreen() {
 
             if (policy.feeAmount > 0) {
               try {
-                // 1. Deduct calculated fine from Tourist Wallet
-                const deductRes = await deductWalletApi({
+                await deductWalletApi({
                   userId: userId || 't1',
                   amount: policy.feeAmount,
                   description: `Cancellation Fee: ${policy.reasonText} for Booking #${trip.id}`,
                 });
-
-                // 2. Submit Wallet Deduction Request for Admin Panel ONLY if deduction succeeded
-                if (deductRes && deductRes.success) {
-                  await submitWalletDeductionRequestApi({
-                    userId: userId || 't1',
-                    userName: session?.name || 'Tourist Client',
-                    role: 'tourist',
-                    amount: policy.feeAmount,
-                    description: `Cancellation Fee (${policy.reasonText}) for Booking #${trip.id} (${trip.title})`,
-                  });
-                }
+                await submitWalletDeductionRequestApi({
+                  userId: userId || 't1',
+                  userName: session?.name || 'Tourist Client',
+                  role: 'tourist',
+                  amount: policy.feeAmount,
+                  description: `Cancellation Fee (${policy.reasonText}) for Booking #${trip.id}`,
+                });
               } catch (e) {
-                console.warn('Cancellation fine deduction warning:', e);
+                console.warn('Deduction request error:', e);
               }
             }
 
-            // 3. Persist cancellation in backend PostgreSQL DB
             try {
               await cancelTripApi(String(trip.id), { cancelledBy: 'tourist', role: 'tourist' });
             } catch (e) {
-              console.warn('cancelTripApi call failed:', e);
+              console.warn('cancelTripApi error:', e);
             }
 
-            // 4. Update local state & adminState
-            if (Array.isArray(adminState.advanceBookings)) {
-              adminState.advanceBookings.forEach((b: any) => {
-                if (b && String(b.id) === String(trip.id)) {
-                  b.status = 'Cancelled by Tourist';
-                }
-              });
-            }
-            if (Array.isArray(adminState.userTrips)) {
-              adminState.userTrips.forEach((t: any) => {
-                if (t && String(t.id) === String(trip.id)) {
-                  t.status = 'Cancelled by Tourist';
-                }
-              });
-            }
-
-            setBackendTrips((prev) =>
-              prev.map((t) => (String(t.id) === String(trip.id) ? { ...t, status: 'Cancelled by Tourist' } : t))
-            );
-
-            const confirmationMsg = policy.feeAmount > 0 
-              ? `Your trip has been cancelled. ₹${policy.feeAmount} cancellation fee (${policy.reasonText}) was deducted from your wallet.`
-              : 'Your trip has been cancelled successfully with ₹0 cancellation fee.';
-            Alert.alert('Trip Cancelled', confirmationMsg);
-            setCancelTrigger((prev) => prev + 1);
+            Alert.alert('Trip Cancelled', `Your trip has been cancelled. ${policy.feeAmount > 0 ? `₹${policy.feeAmount} fee deducted.` : ''}`);
+            setCancelTrigger(prev => prev + 1);
           },
         },
       ]
     );
   };
 
-  // Parse fields for the active trip details card
-  const activeTripObj = activeTripData || primaryActiveTrip;
+  // Parse details for Active Trip Card
   const activeBookingType = activeTripObj
-    ? (activeTripObj.booking_type || activeTripObj.bookingType || (activeTripObj.time && !activeTripObj.time.includes('Immediate') ? 'PRE_BOOKED' : 'INSTANT'))
+    ? (activeTripObj.booking_type || activeTripObj.bookingType || 'INSTANT')
     : 'INSTANT';
-  const activeDistanceKm = Number(activeTripObj?.distance_km || activeTripObj?.distanceKm || 38.5);
-  const activeDurationMins = Number(activeTripObj?.duration_mins || activeTripObj?.durationMins || 52);
-  const activeVehicleType = activeTripObj?.type === 'guide' ? 'sedan' : (activeTripObj?.vehicle_type || activeTripObj?.vehicleType || activeTripObj?.type || 'sedan');
-  const activeSurgeMultiplier = Number(activeTripObj?.surge_multiplier || activeTripObj?.surgeMultiplier || 1.2);
   const activeScheduledTime = activeTripObj?.created_at || activeTripObj?.createdAt || new Date().toISOString();
-
-  // Compute Fare Breakdown & Dispatch Guard
+  
   const fareBreakdown = activeTripObj
     ? calculateTripFare({
         bookingType: activeBookingType as any,
-        distanceKm: activeDistanceKm,
-        durationMins: activeDurationMins,
-        vehicleType: activeVehicleType as any,
-        surgeMultiplier: activeSurgeMultiplier,
+        distanceKm: Number(activeTripObj.distance_km || 35),
+        durationMins: Number(activeTripObj.duration_mins || 45),
+        vehicleType: 'sedan',
+        surgeMultiplier: 1.0,
         scheduledTime: activeScheduledTime,
       })
     : null;
 
-  const dispatchGuard = activeTripObj
-    ? validatePreBookedDispatch(activeScheduledTime)
-    : null;
-  const canStart = dispatchGuard ? dispatchGuard.canStart : true;
-  const unlockBadgeText = dispatchGuard ? dispatchGuard.unlockBadgeText : '';
+  const dispatchGuard = activeTripObj ? validatePreBookedDispatch(activeScheduledTime) : null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
-      <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Trips</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Upcoming trip</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Trips</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage active rides & scheduled tours</Text>
         </View>
         <NotificationModal role="tourist" />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* TOP ACTIVE TRIP FEATURED CARD (Ported from TripDetails.tsx) */}
-        {primaryActiveTrip && fareBreakdown && (
-          <View style={[styles.card, { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.border, marginBottom: verticalScale(20) }]}>
-            {/* Header / Title Row */}
-            <View style={[styles.activeHeader, { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: verticalScale(10), marginBottom: verticalScale(12) }]}>
+        {/* 1. TOP SECTION: ACTIVE LIVE TRIP BANNER / CARD */}
+        {activeTripObj ? (
+          <View style={[styles.activeCard, { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.amber }]}>
+            {/* Live Indicator Bar */}
+            <View style={styles.liveBadgeRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
                 <View style={styles.pulsingDot} />
                 <Text style={[styles.activeTagText, { color: colors.amber }]}>LIVE ACTIVE TRIP</Text>
               </View>
-              {/* Booking Type Badge */}
-              <View
-                style={[
-                  styles.typeBadge,
-                  {
-                    backgroundColor:
-                      activeBookingType === 'PRE_BOOKED'
-                        ? 'rgba(16, 185, 129, 0.15)'
-                        : 'rgba(245, 197, 24, 0.15)',
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.typeBadgeText,
-                    { color: activeBookingType === 'PRE_BOOKED' ? '#10B981' : colors.amber },
-                  ]}
-                >
-                  {activeBookingType === 'PRE_BOOKED' ? '📅 PRE-BOOKED' : '⚡ INSTANT'}
+              <View style={[styles.typeBadge, { backgroundColor: 'rgba(245, 197, 24, 0.15)' }]}>
+                <Text style={[styles.typeBadgeText, { color: colors.amber }]}>
+                  {String(activeTripObj.status || 'Accepted').toUpperCase()}
                 </Text>
               </View>
             </View>
 
-            {/* Schedule & Time Banner */}
-            <View style={{ marginBottom: verticalScale(14) }}>
-              <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>
-                {activeBookingType === 'PRE_BOOKED' ? 'SCHEDULED PICKUP TIME' : 'DISPATCH TIME'}
-              </Text>
-              <Text style={[styles.dateTimeText, { color: colors.textPrimary }]}>
-                {fareBreakdown.scheduledTimeFormatted}
-              </Text>
-
-              {/* Time-Gate Activation Badge */}
-              {activeBookingType === 'PRE_BOOKED' && (
-                <View
-                  style={[
-                    styles.guardStatusBanner,
-                    {
-                      backgroundColor: canStart ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                      borderColor: canStart ? '#10B981' : '#EF4444',
-                    },
-                  ]}
-                >
-                  <MaterialIcons
-                    name={canStart ? 'lock-open' : 'lock'}
-                    size={scale(16)}
-                    color={canStart ? '#10B981' : '#EF4444'}
-                  />
-                  <Text
-                    style={[
-                      styles.guardStatusText,
-                      { color: canStart ? '#10B981' : '#EF4444', fontSize: moderateFontScale(11) },
-                    ]}
-                  >
-                    {unlockBadgeText}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Passenger / Driver & Vehicle Info */}
-            <View style={{ marginBottom: verticalScale(14) }}>
-              <View style={styles.passengerRow}>
-                <View style={styles.avatar}>
-                  <FontAwesome5 name="user-alt" size={scale(14)} color={colors.amber} />
-                </View>
-                <View style={{ flex: 1, marginLeft: scale(10) }}>
-                  <Text style={[styles.passengerName, { color: colors.textPrimary }]}>
-                    {primaryActiveTrip.driverOrGuideName || 'Assigned Driver'}
-                  </Text>
-                  <Text style={[styles.passengerSub, { color: colors.textMuted }]}>
-                    {session?.phone || '+91 99000 82400'}
-                  </Text>
-                </View>
-                <View style={styles.vehicleChip}>
-                  <Text style={[styles.vehicleChipText, { color: colors.textPrimary }]}>
-                    {activeVehicleType.toUpperCase()}
-                  </Text>
-                </View>
+            {/* Assigned Partner & Vehicle Info */}
+            <View style={styles.partnerInfoRow}>
+              <View style={styles.avatarCircle}>
+                <FontAwesome5 name="user-tie" size={scale(18)} color={colors.amber} />
               </View>
-            </View>
-
-            {/* Route & Distance Plan */}
-            <View style={{ marginBottom: verticalScale(14) }}>
-              <View style={styles.routeHeader}>
-                <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>ROUTE PLAN</Text>
-                <Text style={[styles.distanceBadge, { color: colors.amber }]}>
-                  {activeDistanceKm} km ({activeDurationMins} mins)
+              <View style={{ flex: 1, marginLeft: scale(10) }}>
+                <Text style={[styles.partnerName, { color: colors.textPrimary }]}>
+                  {activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Driver'}
+                </Text>
+                <Text style={[styles.partnerVehicle, { color: colors.textMuted }]}>
+                  {activeTripObj.vehicleModel || 'Verified Cab'} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{activeTripObj.vehicleNumber || 'KA-03-EX-8240'}</Text>
                 </Text>
               </View>
+            </View>
 
-              <View style={styles.locationBlock}>
+            {/* Pickup & Destination */}
+            <View style={styles.locationBlock}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                 <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
-                <View style={styles.locationTextWrap}>
-                  <Text style={[styles.locLabel, { color: colors.textMuted }]}>PICKUP</Text>
-                  <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
-                    {primaryActiveTrip.pickup || 'Current Location'}
-                  </Text>
-                </View>
+                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {activeTripObj.pickup || activeTripObj.pickup_name || activeTripObj.title || 'Pickup Spot'}
+                </Text>
               </View>
-
-              <View style={styles.locationBlock}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(6) }}>
                 <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
-                <View style={styles.locationTextWrap}>
-                  <Text style={[styles.locLabel, { color: colors.textMuted }]}>DROPOFF</Text>
-                  <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
-                    {primaryActiveTrip.route?.[0] || 'Destination Address'}
-                  </Text>
-                </View>
+                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {Array.isArray(activeTripObj.route) && activeTripObj.route.length > 0 ? activeTripObj.route[0] : (activeTripObj.drop_name || activeTripObj.title || 'Destination')}
+                </Text>
               </View>
             </View>
 
-            {/* OTP DISPLAY BOX (CRITICAL FOR VIBE) */}
-            <View style={[styles.otpBox, { backgroundColor: isDark ? '#111827' : '#FFFFFF', borderColor: colors.border, marginBottom: verticalScale(14) }]}>
+            {/* OTP BOX (ONLY FOR LIVE ACTIVE RIDE) */}
+            <View style={[styles.otpBox, { backgroundColor: isDark ? '#111827' : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.otpColumn}>
                 <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
-                <Text style={[styles.otpValue, { color: '#10B981' }]}>{primaryActiveTrip.otp || '8240'}</Text>
+                <Text style={[styles.otpValue, { color: '#10B981' }]}>{activeTripObj.otp || '8240'}</Text>
               </View>
               <View style={{ width: 1, height: '80%', backgroundColor: colors.border }} />
               <View style={styles.otpColumn}>
                 <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
-                <Text style={[styles.otpValue, { color: '#3B82F6' }]}>{primaryActiveTrip.endOtp || '4321'}</Text>
+                <Text style={[styles.otpValue, { color: '#3B82F6' }]}>{activeTripObj.endOtp || '4321'}</Text>
               </View>
             </View>
 
-            {/* Itemized Fare Breakdown */}
-            <View style={{ marginBottom: verticalScale(14) }}>
-              <Text style={[styles.cardHeaderTitle, { color: colors.textMuted, marginBottom: verticalScale(8) }]}>
-                ITEMIZED FARE BREAKDOWN
-              </Text>
-
-              <View style={styles.fareRow}>
-                <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Base Fare</Text>
-                <Text style={[styles.fareVal, { color: colors.textPrimary }]}>₹{fareBreakdown.baseFare}</Text>
-              </View>
-
-              <View style={styles.fareRow}>
-                <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Distance Charge ({activeDistanceKm} km)</Text>
-                <Text style={[styles.fareVal, { color: colors.textPrimary }]}>₹{fareBreakdown.distanceFare}</Text>
-              </View>
-
-              <View style={styles.fareRow}>
-                <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Time Charge ({activeDurationMins} mins)</Text>
-                <Text style={[styles.fareVal, { color: colors.textPrimary }]}>₹{fareBreakdown.durationFare}</Text>
-              </View>
-
-              {fareBreakdown.surgeAmount > 0 && (
-                <View style={styles.fareRow}>
-                  <Text style={[styles.fareLabel, { color: colors.amber }]}>
-                    Surge Fee ({fareBreakdown.surgeMultiplier}x)
-                  </Text>
-                  <Text style={[styles.fareVal, { color: colors.amber }]}>+₹{fareBreakdown.surgeAmount}</Text>
-                </View>
-              )}
-
-              {fareBreakdown.preBookingFee > 0 && (
-                <View style={styles.fareRow}>
-                  <Text style={[styles.fareLabel, { color: '#10B981' }]}>Pre-Booking Reservation Fee</Text>
-                  <Text style={[styles.fareVal, { color: '#10B981' }]}>+₹{fareBreakdown.preBookingFee}</Text>
-                </View>
-              )}
-
-              <View style={[styles.cardDivider, { backgroundColor: colors.border }]} />
-
-              <View style={styles.fareRow}>
-                <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>Total Fare Estimate</Text>
-                <Text style={[styles.totalVal, { color: '#10B981' }]}>₹{fareBreakdown.totalFare}</Text>
-              </View>
-            </View>
-
-            {/* ACTION BUTTONS */}
-            <View style={{ flexDirection: 'row', gap: scale(8), marginTop: verticalScale(4) }}>
+            {/* PRIMARY ACTION BUTTON: TRACK LIVE RIDE */}
+            <View style={{ flexDirection: 'row', gap: scale(8), marginTop: verticalScale(12) }}>
               <TouchableOpacity
-                style={[styles.activeActionBtn, { backgroundColor: '#F5C518', flex: 1.2 }]}
-                onPress={() => router.push({ pathname: '/trip-status', params: { tripId: primaryActiveTrip.id } })}
+                style={[styles.trackBtn, { backgroundColor: colors.amber, flex: 1 }]}
+                onPress={() => router.push({ pathname: '/trip-status', params: { tripId: activeTripObj.id } })}
               >
-                <MaterialIcons name="map" size={scale(16)} color="#101010" />
-                <Text style={[styles.activeActionBtnText, { color: '#101010', fontWeight: '800' }]}>Track Live Trip 🗺️</Text>
+                <MaterialIcons name="navigation" size={scale(18)} color="#101014" />
+                <Text style={styles.trackBtnText}>Track Live Ride 🗺️</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.activeActionBtn, { backgroundColor: '#10B981', paddingHorizontal: scale(12) }]}
-                onPress={() => Alert.alert('Contact Partner', `Calling ${primaryActiveTrip.driverOrGuideName}...`)}
+                style={[styles.cancelBtnIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#EF4444' }]}
+                onPress={() => handleCancelPress(activeTripObj)}
               >
-                <MaterialIcons name="call" size={scale(16)} color="#FFFFFF" />
-                <Text style={styles.activeActionBtnText}>Call</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.activeActionBtn, { backgroundColor: '#EF4444', paddingHorizontal: scale(12) }]}
-                onPress={() => handleCancelPress(primaryActiveTrip)}
-              >
-                <MaterialIcons name="cancel" size={scale(16)} color="#FFFFFF" />
-                <Text style={styles.activeActionBtnText}>Cancel</Text>
+                <MaterialIcons name="cancel" size={scale(18)} color="#EF4444" />
               </TouchableOpacity>
             </View>
+          </View>
+        ) : (
+          /* Subtle Banner when no live ride is active */
+          <View style={[styles.noActiveBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <MaterialIcons name="info-outline" size={scale(18)} color={colors.textMuted} />
+            <Text style={[styles.noActiveText, { color: colors.textMuted }]}>No Active Ride In Progress</Text>
           </View>
         )}
 
+        {/* 2. SECOND SECTION: SCHEDULED TOURS & RIDES */}
+        <View style={{ marginBottom: verticalScale(14) }}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: verticalScale(10) }]}>
+            Scheduled Tours & Rides
+          </Text>
 
-        {/* Filter Pills list */}
-        <View style={styles.filterPillsRow}>
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
-            onPress={() => setActiveFilter('all')}
-          >
-            <Text style={[styles.filterPillText, { color: activeFilter === 'all' ? '#101010' : colors.textPrimary }]}>
-              All Bookings
-            </Text>
-          </TouchableOpacity>
+          {/* Full Width Segmented Filter Tabs */}
+          <View style={[styles.fullWidthFilterRow, { backgroundColor: isDark ? '#1C1C24' : '#F1EFEA', borderColor: colors.border }]}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.fullWidthPill, activeFilter === 'all' && styles.fullWidthPillActive]}
+              onPress={() => setActiveFilter('all')}
+            >
+              <Text style={[styles.fullWidthPillText, { color: activeFilter === 'all' ? '#101014' : colors.textPrimary }]}>
+                All Bookings
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'cab' && styles.filterPillActive]}
-            onPress={() => setActiveFilter('cab')}
-          >
-            <Text style={[styles.filterPillText, { color: activeFilter === 'cab' ? '#101010' : colors.textPrimary }]}>
-              Cabs & Plans
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.fullWidthPill, activeFilter === 'cab' && styles.fullWidthPillActive]}
+              onPress={() => setActiveFilter('cab')}
+            >
+              <Text style={[styles.fullWidthPillText, { color: activeFilter === 'cab' ? '#101014' : colors.textPrimary }]}>
+                Cabs & Plans
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'guide' && styles.filterPillActive]}
-            onPress={() => setActiveFilter('guide')}
-          >
-            <Text style={[styles.filterPillText, { color: activeFilter === 'guide' ? '#101010' : colors.textPrimary }]}>
-              Guides Booked
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.fullWidthPill, activeFilter === 'guide' && styles.fullWidthPillActive]}
+              onPress={() => setActiveFilter('guide')}
+            >
+              <Text style={[styles.fullWidthPillText, { color: activeFilter === 'guide' ? '#101014' : colors.textPrimary }]}>
+                Guides Booked
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* History timeline Cards list */}
-        {filteredTrips.length === 0 ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
-            <MaterialIcons name="navigation" size={scale(36)} color={colors.textMuted} />
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginTop: scale(8) }}>
-              No upcoming trips found.
+        {/* Scheduled List */}
+        {scheduledTrips.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <MaterialIcons name="event-available" size={scale(36)} color={colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Upcoming Scheduled Tours</Text>
+            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+              Explore our custom packages & book your next destination!
             </Text>
           </View>
         ) : (
-          filteredTrips.map((trip, idx) => {
-            if (!trip) return null;
-            const isCab = trip.type === 'cab' || trip.type === 'custom_trip' || trip.type === 'plan';
-            const isCompleted = String(trip.status || '').toLowerCase() === 'completed';
-            const isCancelled = String(trip.status || '').toLowerCase().includes('cancel');
-            const badgeColors = getStatusBadgeColors(trip.status);
-
-            const payModeStr = String(trip.paymentMode || 'Wallet');
-            const isCash = payModeStr.toLowerCase().includes('cash');
+          scheduledTrips.map((trip, idx) => {
+            const isGuide = trip.type === 'guide';
+            const price = Number(trip.price || 0);
+            const advancePaid = trip.advanceDepositPaid || Math.round(price * 0.20);
+            const balanceDue = price - advancePaid;
 
             return (
               <View
-                key={`${trip.id || 'trip'}_${idx}`}
-                style={[
-                  styles.tripCard,
-                  {
-                    backgroundColor: isCancelled ? (isDark ? 'rgba(239, 68, 68, 0.05)' : '#FFF5F5') : colors.surface,
-                    borderColor: isCancelled ? 'rgba(239, 68, 68, 0.35)' : colors.border,
-                  },
-                ]}
+                key={`${trip.id}_${idx}`}
+                style={[styles.scheduledCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >
-                {/* Card Title Header */}
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.titleIconCol}>
-                    <View
-                      style={[
-                        styles.iconBox,
-                        {
-                          backgroundColor: isCancelled
-                            ? 'rgba(239, 68, 68, 0.15)'
-                            : isCab
-                              ? 'rgba(245,197,24,0.1)'
-                              : 'rgba(16, 185, 129, 0.1)',
-                        },
-                      ]}
-                    >
-                      {isCancelled ? (
-                        <MaterialIcons name="cancel" size={scale(18)} color="#EF4444" />
-                      ) : (trip.type as string) === 'auto' ? (
-                        <MaterialIcons name="electric-rickshaw" size={scale(16)} color={colors.amber} />
-                      ) : (
-                        <FontAwesome5
-                          name={isCab ? (trip.type === 'custom_trip' ? 'map-marked-alt' : 'car') : 'compass'}
-                          size={scale(14)}
-                          color={isCab ? colors.amber : '#10B981'}
-                        />
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.tripNameText, { color: isCancelled ? '#EF4444' : colors.textPrimary }]} numberOfLines={2}>
-                        {trip.title}
-                      </Text>
-                      <Text style={[styles.tripDateSub, { color: colors.textMuted }]}>
+                {/* Header Row: Title & Date */}
+                <View style={styles.schedHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.schedTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {trip.title}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4), marginTop: verticalScale(2) }}>
+                      <MaterialIcons name="schedule" size={scale(14)} color={colors.amber} />
+                      <Text style={[styles.schedDateText, { color: colors.amber }]}>
                         {trip.date} · {trip.time}
                       </Text>
                     </View>
                   </View>
 
-                  {/* Status indicator */}
-                  <View style={[styles.statusBadge, { backgroundColor: badgeColors.bg }]}>
-                    <Text style={[styles.statusBadgeText, { color: badgeColors.text }]}>
-                      {isCancelled ? '🚫 Cancelled by you' : (trip.status || 'Upcoming')}
+                  <View style={[styles.typeBadge, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                    <Text style={[styles.typeBadgeText, { color: '#3B82F6' }]}>
+                      {isGuide ? '🧭 GUIDE' : '📅 SCHEDULED'}
                     </Text>
                   </View>
                 </View>
 
-                {/* Cancelled Alert Banner */}
-                {isCancelled && (
-                  <View
-                    style={{
-                      backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                      paddingHorizontal: scale(10),
-                      paddingVertical: verticalScale(8),
-                      borderRadius: scale(10),
-                      marginTop: verticalScale(10),
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: scale(8),
-                      borderWidth: 1,
-                      borderColor: 'rgba(239, 68, 68, 0.2)',
-                    }}
-                  >
-                    <MaterialIcons name="info" size={scale(16)} color="#EF4444" />
-                    <Text style={{ color: '#EF4444', fontSize: moderateFontScale(11), fontWeight: '700', flex: 1 }}>
-                      Trip Cancelled by Tourist · Fine Deducted & Notified to Admin
-                    </Text>
-                  </View>
-                )}
+                {/* NOTE: OTP IS STRICTLY NOT DISPLAYED ON SCHEDULED TRIPS PER REFACTOR RULE */}
 
-                {/* Waypoints line visual if it is a cab route */}
-                {isCab && Array.isArray(trip.route) && trip.route.length > 0 && (
-                  <View style={styles.routeSection}>
-                    {trip.route.map((stop: string, idx: number) => {
-                      const isLast = idx === trip.route.length - 1;
-                      return (
-                        <View key={idx} style={styles.routeNodeItem}>
-                          <View style={styles.nodeIndicator}>
-                            <View style={[styles.nodeIndicatorDot, { backgroundColor: idx === 0 ? colors.amber : (isLast ? '#ef4444' : '#888') }]} />
-                            {!isLast && <View style={[styles.nodeIndicatorLine, { backgroundColor: colors.border }]} />}
-                          </View>
-                          <Text style={[styles.nodeAddressName, { color: colors.textPrimary }]} numberOfLines={1}>
-                            {stop}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
+                {/* Route Summary */}
+                <View style={[styles.schedRouteBox, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.locVal, { color: colors.textMuted }]} numberOfLines={2}>
+                    📍 {trip.pickup || 'Pickup'} ➔ {Array.isArray(trip.route) && trip.route.length > 0 ? trip.route.join(' ➔ ') : 'Tour Destination'}
+                  </Text>
+                </View>
 
-                {/* Service details row */}
-                <View style={[styles.detailsSection, { borderTopColor: colors.border }]}>
-                  {/* Left col info */}
+                {/* Financial Summary */}
+                <View style={[styles.financeRow, { borderTopColor: colors.border }]}>
                   <View>
-                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>
-                      {isCab ? 'Assigned Driver' : 'Tour Guide Name'}
-                    </Text>
-                    <Text style={[styles.detailValue, { color: colors.textPrimary }]}>
-                      {trip.driverOrGuideName || 'Local Guide'}
-                    </Text>
-                    {trip.vehicleType && (
-                      <Text style={[styles.vehicleModelLabel, { color: colors.textMuted }]}>
-                        {trip.vehicleType}
-                      </Text>
-                    )}
-                    {trip.passengerCount !== undefined && (
-                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: verticalScale(2) }}>
-                        Passengers: {trip.passengerCount}
-                      </Text>
-                    )}
+                    <Text style={[styles.finLabel, { color: colors.textMuted }]}>Total Fare</Text>
+                    <Text style={[styles.finVal, { color: colors.textPrimary }]}>₹{price}</Text>
                   </View>
-
-                  {/* Right col info */}
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Expenses</Text>
-                    <Text style={[styles.detailPrice, isCancelled && { color: '#EF4444' }]}>₹{trip.price}</Text>
-                    <Text style={[styles.payMethodVal, { color: isCash ? colors.amber : colors.textMuted }]}>
-                      {isCash ? payModeStr : `Paid via ${payModeStr}`}
-                    </Text>
+                  <View>
+                    <Text style={[styles.finLabel, { color: colors.textMuted }]}>Deposit Paid</Text>
+                    <Text style={[styles.finVal, { color: '#10B981' }]}>₹{advancePaid}</Text>
+                  </View>
+                  <View>
+                    <Text style={[styles.finLabel, { color: colors.textMuted }]}>Balance Due</Text>
+                    <Text style={[styles.finVal, { color: colors.amber }]}>₹{balanceDue}</Text>
                   </View>
                 </View>
 
-                {/* Cancellation button for upcoming schedules */}
-                {!isCompleted && !isCancelled && (
-                  <View style={[styles.ratingSection, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>SCHEDULED STATUS</Text>
-                    <TouchableOpacity
-                      style={[styles.rebookBtn, { backgroundColor: '#ef4444' }]}
-                      onPress={() => handleCancelPress(trip)}
-                    >
-                      <Text style={[styles.rebookBtnText, { color: '#ffffff' }]}>Cancel Trip</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                {/* Action Buttons */}
+                <View style={styles.schedActionsRow}>
+                  <TouchableOpacity
+                    style={[styles.schedActionBtn, { backgroundColor: colors.surfaceCard, borderColor: colors.border, borderWidth: 1 }]}
+                    onPress={() => Alert.alert('Trip Itinerary', `Booking #${trip.id}\nTitle: ${trip.title}\nDriver/Guide: ${trip.driverOrGuideName || 'Local Guide'}\nTotal: ₹${price}`)}
+                  >
+                    <Text style={[styles.schedActionText, { color: colors.textPrimary }]}>View Itinerary</Text>
+                  </TouchableOpacity>
 
-                {isCancelled && (
-                  <View style={[styles.ratingSection, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>CANCELLATION STATUS</Text>
-                    <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.12)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8) }}>
-                      <Text style={{ color: '#EF4444', fontSize: moderateFontScale(10), fontWeight: '800' }}>CANCELLED BY TOURIST</Text>
-                    </View>
-                  </View>
-                )}
+                  <TouchableOpacity
+                    style={[styles.schedActionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#EF4444', borderWidth: 1 }]}
+                    onPress={() => handleCancelPress(trip)}
+                  >
+                    <Text style={[styles.schedActionText, { color: '#EF4444' }]}>Cancel Booking</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })
         )}
 
-        {/* Space */}
-        <View style={{ height: verticalScale(30) }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -826,252 +564,87 @@ export default function TripsHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#101014',
   },
   header: {
-    paddingHorizontal: scale(18),
+    paddingHorizontal: scale(16),
     paddingVertical: verticalScale(12),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: moderateFontScale(22),
-    fontWeight: '900',
+    fontSize: moderateFontScale(20),
+    fontWeight: '800',
   },
   headerSub: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '600',
+    fontSize: moderateFontScale(11),
     marginTop: verticalScale(2),
   },
   scrollContent: {
-    paddingHorizontal: scale(18),
-    paddingBottom: verticalScale(20),
-  },
-  summaryCard: {
-    borderRadius: scale(18),
     padding: scale(16),
-    marginBottom: verticalScale(16),
-    elevation: 2,
-  },
-  summaryTitle: {
-    fontSize: moderateFontScale(11),
-    color: '#888',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  summaryAmount: {
-    fontSize: moderateFontScale(28),
-    color: '#F5C518',
-    fontWeight: '900',
-    marginTop: verticalScale(4),
-  },
-  summaryDivider: {
-    height: 1,
-    marginVertical: verticalScale(12),
-  },
-  summaryStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(6),
-  },
-  statValue: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '800',
-  },
-  statLabel: {
-    fontSize: moderateFontScale(10),
-  },
-  filterPillsRow: {
-    flexDirection: 'row',
-    gap: scale(8),
-    marginBottom: verticalScale(14),
-  },
-  filterPill: {
-    paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(8),
-    borderRadius: scale(20),
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  filterPillActive: {
-    backgroundColor: '#F5C518',
-  },
-  filterPillText: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '800',
-  },
-  emptyCard: {
-    borderRadius: scale(18),
-    padding: scale(30),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tripCard: {
-    borderRadius: scale(18),
-    borderWidth: 1,
-    padding: scale(14),
-    marginBottom: verticalScale(14),
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  titleIconCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(10),
-    flex: 1,
-  },
-  iconBox: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(10),
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tripNameText: {
-    fontSize: moderateFontScale(14),
-    fontWeight: '800',
-  },
-  tripDateSub: {
-    fontSize: moderateFontScale(11),
-    fontWeight: '600',
-    marginTop: verticalScale(2),
-  },
-  statusBadge: {
-    paddingHorizontal: scale(8),
-    paddingVertical: verticalScale(4),
-    borderRadius: scale(8),
-  },
-  statusBadgeText: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '800',
-  },
-  routeSection: {
-    marginTop: verticalScale(12),
-    paddingLeft: scale(6),
-  },
-  routeNodeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(10),
-    height: verticalScale(22),
-  },
-  nodeIndicator: {
-    alignItems: 'center',
-    width: scale(12),
-  },
-  nodeIndicatorDot: {
-    width: scale(8),
-    height: scale(8),
-    borderRadius: scale(4),
-  },
-  nodeIndicatorLine: {
-    width: 1,
-    height: verticalScale(14),
-  },
-  nodeAddressName: {
-    fontSize: moderateFontScale(11.5),
-    fontWeight: '600',
-  },
-  detailsSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    marginTop: verticalScale(12),
-    paddingTop: verticalScale(10),
-  },
-  detailLabel: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  detailValue: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '800',
-    marginTop: verticalScale(2),
-  },
-  vehicleModelLabel: {
-    fontSize: moderateFontScale(10.5),
-    fontWeight: '600',
-  },
-  detailPrice: {
-    fontSize: moderateFontScale(16),
-    fontWeight: '900',
-    color: '#F5C518',
-    marginTop: verticalScale(2),
-  },
-  payMethodVal: {
-    fontSize: moderateFontScale(10.5),
-    fontWeight: '700',
-    marginTop: verticalScale(2),
-  },
-  ratingSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    marginTop: verticalScale(10),
-    paddingTop: verticalScale(8),
-  },
-  rebookBtn: {
-    paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(6),
-    borderRadius: scale(10),
-  },
-  rebookBtnText: {
-    fontSize: moderateFontScale(11),
-    fontWeight: '800',
+    paddingBottom: verticalScale(40),
   },
   activeCard: {
     padding: scale(14),
     borderRadius: scale(16),
     borderWidth: 1.5,
-    marginBottom: verticalScale(16),
+    marginBottom: verticalScale(20),
   },
-  activeHeader: {
+  liveBadgeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(8),
+    justifyContent: 'space-between',
+    marginBottom: verticalScale(12),
   },
   pulsingDot: {
     width: scale(8),
     height: scale(8),
     borderRadius: scale(4),
-    backgroundColor: '#2563EB',
+    backgroundColor: '#10B981',
   },
   activeTagText: {
     fontSize: moderateFontScale(11),
     fontWeight: '900',
     letterSpacing: 0.5,
   },
-  statusPill: {
+  typeBadge: {
     paddingHorizontal: scale(8),
     paddingVertical: verticalScale(3),
     borderRadius: scale(6),
   },
-  statusPillText: {
-    color: '#FFFFFF',
-    fontSize: moderateFontScale(9.5),
+  typeBadgeText: {
+    fontSize: moderateFontScale(10),
     fontWeight: '800',
   },
-  activeTripTitle: {
-    fontSize: moderateFontScale(15),
-    fontWeight: '800',
-    marginBottom: verticalScale(6),
-  },
-  activeDetailRow: {
+  partnerInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scale(6),
-    marginBottom: verticalScale(10),
+    marginBottom: verticalScale(12),
   },
-  activeDetailText: {
+  avatarCircle: {
+    width: scale(36),
+    height: scale(36),
+    borderRadius: scale(18),
+    backgroundColor: 'rgba(245, 197, 24, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partnerName: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+  },
+  partnerVehicle: {
+    fontSize: moderateFontScale(11),
+    marginTop: verticalScale(2),
+  },
+  locationBlock: {
+    marginBottom: verticalScale(12),
+  },
+  locVal: {
     fontSize: moderateFontScale(12),
+    fontWeight: '600',
+    flex: 1,
   },
   otpBox: {
     flexDirection: 'row',
@@ -1081,170 +654,158 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(12),
     borderRadius: scale(12),
     borderWidth: 1,
-    marginBottom: verticalScale(10),
+    marginBottom: verticalScale(6),
   },
   otpColumn: {
     alignItems: 'center',
   },
   otpLabel: {
-    fontSize: moderateFontScale(9.5),
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: verticalScale(2),
-  },
-  otpValue: {
-    fontSize: moderateFontScale(18),
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  routeBox: {
-    padding: scale(10),
-    borderRadius: scale(10),
-  },
-  routeText: {
-    fontSize: moderateFontScale(11.5),
-    fontWeight: '600',
-    flex: 1,
-  },
-  activeActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: scale(6),
-    paddingVertical: verticalScale(10),
-    borderRadius: scale(10),
-  },
-  activeActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: moderateFontScale(12),
-    fontWeight: '800',
-  },
-  card: {
-    borderRadius: scale(16),
-    borderWidth: 1,
-    padding: scale(16),
-  },
-  typeBadge: {
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(5),
-    borderRadius: scale(12),
-  },
-  typeBadgeText: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '900',
-  },
-  guardStatusBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(8),
-    borderWidth: 1,
-    borderRadius: scale(10),
-    paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(8),
-    marginTop: verticalScale(10),
-  },
-  guardStatusText: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '800',
-  },
-  passengerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: scale(38),
-    height: scale(38),
-    borderRadius: scale(19),
-    backgroundColor: 'rgba(245, 197, 24, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  passengerName: {
-    fontSize: moderateFontScale(15),
-    fontWeight: '800',
-  },
-  passengerSub: {
-    fontSize: moderateFontScale(11),
-    marginTop: verticalScale(2),
-  },
-  vehicleChip: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(5),
-    borderRadius: scale(8),
-  },
-  vehicleChipText: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '800',
-  },
-  routeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: verticalScale(12),
-  },
-  distanceBadge: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '800',
-  },
-  locationBlock: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: verticalScale(10),
-  },
-  locationTextWrap: {
-    marginLeft: scale(10),
-    flex: 1,
-  },
-  locLabel: {
     fontSize: moderateFontScale(9),
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  locVal: {
-    fontSize: moderateFontScale(13),
-    fontWeight: '600',
+  otpValue: {
+    fontSize: moderateFontScale(16),
+    fontWeight: '900',
     marginTop: verticalScale(2),
   },
-  fareRow: {
+  trackBtn: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(8),
+    justifyContent: 'center',
+    gap: scale(6),
+    paddingVertical: verticalScale(12),
+    borderRadius: scale(12),
   },
-  fareLabel: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '500',
-  },
-  fareVal: {
+  trackBtnText: {
+    color: '#101014',
     fontSize: moderateFontScale(13),
-    fontWeight: '700',
+    fontWeight: '900',
   },
-  totalLabel: {
+  cancelBtnIcon: {
+    width: scale(44),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: scale(12),
+    borderWidth: 1,
+  },
+  noActiveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(8),
+    padding: scale(12),
+    borderRadius: scale(12),
+    borderWidth: 1,
+    marginBottom: verticalScale(20),
+  },
+  noActiveText: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '600',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: verticalScale(12),
+  },
+  sectionTitle: {
+    fontSize: moderateFontScale(15),
+    fontWeight: '800',
+  },
+  fullWidthFilterRow: {
+    flexDirection: 'row',
+    width: '100%',
+    borderRadius: scale(14),
+    padding: scale(4),
+    borderWidth: 1,
+  },
+  fullWidthPill: {
+    flex: 1,
+    paddingVertical: verticalScale(10),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: scale(10),
+  },
+  fullWidthPillActive: {
+    backgroundColor: '#F5C518',
+  },
+  fullWidthPillText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '800',
+  },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: scale(24),
+    borderRadius: scale(16),
+    borderWidth: 1,
+    marginVertical: verticalScale(10),
+  },
+  emptyTitle: {
+    fontSize: moderateFontScale(14),
+    fontWeight: '800',
+    marginTop: verticalScale(8),
+  },
+  emptySub: {
+    fontSize: moderateFontScale(11),
+    textAlign: 'center',
+    marginTop: verticalScale(4),
+  },
+  scheduledCard: {
+    padding: scale(14),
+    borderRadius: scale(16),
+    borderWidth: 1,
+    marginBottom: verticalScale(14),
+  },
+  schedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: verticalScale(10),
+  },
+  schedTitle: {
     fontSize: moderateFontScale(14),
     fontWeight: '800',
   },
-  totalVal: {
-    fontSize: moderateFontScale(18),
-    fontWeight: '900',
+  schedDateText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
   },
-  lockedSub: {
-    fontSize: moderateFontScale(10),
-    fontWeight: '600',
-    marginTop: verticalScale(4),
+  schedRouteBox: {
+    borderTopWidth: 1,
+    paddingTop: verticalScale(8),
+    marginBottom: verticalScale(10),
   },
-  cardHeaderTitle: {
+  financeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: verticalScale(8),
+    marginBottom: verticalScale(12),
+  },
+  finLabel: {
+    fontSize: moderateFontScale(9),
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  finVal: {
+    fontSize: moderateFontScale(12),
+    fontWeight: '800',
+    marginTop: verticalScale(2),
+  },
+  schedActionsRow: {
+    flexDirection: 'row',
+    gap: scale(8),
+  },
+  schedActionBtn: {
+    flex: 1,
+    paddingVertical: verticalScale(8),
+    borderRadius: scale(10),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  schedActionText: {
     fontSize: moderateFontScale(11),
     fontWeight: '800',
-    letterSpacing: 0.6,
-  },
-  dateTimeText: {
-    fontSize: moderateFontScale(18),
-    fontWeight: '900',
-    marginVertical: verticalScale(4),
-  },
-  cardDivider: {
-    height: 1,
-    marginVertical: verticalScale(10),
   },
 });

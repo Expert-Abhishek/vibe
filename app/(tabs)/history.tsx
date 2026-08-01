@@ -52,7 +52,12 @@ export default function HistoryScreen() {
         const tripsData = await fetchCustomerTripsApi(userId);
         if (Array.isArray(tripsData) && tripsData.length > 0) {
           const mapped: HistoryRecord[] = tripsData
-            .filter((t: any) => !t.customerId || String(t.customerId) === String(userId))
+            .filter((t: any) => {
+              if (t && t.customerId && String(t.customerId) !== String(userId)) return false;
+              const st = String(t?.status || '').toLowerCase();
+              // MUST ONLY show past Completed and Cancelled trips
+              return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish');
+            })
             .map((t: any) => ({
               id: String(t.id),
               type: (t.tripType || 'cab') as any,
@@ -62,7 +67,7 @@ export default function HistoryScreen() {
               date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today',
               time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
               price: Number(t.amount) || 0,
-              status: t.status === 'Cancelled' ? 'Cancelled' : 'Completed',
+              status: String(t.status || '').toLowerCase().includes('cancel') ? 'Cancelled' : 'Completed',
               rating: Number(t.rating) || 5,
               passengerCount: t.passengerCount || 1,
             }));

@@ -237,7 +237,28 @@ CREATE TABLE IF NOT EXISTS platform_fee_revenue (
     user_role VARCHAR(50) NOT NULL, -- 'guide' or 'driver'
     trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
     amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+-- 18. Trip Checkpoints Table (Strict Sequential Ordering)
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(50);
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS trip_checkpoints (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    sequence_order INT NOT NULL DEFAULT 1,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending', -- 'pending', 'reached'
+    reached_at TIMESTAMP WITH TIME ZONE,
+    latitude NUMERIC(10,6),
+    longitude NUMERIC(10,6),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_trip_checkpoints_trip_seq ON trip_checkpoints(trip_id, sequence_order ASC);
+CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
+CREATE INDEX IF NOT EXISTS idx_trips_customer_id ON trips(customer_id);
+CREATE INDEX IF NOT EXISTS idx_trips_driver_id ON trips(driver_id);
 

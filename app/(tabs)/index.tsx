@@ -38,7 +38,9 @@ export default function HomeScreen() {
 
   const slideAnim = React.useRef(new Animated.Value(adminState.instantBookingEnabled ? 1 : 0)).current;
 
-  // Active Trip Auto-Check on App Launch
+  // Active Trip Check for Quick Banner (No Forced Redirection)
+  const [activeTrip, setActiveTrip] = useState<any>(null);
+
   React.useEffect(() => {
     async function checkActiveTripOnStartup() {
       try {
@@ -46,11 +48,10 @@ export default function HomeScreen() {
         if (session?.id) {
           const res = await fetchActiveTripApi(session.id);
           if (res && res.hasActiveTrip && res.trip && res.trip.id) {
-            console.log('[HomeScreen] 🚀 Active Trip Detected on Startup:', res.trip.id);
-            router.replace({
-              pathname: '/trip-status',
-              params: { tripId: String(res.trip.id) },
-            });
+            console.log('[HomeScreen] 🚀 Active Trip Detected for Quick Banner:', res.trip.id);
+            setActiveTrip(res.trip);
+          } else {
+            setActiveTrip(null);
           }
         }
       } catch (e) {
@@ -101,6 +102,35 @@ export default function HomeScreen() {
           <NotificationModal role="tourist" />
         </View>
 
+        {/* ACTIVE TRIP QUICK BANNER (Non-intrusive, user can tap to track) */}
+        {activeTrip && (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={[
+              styles.activeTripBanner,
+              { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.amber }
+            ]}
+            onPress={() => router.push({ pathname: '/trip-status', params: { tripId: activeTrip.id } })}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(4) }}>
+                <View style={styles.pulsingGreenDot} />
+                <Text style={[styles.activeBannerTag, { color: colors.amber }]}>LIVE RIDE IN PROGRESS</Text>
+              </View>
+              <Text style={[styles.activeBannerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                {activeTrip.pickup || activeTrip.pickup_name || activeTrip.title || 'Active Trip'} ➔ {activeTrip.drop_name || 'Destination'}
+              </Text>
+              <Text style={[styles.activeBannerSub, { color: colors.textMuted }]}>
+                Captain: {activeTrip.driverName || activeTrip.driver_or_guide_name || 'Assigned Partner'}
+              </Text>
+            </View>
+
+            <View style={[styles.trackQuickBtn, { backgroundColor: colors.amber }]}>
+              <Text style={styles.trackQuickBtnText}>Track 🗺️</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* TOP BAR: Search Bar (100%) */}
         <View style={styles.topActionRow}>
           <TouchableOpacity
@@ -115,7 +145,8 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* INSTANT / PRE-BOOKING TOGGLE */}
+        {/* INSTANT / PRE-BOOKING TOGGLE (COMMENTED OUT TEMPORARILY FOR NOW) */}
+        {/*
         <View style={styles.bookingTypeRow}>
           <Animated.View
             style={[
@@ -162,6 +193,7 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+        */}
 
         {/* Guides & Custom Trip Side-by-Side (50% each) */}
         <View style={styles.servicesGridRow}>
@@ -598,7 +630,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: scale(12),
     paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(4),
+    paddingVertical: verticalScale(2),
+    alignSelf: 'flex-start',
+  },
+  activeTripBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: scale(12),
+    borderRadius: scale(14),
+    borderWidth: 1.5,
+    marginTop: verticalScale(10),
+    marginBottom: verticalScale(6),
+  },
+  pulsingGreenDot: {
+    width: scale(8),
+    height: scale(8),
+    borderRadius: scale(4),
+    backgroundColor: '#10B981',
+  },
+  activeBannerTag: {
+    fontSize: moderateFontScale(10),
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  activeBannerTitle: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+  },
+  activeBannerSub: {
+    fontSize: moderateFontScale(11),
+    marginTop: verticalScale(2),
+  },
+  trackQuickBtn: {
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(6),
+    borderRadius: scale(10),
+    marginLeft: scale(8),
+  },
+  trackQuickBtnText: {
+    color: '#101014',
+    fontSize: moderateFontScale(11),
+    fontWeight: '900',
   },
   bookingModeText: {
     fontSize: moderateFontScale(10),

@@ -84,13 +84,33 @@ export default function TripStatusScreen() {
       try {
         const res = await fetchLiveLocationApi(tripIdParam);
         if (res && res.success && res.data) {
-          if (res.data.status) setTripStatus(res.data.status);
+          const statusStr = String(res.data.status || '');
+          const statusLower = statusStr.toLowerCase();
+          setTripStatus(statusStr);
+
           if (res.data.driver) setDriverInfo((prev: any) => ({ ...prev, ...res.data.driver }));
           if (res.data.pickup_name) setPickupLocation(res.data.pickup_name);
           if (res.data.drop_name) setDropLocation(res.data.drop_name);
           if (res.data.amount) setFareAmount(parseFloat(res.data.amount));
-          if (res.data.otp) setStartOtp(res.data.otp);
-          if (res.data.end_otp || res.data.endOtp) setEndOtp(res.data.end_otp || res.data.endOtp);
+
+          // Direct API OTP bindings without frontend re-hashing
+          if (res.data.otp) setStartOtp(String(res.data.otp));
+          if (res.data.end_otp || res.data.endOtp) setEndOtp(String(res.data.end_otp || res.data.endOtp));
+
+          // Transition away if completed or cancelled on poll
+          if (statusLower.includes('completed') || statusLower.includes('finish')) {
+            sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
+            Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
+              { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
+            ]);
+            return;
+          }
+          if (statusLower.includes('cancelled') || statusLower.includes('declined')) {
+            Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
+              { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
+            ]);
+            return;
+          }
         }
       } catch (e) {
         console.warn('loadStatus error:', e);
@@ -130,17 +150,26 @@ export default function TripStatusScreen() {
       }
     };
 
+    const handleCompleted = (data: any) => {
+      console.log('[TripStatusScreen] 🏁 Active trip completed:', data);
+      setTripStatus('Completed');
+      sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
+      Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibe.', [
+        { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
+      ]);
+    };
+
     const handleDeclined = () => {
       setTripStatus('Declined');
       Alert.alert('Trip Declined', 'The driver declined this trip request.', [
-        { text: 'OK', onPress: () => router.replace('/') }
+        { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
       ]);
     };
 
     const handleCancelled = () => {
       setTripStatus('CANCELLED');
       Alert.alert('Trip Cancelled', 'This trip has been cancelled.', [
-        { text: 'OK', onPress: () => router.replace('/') }
+        { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
       ]);
     };
 
@@ -173,24 +202,30 @@ export default function TripStatusScreen() {
     if (socket) {
       socket.on('driver_location_stream', handleLocationStream);
       socket.on('driver_location_update', handleLocationStream);
+      socket.on('trip_completed', handleCompleted);
+      socket.on('trip_cancelled', handleCancelled);
     }
 
     const sub1 = DeviceEventEmitter.addListener('trip_accepted', handleAccepted);
     const sub2 = DeviceEventEmitter.addListener('trip_declined', handleDeclined);
     const sub3 = DeviceEventEmitter.addListener('trip_cancelled', handleCancelled);
-    const sub4 = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
-    const sub5 = DeviceEventEmitter.addListener('driver_location_update', handleLocationStream);
+    const sub4 = DeviceEventEmitter.addListener('trip_completed', handleCompleted);
+    const sub5 = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
+    const sub6 = DeviceEventEmitter.addListener('driver_location_update', handleLocationStream);
 
     return () => {
       if (socket) {
         socket.off('driver_location_stream', handleLocationStream);
         socket.off('driver_location_update', handleLocationStream);
+        socket.off('trip_completed', handleCompleted);
+        socket.off('trip_cancelled', handleCancelled);
       }
       sub1.remove();
       sub2.remove();
       sub3.remove();
       sub4.remove();
       sub5.remove();
+      sub6.remove();
     };
   }, [tripIdParam]);
 
@@ -208,9 +243,15 @@ export default function TripStatusScreen() {
             const session = getUserSessionSync();
             try {
               await cancelTripApi(tripIdParam, { cancelledBy: 'tourist', role: 'tourist' });
+              const socket = getSocket();
+              if (socket && socket.connected) {
+                socket.emit('trip_cancelled', { tripId: tripIdParam, userId: session?.id, cancelledBy: 'tourist' });
+              }
+              DeviceEventEmitter.emit('trip_cancelled', { tripId: tripIdParam });
               sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
-              Alert.alert('Cancelled', 'Your trip has been cancelled.');
-              router.replace('/');
+              Alert.alert('Cancelled', 'Your trip has been cancelled.', [
+                { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
+              ]);
             } catch (e) {
               console.warn('Cancel error:', e);
               Alert.alert('Error', 'Failed to cancel trip.');
@@ -249,7 +290,7 @@ export default function TripStatusScreen() {
 
       {/* Header */}
       <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.replace('/')} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/trips')} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Live Trip Status</Text>
@@ -277,6 +318,7 @@ export default function TripStatusScreen() {
             </View>
           ) : (
             <MapView
+              ref={mapRef}
               provider="google"
               style={StyleSheet.absoluteFillObject}
               initialRegion={{
@@ -291,6 +333,8 @@ export default function TripStatusScreen() {
                 title={driverInfo.name}
                 description={driverInfo.vehicleModel}
                 pinColor={colors.amber}
+                rotation={driverInfo.heading || 0}
+                flat={true}
               />
             </MapView>
           )}

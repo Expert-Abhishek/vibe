@@ -196,6 +196,11 @@ export default function BookCabScreen() {
           updatedStops[searchField] = selectedNode;
           setStops(updatedStops);
         } else if (searchField === 'newstop') {
+          // Max 5 places total (Pickup + Drop + 3 Intermediate Stops = 5 places)
+          if (stops.length >= 3) {
+            Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 places/stops to visit in a trip.');
+            return;
+          }
           setStops([...stops, selectedNode]);
         }
         setSearchField(null);
@@ -1018,6 +1023,7 @@ export default function BookCabScreen() {
               <Text style={[styles.modeBtnText, { color: bookingMode === 'now' ? '#101010' : colors.textPrimary }]}>Book Now (Instant)</Text>
             </TouchableOpacity>
 
+            {/* PRE-BOOKING COMMENTED OUT TEMPORARILY FOR NOW
             <TouchableOpacity
               style={[styles.modeBtn, bookingMode === 'advance' && styles.modeBtnActive, { borderColor: colors.border }]}
               onPress={() => setBookingMode('advance')}
@@ -1025,6 +1031,7 @@ export default function BookCabScreen() {
               <MaterialIcons name="schedule" size={scale(14)} color={bookingMode === 'advance' ? '#101010' : colors.textPrimary} />
               <Text style={[styles.modeBtnText, { color: bookingMode === 'advance' ? '#101010' : colors.textPrimary }]}>Book in Advance</Text>
             </TouchableOpacity>
+            */}
           </View>
 
           {/* INSTANT MODE: Payment Mode Options (Cash / UPI) */}

@@ -293,6 +293,10 @@ export default function MakeTripScreen() {
 
   // Select place from Google Suggestions & fetch Lat/Lng
   const handleSelectSuggestion = async (placeId: string, description: string) => {
+    if (checkpoints.length >= 5) {
+      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 places to visit in a customer trip.');
+      return;
+    }
     setSearchText('');
     setSuggestions([]);
     setLoadingRoute(true);
@@ -322,6 +326,10 @@ export default function MakeTripScreen() {
   };
 
   const handleSelectPreset = (preset: Checkpoint) => {
+    if (checkpoints.length >= 5) {
+      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 places to visit in a customer trip.');
+      return;
+    }
     // Prevent duplicate entries of the same preset
     if (checkpoints.find(c => c.name === preset.name)) {
       Alert.alert('Checkpoint Exists', `${preset.name} is already in your itinerary.`);
@@ -337,6 +345,10 @@ export default function MakeTripScreen() {
   };
 
   const handleSelectLiveDestination = (dest: any) => {
+    if (checkpoints.length >= 5) {
+      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 places to visit in a customer trip.');
+      return;
+    }
     const name = dest.name || 'Tourist Place';
     if (checkpoints.find(c => c.name.toLowerCase() === name.toLowerCase())) {
       Alert.alert('Checkpoint Exists', `${name} is already in your itinerary.`);

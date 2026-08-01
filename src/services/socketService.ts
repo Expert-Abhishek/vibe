@@ -85,23 +85,51 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       }
     });
 
-    // 4. Real-time trip acceptance & decline events
+    // 4. Real-time trip status events (accepted, completed, cancelled, declined)
     socket.off('trip_status_updated');
     socket.on('trip_status_updated', (data: any) => {
       console.log('[SocketService] 📢 Received real-time trip_status_updated event:', data);
       if (data) {
         try {
           DeviceEventEmitter.emit('trip_status_updated', data);
-          if (data.status === 'Accepted') {
+          const st = String(data.status || '').toLowerCase();
+          if (st.includes('accepted')) {
             DeviceEventEmitter.emit('trip_accepted', data);
             DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
-          } else if (data.status === 'Declined') {
+          } else if (st.includes('completed') || st.includes('finish')) {
+            DeviceEventEmitter.emit('trip_completed', data);
+            DeviceEventEmitter.emit('RIDE_COMPLETED', data);
+          } else if (st.includes('declined')) {
             DeviceEventEmitter.emit('trip_declined', data);
             DeviceEventEmitter.emit('RIDE_DECLINED', data);
-          } else if (data.status === 'CANCELLED' || data.status === 'Cancelled') {
+          } else if (st.includes('cancel')) {
             DeviceEventEmitter.emit('trip_cancelled', data);
             DeviceEventEmitter.emit('RIDE_CANCELLED', data);
           }
+        } catch (e) {}
+      }
+    });
+
+    socket.off('trip_completed');
+    socket.on('trip_completed', (data: any) => {
+      console.log('[SocketService] 🎉 Received real-time trip_completed event:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_completed', data);
+          DeviceEventEmitter.emit('RIDE_COMPLETED', data);
+          DeviceEventEmitter.emit('trip_status_updated', { ...data, status: 'Completed' });
+        } catch (e) {}
+      }
+    });
+
+    socket.off('trip_cancelled');
+    socket.on('trip_cancelled', (data: any) => {
+      console.log('[SocketService] 🛑 Received real-time trip_cancelled event:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_cancelled', data);
+          DeviceEventEmitter.emit('RIDE_CANCELLED', data);
+          DeviceEventEmitter.emit('trip_status_updated', { ...data, status: 'CANCELLED' });
         } catch (e) {}
       }
     });

@@ -417,48 +417,209 @@ function canDriverStartTrip(scheduledTime, bookingType = 'INSTANT') {
 }
 
 /**
+ * State Machine Transition Matrix Guard
+ * States: pending -> in_progress -> done | cancelled
+ */
+const VALID_TRANSITIONS = {
+  pending: ['pending', 'in_progress', 'cancelled'],
+  in_progress: ['in_progress', 'done', 'cancelled'],
+  cancelled: [], // Terminal State
+  done: [], // Terminal State
+};
+
+function normalizeStatus(status) {
+  if (!status) return 'pending';
+  const s = String(status).toLowerCase().trim();
+  if (s.includes('cancel') || s.includes('decline') || s.includes('reject')) return 'cancelled';
+  if (s.includes('complete') || s.includes('finish') || s === 'done') return 'done';
+  if (s.includes('progress') || s.includes('accept') || s.includes('start') || s.includes('active') || s.includes('arrived')) return 'in_progress';
+  return 'pending';
+}
+
+function isValidTransition(currentRawStatus, newRawStatus) {
+  const current = normalizeStatus(currentRawStatus);
+  const next = normalizeStatus(newRawStatus);
+
+  if (current === next) return { allowed: true, normalizedNext: next };
+
+  const allowedNextStates = VALID_TRANSITIONS[current] || [];
+  if (!allowedNextStates.includes(next)) {
+    return {
+      allowed: false,
+      reason: `Invalid status transition from '${current}' to '${next}'. '${current}' is a ${allowedNextStates.length === 0 ? 'terminal state' : 'state that cannot transition to ' + next}.`,
+      currentNormalized: current,
+      nextNormalized: next,
+    };
+  }
+
+  return { allowed: true, normalizedNext: next };
+}
+
+/**
  * POST /api/trips/:id/status
- * Updates trip status with strict pre-booking time-gate validation
+ * State Machine guarded status update & Checkpoint mark reached. Soft updates ONLY. Never deletes.
  */
 router.post('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, driverName = 'Captain' } = req.body;
+    const { status, driverName = 'Captain', cancelledBy = 'user', cancelReason = null, checkpointId = null } = req.body;
 
     const tripRes = await db.query('SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [id]);
     if (tripRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Trip not found' });
+      return res.status(404).json({ success: false, message: 'Trip record not found' });
     }
 
     const trip = tripRes.rows[0];
 
-    // API Level Lock: Validate pre-booking 
-    // minute time-gate guard for activation states
-    if (['STARTED', 'EN_ROUTE_TO_PICKUP', 'ARRIVED', 'TRIP_STARTED'].includes(status)) {
-      const guardCheck = canDriverStartTrip(trip.scheduled_time, trip.booking_type);
-      if (!guardCheck.allowed) {
-        return res.status(400).json({
-          success: false,
-          code: 'PREBOOKING_LOCKED',
-          message: guardCheck.message,
-          unlocksAt: guardCheck.unlocksAt,
-        });
-      }
+    // Handle Checkpoint Mark Reached Action
+    if (checkpointId) {
+      await db.query(
+        `UPDATE trip_checkpoints
+         SET status = 'reached', reached_at = NOW(), updated_at = NOW()
+         WHERE id::text = $1::text AND trip_id::text = $2::text`,
+        [checkpointId, trip.id]
+      );
     }
 
-    const updateRes = await db.query(
-      `UPDATE trips SET status = $1, driver_or_guide_name = COALESCE($2, driver_or_guide_name) WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text RETURNING *`,
-      [status, driverName, id]
+    if (status) {
+      // API Level Lock: Validate pre-booking minute time-gate guard for activation states
+      if (['STARTED', 'EN_ROUTE_TO_PICKUP', 'ARRIVED', 'TRIP_STARTED', 'in_progress'].includes(status)) {
+        const guardCheck = canDriverStartTrip(trip.scheduled_time, trip.booking_type);
+        if (!guardCheck.allowed) {
+          return res.status(400).json({
+            success: false,
+            code: 'PREBOOKING_LOCKED',
+            message: guardCheck.message,
+            unlocksAt: guardCheck.unlocksAt,
+          });
+        }
+      }
+
+      // State Machine Guard Check
+      const stateGuard = isValidTransition(trip.status, status);
+      if (!stateGuard.allowed) {
+        return res.status(400).json({
+          success: false,
+          code: 'ILLEGAL_STATE_TRANSITION',
+          message: stateGuard.reason,
+          currentStatus: trip.status,
+          requestedStatus: status,
+        });
+      }
+
+      const targetStatus = stateGuard.normalizedNext;
+      let updateRes;
+
+      if (targetStatus === 'cancelled') {
+        updateRes = await db.query(
+          `UPDATE trips
+           SET status = 'cancelled',
+               cancelled_by = $1,
+               cancel_reason = COALESCE($2, cancel_reason, 'Cancelled by user or driver'),
+               driver_or_guide_name = COALESCE($3, driver_or_guide_name),
+               updated_at = NOW()
+           WHERE id::text = $4::text OR CAST(id AS VARCHAR) = $4::text
+           RETURNING *`,
+          [cancelledBy, cancelReason, driverName, id]
+        );
+        emitTripCancelled(updateRes.rows[0]);
+      } else if (targetStatus === 'done') {
+        updateRes = await db.query(
+          `UPDATE trips
+           SET status = 'done',
+               driver_or_guide_name = COALESCE($1, driver_or_guide_name),
+               updated_at = NOW()
+           WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text
+           RETURNING *`,
+          [driverName, id]
+        );
+        emitTripStatusUpdated(updateRes.rows[0], 'done');
+      } else {
+        updateRes = await db.query(
+          `UPDATE trips
+           SET status = 'in_progress',
+               driver_or_guide_name = COALESCE($1, driver_or_guide_name),
+               updated_at = NOW()
+           WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text
+           RETURNING *`,
+          [driverName, id]
+        );
+        emitTripStatusUpdated(updateRes.rows[0], 'in_progress');
+      }
+
+      const updatedTrip = updateRes.rows[0];
+
+      // Fetch Checkpoints ordered by sequence_order ASC
+      const cpRes = await db.query(
+        `SELECT * FROM trip_checkpoints WHERE trip_id::text = $1::text ORDER BY sequence_order ASC`,
+        [updatedTrip.id]
+      );
+
+      return res.json({
+        success: true,
+        message: `Status updated to ${targetStatus}`,
+        data: {
+          ...updatedTrip,
+          checkpoints: cpRes.rows,
+        },
+      });
+    }
+
+    // Return current checkpoints if no status change requested
+    const cpRes = await db.query(
+      `SELECT * FROM trip_checkpoints WHERE trip_id::text = $1::text ORDER BY sequence_order ASC`,
+      [trip.id]
     );
 
     res.json({
       success: true,
-      message: `Status updated to ${status}`,
-      data: updateRes.rows[0],
+      message: 'Checkpoint updated',
+      data: {
+        ...trip,
+        checkpoints: cpRes.rows,
+      },
     });
   } catch (error) {
     console.error('Error updating status:', error);
-    res.status(500).json({ success: false, message: 'Failed to update trip status' });
+    res.status(500).json({ success: false, message: 'Failed to update trip status', error: error.message });
+  }
+});
+
+/**
+ * GET /api/trips/history-stats/:userId
+ * Return 100% accurate aggregated statistics for user historical auditing
+ */
+router.get('/history-stats/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const statsRes = await db.query(
+      `SELECT
+        COUNT(*) as total_created,
+        COUNT(*) FILTER (WHERE LOWER(status) IN ('done', 'completed')) as completed,
+        COUNT(*) FILTER (WHERE LOWER(status) IN ('cancelled', 'declined')) as cancelled,
+        COUNT(*) FILTER (WHERE LOWER(status) IN ('pending', 'dispatched')) as pending,
+        COUNT(*) FILTER (WHERE LOWER(status) IN ('in_progress', 'active', 'accepted', 'started', 'arrived')) as in_progress
+       FROM trips
+       WHERE customer_id::text = $1::text OR user_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text`,
+      [userId]
+    );
+
+    const row = statsRes.rows[0] || {};
+
+    res.json({
+      success: true,
+      stats: {
+        totalCreated: parseInt(row.total_created || 0, 10),
+        completed: parseInt(row.completed || 0, 10),
+        cancelled: parseInt(row.cancelled || 0, 10),
+        pending: parseInt(row.pending || 0, 10),
+        inProgress: parseInt(row.in_progress || 0, 10),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching history stats:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch history stats' });
   }
 });
 
