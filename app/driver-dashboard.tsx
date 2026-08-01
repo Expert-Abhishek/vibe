@@ -1,4 +1,4 @@
-import { initSocketService, emitDriverLocationSocket } from '@src/services/socketService';
+import { initSocketService, emitDriverLocationSocket, joinTripRoom } from '@src/services/socketService';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import {
