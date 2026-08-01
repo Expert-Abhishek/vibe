@@ -202,11 +202,30 @@ export default function TripStatusScreen() {
       }
     };
 
+    const handleStageUpdate = (data: any) => {
+      if (!data) return;
+      const st = String(data.stage || data.status || '').toLowerCase();
+      setTripStatus(st);
+      if (data.driverName || data.driver_or_guide_name) {
+        setDriverInfo((prev: any) => ({
+          ...prev,
+          name: data.driverName || data.driver_or_guide_name,
+          phone: data.driverPhone || prev.phone,
+          vehicleModel: data.vehicleModel || prev.vehicleModel,
+          vehicleNumber: data.vehicleNumber || prev.vehicleNumber,
+        }));
+      }
+      if (st === 'completed' || st === 'done') {
+        handleCompleted(data);
+      }
+    };
+
     if (socket) {
       socket.on('driver_location_stream', handleLocationStream);
       socket.on('driver_location_update', handleLocationStream);
       socket.on('trip_completed', handleCompleted);
       socket.on('trip_cancelled', handleCancelled);
+      socket.on('trip_stage_update', handleStageUpdate);
     }
 
     const sub1 = DeviceEventEmitter.addListener('trip_accepted', handleAccepted);
@@ -215,6 +234,7 @@ export default function TripStatusScreen() {
     const sub4 = DeviceEventEmitter.addListener('trip_completed', handleCompleted);
     const sub5 = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
     const sub6 = DeviceEventEmitter.addListener('driver_location_update', handleLocationStream);
+    const sub7 = DeviceEventEmitter.addListener('trip_stage_update', handleStageUpdate);
 
     return () => {
       if (socket) {
@@ -222,6 +242,7 @@ export default function TripStatusScreen() {
         socket.off('driver_location_update', handleLocationStream);
         socket.off('trip_completed', handleCompleted);
         socket.off('trip_cancelled', handleCancelled);
+        socket.off('trip_stage_update', handleStageUpdate);
       }
       sub1.remove();
       sub2.remove();
@@ -229,6 +250,7 @@ export default function TripStatusScreen() {
       sub4.remove();
       sub5.remove();
       sub6.remove();
+      sub7.remove();
     };
   }, [tripIdParam]);
 

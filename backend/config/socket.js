@@ -456,20 +456,27 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
     updatedAt: new Date().toISOString(),
   };
 
-  console.log(`[SOCKET] 📢 Trip status [${status}] sent to Rider Room: user:${customerId}`);
+  const stLower = String(status).toLowerCase();
+  const stagePayload = {
+    ...payload,
+    stage: stLower,
+  };
 
   if (customerId && customerId !== 'null' && customerId !== 'undefined') {
     io.to(`user:${customerId}`).emit('trip_status_updated', payload);
-    if (status === 'Accepted') {
+    io.to(`user:${customerId}`).emit('trip_stage_update', stagePayload);
+    if (stLower === 'accepted') {
       io.to(`user:${customerId}`).emit('trip_accepted', payload);
-    } else if (status === 'done' || status === 'Completed') {
+    } else if (stLower === 'done' || stLower === 'completed') {
       io.to(`user:${customerId}`).emit('trip_completed', payload);
     }
   }
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_status_updated', payload);
     io.to(`trip_${tripId}`).emit('trip_status_updated', payload);
-    const stLower = String(status).toLowerCase();
+    io.to(`trip:${tripId}`).emit('trip_stage_update', stagePayload);
+    io.to(`trip_${tripId}`).emit('trip_stage_update', stagePayload);
+
     if (stLower === 'accepted') {
       io.to(`trip:${tripId}`).emit('trip_accepted', payload);
       io.to(`trip_${tripId}`).emit('trip_accepted', payload);
@@ -480,7 +487,8 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
   }
   if (driverId && driverId !== 'null' && driverId !== 'undefined') {
     io.to(`user:${driverId}`).emit('trip_status_updated', payload);
-    if (status === 'done' || status === 'Completed') {
+    io.to(`user:${driverId}`).emit('trip_stage_update', stagePayload);
+    if (stLower === 'done' || stLower === 'completed') {
       io.to(`user:${driverId}`).emit('trip_completed', payload);
     }
   }

@@ -134,6 +134,24 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       }
     });
 
+    socket.off('trip_stage_update');
+    socket.on('trip_stage_update', (data: any) => {
+      console.log('[SocketService] 🔄 Received real-time trip_stage_update:', data);
+      if (data) {
+        try {
+          DeviceEventEmitter.emit('trip_stage_update', data);
+          DeviceEventEmitter.emit('trip_status_updated', data);
+          const st = String(data.stage || data.status || '').toLowerCase();
+          if (st === 'completed' || st === 'done') {
+            DeviceEventEmitter.emit('trip_completed', data);
+          } else if (st === 'accepted') {
+            DeviceEventEmitter.emit('trip_accepted', data);
+            DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
+          }
+        } catch (e) {}
+      }
+    });
+
     socket.off('trip_accepted');
     socket.on('trip_accepted', (data: any) => {
       console.log('[SocketService] 🚀 Received real-time trip_accepted event:', data);
@@ -141,6 +159,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         try {
           DeviceEventEmitter.emit('trip_accepted', data);
           DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
+          DeviceEventEmitter.emit('trip_status_updated', { ...data, status: 'accepted' });
         } catch (e) {}
       }
     });

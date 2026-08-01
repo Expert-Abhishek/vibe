@@ -832,21 +832,31 @@ router.post('/book', async (req, res) => {
     const advanceDepositPaid = isPreBooked ? Math.round(numAmount * 0.20) : 0;
     const remainingCashBalance = isPreBooked ? numAmount - advanceDepositPaid : numAmount;
 
-    // Wallet Balance Check for Wallet/UPI payment mode
-    if (paymentMode && paymentMode.toLowerCase().includes('upi') && customerId) {
-      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(customerId);
-      if (isUuid) {
-        const dWallet = await db.query('SELECT wallet_balance FROM driver_profiles WHERE user_id = $1', [customerId]);
-        const gWallet = await db.query('SELECT wallet_balance FROM guide_profiles WHERE user_id = $1', [customerId]);
-        const userWallet = (dWallet.rows[0]?.wallet_balance || 0) || (gWallet.rows[0]?.wallet_balance || 0);
+    let sanitizedPaymentMode = 'Wallet';
+    const rawPm = String(paymentMode || 'Wallet').toLowerCase();
+    if (rawPm.includes('cash')) {
+      sanitizedPaymentMode = 'Cash';
+    } else if (rawPm.includes('wallet') || rawPm.includes('upi') || rawPm.includes('online')) {
+      sanitizedPaymentMode = 'Wallet';
+    }
 
-        const requiredPayment = isPreBooked ? advanceDepositPaid : numAmount;
-        if (userWallet < requiredPayment && userWallet > 0) {
-          return res.status(400).json({
-            success: false,
-            code: 'INSUFFICIENT_WALLET_BALANCE',
-            message: `Insufficient wallet balance (₹${userWallet}). Required: ₹${requiredPayment}. Please add money to wallet.`,
-          });
+    // Wallet Balance Check for Wallet/UPI payment mode
+    if (rawPm.includes('upi') || rawPm.includes('wallet')) {
+      if (customerId) {
+        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(customerId);
+        if (isUuid) {
+          const dWallet = await db.query('SELECT wallet_balance FROM driver_profiles WHERE user_id = $1', [customerId]);
+          const gWallet = await db.query('SELECT wallet_balance FROM guide_profiles WHERE user_id = $1', [customerId]);
+          const userWallet = (dWallet.rows[0]?.wallet_balance || 0) || (gWallet.rows[0]?.wallet_balance || 0);
+
+          const requiredPayment = isPreBooked ? advanceDepositPaid : numAmount;
+          if (userWallet < requiredPayment && userWallet > 0) {
+            return res.status(400).json({
+              success: false,
+              code: 'INSUFFICIENT_WALLET_BALANCE',
+              message: `Insufficient wallet balance (₹${userWallet}). Required: ₹${requiredPayment}. Please add money to wallet.`,
+            });
+          }
         }
       }
     }
@@ -875,7 +885,7 @@ router.post('/book', async (req, res) => {
           dropLat,
           dropLng,
           parseFloat(amount),
-          paymentMode,
+          sanitizedPaymentMode,
           otpCode,
           bookingType,
           scheduledTime ? new Date(scheduledTime) : null,
@@ -907,7 +917,7 @@ router.post('/book', async (req, res) => {
             dropLat,
             dropLng,
             parseFloat(amount),
-            paymentMode,
+            sanitizedPaymentMode,
             otpCode,
             bookingType,
             scheduledTime ? new Date(scheduledTime) : null,
@@ -929,7 +939,7 @@ router.post('/book', async (req, res) => {
             customerId || null,
             customerName,
             parseFloat(amount),
-            paymentMode,
+            sanitizedPaymentMode,
             otpCode,
           ]
         );
