@@ -291,22 +291,29 @@ router.get('/active-trip/:customerId', async (req, res) => {
 router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
   try {
     const { id } = req.params;
-    const { cancelledBy = 'tourist', role = 'tourist', reason = 'Cancelled by user' } = req.body || {};
+    const { cancelledBy = 'user', role = 'tourist', reason = 'Cancelled by user' } = req.body || {};
+
+    const actor = cancelledBy === 'driver' || role === 'driver' ? 'driver' : 'user';
+    const statusText = actor === 'driver' ? 'Cancelled by Driver' : 'Cancelled by User';
 
     const result = await db.query(
       `UPDATE trips
-       SET status = 'CANCELLED'
-       WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text
+       SET status = $1,
+           cancelled_by = $2,
+           cancel_reason = $3,
+           updated_at = NOW()
+       WHERE id::text = $4::text OR CAST(id AS VARCHAR) = $4::text
        RETURNING *`,
-      [id]
+      [statusText, actor, reason, id]
     );
 
-    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'CANCELLED' };
-    emitTripStatusUpdated(trip, 'CANCELLED');
+    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: statusText, cancelled_by: actor };
+    emitTripStatusUpdated(trip, statusText);
+    emitTripCancelled(trip);
 
     res.json({
       success: true,
-      message: 'Trip cancelled successfully',
+      message: `Trip status updated to ${statusText}`,
       data: trip,
     });
   } catch (error) {

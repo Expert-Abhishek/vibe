@@ -96,7 +96,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
           if (st.includes('accepted')) {
             DeviceEventEmitter.emit('trip_accepted', data);
             DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
-          } else if (st.includes('completed') || st.includes('finish')) {
+          } else if (st.includes('completed') || st.includes('finish') || st === 'done') {
             DeviceEventEmitter.emit('trip_completed', data);
             DeviceEventEmitter.emit('RIDE_COMPLETED', data);
           } else if (st.includes('declined')) {

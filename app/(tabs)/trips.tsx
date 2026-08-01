@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
 import {
   Alert,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -52,6 +53,7 @@ export default function TripsHistoryScreen() {
   const [backendTrips, setBackendTrips] = useState<any[]>([]);
   const [hasActiveTripState, setHasActiveTripState] = useState<boolean | null>(null);
   const [activeTripData, setActiveTripData] = useState<any>(null);
+  const [selectedItineraryTrip, setSelectedItineraryTrip] = useState<TripItem | null>(null);
 
   const session = getUserSessionSync();
   const userId = session?.id;
@@ -173,26 +175,29 @@ export default function TripsHistoryScreen() {
 
   const filteredUserTrips: TripItem[] = safeUserTrips
     .filter(t => t && (!userId || !t.customerId || String(t.customerId) === String(userId)))
-    .map((t: any) => ({
-      id: String(t.id),
-      type: String(t.type || 'guide') as any,
-      vehicleType: t.vehicleType,
-      title: String(t.title || 'Tour Request'),
-      route: Array.isArray(t.route) ? t.route : [],
-      driverOrGuideName: String(t.driverOrGuideName || 'Local Guide'),
-      date: String(t.date || 'Today'),
-      time: String(t.time || 'Immediate'),
-      price: Number(t.price) || 0,
-      paymentMode: String(t.paymentMode || 'Wallet'),
-      status: String(t.status || 'Pending'),
-      passengerCount: t.passengerCount,
-      advanceDepositPaid: t.advanceDepositPaid,
-      remainingCashBalance: t.remainingCashBalance,
-      otp: t.otp,
-      endOtp: t.endOtp,
-      pickup: t.pickupName || t.pickup || t.title || 'Pickup Spot',
-      bookingType: t.bookingType || 'INSTANT',
-    }));
+    .map((t: any) => {
+      const parsedType = String(t.type || t.trip_type || 'cab');
+      return {
+        id: String(t.id),
+        type: (parsedType === 'guide' ? 'guide' : 'cab') as any,
+        vehicleType: t.vehicleType,
+        title: String(t.title || 'Cab Booking'),
+        route: Array.isArray(t.route) ? t.route : [],
+        driverOrGuideName: String(t.driverOrGuideName || (parsedType === 'guide' ? 'Local Guide' : 'Assigned Captain')),
+        date: String(t.date || 'Today'),
+        time: String(t.time || 'Immediate'),
+        price: Number(t.price) || 0,
+        paymentMode: String(t.paymentMode || 'Wallet'),
+        status: String(t.status || 'Pending'),
+        passengerCount: t.passengerCount,
+        advanceDepositPaid: t.advanceDepositPaid,
+        remainingCashBalance: t.remainingCashBalance,
+        otp: t.otp,
+        endOtp: t.endOtp,
+        pickup: t.pickupName || t.pickup || t.title || 'Pickup Spot',
+        bookingType: t.bookingType || 'INSTANT',
+      };
+    });
 
   const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips].filter(Boolean);
   
@@ -472,7 +477,7 @@ export default function TripsHistoryScreen() {
         {scheduledTrips.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <MaterialIcons name="event-available" size={scale(36)} color={colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Upcoming Scheduled Tours</Text>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Active or Upcoming Bookings</Text>
             <Text style={[styles.emptySub, { color: colors.textMuted }]}>
               Explore our custom packages & book your next destination!
             </Text>
@@ -483,6 +488,44 @@ export default function TripsHistoryScreen() {
             const price = Number(trip.price || 0);
             const advancePaid = trip.advanceDepositPaid || Math.round(price * 0.20);
             const balanceDue = price - advancePaid;
+
+            const handleViewItinerary = () => {
+              const partnerName = trip.driverOrGuideName || (isGuide ? 'Local Guide' : 'Assigned Driver/Captain');
+              const routeList = Array.isArray(trip.route) && trip.route.length > 0
+                ? trip.route.map((cp: string, i: number) => `   📍 Stop ${i + 1}: ${cp}`).join('\n')
+                : `   📍 Pickup: ${trip.pickup || 'Pickup Location'}\n   🏁 Drop: ${trip.title || 'Destination'}`;
+
+              const message = [
+                `=================================`,
+                `📋 TRIP ITINERARY DETAILS`,
+                `=================================`,
+                ``,
+                `🎫 Booking ID: #${trip.id}`,
+                `📌 Trip Name: ${trip.title}`,
+                `🏷️ Category: ${isGuide ? 'Guide Tour' : 'Cab / Vehicle Ride'}`,
+                `📅 Schedule: ${trip.date} at ${trip.time}`,
+                ``,
+                `---------------------------------`,
+                `👥 ASSIGNED PARTNER`,
+                `---------------------------------`,
+                `  ${isGuide ? '🧭 Tour Guide' : '🚕 Driver Captain'}: ${partnerName}`,
+                ``,
+                `---------------------------------`,
+                `🗺️ ROUTE & CHECKPOINTS`,
+                `---------------------------------`,
+                routeList,
+                ``,
+                `---------------------------------`,
+                `💳 FARE & PAYMENT DETAILS`,
+                `---------------------------------`,
+                `  💰 Total Fare: ₹${price}`,
+                `  💳 Payment Mode: ${trip.paymentMode || 'Wallet'}`,
+                `  🟢 Status: ${trip.status}`,
+                `=================================`,
+              ].join('\n');
+
+              Alert.alert(`Trip Itinerary #${String(trip.id).slice(-6)}`, message);
+            };
 
             return (
               <View
@@ -502,22 +545,30 @@ export default function TripsHistoryScreen() {
                       </Text>
                     </View>
                   </View>
+                </View>
 
-                  <View style={[styles.typeBadge, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-                    <Text style={[styles.typeBadgeText, { color: '#3B82F6' }]}>
-                      {isGuide ? '🧭 GUIDE' : '📅 SCHEDULED'}
+                {/* DISTINCT UI FOR GUIDE VS CAB (NO CAB/GUIDE TAGS) */}
+                {isGuide ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), marginTop: verticalScale(8), paddingHorizontal: scale(12), paddingVertical: verticalScale(8), backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: scale(8) }}>
+                    <View style={{ width: scale(40), height: scale(40), borderRadius: scale(20), backgroundColor: colors.amber, justifyContent: 'center', alignItems: 'center' }}>
+                      <MaterialIcons name="person" size={scale(22)} color="#101014" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>{trip.driverOrGuideName || 'Certified Heritage Guide'}</Text>
+                      <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '600' }}>Area & Expertise: Mysuru Heritage & Culture</Text>
+                      <Text style={{ fontSize: moderateFontScale(10), color: colors.textMuted }}>Languages: English, Kannada, Hindi</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={[styles.schedRouteBox, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.locVal, { color: colors.textMuted }]} numberOfLines={2}>
+                      📍 {trip.pickup || 'Pickup'} ➔ {Array.isArray(trip.route) && trip.route.length > 0 ? trip.route.join(' ➔ ') : 'Tour Destination'}
+                    </Text>
+                    <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '600', marginTop: verticalScale(4) }}>
+                      🛣️ Distance & Route: ~35.0 km · {Array.isArray(trip.route) ? trip.route.length : 2} Checkpoints
                     </Text>
                   </View>
-                </View>
-
-                {/* NOTE: OTP IS STRICTLY NOT DISPLAYED ON SCHEDULED TRIPS PER REFACTOR RULE */}
-
-                {/* Route Summary */}
-                <View style={[styles.schedRouteBox, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.locVal, { color: colors.textMuted }]} numberOfLines={2}>
-                    📍 {trip.pickup || 'Pickup'} ➔ {Array.isArray(trip.route) && trip.route.length > 0 ? trip.route.join(' ➔ ') : 'Tour Destination'}
-                  </Text>
-                </View>
+                )}
 
                 {/* Financial Summary */}
                 <View style={[styles.financeRow, { borderTopColor: colors.border }]}>
@@ -539,7 +590,7 @@ export default function TripsHistoryScreen() {
                 <View style={styles.schedActionsRow}>
                   <TouchableOpacity
                     style={[styles.schedActionBtn, { backgroundColor: colors.surfaceCard, borderColor: colors.border, borderWidth: 1 }]}
-                    onPress={() => Alert.alert('Trip Itinerary', `Booking #${trip.id}\nTitle: ${trip.title}\nDriver/Guide: ${trip.driverOrGuideName || 'Local Guide'}\nTotal: ₹${price}`)}
+                    onPress={() => setSelectedItineraryTrip(trip)}
                   >
                     <Text style={[styles.schedActionText, { color: colors.textPrimary }]}>View Itinerary</Text>
                   </TouchableOpacity>
@@ -557,6 +608,94 @@ export default function TripsHistoryScreen() {
         )}
 
       </ScrollView>
+
+      {/* ITINERARY MODAL OVERLAY */}
+      <Modal
+        visible={selectedItineraryTrip !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSelectedItineraryTrip(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+          {selectedItineraryTrip && (
+            <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(24), borderTopRightRadius: scale(24), padding: scale(20), maxHeight: '85%', borderWidth: 1, borderColor: colors.border }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(14) }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                  <MaterialIcons name="map" size={scale(22)} color={colors.amber} />
+                  <Text style={{ fontSize: moderateFontScale(16), fontWeight: '900', color: colors.textPrimary }}>Trip Itinerary Details</Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedItineraryTrip(null)} style={{ padding: scale(4) }}>
+                  <MaterialIcons name="close" size={scale(22)} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: verticalScale(12) }}>
+                {/* Header Info */}
+                <View style={{ backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.amber }}>
+                  <Text style={{ fontSize: moderateFontScale(16), fontWeight: '800', color: colors.textPrimary }}>{selectedItineraryTrip.title}</Text>
+                  <Text style={{ fontSize: moderateFontScale(12), color: colors.amber, fontWeight: '700', marginTop: verticalScale(4) }}>
+                    📅 {selectedItineraryTrip.date} at {selectedItineraryTrip.time}
+                  </Text>
+                  <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: 2 }}>Booking ID: #{selectedItineraryTrip.id}</Text>
+                </View>
+
+                {/* Partner Details */}
+                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9F9FB', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: colors.textMuted, marginBottom: verticalScale(6) }}>ASSIGNED PARTNER</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10) }}>
+                    <View style={{ width: scale(36), height: scale(36), borderRadius: scale(18), backgroundColor: colors.amber, justifyContent: 'center', alignItems: 'center' }}>
+                      <MaterialIcons name="person" size={scale(20)} color="#101014" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>{selectedItineraryTrip.driverOrGuideName || 'Assigned Partner'}</Text>
+                      <Text style={{ fontSize: moderateFontScale(11), color: colors.amber }}>{selectedItineraryTrip.type === 'guide' ? 'Certified Heritage Guide' : 'Verified Captain'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Checkpoints & Route */}
+                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9F9FB', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: colors.textMuted, marginBottom: verticalScale(8) }}>ROUTE CHECKPOINTS</Text>
+                  {Array.isArray(selectedItineraryTrip.route) && selectedItineraryTrip.route.length > 0 ? (
+                    selectedItineraryTrip.route.map((cp, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginVertical: verticalScale(3) }}>
+                        <View style={{ width: scale(8), height: scale(8), borderRadius: scale(4), backgroundColor: colors.amber }} />
+                        <Text style={{ fontSize: moderateFontScale(12), fontWeight: '600', color: colors.textPrimary }}>Stop {idx + 1}: {cp}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textPrimary }}>📍 {selectedItineraryTrip.pickup || 'Pickup Location'} ➔ 🏁 {selectedItineraryTrip.title}</Text>
+                  )}
+                </View>
+
+                {/* Fare & Payment Breakdown */}
+                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9F9FB', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: colors.textMuted, marginBottom: verticalScale(8) }}>PAYMENT DETAILS</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(4) }}>
+                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted }}>Total Fare</Text>
+                    <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.amber }}>₹{selectedItineraryTrip.price}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(4) }}>
+                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted }}>Payment Method</Text>
+                    <Text style={{ fontSize: moderateFontScale(12), fontWeight: '700', color: colors.textPrimary }}>{selectedItineraryTrip.paymentMode || 'Wallet'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted }}>Booking Status</Text>
+                    <Text style={{ fontSize: moderateFontScale(12), fontWeight: '700', color: '#10B981' }}>{selectedItineraryTrip.status}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity
+                style={{ backgroundColor: colors.amber, borderRadius: scale(14), paddingVertical: verticalScale(12), alignItems: 'center', marginTop: verticalScale(14) }}
+                onPress={() => setSelectedItineraryTrip(null)}
+              >
+                <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(14) }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

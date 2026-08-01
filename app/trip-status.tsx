@@ -98,17 +98,19 @@ export default function TripStatusScreen() {
           if (res.data.end_otp || res.data.endOtp) setEndOtp(String(res.data.end_otp || res.data.endOtp));
 
           // Transition away if completed or cancelled on poll
-          if (statusLower.includes('completed') || statusLower.includes('finish')) {
+          if (statusLower.includes('completed') || statusLower.includes('finish') || statusLower.includes('done')) {
             sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
             Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
               { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
             ]);
+            router.replace('/(tabs)/history');
             return;
           }
           if (statusLower.includes('cancelled') || statusLower.includes('declined')) {
             Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
               { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
             ]);
+            router.replace('/(tabs)/trips');
             return;
           }
         }
@@ -157,6 +159,7 @@ export default function TripStatusScreen() {
       Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibe.', [
         { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
       ]);
+      router.replace('/(tabs)/history');
     };
 
     const handleDeclined = () => {

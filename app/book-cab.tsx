@@ -1053,8 +1053,8 @@ export default function BookCabScreen() {
                   style={[styles.payMethodBtn, paymentMethod === 'upi' && styles.payMethodBtnActive]}
                   onPress={() => setPaymentMethod('upi')}
                 >
-                  <FontAwesome5 name="qrcode" size={scale(11)} color={paymentMethod === 'upi' ? '#101010' : colors.textPrimary} />
-                  <Text style={[styles.payMethodText, { color: paymentMethod === 'upi' ? '#101010' : colors.textPrimary }]}>UPI / Wallet</Text>
+                  <FontAwesome5 name="wallet" size={scale(11)} color={paymentMethod === 'upi' ? '#101010' : colors.textPrimary} />
+                  <Text style={[styles.payMethodText, { color: paymentMethod === 'upi' ? '#101010' : colors.textPrimary }]}>Wallet</Text>
                 </TouchableOpacity>
               </View>
             </View>

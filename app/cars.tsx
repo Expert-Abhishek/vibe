@@ -170,6 +170,7 @@ export default function FleetCatalogScreen() {
         }
       });
     } else {
+      const existingCheckpoints = (searchParams as any).checkpoints;
       router.push({
         pathname: '/make-trip',
         params: {
@@ -182,6 +183,7 @@ export default function FleetCatalogScreen() {
           selectedCarPhoto: carPhoto,
           selectedDriverRate: dayRate,
           selectedDriverAddonRate: hrAddonRate,
+          checkpoints: existingCheckpoints,
         }
       });
     }

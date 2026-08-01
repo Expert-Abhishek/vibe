@@ -55,22 +55,33 @@ export default function HistoryScreen() {
             .filter((t: any) => {
               if (t && t.customerId && String(t.customerId) !== String(userId)) return false;
               const st = String(t?.status || '').toLowerCase();
-              // MUST ONLY show past Completed and Cancelled trips
-              return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish');
+              return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish') || st === 'done' || st.includes('done');
             })
-            .map((t: any) => ({
-              id: String(t.id),
-              type: (t.tripType || 'cab') as any,
-              title: t.title || (t.pickupName && t.dropName ? `${t.pickupName} ➔ ${t.dropName}` : 'Tour Booking'),
-              route: Array.isArray(t.destinationIds) && t.destinationIds.length > 0 ? t.destinationIds : (t.pickupName && t.dropName ? [t.pickupName, t.dropName] : undefined),
-              driverOrGuideName: t.driverOrGuideName || undefined,
-              date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today',
-              time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-              price: Number(t.amount) || 0,
-              status: String(t.status || '').toLowerCase().includes('cancel') ? 'Cancelled' : 'Completed',
-              rating: Number(t.rating) || 5,
-              passengerCount: t.passengerCount || 1,
-            }));
+            .map((t: any) => {
+              const stLower = String(t.status || '').toLowerCase();
+              let statusLabel = 'Completed';
+              if (stLower.includes('driver') || t.cancelled_by === 'driver') {
+                statusLabel = 'Cancelled by Driver';
+              } else if (stLower.includes('user') || stLower.includes('tourist') || t.cancelled_by === 'user' || t.cancelled_by === 'tourist') {
+                statusLabel = 'Cancelled by User';
+              } else if (stLower.includes('cancel') || stLower.includes('decline')) {
+                statusLabel = 'Cancelled';
+              }
+
+              return {
+                id: String(t.id),
+                type: (t.tripType || 'cab') as any,
+                title: t.title || (t.pickupName && t.dropName ? `${t.pickupName} ➔ ${t.dropName}` : 'Tour Booking'),
+                route: Array.isArray(t.destinationIds) && t.destinationIds.length > 0 ? t.destinationIds : (t.pickupName && t.dropName ? [t.pickupName, t.dropName] : undefined),
+                driverOrGuideName: t.driverOrGuideName || undefined,
+                date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today',
+                time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+                price: Number(t.amount) || 0,
+                status: statusLabel,
+                rating: Number(t.rating) || 5,
+                passengerCount: t.passengerCount || 1,
+              };
+            });
           setDbHistory(mapped);
         } else {
           setDbHistory([]);
@@ -98,20 +109,36 @@ export default function HistoryScreen() {
   };
 
   const localUserTrips = adminState.userTrips
-    .filter(t => (t.status === 'Completed' || t.status === 'Cancelled') && (userId ? String(t.customerId) === String(userId) : false))
-    .map(t => ({
-      id: t.id,
-      type: t.type,
-      title: t.title,
-      route: t.route,
-      driverOrGuideName: t.driverOrGuideName,
-      date: t.date,
-      time: t.time,
-      price: t.price,
-      status: (t.status === 'Cancelled' ? 'Cancelled' : 'Completed') as 'Cancelled' | 'Completed',
-      rating: t.rating || 5,
-      passengerCount: t.passengerCount,
-    }));
+    .filter(t => {
+      if (!t) return false;
+      if (userId && t.customerId && String(t.customerId) !== String(userId)) return false;
+      const st = String(t.status || '').toLowerCase();
+      return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish') || st.includes('reject') || st === 'done' || st.includes('done');
+    })
+    .map(t => {
+      const stLower = String(t.status || '').toLowerCase();
+      let statusLabel = 'Completed';
+      if (stLower.includes('driver')) {
+        statusLabel = 'Cancelled by Driver';
+      } else if (stLower.includes('user') || stLower.includes('tourist')) {
+        statusLabel = 'Cancelled by User';
+      } else if (stLower.includes('cancel') || stLower.includes('decline')) {
+        statusLabel = 'Cancelled';
+      }
+      return {
+        id: t.id,
+        type: t.type,
+        title: t.title,
+        route: t.route,
+        driverOrGuideName: t.driverOrGuideName,
+        date: t.date,
+        time: t.time,
+        price: t.price,
+        status: statusLabel,
+        rating: t.rating || 5,
+        passengerCount: t.passengerCount,
+      };
+    });
 
   const localCancelledBookings = adminState.advanceBookings
     .filter(b => b.status === 'Cancelled' && (userId ? (String(b.assignedToId) === String(userId) || b.touristName?.includes(session?.name || '')) : false))

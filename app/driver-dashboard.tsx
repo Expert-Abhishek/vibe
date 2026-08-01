@@ -1415,27 +1415,45 @@ export default function DriverDashboardScreen() {
             </View>
           </View>
 
-          {/* Upcoming Advance Bookings & Pending Requests card */}
+          {/* Pending Instant Ride Requests card */}
           <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
-            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Upcoming & Pending Booking Queries</Text>
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Pending Instant Ride Requests</Text>
             {(() => {
               const allBookingsMap = new Map();
 
               // 1. Load real-time PostgreSQL database trips fetched via API
               if (Array.isArray(driverTrips)) {
                 driverTrips.forEach(t => {
+                  if (!t) return;
+                  const pickupName = t.pickup || t.pickupName || t.pickup_name || t.title || 'Pickup Spot';
+                  const dropName = t.drop || t.dropName || t.drop_name || t.title || 'Destination';
+                  const rawCheckpoints = t.checkpoints || t.destination_ids || t.destinationIds || t.route;
+                  const parsedCheckpoints = typeof rawCheckpoints === 'string'
+                    ? JSON.parse(rawCheckpoints)
+                    : (Array.isArray(rawCheckpoints) ? rawCheckpoints : [pickupName, dropName]);
+
                   allBookingsMap.set(t.id, {
-                    id: t.id,
-                    title: t.title || `${t.pickupName || 'Pickup'} ➔ ${t.dropName || 'Destination'}`,
-                    date: t.date || 'Today',
-                    time: t.time || 'Immediate',
-                    price: t.price || t.amount || 1200,
-                    touristName: t.touristName || t.customerName || 'Tourist Client',
-                    driverOrGuideName: t.driverOrGuideName || '',
+                    id: String(t.id),
+                    title: t.title || `${pickupName} ➔ ${dropName}`,
+                    pickup: pickupName,
+                    pickupLat: parseFloat(t.pickupLat || t.pickup_lat || 12.9716),
+                    pickupLng: parseFloat(t.pickupLng || t.pickup_lng || 77.5946),
+                    drop: dropName,
+                    dropLat: parseFloat(t.dropLat || t.drop_lat || 12.3053),
+                    dropLng: parseFloat(t.dropLng || t.drop_lng || 76.6552),
+                    distanceKm: parseFloat(t.distanceKm || t.distance_km || 35.0),
+                    durationMins: parseFloat(t.durationMins || t.duration_mins || 45),
+                    checkpoints: parsedCheckpoints,
+                    date: t.date || (t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Today'),
+                    time: t.time || (t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Immediate'),
+                    price: parseFloat(t.price || t.amount || 1200),
+                    touristName: t.touristName || t.customerName || t.customer_name || 'Tourist Client',
+                    driverOrGuideName: t.driverOrGuideName || t.driver_or_guide_name || '',
                     status: t.status || 'Pending',
-                    paymentMode: t.paymentMode || 'Cash',
-                    assignedToId: t.assignedToId,
+                    paymentMode: t.paymentMode || t.payment_mode || 'Cash',
+                    assignedToId: t.assignedToId || t.driver_id,
                     otp: t.otp || '8240',
+                    endOtp: t.end_otp || t.endOtp || '4321',
                   });
                 });
               }
@@ -1443,19 +1461,31 @@ export default function DriverDashboardScreen() {
               // 2. Load client-side advance bookings
               if (adminState && Array.isArray(adminState.advanceBookings)) {
                 adminState.advanceBookings.forEach(b => {
-                  if (b.status !== 'Cancelled') {
+                  if (b && b.status !== 'Cancelled') {
+                    const pickupName = b.pickup || b.title || 'Pickup Spot';
+                    const dropName = Array.isArray(b.route) && b.route.length > 0 ? b.route[b.route.length - 1] : b.title;
                     allBookingsMap.set(b.id, {
-                      id: b.id,
+                      id: String(b.id),
                       title: b.title,
-                      date: b.date,
-                      time: b.time,
-                      price: b.price,
-                      touristName: b.touristName,
-                      driverOrGuideName: b.driverOrGuideName,
-                      status: b.status,
-                      paymentMode: b.paymentMode,
+                      pickup: pickupName,
+                      pickupLat: 12.9716,
+                      pickupLng: 77.5946,
+                      drop: dropName,
+                      dropLat: 12.3053,
+                      dropLng: 76.6552,
+                      distanceKm: 35.0,
+                      durationMins: 45,
+                      checkpoints: Array.isArray(b.route) ? b.route : [pickupName, dropName],
+                      date: b.date || 'Upcoming',
+                      time: b.time || '10:00 AM',
+                      price: parseFloat(b.price || 0),
+                      touristName: b.touristName || 'Tourist Client',
+                      driverOrGuideName: b.driverOrGuideName || '',
+                      status: b.status || 'Pending',
+                      paymentMode: b.paymentMode || 'Cash',
                       assignedToId: b.assignedToId,
-                      otp: '8240',
+                      otp: b.otp || '8240',
+                      endOtp: b.endOtp || '4321',
                     });
                   }
                 });
@@ -1483,7 +1513,7 @@ export default function DriverDashboardScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.logTitle, { color: colors.textPrimary }]}>{booking.title}</Text>
                         <Text style={[styles.logTime, { color: colors.textMuted }]}>
-                          Scheduled: {formatIndianDateTime(booking.date || (booking as any).scheduledTime, booking.time)}
+                          Requested: {formatIndianDateTime(booking.date || (booking as any).scheduledTime, booking.time)}
                         </Text>
                         <Text style={[styles.logTime, { color: colors.textMuted }]}>
                           Client: {booking.touristName}
@@ -1519,17 +1549,19 @@ export default function DriverDashboardScreen() {
 
                           const reqObj: ActiveRequest = {
                             touristName: booking.touristName,
-                            pickup: booking.title,
-                            pickupLat: 12.9716,
-                            pickupLng: 77.5946,
-                            drop: booking.title,
-                            dropLat: 12.3053,
-                            dropLng: 76.6552,
-                            distanceKm: 45,
-                            durationMins: 60,
+                            pickup: booking.pickup || booking.title,
+                            pickupLat: booking.pickupLat || 12.9716,
+                            pickupLng: booking.pickupLng || 77.5946,
+                            drop: booking.drop || booking.title,
+                            dropLat: booking.dropLat || 12.3053,
+                            dropLng: booking.dropLng || 76.6552,
+                            distanceKm: booking.distanceKm || 35,
+                            durationMins: booking.durationMins || 45,
                             estimatedFare: Number(booking.price) || 2500,
                             paymentMode: booking.paymentMode || 'Cash',
                             otp: booking.otp || '8240',
+                            endOtp: booking.endOtp || '4321',
+                            checkpoints: booking.checkpoints || [booking.pickup, booking.drop],
                             tripId: booking.id,
                           } as any;
 
@@ -1545,7 +1577,7 @@ export default function DriverDashboardScreen() {
                           setUpdateTrigger(prev => prev + 1);
                         }}
                       >
-                        <Text style={styles.smallPayoutBtnText}>Accept Booking Schedule</Text>
+                        <Text style={styles.smallPayoutBtnText}>Accept Instant Ride Request</Text>
                       </TouchableOpacity>
                     )}
                   </View>

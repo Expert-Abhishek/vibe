@@ -373,6 +373,38 @@ function emitTripCancelled(tripObject) {
 }
 
 /**
+ * Emit real-time trip completion event to rider, driver, and trip rooms
+ */
+function emitTripCompleted(tripObject) {
+  if (!io || !tripObject) return;
+  const tripId = String(tripObject.id || tripObject.tripId || '');
+  const customerId = String(tripObject.customer_id || tripObject.customerId || '');
+  const driverId = String(tripObject.driver_id || tripObject.driverId || '');
+  const fare = parseFloat(tripObject.amount || tripObject.price || tripObject.fare || 0);
+
+  const payload = {
+    tripId: tripId,
+    id: tripId,
+    status: 'done',
+    finalFare: fare,
+    amount: fare,
+    completedAt: new Date().toISOString(),
+    customerId: customerId,
+    driverId: driverId,
+  };
+
+  console.log(`[Socket.io] 🏁 Emitting trip_completed to trip:${tripId} & user:${customerId}`);
+
+  if (tripId) io.to(`trip:${tripId}`).emit('trip_completed', payload);
+  if (customerId) io.to(`user:${customerId}`).emit('trip_completed', payload);
+  if (driverId) io.to(`user:${driverId}`).emit('trip_completed', payload);
+
+  io.to('role:driver').emit('trip_completed', payload);
+  io.to('role:tourist').emit('trip_completed', payload);
+  io.emit('trip_completed', payload);
+}
+
+/**
  * Emit unified 'trip_status_updated' event to specific rider room, trip room & globally
  */
 function emitTripStatusUpdated(tripObject, statusOverride) {
@@ -413,23 +445,30 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
     io.to(`user:${customerId}`).emit('trip_status_updated', payload);
     if (status === 'Accepted') {
       io.to(`user:${customerId}`).emit('trip_accepted', payload);
-      console.log(`[SOCKET] Broadcasted trip_accepted to user:${customerId}`);
+    } else if (status === 'done' || status === 'Completed') {
+      io.to(`user:${customerId}`).emit('trip_completed', payload);
     }
   }
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_status_updated', payload);
     if (status === 'Accepted') {
       io.to(`trip:${tripId}`).emit('trip_accepted', payload);
+    } else if (status === 'done' || status === 'Completed') {
+      io.to(`trip:${tripId}`).emit('trip_completed', payload);
     }
   }
   if (driverId && driverId !== 'null' && driverId !== 'undefined') {
     io.to(`user:${driverId}`).emit('trip_status_updated', payload);
+    if (status === 'done' || status === 'Completed') {
+      io.to(`user:${driverId}`).emit('trip_completed', payload);
+    }
   }
 
   io.emit('trip_status_updated', payload);
 
   // Legacy helper calls for backward compatibility
   if (status === 'Accepted') emitTripAccepted(tripObject);
+  else if (status === 'done' || status === 'Completed') emitTripCompleted(tripObject);
   else if (status === 'Declined') emitTripDeclined(tripObject);
   else if (status === 'CANCELLED' || status === 'Cancelled') emitTripCancelled(tripObject);
 }
@@ -443,6 +482,7 @@ module.exports = {
   emitTripAccepted,
   emitTripDeclined,
   emitTripCancelled,
+  emitTripCompleted,
   emitTripStatusUpdated,
   emitTripStatusUpdate: emitTripStatusUpdated,
 };

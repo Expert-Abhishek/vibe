@@ -171,6 +171,18 @@ export default function MakeTripScreen() {
 
   // Listen for vehicle selection returned from Fleet Showcase (/cars)
   useEffect(() => {
+    if (searchParams.checkpoints) {
+      try {
+        const parsed = typeof searchParams.checkpoints === 'string'
+          ? JSON.parse(searchParams.checkpoints)
+          : searchParams.checkpoints;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCheckpoints(parsed);
+        }
+      } catch (e) {
+        console.warn('Could not parse checkpoints from searchParams:', e);
+      }
+    }
     if (searchParams.fromVehicle === 'true') {
       if (searchParams.selectedRide) {
         setSelectedRide(searchParams.selectedRide as string);
@@ -189,7 +201,7 @@ export default function MakeTripScreen() {
       }
       router.setParams({ fromVehicle: undefined });
     }
-  }, [searchParams.fromVehicle, searchParams.selectedDriverId]);
+  }, [searchParams.fromVehicle, searchParams.selectedDriverId, searchParams.checkpoints]);
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
     { id: 'start', name: 'Bengaluru (Start)', latitude: 12.9716, longitude: 77.5946, address: 'Bengaluru City Center' },
@@ -1273,7 +1285,7 @@ export default function MakeTripScreen() {
                 onPress={() => {
                   router.push({
                     pathname: '/cars',
-                    params: { mode: 'custom_trip', selectedRide: selectedDriver.vehicle_type || '5seater' }
+                    params: { mode: 'custom_trip', selectedRide: selectedDriver.vehicle_type || '5seater', checkpoints: JSON.stringify(checkpoints) }
                   });
                 }}
               >
@@ -1589,9 +1601,9 @@ export default function MakeTripScreen() {
                     }}
                     onPress={() => setPaymentMethod('upi')}
                   >
-                    <MaterialIcons name="qr-code-scanner" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
+                    <MaterialIcons name="account-balance-wallet" size={scale(18)} color={paymentMethod === 'upi' ? colors.amber : colors.textMuted} />
                     <Text style={{ color: paymentMethod === 'upi' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(12) }}>
-                      Online UPI
+                      Wallet
                     </Text>
                   </TouchableOpacity>
                 </View>
