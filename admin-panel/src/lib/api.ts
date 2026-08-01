@@ -936,6 +936,20 @@ export async function fetchUserWalletHistoryApi(
   };
 }
 
+export async function fetchAdminAllTripsApi(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/admin/all`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.trips)) {
+      return data.trips;
+    }
+  } catch (e) {
+    console.warn('fetchAdminAllTripsApi error:', e);
+  }
+  return [];
+}
+
+
 
 
 

@@ -6,6 +6,7 @@ import {
   Compass,
   LayoutDashboard,
   MapPin,
+  Navigation,
   QrCode,
   Route,
   ShieldCheck,
@@ -17,6 +18,7 @@ import { usePathname } from 'next/navigation';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'User Trips & Tracking', href: '/trips', icon: Navigation },
   { name: 'Customers', href: '/customers', icon: Users },
   { name: 'Drivers', href: '/drivers', icon: Car },
   { name: 'Guides', href: '/guides', icon: Compass },

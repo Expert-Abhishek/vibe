@@ -33,6 +33,54 @@ async function ensureTripsColumnsExist() {
 ensureTripsColumnsExist();
 
 /**
+ * GET /api/trips/admin/all
+ * Fetch all user trips (Active, Scheduled, Completed, Cancelled) for Admin Panel
+ */
+router.get('/admin/all', async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT t.*, u.phone as customer_phone
+       FROM trips t
+       LEFT JOIN users u ON u.id = t.customer_id
+       ORDER BY t.created_at DESC
+       LIMIT 200`
+    );
+
+    const trips = result.rows.map(t => ({
+      id: t.id,
+      tripType: t.trip_type || 'custom_trip',
+      title: t.title || 'Tour Booking',
+      customerId: t.customer_id,
+      customerName: t.customer_name || 'Tourist Client',
+      customerPhone: t.customer_phone || '',
+      driverOrGuideName: t.driver_or_guide_name || 'Assigned Partner',
+      driverId: t.driver_id || null,
+      amount: parseFloat(t.amount || 0),
+      paymentMode: t.payment_mode || 'UPI',
+      status: t.status || 'Pending',
+      bookingType: t.booking_type || 'INSTANT',
+      scheduledTime: t.scheduled_time,
+      advanceDepositPaid: parseFloat(t.advance_deposit_paid || 0),
+      remainingCashBalance: parseFloat(t.remaining_cash_balance || 0),
+      otp: t.otp || '8240',
+      endOtp: t.end_otp || t.endOtp || '4321',
+      pickupName: t.pickup_name || t.title,
+      dropName: t.drop_name || t.title,
+      pickupLat: parseFloat(t.pickup_lat || 12.9716),
+      pickupLng: parseFloat(t.pickup_lng || 77.5946),
+      dropLat: parseFloat(t.drop_lat || 12.3053),
+      dropLng: parseFloat(t.drop_lng || 76.6552),
+      createdAt: t.created_at,
+    }));
+
+    res.json({ success: true, count: trips.length, trips });
+  } catch (error) {
+    console.error('Error fetching admin trips:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch admin trips', trips: [] });
+  }
+});
+
+/**
  * Expo Push Notification Helper
  */
 async function sendExpoPushNotification(pushToken, title, body, data = {}) {
