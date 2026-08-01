@@ -4,6 +4,7 @@ import { cancelTripApi, deductWalletApi, fetchActiveTripApi, fetchCustomerTripsA
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { initSocketService, getSocket } from '@src/services/socketService';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -35,6 +36,9 @@ export default function TripsHistoryScreen() {
   const [cancelledIds, setCancelledIds] = useState<string[]>([]);
 
   React.useEffect(() => {
+    initSocketService();
+    const socket = getSocket();
+
     async function loadBackendTrips() {
       try {
         if (!userId) {
@@ -58,6 +62,23 @@ export default function TripsHistoryScreen() {
       }
     }
     loadBackendTrips();
+
+    if (socket) {
+      const handleTripUpdate = () => {
+        console.log('[TripsScreen] 🔔 Real-time socket trip update received. Refreshing list...');
+        loadBackendTrips();
+      };
+
+      socket.on('trip_completed', handleTripUpdate);
+      socket.on('trip_status_updated', handleTripUpdate);
+      socket.on('trip_accepted', handleTripUpdate);
+
+      return () => {
+        socket.off('trip_completed', handleTripUpdate);
+        socket.off('trip_status_updated', handleTripUpdate);
+        socket.off('trip_accepted', handleTripUpdate);
+      };
+    }
   }, [cancelTrigger, userId]);
 
   const colors = {
@@ -393,17 +414,25 @@ export default function TripsHistoryScreen() {
             </View>
 
             {/* ACTION BUTTONS */}
-            <View style={{ flexDirection: 'row', gap: scale(10), marginTop: verticalScale(12) }}>
+            <View style={{ flexDirection: 'row', gap: scale(8), marginTop: verticalScale(12) }}>
               <TouchableOpacity
-                style={[styles.activeActionBtn, { backgroundColor: '#10B981', flex: 1 }]}
-                onPress={() => Alert.alert('Contact Partner', `Calling ${primaryActiveTrip.driverOrGuideName}...`)}
+                style={[styles.activeActionBtn, { backgroundColor: '#F5C518', flex: 1.2 }]}
+                onPress={() => router.push({ pathname: '/trip-status', params: { tripId: primaryActiveTrip.id } })}
               >
-                <MaterialIcons name="call" size={scale(16)} color="#FFFFFF" />
-                <Text style={styles.activeActionBtnText}>Call Partner</Text>
+                <MaterialIcons name="map" size={scale(16)} color="#101010" />
+                <Text style={[styles.activeActionBtnText, { color: '#101010', fontWeight: '800' }]}>Track Live Trip 🗺️</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.activeActionBtn, { backgroundColor: '#EF4444', paddingHorizontal: scale(14) }]}
+                style={[styles.activeActionBtn, { backgroundColor: '#10B981', paddingHorizontal: scale(12) }]}
+                onPress={() => Alert.alert('Contact Partner', `Calling ${primaryActiveTrip.driverOrGuideName}...`)}
+              >
+                <MaterialIcons name="call" size={scale(16)} color="#FFFFFF" />
+                <Text style={styles.activeActionBtnText}>Call</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.activeActionBtn, { backgroundColor: '#EF4444', paddingHorizontal: scale(12) }]}
                 onPress={() => handleCancelPress(primaryActiveTrip)}
               >
                 <MaterialIcons name="cancel" size={scale(16)} color="#FFFFFF" />

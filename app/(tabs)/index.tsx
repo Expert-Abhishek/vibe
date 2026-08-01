@@ -1,11 +1,14 @@
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
+import { fetchActiveTripApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Alert,
   Animated,
   Image,
   ImageBackground,
@@ -34,6 +37,28 @@ export default function HomeScreen() {
   const [instantEnabled, setInstantEnabled] = useState<boolean>(adminState.instantBookingEnabled);
 
   const slideAnim = React.useRef(new Animated.Value(adminState.instantBookingEnabled ? 1 : 0)).current;
+
+  // Active Trip Auto-Check on App Launch
+  React.useEffect(() => {
+    async function checkActiveTripOnStartup() {
+      try {
+        const session = getUserSessionSync();
+        if (session?.id) {
+          const res = await fetchActiveTripApi(session.id);
+          if (res && res.hasActiveTrip && res.trip && res.trip.id) {
+            console.log('[HomeScreen] 🚀 Active Trip Detected on Startup:', res.trip.id);
+            router.replace({
+              pathname: '/trip-status',
+              params: { tripId: String(res.trip.id) },
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('checkActiveTripOnStartup error:', e);
+      }
+    }
+    checkActiveTripOnStartup();
+  }, []);
 
   React.useEffect(() => {
     Animated.spring(slideAnim, {
