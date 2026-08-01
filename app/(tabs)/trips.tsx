@@ -212,13 +212,12 @@ export default function TripsHistoryScreen() {
       return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish');
     });
 
-  // Separate Active Live Trip vs Scheduled / Upcoming Trips
-  const isLiveStatus = (statusStr: string) => {
+  const isNonCompleted = (statusStr: string) => {
     const st = String(statusStr || '').toLowerCase();
-    return st.includes('accepted') || st.includes('active') || st.includes('started') || st.includes('arrived') || st.includes('confirmed') || st.includes('en_route');
+    return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
   };
 
-  const activeTripObj = activeTripData || validTrips.find(t => isLiveStatus(t.status)) || null;
+  const activeTripObj = activeTripData || (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || validTrips[0] : null);
 
   const scheduledTrips = validTrips.filter(t => {
     if (activeTripObj && String(t.id) === String(activeTripObj.id)) return false;
@@ -265,72 +264,55 @@ export default function TripsHistoryScreen() {
 
   const handleCancelPress = (trip: any) => {
     if (!trip) return;
-    const policy = calculateCancellationFine(trip);
-    const alertMsg = `Booking: ${trip.title}\n\nCancellation Policy: ${policy.reasonText}\nFee Amount: ₹${policy.feeAmount}`;
+    const { feeAmount, reasonText } = calculateCancellationFine(trip);
 
     Alert.alert(
-      'Confirm Trip Cancellation',
-      alertMsg,
+      'Cancel Booking?',
+      `Are you sure you want to cancel this booking?\n\n📌 Trip: ${trip.title}\n💰 Cancellation Policy: ${reasonText}${feeAmount > 0 ? `\n\n⚠️ ₹${feeAmount} cancellation fee will be deducted.` : ''}`,
       [
         { text: 'Keep Booking', style: 'cancel' },
         {
           text: 'Confirm Cancel',
           style: 'destructive',
           onPress: async () => {
-            cancelledTripIdsRef.current.add(String(trip.id));
-            setCancelledIds(prev => [...prev, String(trip.id)]);
-
-            if (policy.feeAmount > 0) {
-              try {
-                await deductWalletApi({
-                  userId: userId || 't1',
-                  amount: policy.feeAmount,
-                  description: `Cancellation Fee: ${policy.reasonText} for Booking #${trip.id}`,
-                });
-                await submitWalletDeductionRequestApi({
-                  userId: userId || 't1',
-                  userName: session?.name || 'Tourist Client',
-                  role: 'tourist',
-                  amount: policy.feeAmount,
-                  description: `Cancellation Fee (${policy.reasonText}) for Booking #${trip.id}`,
-                });
-              } catch (e) {
-                console.warn('Deduction request error:', e);
-              }
-            }
-
             try {
-              await cancelTripApi(String(trip.id), { cancelledBy: 'tourist', role: 'tourist' });
-            } catch (e) {
-              console.warn('cancelTripApi error:', e);
-            }
+              const tid = String(trip.id);
+              cancelledTripIdsRef.current.add(tid);
+              setCancelledIds(prev => [...prev, tid]);
 
-            Alert.alert('Trip Cancelled', `Your trip has been cancelled. ${policy.feeAmount > 0 ? `₹${policy.feeAmount} fee deducted.` : ''}`);
-            setCancelTrigger(prev => prev + 1);
+              await cancelTripApi(tid, 'Cancelled by user', 'user');
+
+              if (feeAmount > 0) {
+                try {
+                  await submitWalletDeductionRequestApi(
+                    userId || 'customer',
+                    feeAmount,
+                    `Cancellation Fee for Trip #${tid}`
+                  );
+                } catch (e) {
+                  console.warn('Wallet deduction error:', e);
+                }
+              }
+
+              if (hasActiveTripState && activeTripData && String(activeTripData.id) === tid) {
+                setHasActiveTripState(false);
+                setActiveTripData(null);
+              }
+
+              adminState.userTrips = adminState.userTrips.filter(t => String(t.id) !== tid);
+              adminState.advanceBookings = adminState.advanceBookings.filter(b => String(b.id) !== tid);
+
+              Alert.alert('Booking Cancelled', 'Your booking has been cancelled and recorded in your History ledger.');
+              setCancelTrigger(prev => prev + 1);
+            } catch (e) {
+              console.warn('Cancel error:', e);
+              Alert.alert('Booking Cancelled', 'Your booking has been cancelled.');
+            }
           },
         },
       ]
     );
   };
-
-  // Parse details for Active Trip Card
-  const activeBookingType = activeTripObj
-    ? (activeTripObj.booking_type || activeTripObj.bookingType || 'INSTANT')
-    : 'INSTANT';
-  const activeScheduledTime = activeTripObj?.created_at || activeTripObj?.createdAt || new Date().toISOString();
-  
-  const fareBreakdown = activeTripObj
-    ? calculateTripFare({
-        bookingType: activeBookingType as any,
-        distanceKm: Number(activeTripObj.distance_km || 35),
-        durationMins: Number(activeTripObj.duration_mins || 45),
-        vehicleType: 'sedan',
-        surgeMultiplier: 1.0,
-        scheduledTime: activeScheduledTime,
-      })
-    : null;
-
-  const dispatchGuard = activeTripObj ? validatePreBookedDispatch(activeScheduledTime) : null;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -347,30 +329,35 @@ export default function TripsHistoryScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* 1. TOP SECTION: ACTIVE LIVE TRIP BANNER / CARD */}
+        {/* 1. TOP SECTION: RECTANGULAR LIVE ACTIVE TRIP CARD */}
         {activeTripObj ? (
           <View style={[styles.activeCard, { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.amber }]}>
             {/* Live Indicator Bar */}
             <View style={styles.liveBadgeRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
                 <View style={styles.pulsingDot} />
-                <Text style={[styles.activeTagText, { color: colors.amber }]}>LIVE ACTIVE TRIP</Text>
+                <Text style={[styles.activeTagText, { color: colors.amber }]}>LIVE RIDE IN PROGRESS</Text>
               </View>
               <View style={[styles.typeBadge, { backgroundColor: 'rgba(245, 197, 24, 0.15)' }]}>
                 <Text style={[styles.typeBadgeText, { color: colors.amber }]}>
-                  {String(activeTripObj.status || 'Accepted').toUpperCase()}
+                  {String(activeTripObj.status || 'Active').toUpperCase()}
                 </Text>
               </View>
             </View>
 
+            {/* Trip Title */}
+            <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.textPrimary, marginBottom: verticalScale(8) }} numberOfLines={1}>
+              {activeTripObj.title || `${activeTripObj.pickup || 'Pickup'} ➔ ${activeTripObj.drop || 'Destination'}`}
+            </Text>
+
             {/* Assigned Partner & Vehicle Info */}
             <View style={styles.partnerInfoRow}>
               <View style={styles.avatarCircle}>
-                <FontAwesome5 name="user-tie" size={scale(18)} color={colors.amber} />
+                <FontAwesome5 name="user-tie" size={scale(16)} color={colors.amber} />
               </View>
               <View style={{ flex: 1, marginLeft: scale(10) }}>
                 <Text style={[styles.partnerName, { color: colors.textPrimary }]}>
-                  {activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Driver'}
+                  Captain: {activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Partner'}
                 </Text>
                 <Text style={[styles.partnerVehicle, { color: colors.textMuted }]}>
                   {activeTripObj.vehicleModel || 'Verified Cab'} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{activeTripObj.vehicleNumber || 'KA-03-EX-8240'}</Text>
@@ -383,13 +370,13 @@ export default function TripsHistoryScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                 <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
                 <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {activeTripObj.pickup || activeTripObj.pickup_name || activeTripObj.title || 'Pickup Spot'}
+                  Pickup: <Text style={{ fontWeight: '700' }}>{activeTripObj.pickup || activeTripObj.pickup_name || 'Pickup Spot'}</Text>
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(6) }}>
                 <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
                 <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {Array.isArray(activeTripObj.route) && activeTripObj.route.length > 0 ? activeTripObj.route[0] : (activeTripObj.drop_name || activeTripObj.title || 'Destination')}
+                  Drop: <Text style={{ fontWeight: '700' }}>{Array.isArray(activeTripObj.route) && activeTripObj.route.length > 0 ? activeTripObj.route.join(' ➔ ') : (activeTripObj.drop_name || activeTripObj.title || 'Destination')}</Text>
                 </Text>
               </View>
             </View>
@@ -425,13 +412,7 @@ export default function TripsHistoryScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        ) : (
-          /* Subtle Banner when no live ride is active */
-          <View style={[styles.noActiveBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MaterialIcons name="info-outline" size={scale(18)} color={colors.textMuted} />
-            <Text style={[styles.noActiveText, { color: colors.textMuted }]}>No Active Ride In Progress</Text>
-          </View>
-        )}
+        ) : null}
 
         {/* 2. SECOND SECTION: SCHEDULED TOURS & RIDES */}
         <View style={{ marginBottom: verticalScale(14) }}>

@@ -241,7 +241,7 @@ router.get('/active-trip/:customerId', async (req, res) => {
     const result = await db.query(
       `SELECT * FROM trips
        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
-         AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected')
+         AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done')
        ORDER BY created_at DESC
        LIMIT 1`,
       [customerId]
