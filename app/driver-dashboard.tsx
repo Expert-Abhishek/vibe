@@ -1542,8 +1542,9 @@ export default function DriverDashboardScreen() {
 
                           await respondDriverRequestApi(booking.id, dId, 'accept', name);
                           await acceptTripApi(booking.id, dId, name);
+                          joinTripRoom(booking.id, 'driver', dId);
 
-                          booking.status = 'Accepted';
+                          booking.status = 'accepted';
                           booking.driverOrGuideName = name;
                           booking.assignedToId = dId;
 

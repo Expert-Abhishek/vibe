@@ -4,12 +4,14 @@ import { fetchActiveTripApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { initSocketService, getSocket } from '@src/services/socketService';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
   Animated,
+  DeviceEventEmitter,
   Image,
   ImageBackground,
   ScrollView,
@@ -42,23 +44,57 @@ export default function HomeScreen() {
   const [activeTrip, setActiveTrip] = useState<any>(null);
 
   React.useEffect(() => {
-    async function checkActiveTripOnStartup() {
+    const session = getUserSessionSync();
+    const userId = session?.id;
+    if (!userId) return;
+
+    initSocketService(userId, session?.role || 'tourist');
+    const socket = getSocket();
+
+    async function checkActiveTrip() {
       try {
-        const session = getUserSessionSync();
-        if (session?.id) {
-          const res = await fetchActiveTripApi(session.id);
-          if (res && res.hasActiveTrip && res.trip && res.trip.id) {
-            console.log('[HomeScreen] 🚀 Active Trip Detected for Quick Banner:', res.trip.id);
-            setActiveTrip(res.trip);
-          } else {
-            setActiveTrip(null);
-          }
+        const res = await fetchActiveTripApi(userId);
+        if (res && res.hasActiveTrip && res.trip && res.trip.id) {
+          setActiveTrip(res.trip);
+        } else {
+          setActiveTrip(null);
         }
       } catch (e) {
-        console.warn('checkActiveTripOnStartup error:', e);
+        console.warn('checkActiveTrip error:', e);
       }
     }
-    checkActiveTripOnStartup();
+
+    checkActiveTrip();
+
+    const handleUpdate = () => {
+      console.log('[HomeScreen] 🔔 Real-time socket/emitter trip update received. Syncing...');
+      checkActiveTrip();
+    };
+
+    if (socket) {
+      socket.on('trip_accepted', handleUpdate);
+      socket.on('RIDE_ACCEPTED', handleUpdate);
+      socket.on('trip_status_updated', handleUpdate);
+      socket.on('trip_completed', handleUpdate);
+    }
+
+    const subAcc = DeviceEventEmitter.addListener('trip_accepted', handleUpdate);
+    const subRideAcc = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleUpdate);
+    const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleUpdate);
+    const subComp = DeviceEventEmitter.addListener('trip_completed', handleUpdate);
+
+    return () => {
+      if (socket) {
+        socket.off('trip_accepted', handleUpdate);
+        socket.off('RIDE_ACCEPTED', handleUpdate);
+        socket.off('trip_status_updated', handleUpdate);
+        socket.off('trip_completed', handleUpdate);
+      }
+      subAcc.remove();
+      subRideAcc.remove();
+      subStatus.remove();
+      subComp.remove();
+    };
   }, []);
 
   React.useEffect(() => {

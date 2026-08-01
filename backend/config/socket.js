@@ -38,9 +38,10 @@ function initSocket(server) {
       }
 
       if (tripId) {
-        const tripRoom = `trip:${String(tripId)}`;
-        socket.join(tripRoom); // Join specific trip tracking room
-        console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined trip room [${tripRoom}]`);
+        const idStr = String(tripId);
+        socket.join(`trip:${idStr}`); // Join specific trip tracking room
+        socket.join(`trip_${idStr}`);
+        console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined trip rooms [trip:${idStr}] and [trip_${idStr}]`);
       }
 
       if (role) {
@@ -53,6 +54,20 @@ function initSocket(server) {
         const vehicleRoom = `role:${vehicleType}`;
         socket.join(vehicleRoom);
         console.log(`[Socket.io] Socket ${socket.id} joined vehicle room [${vehicleRoom}]`);
+      }
+    });
+
+    // Explicit join_trip_room handler for client subscription
+    socket.on('join_trip_room', (data) => {
+      const { tripId, room } = data || (typeof data === 'string' ? { tripId: data } : {});
+      if (tripId) {
+        const idStr = String(tripId);
+        socket.join(`trip:${idStr}`);
+        socket.join(`trip_${idStr}`);
+        console.log(`[Socket.io] 🟢 Explicit join_trip_room: Socket ${socket.id} joined [trip:${idStr}] & [trip_${idStr}]`);
+      }
+      if (room) {
+        socket.join(String(room));
       }
     });
 
@@ -297,11 +312,13 @@ function emitTripAccepted(tripObject) {
     console.log(`[SOCKET] Broadcasted trip_accepted to user:${customerId}`);
   }
 
-  // 2. Emit to Trip room
+  // 2. Emit to Trip rooms (both trip:ID and trip_ID formats)
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
+    io.to(`trip_${tripId}`).emit('trip_accepted', acceptancePayload);
     io.to(`trip:${tripId}`).emit('trip_status_updated', acceptancePayload);
-    console.log(`[SOCKET] Broadcasted trip_accepted to trip:${tripId}`);
+    io.to(`trip_${tripId}`).emit('trip_status_updated', acceptancePayload);
+    console.log(`[SOCKET] Broadcasted trip_accepted to trip:${tripId} and trip_${tripId}`);
   }
 
   // 3. Global Broadcast Fallback
@@ -451,10 +468,14 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
   }
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_status_updated', payload);
-    if (status === 'Accepted') {
+    io.to(`trip_${tripId}`).emit('trip_status_updated', payload);
+    const stLower = String(status).toLowerCase();
+    if (stLower === 'accepted') {
       io.to(`trip:${tripId}`).emit('trip_accepted', payload);
-    } else if (status === 'done' || status === 'Completed') {
+      io.to(`trip_${tripId}`).emit('trip_accepted', payload);
+    } else if (stLower === 'done' || stLower === 'completed') {
       io.to(`trip:${tripId}`).emit('trip_completed', payload);
+      io.to(`trip_${tripId}`).emit('trip_completed', payload);
     }
   }
   if (driverId && driverId !== 'null' && driverId !== 'undefined') {

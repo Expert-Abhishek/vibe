@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
 import {
   Alert,
+  DeviceEventEmitter,
   Modal,
   ScrollView,
   StatusBar,
@@ -95,22 +96,53 @@ export default function TripsHistoryScreen() {
     }
     loadBackendTrips();
 
-    if (socket) {
-      const handleTripUpdate = () => {
-        console.log('[TripsScreen] 🔔 Real-time socket trip update received. Refreshing list...');
-        loadBackendTrips();
-      };
+    const handleTripUpdate = (data?: any) => {
+      console.log('[TripsScreen] 🔔 Real-time socket/emitter trip update received:', data);
+      if (data) {
+        const tripId = String(data.tripId || data.id || '');
+        const newStatus = String(data.status || 'accepted').toLowerCase();
+        const driverName = data.driverName || data.driver_or_guide_name || data.driverDetails?.name;
 
+        adminState.userTrips.forEach(t => {
+          if (t && String(t.id) === tripId) {
+            t.status = newStatus;
+            if (driverName) t.driverOrGuideName = driverName;
+          }
+        });
+        adminState.advanceBookings.forEach(b => {
+          if (b && String(b.id) === tripId) {
+            b.status = newStatus;
+            if (driverName) b.driverOrGuideName = driverName;
+          }
+        });
+      }
+      loadBackendTrips();
+    };
+
+    if (socket) {
       socket.on('trip_completed', handleTripUpdate);
       socket.on('trip_status_updated', handleTripUpdate);
       socket.on('trip_accepted', handleTripUpdate);
+      socket.on('RIDE_ACCEPTED', handleTripUpdate);
+    }
 
-      return () => {
+    const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleTripUpdate);
+    const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleTripUpdate);
+    const subRideAcc = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleTripUpdate);
+    const subComp = DeviceEventEmitter.addListener('trip_completed', handleTripUpdate);
+
+    return () => {
+      if (socket) {
         socket.off('trip_completed', handleTripUpdate);
         socket.off('trip_status_updated', handleTripUpdate);
         socket.off('trip_accepted', handleTripUpdate);
-      };
-    }
+        socket.off('RIDE_ACCEPTED', handleTripUpdate);
+      }
+      subStatus.remove();
+      subAccepted.remove();
+      subRideAcc.remove();
+      subComp.remove();
+    };
   }, [cancelTrigger, userId]);
 
   const colors = {
@@ -119,7 +151,7 @@ export default function TripsHistoryScreen() {
     surfaceCard: isDark ? '#16161B' : '#FFFFFF',
     textPrimary: isDark ? '#ffffff' : '#1E293B',
     textMuted: isDark ? 'rgba(255,255,255,0.45)' : '#64748B',
-    border: isDark ? 'rgba(255, 255, 255, 0.05)' : '#E8E3DA',
+    border: isDark ? 'rgba(255, 255, 255, 0.05)' : '#E2DCD0',
     amber: isDark ? '#F5C518' : '#D97706',
     success: '#10B981',
     danger: '#EF4444',
@@ -201,15 +233,28 @@ export default function TripsHistoryScreen() {
 
   const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips].filter(Boolean);
   
-  // Deduplicate and filter out cancelled & completed trips
+  // Deduplicate and prefer Accepted/in_progress over Pending
   const validTrips = rawAllTrips
-    .filter((item, index, self) => item && item.id && index === self.findIndex(t => t && String(t.id) === String(item.id)))
+    .reduce((acc: TripItem[], current) => {
+      if (!current || !current.id) return acc;
+      const existingIdx = acc.findIndex(t => String(t.id) === String(current.id));
+      if (existingIdx === -1) {
+        acc.push(current);
+      } else {
+        const existingSt = String(acc[existingIdx].status || '').toLowerCase();
+        const currentSt = String(current.status || '').toLowerCase();
+        if (existingSt === 'pending' && currentSt !== 'pending') {
+          acc[existingIdx] = current;
+        }
+      }
+      return acc;
+    }, [])
     .filter((t) => {
       if (!t) return false;
       const tid = String(t.id);
       if (cancelledTripIdsRef.current.has(tid) || cancelledIds.includes(tid)) return false;
       const st = String(t.status || '').toLowerCase();
-      return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish');
+      return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
     });
 
   const isNonCompleted = (statusStr: string) => {

@@ -210,15 +210,21 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
  * Join a specific trip room for real-time location streaming & status updates
  */
 export function joinTripRoom(tripId: string, role: string = 'tourist', userId?: string) {
+  const idStr = String(tripId);
+  const payload = { tripId: idStr, role, userId: userId || null, room: `trip:${idStr}` };
+  const roomPayload = { tripId: idStr, room: `trip_${idStr}` };
+
   if (socket && socket.connected) {
-    socket.emit('join_room', { tripId: String(tripId), role, userId: userId || null });
-    console.log(`[SocketService] 🟢 Joined trip room: trip:${tripId} (role: ${role})`);
+    socket.emit('join_room', payload);
+    socket.emit('join_trip_room', roomPayload);
+    console.log(`[SocketService] 🟢 Joined trip rooms: trip:${idStr} & trip_${idStr}`);
   } else {
     initSocketService(userId, role);
     setTimeout(() => {
       if (socket && socket.connected) {
-        socket.emit('join_room', { tripId: String(tripId), role, userId: userId || null });
-        console.log(`[SocketService] 🟢 Joined trip room on delayed connect: trip:${tripId}`);
+        socket.emit('join_room', payload);
+        socket.emit('join_trip_room', roomPayload);
+        console.log(`[SocketService] 🟢 Joined trip rooms on connect: trip:${idStr} & trip_${idStr}`);
       }
     }, 1000);
   }
