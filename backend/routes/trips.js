@@ -240,7 +240,7 @@ router.get('/active-trip/:customerId', async (req, res) => {
 
     const result = await db.query(
       `SELECT * FROM trips
-       WHERE (customer_id = $1 OR CAST(customer_id AS VARCHAR) = $1)
+       WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
          AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected')
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -296,7 +296,7 @@ router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
     const result = await db.query(
       `UPDATE trips
        SET status = 'CANCELLED'
-       WHERE id = $1 OR CAST(id AS VARCHAR) = $1
+       WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text
        RETURNING *`,
       [id]
     );
@@ -344,7 +344,7 @@ router.get('/live-location/:tripId', async (req, res) => {
         `SELECT dp.*, u.name, u.phone 
          FROM driver_profiles dp 
          JOIN users u ON u.id = dp.user_id 
-         WHERE dp.user_id = $1 OR dp.id = $1`,
+         WHERE dp.user_id::text = $1::text OR dp.id::text = $1::text`,
         [trip.driver_id]
       );
       if (dpRes.rows.length > 0) {
@@ -425,7 +425,7 @@ router.post('/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, driverName = 'Captain' } = req.body;
 
-    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    const tripRes = await db.query('SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [id]);
     if (tripRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
@@ -447,7 +447,7 @@ router.post('/:id/status', async (req, res) => {
     }
 
     const updateRes = await db.query(
-      `UPDATE trips SET status = $1, driver_or_guide_name = COALESCE($2, driver_or_guide_name) WHERE id = $3 RETURNING *`,
+      `UPDATE trips SET status = $1, driver_or_guide_name = COALESCE($2, driver_or_guide_name) WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text RETURNING *`,
       [status, driverName, id]
     );
 
@@ -471,7 +471,7 @@ router.post('/:id/complete', async (req, res) => {
     const { id } = req.params;
     const { driverName = 'Captain' } = req.body;
 
-    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    const tripRes = await db.query('SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [id]);
     if (tripRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
@@ -486,7 +486,7 @@ router.post('/:id/complete', async (req, res) => {
     const remainingCashBalance = isPreBooked ? totalFare - advanceDepositPaid : totalFare;
 
     const updateRes = await db.query(
-      `UPDATE trips SET status = 'Completed', driver_or_guide_name = COALESCE($1, driver_or_guide_name) WHERE id = $2 RETURNING *`,
+      `UPDATE trips SET status = 'Completed', driver_or_guide_name = COALESCE($1, driver_or_guide_name) WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text RETURNING *`,
       [driverName, id]
     );
 
