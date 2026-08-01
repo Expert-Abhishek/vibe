@@ -230,20 +230,20 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
  */
 export function joinTripRoom(tripId: string, role: string = 'tourist', userId?: string) {
   const idStr = String(tripId);
-  const payload = { tripId: idStr, role, userId: userId || null, room: `trip:${idStr}` };
-  const roomPayload = { tripId: idStr, room: `trip_${idStr}` };
+  const roomName = `trip:${idStr}`;
+  const payload = { tripId: idStr, role, userId: userId || null, room: roomName };
 
   if (socket && socket.connected) {
     socket.emit('join_room', payload);
-    socket.emit('join_trip_room', roomPayload);
-    console.log(`[SocketService] 🟢 Joined trip rooms: trip:${idStr} & trip_${idStr}`);
+    socket.emit('join_trip_room', { tripId: idStr, room: roomName });
+    console.log(`[SocketService] 🟢 Joined trip room: ${roomName}`);
   } else {
     initSocketService(userId, role);
     setTimeout(() => {
       if (socket && socket.connected) {
         socket.emit('join_room', payload);
-        socket.emit('join_trip_room', roomPayload);
-        console.log(`[SocketService] 🟢 Joined trip rooms on connect: trip:${idStr} & trip_${idStr}`);
+        socket.emit('join_trip_room', { tripId: idStr, room: roomName });
+        console.log(`[SocketService] 🟢 Joined trip room on connect: ${roomName}`);
       }
     }, 1000);
   }
