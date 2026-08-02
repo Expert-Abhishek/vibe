@@ -711,6 +711,8 @@ router.post('/:id/arrive', async (req, res) => {
 
     const trip = result.rows[0];
 
+    emitTripStatusUpdated(trip, 'Arrived');
+
     logActivityNotification(
       trip.customer_id,
       'tourist',
@@ -1699,7 +1701,7 @@ router.post('/:id/verify-otp', async (req, res) => {
     const { id } = req.params;
     const { otp } = req.body;
 
-    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    const tripRes = await db.query('SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [id]);
     if (tripRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
@@ -1709,7 +1711,13 @@ router.post('/:id/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid OTP code. Please verify with tourist.' });
     }
 
-    await db.query("UPDATE trips SET status = 'Active' WHERE id = $1", [id]);
+    const updateRes = await db.query(
+      "UPDATE trips SET status = 'Active' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
+      [id]
+    );
+    const updatedTrip = updateRes.rows[0];
+
+    emitTripStatusUpdated(updatedTrip, 'Active');
 
     res.json({ success: true, message: 'OTP verified! Trip started.' });
   } catch (error) {
@@ -1728,7 +1736,7 @@ router.post('/:id/complete', async (req, res) => {
     const { driverId } = req.body;
 
     const result = await db.query(
-      "UPDATE trips SET status = 'Completed' WHERE id = $1 RETURNING *",
+      "UPDATE trips SET status = 'Completed' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
       [id]
     );
 
@@ -1737,6 +1745,7 @@ router.post('/:id/complete', async (req, res) => {
     }
 
     const trip = result.rows[0];
+    emitTripStatusUpdated(trip, 'Completed');
     const fare = parseFloat(trip.amount || 0);
 
     // Credit driver / guide wallet in database
@@ -1924,22 +1933,31 @@ router.post('/:id/respond', async (req, res) => {
         console.warn('Failed to log platform fee revenue:', pErr.message);
       }
 
-      await db.query(
-        "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id = $3",
+      const updateRes = await db.query(
+        "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text RETURNING *",
         [driverId, driverName || 'Verified Partner', id]
       );
+      if (updateRes.rows.length > 0) {
+        emitTripStatusUpdated(updateRes.rows[0], 'Accepted');
+      }
       return res.json({ success: true, message: 'Ride Accepted successfully!' });
     } else if (action === 'complete') {
-      await db.query(
-        "UPDATE trips SET status = 'Completed' WHERE id = $1",
+      const updateRes = await db.query(
+        "UPDATE trips SET status = 'Completed' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
         [id]
       );
+      if (updateRes.rows.length > 0) {
+        emitTripStatusUpdated(updateRes.rows[0], 'Completed');
+      }
       return res.json({ success: true, message: 'Ride Completed successfully!' });
     } else {
-      await db.query(
-        "UPDATE trips SET status = 'Declined', driver_id = NULL, driver_or_guide_name = NULL WHERE id = $1",
+      const updateRes = await db.query(
+        "UPDATE trips SET status = 'Declined', driver_id = NULL, driver_or_guide_name = NULL WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
         [id]
       );
+      if (updateRes.rows.length > 0) {
+        emitTripStatusUpdated(updateRes.rows[0], 'Declined');
+      }
       return res.json({ success: true, message: 'Ride Declined' });
     }
   } catch (error) {

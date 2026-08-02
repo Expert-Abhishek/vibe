@@ -25,12 +25,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 let MapView: any = null;
 let Marker: any = null;
+let Polyline: any = null;
 
 if (Platform.OS !== 'web') {
   try {
     const Maps = require('react-native-maps');
     MapView = Maps.default;
     Marker = Maps.Marker;
+    Polyline = Maps.Polyline;
   } catch (e) {
     console.warn('react-native-maps dynamic load error in trip-status:', e);
   }
@@ -61,6 +63,10 @@ export default function TripStatusScreen() {
 
   const [pickupLocation, setPickupLocation] = useState('Heritage City Palace, Mysore');
   const [dropLocation, setDropLocation] = useState('Chamundi Hill View Point');
+  const [pickupLat, setPickupLat] = useState<number>(12.9716);
+  const [pickupLng, setPickupLng] = useState<number>(77.5946);
+  const [dropLat, setDropLat] = useState<number>(12.2958);
+  const [dropLng, setDropLng] = useState<number>(76.6394);
   const [fareAmount, setFareAmount] = useState(2500);
   const [paymentMode, setPaymentMode] = useState('Wallet / Online');
   const [startOtp, setStartOtp] = useState('8240');
@@ -91,6 +97,10 @@ export default function TripStatusScreen() {
           if (res.data.driver) setDriverInfo((prev: any) => ({ ...prev, ...res.data.driver }));
           if (res.data.pickup_name) setPickupLocation(res.data.pickup_name);
           if (res.data.drop_name) setDropLocation(res.data.drop_name);
+          if (res.data.pickup_lat) setPickupLat(parseFloat(res.data.pickup_lat));
+          if (res.data.pickup_lng) setPickupLng(parseFloat(res.data.pickup_lng));
+          if (res.data.drop_lat) setDropLat(parseFloat(res.data.drop_lat));
+          if (res.data.drop_lng) setDropLng(parseFloat(res.data.drop_lng));
           if (res.data.amount) setFareAmount(parseFloat(res.data.amount));
 
           // Direct API OTP bindings without frontend re-hashing
@@ -125,6 +135,25 @@ export default function TripStatusScreen() {
     const interval = setInterval(loadStatus, 3000);
     return () => clearInterval(interval);
   }, [tripIdParam]);
+
+  // Dynamic Map Bounds Camera Fit (Halo Repo tracking pattern)
+  useEffect(() => {
+    if (mapRef.current && mapRef.current.fitToCoordinates && driverInfo.latitude && pickupLat && dropLat) {
+      try {
+        mapRef.current.fitToCoordinates(
+          [
+            { latitude: driverInfo.latitude, longitude: driverInfo.longitude },
+            { latitude: pickupLat, longitude: pickupLng },
+            { latitude: dropLat, longitude: dropLng },
+          ],
+          {
+            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            animated: true,
+          }
+        );
+      } catch (e) {}
+    }
+  }, [driverInfo.latitude, driverInfo.longitude, pickupLat, pickupLng, dropLat, dropLng]);
 
   // Socket & DeviceEventEmitter listeners
   useEffect(() => {
@@ -347,20 +376,50 @@ export default function TripStatusScreen() {
               provider="google"
               style={StyleSheet.absoluteFillObject}
               initialRegion={{
-                latitude: driverInfo.latitude || 12.9716,
-                longitude: driverInfo.longitude || 77.5946,
+                latitude: driverInfo.latitude || pickupLat || 12.9716,
+                longitude: driverInfo.longitude || pickupLng || 77.5946,
                 latitudeDelta: 0.04,
                 longitudeDelta: 0.04,
               }}
             >
+              {/* Driver Marker */}
               <Marker
                 coordinate={{ latitude: driverInfo.latitude || 12.9716, longitude: driverInfo.longitude || 77.5946 }}
-                title={driverInfo.name}
+                title={`Driver: ${driverInfo.name}`}
                 description={driverInfo.vehicleModel}
                 pinColor={colors.amber}
                 rotation={driverInfo.heading || 0}
                 flat={true}
               />
+
+              {/* Pickup Marker */}
+              <Marker
+                coordinate={{ latitude: pickupLat, longitude: pickupLng }}
+                title="Pickup Spot"
+                description={pickupLocation}
+                pinColor="#10B981"
+              />
+
+              {/* Drop Marker */}
+              <Marker
+                coordinate={{ latitude: dropLat, longitude: dropLng }}
+                title="Destination"
+                description={dropLocation}
+                pinColor="#EF4444"
+              />
+
+              {/* Live Route Polyline */}
+              {Polyline && (
+                <Polyline
+                  coordinates={[
+                    { latitude: driverInfo.latitude || pickupLat, longitude: driverInfo.longitude || pickupLng },
+                    { latitude: pickupLat, longitude: pickupLng },
+                    { latitude: dropLat, longitude: dropLng },
+                  ]}
+                  strokeColor="#F5C518"
+                  strokeWidth={4}
+                />
+              )}
             </MapView>
           )}
         </View>

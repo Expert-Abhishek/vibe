@@ -50,47 +50,55 @@ export default function HistoryScreen() {
     async function loadRealHistory() {
       setLoading(true);
       try {
-        if (!userId) {
-          setDbHistory([]);
-          return;
-        }
-        const tripsData = await fetchCustomerTripsApi(userId);
-        if (Array.isArray(tripsData) && tripsData.length > 0) {
-          const mapped: HistoryRecord[] = tripsData
-            .filter((t: any) => {
-              if (t && t.customerId && String(t.customerId) !== String(userId)) return false;
-              const st = String(t?.status || '').toLowerCase();
-              return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish') || st === 'done' || st.includes('done');
-            })
-            .map((t: any) => {
-              const stLower = String(t.status || '').toLowerCase();
-              let statusLabel = 'Completed';
-              if (stLower.includes('driver') || t.cancelled_by === 'driver') {
-                statusLabel = 'Cancelled by Driver';
-              } else if (stLower.includes('user') || stLower.includes('tourist') || t.cancelled_by === 'user' || t.cancelled_by === 'tourist') {
-                statusLabel = 'Cancelled by User';
-              } else if (stLower.includes('cancel') || stLower.includes('decline')) {
-                statusLabel = 'Cancelled';
-              }
+        const tripsData = userId ? await fetchCustomerTripsApi(userId) : [];
+        const dbTrips = Array.isArray(tripsData) ? tripsData : [];
+        const localUserTrips = Array.isArray(adminState.userTrips) ? adminState.userTrips : [];
+        const localAdvance = Array.isArray(adminState.advanceBookings) ? adminState.advanceBookings : [];
 
-              return {
-                id: String(t.id),
-                type: (t.tripType || 'cab') as any,
-                title: t.title || (t.pickupName && t.dropName ? `${t.pickupName} ➔ ${t.dropName}` : 'Tour Booking'),
-                route: Array.isArray(t.destinationIds) && t.destinationIds.length > 0 ? t.destinationIds : (t.pickupName && t.dropName ? [t.pickupName, t.dropName] : undefined),
-                driverOrGuideName: t.driverOrGuideName || undefined,
-                date: t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today',
-                time: t.createdAt ? new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
-                price: Number(t.amount) || 0,
-                status: statusLabel,
-                rating: Number(t.rating) || 5,
-                passengerCount: t.passengerCount || 1,
-              };
+        const combinedRaw = [...dbTrips, ...localUserTrips, ...localAdvance];
+
+        const historyItems: HistoryRecord[] = combinedRaw
+          .filter(Boolean)
+          .filter((t: any) => {
+            if (t && t.customerId && userId && String(t.customerId) !== String(userId)) return false;
+            const st = String(t?.status || '').toLowerCase();
+            return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish') || st === 'done';
+          })
+          .reduce((acc: HistoryRecord[], item: any) => {
+            const idStr = String(item.id || item.tripId || '');
+            if (!idStr) return acc;
+            if (acc.some(existing => existing.id === idStr)) return acc;
+
+            const stLower = String(item.status || '').toLowerCase();
+            let statusLabel = 'Completed';
+            if (stLower.includes('driver') || item.cancelled_by === 'driver') {
+              statusLabel = 'Cancelled by Driver';
+            } else if (stLower.includes('user') || stLower.includes('tourist') || item.cancelled_by === 'user' || item.cancelled_by === 'tourist') {
+              statusLabel = 'Cancelled by User';
+            } else if (stLower.includes('cancel') || stLower.includes('decline')) {
+              statusLabel = 'Cancelled';
+            }
+
+            const titleStr = item.title || (item.pickupName && item.dropName ? `${item.pickupName} ➔ ${item.dropName}` : (item.pickup ? `${item.pickup} ➔ Destination` : 'Tour Booking'));
+            const partnerName = item.driverOrGuideName || item.driverName || item.driver_or_guide_name || undefined;
+
+            acc.push({
+              id: idStr,
+              type: (item.type || item.tripType || 'cab') as any,
+              title: titleStr,
+              route: Array.isArray(item.destinationIds) && item.destinationIds.length > 0 ? item.destinationIds : (item.route || undefined),
+              driverOrGuideName: partnerName,
+              date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (item.date || 'Today'),
+              time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (item.time || ''),
+              price: Number(item.amount || item.price) || 0,
+              status: statusLabel,
+              rating: Number(item.rating) || 5,
+              passengerCount: item.passengerCount || 1,
             });
-          setDbHistory(mapped);
-        } else {
-          setDbHistory([]);
-        }
+            return acc;
+          }, []);
+
+        setDbHistory(historyItems);
       } catch (e) {
         console.warn('Error fetching history trips:', e);
         setDbHistory([]);

@@ -100,7 +100,9 @@ export default function TripsHistoryScreen() {
       console.log('[TripsScreen] 🔔 Real-time socket/emitter trip update received:', data);
       if (data) {
         const tripId = String(data.tripId || data.id || '');
-        const newStatus = String(data.status || 'accepted').toLowerCase();
+        const rawSt = String(data.status || 'accepted').toLowerCase();
+        const isComp = rawSt.includes('complete') || rawSt.includes('finish') || rawSt === 'done';
+        const newStatus = isComp ? 'Completed' : String(data.status || 'Accepted');
         const driverName = data.driverName || data.driver_or_guide_name || data.driverDetails?.name;
 
         adminState.userTrips.forEach(t => {
@@ -262,9 +264,7 @@ export default function TripsHistoryScreen() {
     return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
   };
 
-  const activeTripObj = hasActiveTripState === false
-    ? null
-    : (activeTripData || (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || null : null));
+  const activeTripObj = activeTripData || (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || null : null);
 
   const scheduledTrips = validTrips.filter(t => {
     if (activeTripObj && String(t.id) === String(activeTripObj.id)) return false;

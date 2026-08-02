@@ -116,11 +116,27 @@ export const rideStateService = {
     persistRideStatus(tripId, nextStatus);
     notifyTripListeners(tripId);
 
+    // Emit local event immediately for responsive UI
+    try {
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('trip_status_updated', { tripId, id: tripId, status: nextStatus, driverName });
+      if (nextStatus === 'COMPLETED') {
+        DeviceEventEmitter.emit('trip_completed', { tripId, id: tripId, status: 'Completed', driverName });
+        DeviceEventEmitter.emit('RIDE_COMPLETED', { tripId, id: tripId, status: 'Completed', driverName });
+      }
+    } catch (e) {}
+
     // Trigger external API call where appropriate
     try {
       let res: Response;
       if (nextStatus === 'ARRIVED') {
         res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/arrive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ driverName }),
+        });
+      } else if (nextStatus === 'COMPLETED') {
+        res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ driverName }),

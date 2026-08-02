@@ -53,12 +53,30 @@ export default function HomeScreen() {
 
     async function checkActiveTrip() {
       try {
-        const res = await fetchActiveTripApi(userId);
-        if (res && res.hasActiveTrip && res.trip && res.trip.id) {
-          setActiveTrip(res.trip);
-        } else {
-          setActiveTrip(null);
+        let activeObj = null;
+        if (userId) {
+          const res = await fetchActiveTripApi(userId);
+          if (res && res.hasActiveTrip && res.trip && res.trip.id) {
+            activeObj = res.trip;
+          }
         }
+        if (!activeObj && Array.isArray(adminState.userTrips)) {
+          const localActive = adminState.userTrips.find(t => {
+            if (!t) return false;
+            const st = String(t.status || '').toLowerCase();
+            return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
+          });
+          if (localActive) {
+            activeObj = {
+              id: localActive.id,
+              pickup: localActive.title || localActive.pickup || 'Pickup Spot',
+              drop_name: Array.isArray(localActive.route) && localActive.route.length > 0 ? localActive.route[localActive.route.length - 1] : 'Destination',
+              driverName: localActive.driverOrGuideName || 'Assigned Partner',
+              status: localActive.status,
+            };
+          }
+        }
+        setActiveTrip(activeObj);
       } catch (e) {
         console.warn('checkActiveTrip error:', e);
       }
