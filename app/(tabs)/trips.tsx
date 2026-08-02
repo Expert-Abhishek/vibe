@@ -459,7 +459,6 @@ export default function TripsHistoryScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          </View>
         ) : (
           <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: verticalScale(20) }]}>
             <MaterialIcons name="local-taxi" size={scale(36)} color={colors.textMuted} />
