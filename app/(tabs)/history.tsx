@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '@/constants/admin-state';
-import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
+import { fetchCustomerTripsApi, fetchTripsApi, fetchUserTripHistoryApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { initSocketService, getSocket } from '@src/services/socketService';
 
@@ -50,14 +50,29 @@ export default function HistoryScreen() {
     async function loadRealHistory() {
       setLoading(true);
       try {
-        const tripsData = userId ? await fetchCustomerTripsApi(userId) : [];
-        const dbTrips = Array.isArray(tripsData) ? tripsData : [];
+        // 1. Fetch dedicated user history split endpoint (matching driver-history method)
+        let apiCompletedTrips: any[] = [];
+        if (userId) {
+          const userHistoryRes = await fetchUserTripHistoryApi(userId);
+          if (userHistoryRes && userHistoryRes.success && userHistoryRes.data) {
+            apiCompletedTrips = userHistoryRes.data.completed || [];
+          }
+        }
+
+        // Fallback to customer trips API if dedicated endpoint returned empty
+        if (apiCompletedTrips.length === 0 && userId) {
+          const fallbackData = await fetchCustomerTripsApi(userId);
+          if (Array.isArray(fallbackData)) {
+            apiCompletedTrips = fallbackData;
+          }
+        }
+
         const localUserTrips = Array.isArray(adminState.userTrips) ? adminState.userTrips : [];
         const localAdvance = Array.isArray(adminState.advanceBookings) ? adminState.advanceBookings : [];
         const localPending = Array.isArray((adminState as any).pendingDriverRequests) ? (adminState as any).pendingDriverRequests : [];
         const localCustom = Array.isArray(adminState.customTripRequests) ? adminState.customTripRequests : [];
 
-        const combinedRaw = [...dbTrips, ...localUserTrips, ...localAdvance, ...localPending, ...localCustom];
+        const combinedRaw = [...apiCompletedTrips, ...localUserTrips, ...localAdvance, ...localPending, ...localCustom];
 
         const historyItems: HistoryRecord[] = combinedRaw
           .filter(Boolean)

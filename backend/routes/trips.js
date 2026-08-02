@@ -2143,6 +2143,98 @@ router.get('/driver-history/:driverId', async (req, res) => {
 });
 
 /**
+ * GET /api/trips/user-history/:customerId
+ * Fetch full trip history for a user/tourist split into Active vs Completed
+ */
+router.get('/user-history/:customerId', async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const userRes = await db.query('SELECT name FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [customerId]);
+    const customerName = userRes.rows.length > 0 ? userRes.rows[0].name : '';
+
+    let queryText;
+    let queryParams;
+
+    if (customerName && customerName.trim().length > 2) {
+      queryText = `
+        SELECT * FROM trips 
+        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text OR LOWER(customer_name) = LOWER($2)) 
+        ORDER BY created_at DESC LIMIT 100
+      `;
+      queryParams = [customerId, customerName.trim()];
+    } else {
+      queryText = `
+        SELECT * FROM trips 
+        WHERE customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text
+        ORDER BY created_at DESC LIMIT 100
+      `;
+      queryParams = [customerId];
+    }
+
+    const result = await db.query(queryText, queryParams);
+
+    const formattedTrips = result.rows.map(t => {
+      const stLower = String(t.status || '').toLowerCase();
+      const isCompleted = stLower.includes('complete') || stLower.includes('finish') || stLower === 'done' || stLower.includes('cancel') || stLower.includes('decline');
+      const totalFare = parseFloat(t.amount || 0);
+
+      let statusLabel = 'Completed';
+      if (stLower.includes('driver') || t.cancelled_by === 'driver') {
+        statusLabel = 'Cancelled by Driver';
+      } else if (stLower.includes('user') || stLower.includes('tourist') || t.cancelled_by === 'user' || t.cancelled_by === 'tourist') {
+        statusLabel = 'Cancelled by User';
+      } else if (stLower.includes('cancel') || stLower.includes('decline')) {
+        statusLabel = 'Cancelled';
+      } else if (isCompleted) {
+        statusLabel = 'Completed';
+      } else {
+        statusLabel = t.status || 'Active';
+      }
+
+      return {
+        id: t.id,
+        tripId: t.id,
+        type: t.trip_type || 'cab',
+        tripType: t.trip_type || 'cab',
+        title: t.title || (t.pickup_name && t.drop_name ? `${t.pickup_name} ➔ ${t.drop_name}` : 'Tour Booking'),
+        pickupName: t.pickup_name || 'Pickup Point',
+        dropName: t.drop_name || 'Drop Point',
+        pickup: t.pickup_name || 'Pickup Point',
+        drop: t.drop_name || 'Drop Point',
+        date: new Date(t.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
+        time: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: t.created_at,
+        amount: totalFare,
+        price: totalFare,
+        driverOrGuideName: t.driver_or_guide_name || 'Assigned Partner',
+        customerName: t.customer_name || 'Tourist Client',
+        status: statusLabel,
+        rawStatus: t.status,
+        paymentMode: t.payment_mode || 'Wallet',
+        rating: t.rating || 5,
+        passengerCount: 1,
+      };
+    });
+
+    const active = formattedTrips.filter(t => !['Completed', 'Cancelled', 'Cancelled by Driver', 'Cancelled by User'].includes(t.status));
+    const completed = formattedTrips.filter(t => ['Completed', 'Cancelled', 'Cancelled by Driver', 'Cancelled by User'].includes(t.status));
+
+    res.json({
+      success: true,
+      data: {
+        active,
+        completed,
+        all: formattedTrips,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching user trip history:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch user trip history' });
+  }
+});
+
+/**
  * GET /api/trips/guide-stats/:guideId
  * Fetch real-time statistics for guide (Trips Count, Today Earnings, wallet balance)
  */

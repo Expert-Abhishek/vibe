@@ -619,6 +619,19 @@ export async function fetchDriverTripHistoryApi(driverId: string): Promise<any> 
 }
 
 /**
+ * Fetch User/Tourist Trip History (Active vs Completed)
+ */
+export async function fetchUserTripHistoryApi(customerId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/user-history/${customerId}`);
+    return await res.json();
+  } catch (e) {
+    console.warn('fetchUserTripHistoryApi error:', e);
+    return { success: false, data: { active: [], completed: [], all: [] } };
+  }
+}
+
+/**
  * Fetch Guide Statistics (Trips Count, Today Earnings)
  */
 export async function fetchGuideStatsApi(guideId: string): Promise<any> {
