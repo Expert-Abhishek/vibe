@@ -62,8 +62,9 @@ export default function HistoryScreen() {
         const historyItems: HistoryRecord[] = combinedRaw
           .filter(Boolean)
           .filter((t: any) => {
-            if (t && t.customerId && userId && String(t.customerId) !== String(userId)) return false;
-            const st = String(t?.status || '').toLowerCase();
+            const itemCustId = t.customerId || t.customer_id || t.userId || t.user_id;
+            if (itemCustId && userId && String(itemCustId).toLowerCase().trim() !== String(userId).toLowerCase().trim()) return false;
+            const st = String(t?.status || '').toLowerCase().trim();
             return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish') || st === 'done';
           })
           .reduce((acc: HistoryRecord[], item: any) => {

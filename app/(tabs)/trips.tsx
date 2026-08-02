@@ -100,19 +100,24 @@ export default function TripsHistoryScreen() {
       console.log('[TripsScreen] 🔔 Real-time socket/emitter trip update received:', data);
       if (data) {
         const tripId = String(data.tripId || data.id || '');
-        const rawSt = String(data.status || 'accepted').toLowerCase();
-        const isComp = rawSt.includes('complete') || rawSt.includes('finish') || rawSt === 'done';
-        const newStatus = isComp ? 'Completed' : String(data.status || 'Accepted');
+        const rawSt = String(data.status || 'accepted').toLowerCase().trim();
+        const isComp = rawSt.includes('complete') || rawSt.includes('finish') || rawSt.includes('cancel') || rawSt.includes('decline') || rawSt === 'done';
+        const newStatus = isComp ? (rawSt.includes('cancel') || rawSt.includes('decline') ? 'Cancelled' : 'Completed') : String(data.status || 'Accepted');
         const driverName = data.driverName || data.driver_or_guide_name || data.driverDetails?.name;
 
+        if (isComp) {
+          setActiveTripData(null);
+          setHasActiveTripState(false);
+        }
+
         adminState.userTrips.forEach(t => {
-          if (t && String(t.id) === tripId) {
+          if (t && (String(t.id) === tripId || (tripId && String(t.id).includes(tripId)))) {
             t.status = newStatus;
             if (driverName) t.driverOrGuideName = driverName;
           }
         });
         adminState.advanceBookings.forEach(b => {
-          if (b && String(b.id) === tripId) {
+          if (b && (String(b.id) === tripId || (tripId && String(b.id).includes(tripId)))) {
             b.status = newStatus;
             if (driverName) b.driverOrGuideName = driverName;
           }
@@ -231,6 +236,8 @@ export default function TripsHistoryScreen() {
         pickup: t.pickupName || t.pickup || t.title || 'Pickup Spot',
         bookingType: t.bookingType || 'INSTANT',
       };
+    });
+
   const safePendingRequests = Array.isArray((adminState as any).pendingDriverRequests)
     ? (adminState as any).pendingDriverRequests
     : [];
@@ -282,9 +289,11 @@ export default function TripsHistoryScreen() {
       return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
     });
 
-  const isNonCompleted = (statusStr: string) => {
-    const st = String(statusStr || '').toLowerCase();
-    return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
+  const isNonCompleted = (st?: string) => {
+    if (!st) return false;
+    const s = String(st).toLowerCase().trim();
+    const completedStatuses = ['completed', 'finish', 'finished', 'cancelled', 'declined', 'done'];
+    return !completedStatuses.includes(s);
   };
 
   const activeTripObj = activeTripData || (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || null : null);

@@ -14,8 +14,8 @@ import { emitTripRequestSocket } from '@/src/services/socketService';
 
 export function updateTripStatusGlobally(tripId: string, status: string, extraData?: any) {
   if (!tripId) return;
-  const tid = String(tripId);
-  const stLower = String(status || '').toLowerCase();
+  const tid = String(tripId).toLowerCase().trim();
+  const stLower = String(status || '').toLowerCase().trim();
   const normalizedStatus = (stLower.includes('complete') || stLower.includes('finish') || stLower === 'done')
     ? 'Completed'
     : (stLower.includes('cancel') || stLower.includes('decline'))
@@ -23,7 +23,10 @@ export function updateTripStatusGlobally(tripId: string, status: string, extraDa
     : status;
 
   const updateItem = (item: any) => {
-    if (item && (String(item.id) === tid || String(item.tripId) === tid)) {
+    if (!item) return;
+    const itemId = item.id ? String(item.id).toLowerCase().trim() : '';
+    const itemTripId = item.tripId ? String(item.tripId).toLowerCase().trim() : '';
+    if (itemId === tid || itemTripId === tid || (tid.length > 5 && itemId.length > 5 && (itemId.includes(tid) || tid.includes(itemId)))) {
       item.status = normalizedStatus;
       if (extraData?.driverName || extraData?.driver_or_guide_name) {
         item.driverOrGuideName = extraData.driverName || extraData.driver_or_guide_name;
@@ -40,6 +43,13 @@ export function updateTripStatusGlobally(tripId: string, status: string, extraDa
   (adminState.advanceBookings || []).forEach(updateItem);
   ((adminState as any).pendingDriverRequests || []).forEach(updateItem);
   (adminState.customTripRequests || []).forEach(updateItem);
+
+  try {
+    DeviceEventEmitter.emit('trip_status_updated', { tripId, id: tripId, status: normalizedStatus, ...extraData });
+    if (normalizedStatus === 'Completed') {
+      DeviceEventEmitter.emit('trip_completed', { tripId, id: tripId, status: 'Completed', ...extraData });
+    }
+  } catch (e) {}
 }
 
 export function broadcastNewTripRequest(tripObject: any) {

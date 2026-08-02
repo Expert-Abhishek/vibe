@@ -8,20 +8,26 @@ let socket: Socket | null = null;
 let currentUserId: string | null = null;
 let currentRole: string = 'tourist';
 
+import { getUserSessionSync } from '@/constants/authStore';
+
 /**
  * Initialize Socket.io connection to backend API server
  */
 export function initSocketService(userId?: string, role: string = 'tourist'): Socket | null {
   try {
+    const session = getUserSessionSync();
+    const effectiveUserId = userId || session?.id || undefined;
+    const effectiveRole = role || session?.role || 'tourist';
+
     if (socket && socket.connected) {
-      if (userId && (userId !== currentUserId || role !== currentRole)) {
-        joinUserRoom(userId, role);
+      if (effectiveUserId && (effectiveUserId !== currentUserId || effectiveRole !== currentRole)) {
+        joinUserRoom(effectiveUserId, effectiveRole);
       }
       return socket;
     }
 
-    currentUserId = userId || null;
-    currentRole = role;
+    currentUserId = effectiveUserId || null;
+    currentRole = effectiveRole;
 
     socket = io(API_BASE_URL, {
       transports: ['polling', 'websocket'],
@@ -34,9 +40,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
 
     socket.on('connect', () => {
       console.log(`[SocketService] Connected to server: ${socket?.id}`);
-      if (currentUserId || currentRole) {
-        joinUserRoom(currentUserId || undefined, currentRole);
-      }
+      joinUserRoom(currentUserId || undefined, currentRole);
     });
 
     socket.on('disconnect', (reason: string) => {
@@ -267,12 +271,23 @@ export function emitTripRequestSocket(tripObject: any) {
  * Join client user/role room for targeted real-time push notifications & wallet updates
  */
 export function joinUserRoom(userId?: string, role: string = 'tourist') {
-  currentUserId = userId || null;
-  currentRole = role;
+  const session = getUserSessionSync();
+  const effectiveUserId = userId || session?.id || null;
+  const effectiveRole = role || session?.role || 'tourist';
+
+  currentUserId = effectiveUserId;
+  currentRole = effectiveRole;
 
   if (socket && socket.connected) {
-    socket.emit('join_room', { userId: userId || null, role });
-    console.log(`[SocketService] Emitted join_room for user:${userId || 'guest'} role:${role}`);
+    socket.emit('join_room', {
+      userId: effectiveUserId,
+      role: effectiveRole,
+      room: effectiveUserId ? `user:${effectiveUserId}` : undefined,
+    });
+    if (effectiveUserId) {
+      socket.emit('join_room', { room: `user:${effectiveUserId}` });
+    }
+    console.log(`[SocketService] Emitted join_room for user:${effectiveUserId || 'guest'} role:${effectiveRole}`);
   }
 }
 
