@@ -2195,14 +2195,14 @@ router.get('/user-history/:customerId', async (req, res) => {
     if (customerName && customerName.trim().length > 2) {
       queryText = `
         SELECT * FROM trips 
-        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text OR LOWER(customer_name) = LOWER($2)) 
+        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text OR LOWER(customer_name) = LOWER($2) OR customer_id IS NULL) 
         ORDER BY created_at DESC LIMIT 100
       `;
       queryParams = [customerId, customerName.trim()];
     } else {
       queryText = `
         SELECT * FROM trips 
-        WHERE customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text
+        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text OR customer_id IS NULL)
         ORDER BY created_at DESC LIMIT 100
       `;
       queryParams = [customerId];

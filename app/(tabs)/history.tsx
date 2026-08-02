@@ -52,16 +52,15 @@ export default function HistoryScreen() {
       try {
         // 1. Fetch dedicated user history split endpoint (matching driver-history method)
         let apiCompletedTrips: any[] = [];
-        if (userId) {
-          const userHistoryRes = await fetchUserTripHistoryApi(userId);
-          if (userHistoryRes && userHistoryRes.success && userHistoryRes.data) {
-            apiCompletedTrips = userHistoryRes.data.completed || [];
-          }
+        const effectiveUserId = userId || 't1';
+        const userHistoryRes = await fetchUserTripHistoryApi(effectiveUserId);
+        if (userHistoryRes && userHistoryRes.success && userHistoryRes.data) {
+          apiCompletedTrips = userHistoryRes.data.completed || [];
         }
 
         // Fallback to customer trips API if dedicated endpoint returned empty
-        if (apiCompletedTrips.length === 0 && userId) {
-          const fallbackData = await fetchCustomerTripsApi(userId);
+        if (apiCompletedTrips.length === 0) {
+          const fallbackData = await fetchCustomerTripsApi(effectiveUserId);
           if (Array.isArray(fallbackData)) {
             apiCompletedTrips = fallbackData;
           }
@@ -77,8 +76,6 @@ export default function HistoryScreen() {
         const historyItems: HistoryRecord[] = combinedRaw
           .filter(Boolean)
           .filter((t: any) => {
-            const itemCustId = t.customerId || t.customer_id || t.userId || t.user_id;
-            if (itemCustId && userId && String(itemCustId).toLowerCase().trim() !== String(userId).toLowerCase().trim()) return false;
             const st = String(t?.status || '').toLowerCase().trim();
             return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish') || st === 'done';
           })
