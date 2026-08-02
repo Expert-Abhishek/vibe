@@ -237,6 +237,9 @@ CREATE TABLE IF NOT EXISTS platform_fee_revenue (
     user_role VARCHAR(50) NOT NULL, -- 'guide' or 'driver'
     trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
     amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 18. Trip Checkpoints Table (Strict Sequential Ordering)
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
