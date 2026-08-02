@@ -1,5 +1,5 @@
+import { API_BASE_URL } from '@/constants/api';
 import { useEffect, useState } from 'react';
-import { API_BASE_URL, driverArrivedApi } from '@/constants/api';
 
 export type RideStatus =
   | 'ACCEPTED'
@@ -124,7 +124,7 @@ export const rideStateService = {
         DeviceEventEmitter.emit('trip_completed', { tripId, id: tripId, status: 'Completed', driverName });
         DeviceEventEmitter.emit('RIDE_COMPLETED', { tripId, id: tripId, status: 'Completed', driverName });
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Trigger external API call where appropriate
     try {

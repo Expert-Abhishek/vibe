@@ -676,7 +676,6 @@ router.post('/:id/complete', async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to complete trip' });
   }
 });
-
 /**
  * POST /api/trips/:id/arrive
  * Driver taps "Arrived at Pickup"
