@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { adminState } from '@/constants/admin-state';
 import { fetchCustomerTripsApi, fetchTripsApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
+import { initSocketService, getSocket } from '@src/services/socketService';
 
 interface HistoryRecord {
   id: string;
@@ -25,7 +27,7 @@ interface HistoryRecord {
   date: string;
   time: string;
   price: number;
-  status: 'Completed' | 'Cancelled';
+  status: 'Completed' | 'Cancelled' | string;
   rating?: number;
   passengerCount?: number;
 }
@@ -42,6 +44,9 @@ export default function HistoryScreen() {
   const userId = session?.id;
 
   useEffect(() => {
+    initSocketService(userId, session?.role || 'tourist');
+    const socket = getSocket();
+
     async function loadRealHistory() {
       setLoading(true);
       try {
@@ -94,6 +99,32 @@ export default function HistoryScreen() {
       }
     }
     loadRealHistory();
+
+    const handleRefresh = () => {
+      console.log('[HistoryScreen] 🔔 Real-time socket/emitter trip update received. Refreshing history...');
+      loadRealHistory();
+    };
+
+    if (socket) {
+      socket.on('trip_completed', handleRefresh);
+      socket.on('trip_status_updated', handleRefresh);
+      socket.on('RIDE_COMPLETED', handleRefresh);
+    }
+
+    const subComp = DeviceEventEmitter.addListener('trip_completed', handleRefresh);
+    const subRideComp = DeviceEventEmitter.addListener('RIDE_COMPLETED', handleRefresh);
+    const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleRefresh);
+
+    return () => {
+      if (socket) {
+        socket.off('trip_completed', handleRefresh);
+        socket.off('trip_status_updated', handleRefresh);
+        socket.off('RIDE_COMPLETED', handleRefresh);
+      }
+      subComp.remove();
+      subRideComp.remove();
+      subStatus.remove();
+    };
   }, [userId]);
 
   const colors = {

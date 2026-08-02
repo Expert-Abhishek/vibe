@@ -530,17 +530,17 @@ router.post('/:id/status', async (req, res) => {
           [cancelledBy, cancelReason, driverName, id]
         );
         emitTripCancelled(updateRes.rows[0]);
-      } else if (targetStatus === 'done') {
+      } else if (targetStatus === 'done' || targetStatus === 'completed') {
         updateRes = await db.query(
           `UPDATE trips
-           SET status = 'done',
+           SET status = 'Completed',
                driver_or_guide_name = COALESCE($1, driver_or_guide_name),
                updated_at = NOW()
            WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text
            RETURNING *`,
           [driverName, id]
         );
-        emitTripStatusUpdated(updateRes.rows[0], 'done');
+        emitTripStatusUpdated(updateRes.rows[0], 'Completed');
       } else {
         updateRes = await db.query(
           `UPDATE trips
@@ -774,17 +774,21 @@ router.get('/customer/:customerId', async (req, res) => {
     const { customerId } = req.params;
 
     const result = await db.query(
-      'SELECT * FROM trips WHERE customer_id = $1 ORDER BY created_at DESC',
+      `SELECT * FROM trips
+       WHERE customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text
+       ORDER BY created_at DESC`,
       [customerId]
     );
 
     const trips = result.rows.map(t => ({
       id: t.id,
       tripType: t.trip_type,
-      title: t.title,
+      title: t.title || (t.pickup_name && t.drop_name ? `${t.pickup_name} ➔ ${t.drop_name}` : 'Tour Booking'),
       customerId: t.customer_id,
       customerName: t.customer_name,
       driverOrGuideName: t.driver_or_guide_name || '',
+      pickupName: t.pickup_name,
+      dropName: t.drop_name,
       planId: t.plan_id,
       destinationIds: t.destination_ids || [],
       amount: parseFloat(t.amount || 0),

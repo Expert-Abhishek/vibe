@@ -262,7 +262,9 @@ export default function TripsHistoryScreen() {
     return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
   };
 
-  const activeTripObj = activeTripData || (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || validTrips[0] : null);
+  const activeTripObj = hasActiveTripState === false
+    ? null
+    : (activeTripData || (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || null : null));
 
   const scheduledTrips = validTrips.filter(t => {
     if (activeTripObj && String(t.id) === String(activeTripObj.id)) return false;
@@ -367,7 +369,7 @@ export default function TripsHistoryScreen() {
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Trips</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage active rides & scheduled tours</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage active rides & trip status</Text>
         </View>
         <NotificationModal role="tourist" />
       </View>
@@ -457,15 +459,23 @@ export default function TripsHistoryScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        ) : null}
+          </View>
+        ) : (
+          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: verticalScale(20) }]}>
+            <MaterialIcons name="local-taxi" size={scale(36)} color={colors.textMuted} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Active Ride in Progress</Text>
+            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+              Book a cab or guide to start your journey!
+            </Text>
+          </View>
+        )}
 
-        {/* 2. SECOND SECTION: SCHEDULED TOURS & RIDES */}
+        {/* 2. SECOND SECTION: SCHEDULED TOURS & RIDES (COMMENTED OUT FOR NOW AS REQUESTED)
         <View style={{ marginBottom: verticalScale(14) }}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: verticalScale(10) }]}>
             Scheduled Tours & Rides
           </Text>
 
-          {/* Full Width Segmented Filter Tabs */}
           <View style={[styles.fullWidthFilterRow, { backgroundColor: isDark ? '#1C1C24' : '#F1EFEA', borderColor: colors.border }]}>
             <TouchableOpacity
               activeOpacity={0.8}
@@ -499,7 +509,6 @@ export default function TripsHistoryScreen() {
           </View>
         </View>
 
-        {/* Scheduled List */}
         {scheduledTrips.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <MaterialIcons name="event-available" size={scale(36)} color={colors.textMuted} />
@@ -515,50 +524,11 @@ export default function TripsHistoryScreen() {
             const advancePaid = trip.advanceDepositPaid || Math.round(price * 0.20);
             const balanceDue = price - advancePaid;
 
-            const handleViewItinerary = () => {
-              const partnerName = trip.driverOrGuideName || (isGuide ? 'Local Guide' : 'Assigned Driver/Captain');
-              const routeList = Array.isArray(trip.route) && trip.route.length > 0
-                ? trip.route.map((cp: string, i: number) => `   📍 Stop ${i + 1}: ${cp}`).join('\n')
-                : `   📍 Pickup: ${trip.pickup || 'Pickup Location'}\n   🏁 Drop: ${trip.title || 'Destination'}`;
-
-              const message = [
-                `=================================`,
-                `📋 TRIP ITINERARY DETAILS`,
-                `=================================`,
-                ``,
-                `🎫 Booking ID: #${trip.id}`,
-                `📌 Trip Name: ${trip.title}`,
-                `🏷️ Category: ${isGuide ? 'Guide Tour' : 'Cab / Vehicle Ride'}`,
-                `📅 Schedule: ${trip.date} at ${trip.time}`,
-                ``,
-                `---------------------------------`,
-                `👥 ASSIGNED PARTNER`,
-                `---------------------------------`,
-                `  ${isGuide ? '🧭 Tour Guide' : '🚕 Driver Captain'}: ${partnerName}`,
-                ``,
-                `---------------------------------`,
-                `🗺️ ROUTE & CHECKPOINTS`,
-                `---------------------------------`,
-                routeList,
-                ``,
-                `---------------------------------`,
-                `💳 FARE & PAYMENT DETAILS`,
-                `---------------------------------`,
-                `  💰 Total Fare: ₹${price}`,
-                `  💳 Payment Mode: ${trip.paymentMode || 'Wallet'}`,
-                `  🟢 Status: ${trip.status}`,
-                `=================================`,
-              ].join('\n');
-
-              Alert.alert(`Trip Itinerary #${String(trip.id).slice(-6)}`, message);
-            };
-
             return (
               <View
                 key={`${trip.id}_${idx}`}
                 style={[styles.scheduledCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >
-                {/* Header Row: Title & Date */}
                 <View style={styles.schedHeaderRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.schedTitle, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -573,7 +543,6 @@ export default function TripsHistoryScreen() {
                   </View>
                 </View>
 
-                {/* DISTINCT UI FOR GUIDE VS CAB (NO CAB/GUIDE TAGS) */}
                 {isGuide ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), marginTop: verticalScale(8), paddingHorizontal: scale(12), paddingVertical: verticalScale(8), backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: scale(8) }}>
                     <View style={{ width: scale(40), height: scale(40), borderRadius: scale(20), backgroundColor: colors.amber, justifyContent: 'center', alignItems: 'center' }}>
@@ -596,7 +565,6 @@ export default function TripsHistoryScreen() {
                   </View>
                 )}
 
-                {/* Financial Summary */}
                 <View style={[styles.financeRow, { borderTopColor: colors.border }]}>
                   <View>
                     <Text style={[styles.finLabel, { color: colors.textMuted }]}>Total Fare</Text>
@@ -612,7 +580,6 @@ export default function TripsHistoryScreen() {
                   </View>
                 </View>
 
-                {/* Action Buttons */}
                 <View style={styles.schedActionsRow}>
                   <TouchableOpacity
                     style={[styles.schedActionBtn, { backgroundColor: colors.surfaceCard, borderColor: colors.border, borderWidth: 1 }]}
@@ -632,6 +599,7 @@ export default function TripsHistoryScreen() {
             );
           })
         )}
+        */}
 
       </ScrollView>
 
