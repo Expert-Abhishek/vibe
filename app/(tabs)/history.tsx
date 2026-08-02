@@ -104,7 +104,9 @@ export default function HistoryScreen() {
               id: idStr,
               type: (item.type || item.tripType || 'cab') as any,
               title: titleStr,
-              route: Array.isArray(item.destinationIds) && item.destinationIds.length > 0 ? item.destinationIds : (item.route || undefined),
+              pickupName: item.pickupName || item.pickup_name || item.pickup || 'Pickup Point',
+              dropName: item.dropName || item.drop_name || item.drop || 'Drop Point',
+              route: Array.isArray(item.destinationIds) && item.destinationIds.length > 0 ? item.destinationIds : (Array.isArray(item.route) ? item.route : (Array.isArray(item.checkpoints) ? item.checkpoints : undefined)),
               driverOrGuideName: partnerName,
               date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (item.date || 'Today'),
               time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (item.time || ''),
@@ -340,15 +342,21 @@ export default function HistoryScreen() {
                 {/* Title */}
                 <Text style={[styles.titleText, { color: colors.textPrimary }]}>{item.title}</Text>
 
-                {/* Route detail if present */}
-                {item.route && item.route.length > 0 && (
-                  <View style={styles.routeBox}>
-                    <Text style={[styles.routeLabel, { color: colors.textMuted }]}>Route checkpoints:</Text>
-                    <Text style={[styles.routeText, { color: colors.textPrimary }]}>
-                      {item.route.join(' ➔ ')}
+                {/* Full Route Itinerary (Pickup, Checkpoints, Drop) */}
+                <View style={styles.routeBox}>
+                  <Text style={[styles.routeLabel, { color: colors.textMuted }]}>Full Travel Itinerary:</Text>
+                  <Text style={[styles.routeText, { color: colors.textPrimary }]}>
+                    🟢 <Text style={{ fontWeight: '700' }}>Pickup:</Text> {item.pickupName || 'Pickup Location'}
+                  </Text>
+                  {item.route && item.route.length > 0 && (
+                    <Text style={[styles.routeText, { color: colors.amber, marginTop: verticalScale(2) }]}>
+                      📍 <Text style={{ fontWeight: '700' }}>Stops:</Text> {item.route.join(' ➔ ')}
                     </Text>
-                  </View>
-                )}
+                  )}
+                  <Text style={[styles.routeText, { color: colors.textPrimary, marginTop: verticalScale(2) }]}>
+                    🔴 <Text style={{ fontWeight: '700' }}>Drop:</Text> {item.dropName || 'Destination'}
+                  </Text>
+                </View>
 
                 {/* Driver / Guide details */}
                 {item.driverOrGuideName && (

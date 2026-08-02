@@ -148,68 +148,88 @@ export default function DriverHistoryScreen() {
     </View>
   );
 
-  const renderCompletedItem = ({ item }: { item: any }) => (
-    <View style={[styles.tripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardHeaderRow}>
-        <View style={styles.badgeCompleted}>
-          <MaterialIcons name="check-circle" size={scale(12)} color={colors.success} />
-          <Text style={styles.badgeCompletedText}>COMPLETED</Text>
+  const renderCompletedItem = ({ item }: { item: any }) => {
+    const cps = Array.isArray(item.checkpoints) ? item.checkpoints : (Array.isArray(item.route) ? item.route : []);
+
+    return (
+      <View style={[styles.tripCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.badgeCompleted}>
+            <MaterialIcons name="check-circle" size={scale(12)} color={colors.success} />
+            <Text style={styles.badgeCompletedText}>COMPLETED</Text>
+          </View>
+          <Text style={[styles.cardDateText, { color: colors.textMuted }]}>
+            {item.date} • {item.time}
+          </Text>
         </View>
-        <Text style={[styles.cardDateText, { color: colors.textMuted }]}>
-          {item.date} • {item.time}
+
+        <Text style={[styles.touristNameText, { color: colors.textPrimary }]}>
+          👤 {item.touristName || 'Passenger Client'}
         </Text>
+
+        {/* Full Route Itinerary (Pickup, Checkpoints, Drop) */}
+        <View style={styles.routeContainer}>
+          <View style={styles.routeRow}>
+            <View style={[styles.dotStart, { backgroundColor: colors.success }]} />
+            <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
+              <Text style={{ fontWeight: '800' }}>Pickup: </Text>{item.pickupName || item.pickup || 'Pickup Spot'}
+            </Text>
+          </View>
+
+          {cps.length > 0 && (
+            <View style={{ paddingLeft: scale(16), marginVertical: verticalScale(2) }}>
+              <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '700' }}>
+                📍 Checkpoints: {cps.join(' ➔ ')}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.routeRow}>
+            <View style={[styles.dotEnd, { backgroundColor: '#EF4444' }]} />
+            <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
+              <Text style={{ fontWeight: '800' }}>Drop: </Text>{item.dropName || item.drop || 'Destination'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Payment Mode Badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginTop: verticalScale(6) }}>
+          <MaterialIcons name="payment" size={scale(14)} color={colors.textMuted} />
+          <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>
+            Payment Mode: <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{item.paymentMode || 'Wallet'}</Text>
+          </Text>
+        </View>
+
+        {/* Fare Breakdown Footer */}
+        <View style={[styles.cardFooterSplit, { borderTopColor: colors.border, marginTop: verticalScale(10) }]}>
+          <View>
+            <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Total Fare</Text>
+            <Text style={[styles.fareValueSmall, { color: colors.textPrimary }]}>
+              ₹{Number(item.amount || 0).toLocaleString('en-IN')}
+            </Text>
+          </View>
+
+          <View style={styles.vertDivider} />
+
+          <View>
+            <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Platform Fee (10%)</Text>
+            <Text style={[styles.fareValueSmall, { color: '#EF4444' }]}>
+              -₹{Number(item.commission || (item.amount * 0.1)).toFixed(0)}
+            </Text>
+          </View>
+
+          <View style={styles.vertDivider} />
+
+          <View>
+            <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Driver Net Earnings</Text>
+            <Text style={[styles.fareValueBold, { color: colors.success }]}>
+              ₹{Number(item.driverEarnings || (item.amount * 0.9)).toLocaleString('en-IN')}
+            </Text>
+          </View>
+        </View>
       </View>
-
-      <Text style={[styles.touristNameText, { color: colors.textPrimary }]}>
-        👤 {item.touristName}
-      </Text>
-
-      {/* Pickup & Drop Details */}
-      <View style={styles.routeContainer}>
-        <View style={styles.routeRow}>
-          <View style={[styles.dotStart, { backgroundColor: colors.success }]} />
-          <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
-            <Text style={{ fontWeight: '800' }}>Pickup: </Text>{item.pickupName}
-          </Text>
-        </View>
-
-        <View style={styles.routeRow}>
-          <View style={[styles.dotEnd, { backgroundColor: '#EF4444' }]} />
-          <Text style={[styles.routeText, { color: colors.textPrimary }]} numberOfLines={1}>
-            <Text style={{ fontWeight: '800' }}>Drop: </Text>{item.dropName}
-          </Text>
-        </View>
-      </View>
-
-      {/* Fare Breakdown Footer */}
-      <View style={[styles.cardFooterSplit, { borderTopColor: colors.border }]}>
-        <View>
-          <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Total Fare</Text>
-          <Text style={[styles.fareValueSmall, { color: colors.textPrimary }]}>
-            ₹{Number(item.amount || 0).toLocaleString('en-IN')}
-          </Text>
-        </View>
-
-        <View style={styles.vertDivider} />
-
-        <View>
-          <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Platform Fee (10%)</Text>
-          <Text style={[styles.fareValueSmall, { color: '#EF4444' }]}>
-            -₹{Number(item.commission || 0).toFixed(0)}
-          </Text>
-        </View>
-
-        <View style={styles.vertDivider} />
-
-        <View>
-          <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Driver Net Earnings</Text>
-          <Text style={[styles.fareValueBold, { color: colors.success }]}>
-            ₹{Number(item.driverEarnings || (item.amount * 0.9)).toLocaleString('en-IN')}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top']}>

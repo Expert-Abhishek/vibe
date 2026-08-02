@@ -83,6 +83,9 @@ export default function TripStatusScreen() {
   const [dropLng, setDropLng] = useState<number>(initialLocalTrip?.dropLng || 76.6394);
   const [fareAmount, setFareAmount] = useState(initialLocalTrip?.price || initialLocalTrip?.amount || 1200);
   const [paymentMode, setPaymentMode] = useState(initialLocalTrip?.paymentMode || 'Wallet');
+  const [advanceDepositPaid, setAdvanceDepositPaid] = useState<number>(initialLocalTrip?.advanceDepositPaid || 0);
+  const [remainingCashBalance, setRemainingCashBalance] = useState<number>(initialLocalTrip?.remainingCashBalance || (initialLocalTrip?.price || initialLocalTrip?.amount || 1200));
+  const [tripCheckpoints, setTripCheckpoints] = useState<any[]>(initialLocalTrip?.checkpoints || initialLocalTrip?.route || []);
   const [startOtp, setStartOtp] = useState(initialLocalTrip?.otp || '8240');
   const [endOtp, setEndOtp] = useState(initialLocalTrip?.endOtp || '4321');
 
@@ -119,8 +122,27 @@ export default function TripStatusScreen() {
           if (res.data.pickup_lng || res.data.pickupLng) setPickupLng(parseFloat(res.data.pickup_lng || res.data.pickupLng));
           if (res.data.drop_lat || res.data.dropLat) setDropLat(parseFloat(res.data.drop_lat || res.data.dropLat));
           if (res.data.drop_lng || res.data.dropLng) setDropLng(parseFloat(res.data.drop_lng || res.data.dropLng));
-          if (res.data.amount || res.data.price) setFareAmount(parseFloat(res.data.amount || res.data.price));
+          
+          const totalAmt = parseFloat(res.data.amount || res.data.price || 0);
+          if (totalAmt > 0) setFareAmount(totalAmt);
           if (res.data.payment_mode || res.data.paymentMode) setPaymentMode(res.data.payment_mode || res.data.paymentMode);
+
+          const advPaid = parseFloat(res.data.advance_deposit_paid || res.data.advanceDepositPaid || 0);
+          setAdvanceDepositPaid(advPaid);
+          const remBal = parseFloat(res.data.remaining_cash_balance || res.data.remainingCashBalance || (totalAmt > 0 ? totalAmt - advPaid : 0));
+          setRemainingCashBalance(remBal);
+
+          if (res.data.trip_checkpoints || res.data.checkpoints || res.data.destination_ids || res.data.route) {
+            const rawCps = res.data.trip_checkpoints || res.data.checkpoints || res.data.destination_ids || res.data.route;
+            let parsed: any[] = Array.isArray(rawCps) ? rawCps : [];
+            if (typeof rawCps === 'string') {
+              try { parsed = JSON.parse(rawCps); } catch (e) { parsed = [rawCps]; }
+            }
+            if (parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
+              parsed.sort((a, b) => (a.step_order || a.stepOrder || 0) - (b.step_order || b.stepOrder || 0));
+            }
+            setTripCheckpoints(parsed);
+          }
 
           // Direct API OTP bindings
           if (res.data.otp) setStartOtp(String(res.data.otp));
@@ -491,10 +513,11 @@ export default function TripStatusScreen() {
           </View>
         </View>
 
-        {/* Route Plan Timeline Card */}
+        {/* Route & Waypoints Card */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>ROUTE & DETAILS</Text>
+          <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>ROUTE & WAYPOINTS</Text>
 
+          {/* Pickup */}
           <View style={styles.routeRow}>
             <View style={[styles.dot, { backgroundColor: colors.success }]} />
             <View style={{ flex: 1 }}>
@@ -503,8 +526,30 @@ export default function TripStatusScreen() {
             </View>
           </View>
 
+          {/* Intermediate Trip Checkpoints */}
+          {Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 && (
+            <>
+              <View style={styles.routeDividerLine} />
+              <View style={{ paddingLeft: scale(20), paddingVertical: verticalScale(4) }}>
+                <Text style={{ fontSize: moderateFontScale(11), fontWeight: '700', color: colors.amber, marginBottom: verticalScale(4) }}>
+                  📍 INTERMEDIATE STOPS ({tripCheckpoints.length})
+                </Text>
+                {tripCheckpoints.map((cp: any, idx: number) => {
+                  const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `Stop ${idx + 1}`) : String(cp);
+                  const stepNum = typeof cp === 'object' && cp !== null && cp.step_order ? `#${cp.step_order} ` : `${idx + 1}. `;
+                  return (
+                    <Text key={idx} style={{ fontSize: moderateFontScale(12), color: colors.textPrimary, marginBottom: verticalScale(2) }}>
+                      {stepNum}{cpName}
+                    </Text>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
           <View style={styles.routeDividerLine} />
 
+          {/* Drop */}
           <View style={styles.routeRow}>
             <View style={[styles.dot, { backgroundColor: colors.danger }]} />
             <View style={{ flex: 1 }}>
@@ -513,16 +558,30 @@ export default function TripStatusScreen() {
             </View>
           </View>
 
-          <View style={[styles.fareRow, { borderTopColor: colors.border }]}>
-            <View>
-              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Total Fare</Text>
-              <Text style={[styles.fareVal, { color: colors.amber }]}>₹{fareAmount}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
+          {/* Payment & Fare Breakdown */}
+          <View style={[styles.fareRow, { borderTopColor: colors.border, marginTop: verticalScale(12) }]}>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Payment Mode</Text>
               <Text style={[styles.paymentModeText, { color: colors.textPrimary }]}>{paymentMode}</Text>
             </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Total Fare</Text>
+              <Text style={[styles.fareVal, { color: colors.amber }]}>₹{fareAmount.toLocaleString('en-IN')}</Text>
+            </View>
           </View>
+
+          {advanceDepositPaid > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(8), paddingTop: verticalScale(8), borderTopWidth: 1, borderTopColor: colors.border }}>
+              <View>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.success }}>Advance Deposit Paid</Text>
+                <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.success }}>₹{advanceDepositPaid.toLocaleString('en-IN')}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>Remaining Cash Balance</Text>
+                <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>₹{remainingCashBalance.toLocaleString('en-IN')}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Cancel Trip Action Button */}

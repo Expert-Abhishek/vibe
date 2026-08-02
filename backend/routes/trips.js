@@ -793,12 +793,29 @@ router.get('/customer/:customerId', async (req, res) => {
   try {
     const { customerId } = req.params;
 
-    const result = await db.query(
-      `SELECT * FROM trips
-       WHERE customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text
-       ORDER BY created_at DESC`,
-      [customerId]
-    );
+    const userRes = await db.query('SELECT name FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [customerId]);
+    const customerName = userRes.rows.length > 0 ? userRes.rows[0].name : '';
+
+    let queryText;
+    let queryParams;
+
+    if (customerName && customerName.trim().length > 2) {
+      queryText = `
+        SELECT * FROM trips 
+        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text OR LOWER(customer_name) = LOWER($2)) 
+        ORDER BY created_at DESC LIMIT 100
+      `;
+      queryParams = [customerId, customerName.trim()];
+    } else {
+      queryText = `
+        SELECT * FROM trips 
+        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text OR customer_id IS NULL)
+        ORDER BY created_at DESC LIMIT 100
+      `;
+      queryParams = [customerId];
+    }
+
+    const result = await db.query(queryText, queryParams);
 
     const trips = result.rows.map(t => ({
       id: t.id,

@@ -408,9 +408,13 @@ export default function TripsHistoryScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* 1. TOP SECTION: RECTANGULAR LIVE ACTIVE TRIP CARD */}
+        {/* 1. TOP SECTION: RECTANGULAR LIVE ACTIVE TRIP CARD (Clickable anywhere -> Trip Status) */}
         {activeTripObj ? (
-          <View style={[styles.activeCard, { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.amber }]}>
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[styles.activeCard, { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.amber }]}
+            onPress={() => router.push({ pathname: '/trip-status', params: { tripId: activeTripObj.id } })}
+          >
             {/* Live Indicator Bar */}
             <View style={styles.liveBadgeRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
@@ -485,12 +489,15 @@ export default function TripsHistoryScreen() {
 
               <TouchableOpacity
                 style={[styles.cancelBtnIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#EF4444' }]}
-                onPress={() => handleCancelPress(activeTripObj)}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleCancelPress(activeTripObj);
+                }}
               >
                 <MaterialIcons name="cancel" size={scale(18)} color="#EF4444" />
               </TouchableOpacity>
             </View>
-          </View>
+          </TouchableOpacity>
         ) : (
           <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: verticalScale(20) }]}>
             <MaterialIcons name="local-taxi" size={scale(36)} color={colors.textMuted} />
