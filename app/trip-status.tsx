@@ -1,4 +1,5 @@
 import NotificationModal from '@/components/NotificationModal';
+import { adminState } from '@/constants/admin-state';
 import { cancelTripApi, fetchLiveLocationApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -47,30 +48,43 @@ export default function TripStatusScreen() {
   const tripIdParam = (params.tripId as string) || (params.id as string) || '';
   const mapRef = React.useRef<any>(null);
 
+  // Local memory trip fallback lookup
+  const initialLocalTrip = React.useMemo(() => {
+    const tid = String(tripIdParam || '').toLowerCase().trim();
+    if (!tid) return null;
+    const all = [
+      ...(adminState.userTrips || []),
+      ...((adminState as any).pendingDriverRequests || []),
+      ...(adminState.customTripRequests || []),
+      ...(adminState.advanceBookings || []),
+    ];
+    return all.find((t: any) => t && (String(t.id).toLowerCase().trim() === tid || String(t.tripId || '').toLowerCase().trim() === tid)) || null;
+  }, [tripIdParam]);
+
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
-  const [tripStatus, setTripStatus] = useState<string>('Accepted');
+  const [tripStatus, setTripStatus] = useState<string>(initialLocalTrip?.status || 'Accepted');
   const [driverInfo, setDriverInfo] = useState<any>({
-    name: 'Captain Anil Gowda',
-    phone: '+91 99000 82400',
-    vehicleModel: 'Mahindra Thar 4x4 / Innova',
-    vehicleNumber: 'KA-03-EX-8240',
-    rating: 4.9,
+    name: initialLocalTrip?.driverOrGuideName || initialLocalTrip?.driverName || 'Assigned Captain',
+    phone: initialLocalTrip?.driverPhone || '+91 99000 82400',
+    vehicleModel: initialLocalTrip?.vehicleModel || initialLocalTrip?.vehicleType || 'AC 5-Seater / SUV',
+    vehicleNumber: initialLocalTrip?.vehicleNumber || 'KA-03-EX-8240',
+    rating: initialLocalTrip?.rating || 4.9,
     latitude: 12.9716,
     longitude: 77.5946,
     heading: 0,
   });
 
-  const [pickupLocation, setPickupLocation] = useState('Heritage City Palace, Mysore');
-  const [dropLocation, setDropLocation] = useState('Chamundi Hill View Point');
-  const [pickupLat, setPickupLat] = useState<number>(12.9716);
-  const [pickupLng, setPickupLng] = useState<number>(77.5946);
-  const [dropLat, setDropLat] = useState<number>(12.2958);
-  const [dropLng, setDropLng] = useState<number>(76.6394);
-  const [fareAmount, setFareAmount] = useState(2500);
-  const [paymentMode, setPaymentMode] = useState('Wallet / Online');
-  const [startOtp, setStartOtp] = useState('8240');
-  const [endOtp, setEndOtp] = useState('4321');
+  const [pickupLocation, setPickupLocation] = useState(initialLocalTrip?.pickupName || initialLocalTrip?.pickup || 'Pickup Spot');
+  const [dropLocation, setDropLocation] = useState(initialLocalTrip?.dropName || initialLocalTrip?.drop || 'Destination');
+  const [pickupLat, setPickupLat] = useState<number>(initialLocalTrip?.pickupLat || 12.9716);
+  const [pickupLng, setPickupLng] = useState<number>(initialLocalTrip?.pickupLng || 77.5946);
+  const [dropLat, setDropLat] = useState<number>(initialLocalTrip?.dropLat || 12.2958);
+  const [dropLng, setDropLng] = useState<number>(initialLocalTrip?.dropLng || 76.6394);
+  const [fareAmount, setFareAmount] = useState(initialLocalTrip?.price || initialLocalTrip?.amount || 1200);
+  const [paymentMode, setPaymentMode] = useState(initialLocalTrip?.paymentMode || 'Wallet');
+  const [startOtp, setStartOtp] = useState(initialLocalTrip?.otp || '8240');
+  const [endOtp, setEndOtp] = useState(initialLocalTrip?.endOtp || '4321');
 
   const colors = {
     bg: isDark ? '#101014' : '#F5F5F7',
@@ -95,15 +109,20 @@ export default function TripStatusScreen() {
           setTripStatus(statusStr);
 
           if (res.data.driver) setDriverInfo((prev: any) => ({ ...prev, ...res.data.driver }));
-          if (res.data.pickup_name) setPickupLocation(res.data.pickup_name);
-          if (res.data.drop_name) setDropLocation(res.data.drop_name);
-          if (res.data.pickup_lat) setPickupLat(parseFloat(res.data.pickup_lat));
-          if (res.data.pickup_lng) setPickupLng(parseFloat(res.data.pickup_lng));
-          if (res.data.drop_lat) setDropLat(parseFloat(res.data.drop_lat));
-          if (res.data.drop_lng) setDropLng(parseFloat(res.data.drop_lng));
-          if (res.data.amount) setFareAmount(parseFloat(res.data.amount));
+          if (res.data.pickup_name || res.data.pickupName || res.data.pickup) {
+            setPickupLocation(res.data.pickup_name || res.data.pickupName || res.data.pickup);
+          }
+          if (res.data.drop_name || res.data.dropName || res.data.drop) {
+            setDropLocation(res.data.drop_name || res.data.dropName || res.data.drop);
+          }
+          if (res.data.pickup_lat || res.data.pickupLat) setPickupLat(parseFloat(res.data.pickup_lat || res.data.pickupLat));
+          if (res.data.pickup_lng || res.data.pickupLng) setPickupLng(parseFloat(res.data.pickup_lng || res.data.pickupLng));
+          if (res.data.drop_lat || res.data.dropLat) setDropLat(parseFloat(res.data.drop_lat || res.data.dropLat));
+          if (res.data.drop_lng || res.data.dropLng) setDropLng(parseFloat(res.data.drop_lng || res.data.dropLng));
+          if (res.data.amount || res.data.price) setFareAmount(parseFloat(res.data.amount || res.data.price));
+          if (res.data.payment_mode || res.data.paymentMode) setPaymentMode(res.data.payment_mode || res.data.paymentMode);
 
-          // Direct API OTP bindings without frontend re-hashing
+          // Direct API OTP bindings
           if (res.data.otp) setStartOtp(String(res.data.otp));
           if (res.data.end_otp || res.data.endOtp) setEndOtp(String(res.data.end_otp || res.data.endOtp));
 

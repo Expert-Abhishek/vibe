@@ -337,13 +337,14 @@ router.get('/live-location/:tripId', async (req, res) => {
 
     const trip = tripRes.rows[0];
     let driverData = {
-      name: trip.driver_or_guide_name || 'Captain Anil Gowda',
+      name: trip.driver_or_guide_name || 'Captain',
       phone: '+91 99000 82400',
-      vehicleModel: 'Mahindra Thar 4x4 / Innova',
+      vehicleModel: 'AC 5-Seater / SUV',
       vehicleNumber: 'KA-03-EX-8240',
       rating: 4.9,
       latitude: parseFloat(trip.pickup_lat || 12.9716),
       longitude: parseFloat(trip.pickup_lng || 77.5946),
+      heading: 0,
     };
 
     if (trip.driver_id) {
@@ -362,8 +363,9 @@ router.get('/live-location/:tripId', async (req, res) => {
           vehicleModel: dp.vehicle_model || driverData.vehicleModel,
           vehicleNumber: dp.vehicle_number || driverData.vehicleNumber,
           rating: parseFloat(dp.rating || 4.9),
-          latitude: parseFloat(dp.latitude || 12.9716),
-          longitude: parseFloat(dp.longitude || 77.5946),
+          latitude: parseFloat(dp.latitude || driverData.latitude),
+          longitude: parseFloat(dp.longitude || driverData.longitude),
+          heading: parseFloat(dp.heading || 0),
         };
       }
     }
@@ -371,14 +373,31 @@ router.get('/live-location/:tripId', async (req, res) => {
     res.json({
       success: true,
       data: {
+        ...trip,
+        id: trip.id,
         tripId: trip.id,
         status: trip.status,
         otp: trip.otp,
-        pickupName: trip.pickup_name,
-        dropName: trip.drop_name,
+        endOtp: trip.end_otp,
+        end_otp: trip.end_otp,
+        pickupName: trip.pickup_name || trip.title || 'Pickup Spot',
+        dropName: trip.drop_name || 'Destination',
+        pickup_name: trip.pickup_name || trip.title || 'Pickup Spot',
+        drop_name: trip.drop_name || 'Destination',
+        pickupLat: parseFloat(trip.pickup_lat || 12.9716),
+        pickupLng: parseFloat(trip.pickup_lng || 77.5946),
+        dropLat: parseFloat(trip.drop_lat || 12.2958),
+        dropLng: parseFloat(trip.drop_lng || 76.6394),
+        pickup_lat: parseFloat(trip.pickup_lat || 12.9716),
+        pickup_lng: parseFloat(trip.pickup_lng || 77.5946),
+        drop_lat: parseFloat(trip.drop_lat || 12.2958),
+        drop_lng: parseFloat(trip.drop_lng || 76.6394),
         amount: parseFloat(trip.amount || 0),
+        paymentMode: trip.payment_mode || 'UPI',
+        payment_mode: trip.payment_mode || 'UPI',
+        bookingType: trip.booking_type || 'INSTANT',
         driver: driverData,
-      }
+      },
     });
   } catch (error) {
     console.error('Error fetching live location:', error);
