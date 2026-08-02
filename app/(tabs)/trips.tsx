@@ -231,9 +231,32 @@ export default function TripsHistoryScreen() {
         pickup: t.pickupName || t.pickup || t.title || 'Pickup Spot',
         bookingType: t.bookingType || 'INSTANT',
       };
-    });
+  const safePendingRequests = Array.isArray((adminState as any).pendingDriverRequests)
+    ? (adminState as any).pendingDriverRequests
+    : [];
 
-  const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips].filter(Boolean);
+  const mappedPendingReqs: TripItem[] = safePendingRequests
+    .filter((t: any) => t && (!userId || !t.customerId || String(t.customerId) === String(userId)))
+    .map((t: any) => ({
+      id: String(t.id || t.tripId),
+      type: (t.tripType || t.type || 'cab') as any,
+      vehicleType: t.vehicleType,
+      title: String(t.title || `${t.pickup || 'Pickup'} ➔ ${t.drop || 'Drop'}`),
+      route: Array.isArray(t.checkpoints) ? t.checkpoints : (Array.isArray(t.route) ? t.route : []),
+      driverOrGuideName: String(t.driverOrGuideName || t.driverName || 'Assigned Captain'),
+      date: String(t.date || 'Today'),
+      time: String(t.time || 'Immediate'),
+      price: Number(t.price || t.estimatedFare) || 0,
+      paymentMode: String(t.paymentMode || 'Wallet'),
+      status: String(t.status || 'Pending'),
+      passengerCount: t.passengerCount,
+      otp: t.otp,
+      endOtp: t.endOtp,
+      pickup: t.pickup || t.pickupName || t.title || 'Pickup Spot',
+      bookingType: t.bookingType || 'INSTANT',
+    }));
+
+  const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips, ...mappedPendingReqs].filter(Boolean);
   
   // Deduplicate and prefer Accepted/in_progress over Pending
   const validTrips = rawAllTrips

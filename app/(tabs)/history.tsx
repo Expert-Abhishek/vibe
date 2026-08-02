@@ -54,8 +54,10 @@ export default function HistoryScreen() {
         const dbTrips = Array.isArray(tripsData) ? tripsData : [];
         const localUserTrips = Array.isArray(adminState.userTrips) ? adminState.userTrips : [];
         const localAdvance = Array.isArray(adminState.advanceBookings) ? adminState.advanceBookings : [];
+        const localPending = Array.isArray((adminState as any).pendingDriverRequests) ? (adminState as any).pendingDriverRequests : [];
+        const localCustom = Array.isArray(adminState.customTripRequests) ? adminState.customTripRequests : [];
 
-        const combinedRaw = [...dbTrips, ...localUserTrips, ...localAdvance];
+        const combinedRaw = [...dbTrips, ...localUserTrips, ...localAdvance, ...localPending, ...localCustom];
 
         const historyItems: HistoryRecord[] = combinedRaw
           .filter(Boolean)

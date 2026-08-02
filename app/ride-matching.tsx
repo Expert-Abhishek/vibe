@@ -1,6 +1,7 @@
 import { initSocketService, getSocket } from '@src/services/socketService';
 import { adminState, TripRecord } from '@/constants/admin-state';
 import { fetchDriversApi, fetchGuidesApi, fetchLiveLocationApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -354,9 +355,10 @@ export default function RideMatchingScreen() {
   };
 
   useEffect(() => {
-    initSocketService();
+    const session = getUserSessionSync();
+    const customerIdParam = session?.id || (params.customerId as string) || (params.userId as string) || 't1';
+    initSocketService(customerIdParam, 'tourist');
     const socket = getSocket();
-    const customerIdParam = (params.customerId as string) || (params.userId as string) || 't1';
 
     const joinRiderRooms = () => {
       if (socket) {

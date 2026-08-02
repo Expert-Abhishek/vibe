@@ -2,6 +2,7 @@ import { DeviceEventEmitter } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL, notifyWalletChanged } from '@/constants/api';
 import { notificationStore } from '../store/notificationStore';
+import { updateTripStatusGlobally } from '@/constants/tripSync';
 
 let socket: Socket | null = null;
 let currentUserId: string | null = null;
@@ -84,15 +85,18 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         } catch (e) {}
       }
     });
-
     // 4. Real-time trip status events (accepted, completed, cancelled, declined)
     socket.off('trip_status_updated');
     socket.on('trip_status_updated', (data: any) => {
       console.log('[SocketService] 📢 Received real-time trip_status_updated event:', data);
       if (data) {
         try {
+          const tripId = String(data.tripId || data.id || '');
+          const status = String(data.status || 'Accepted');
+          updateTripStatusGlobally(tripId, status, data);
+
           DeviceEventEmitter.emit('trip_status_updated', data);
-          const st = String(data.status || '').toLowerCase();
+          const st = status.toLowerCase();
           if (st.includes('accepted')) {
             DeviceEventEmitter.emit('trip_accepted', data);
             DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
