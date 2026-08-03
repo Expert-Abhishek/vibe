@@ -270,10 +270,11 @@ export function emitTripRequestSocket(tripObject: any) {
 /**
  * Join client user/role room for targeted real-time push notifications & wallet updates
  */
-export function joinUserRoom(userId?: string, role: string = 'tourist') {
+export function joinUserRoom(userId?: string, role: string = 'tourist', vehicleCategory?: string) {
   const session = getUserSessionSync();
   const effectiveUserId = userId || session?.id || null;
   const effectiveRole = role || session?.role || 'tourist';
+  const effectiveCategory = vehicleCategory || session?.profile?.vehicle_category || session?.profile?.vehicle_type || undefined;
 
   currentUserId = effectiveUserId;
   currentRole = effectiveRole;
@@ -282,12 +283,14 @@ export function joinUserRoom(userId?: string, role: string = 'tourist') {
     socket.emit('join_room', {
       userId: effectiveUserId,
       role: effectiveRole,
+      vehicleCategory: effectiveCategory,
+      vehicleType: effectiveCategory,
       room: effectiveUserId ? `user:${effectiveUserId}` : undefined,
     });
     if (effectiveUserId) {
       socket.emit('join_room', { room: `user:${effectiveUserId}` });
     }
-    console.log(`[SocketService] Emitted join_room for user:${effectiveUserId || 'guest'} role:${effectiveRole}`);
+    console.log(`[SocketService] Emitted join_room for user:${effectiveUserId || 'guest'} role:${effectiveRole} category:${effectiveCategory || 'none'}`);
   }
 }
 

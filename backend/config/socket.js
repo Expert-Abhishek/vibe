@@ -23,7 +23,8 @@ function initSocket(server) {
 
     // Driver/Guide room join listener
     socket.on('join_room', (data) => {
-      const { userId, role, vehicleType, tripId, room } = data || {};
+      const { userId, role, vehicleType, vehicleCategory, tripId, room } = data || {};
+      const cat = vehicleCategory || vehicleType;
 
       if (room) {
         const customRoom = String(room);
@@ -50,10 +51,10 @@ function initSocket(server) {
         console.log(`[Socket.io] Socket ${socket.id} joined role room [${roleRoom}]`);
       }
 
-      if (vehicleType) {
-        const vehicleRoom = `role:${vehicleType}`;
+      if (cat) {
+        const vehicleRoom = `role:${cat}`;
         socket.join(vehicleRoom);
-        console.log(`[Socket.io] Socket ${socket.id} joined vehicle room [${vehicleRoom}]`);
+        console.log(`[Socket.io] Socket ${socket.id} joined targeted category room [${vehicleRoom}]`);
       }
     });
 
@@ -203,7 +204,7 @@ function calculateHaversineKm(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Emit trip request: Direct Targeted vs Role Broadcast with notification:new fallback
+ * Emit trip request: Direct Targeted vs Vehicle Category Room vs Role Broadcast
  */
 function emitTripRequest(tripObject) {
   if (!io || !tripObject) return;
@@ -211,7 +212,7 @@ function emitTripRequest(tripObject) {
   // Extract & normalize Driver ID to String
   const rawDriverId = tripObject.selectedDriverId || tripObject.driverId || tripObject.driver_id || tripObject.assignedDriverId || tripObject.guideId || tripObject.assignedToId;
   const driverId = rawDriverId ? String(rawDriverId) : null;
-  const vehicleType = tripObject.vehicleType || tripObject.vehicle;
+  const vehicleCategory = tripObject.vehicleCategory || tripObject.vehicle_category || tripObject.vehicleType || tripObject.vehicle;
 
   const computedDistance = tripObject.distanceKm || tripObject.distance_km || tripObject.distance || tripObject.dist ||
     calculateHaversineKm(
@@ -226,6 +227,8 @@ function emitTripRequest(tripObject) {
     id: tripObject.id || tripObject.tripId,
     driverId: driverId,
     driver_id: driverId,
+    vehicleCategory: vehicleCategory || '5_seater',
+    vehicle_category: vehicleCategory || '5_seater',
     distanceKm: computedDistance,
     distance_km: computedDistance,
     status: 'Pending',
@@ -248,21 +251,21 @@ function emitTripRequest(tripObject) {
     const targetRoom = `user:${driverId}`;
     io.to(targetRoom).emit('trip_request', normalizedTrip);
     io.to(targetRoom).emit('notification:new', notificationPayload);
-    io.emit('trip_request', normalizedTrip);
-    io.emit('notification:new', notificationPayload);
     console.log(`🎯 [DIRECT TARGETED REQUEST] Sent strictly to room: [${targetRoom}] for Trip ID: ${normalizedTrip.id}`);
+  } else if (vehicleCategory) {
+    // TARGETED CATEGORY ROOM DISPATCH (e.g. role:5_seater, role:7_seater, role:4x4, role:auto)
+    const categoryRoom = `role:${vehicleCategory}`;
+    io.to(categoryRoom).emit('trip_request', normalizedTrip);
+    io.to(categoryRoom).emit('notification:new', notificationPayload);
+    io.to('role:driver').emit('trip_request', normalizedTrip);
+    io.to('role:driver').emit('notification:new', notificationPayload);
+    console.log(`🎯 [CATEGORY TARGETED REQUEST] Sent to room [${categoryRoom}] & [role:driver] for Trip ID: ${normalizedTrip.id}`);
   } else {
     // GENERAL BROADCAST
-    if (vehicleType) {
-      io.to(`role:${vehicleType}`).emit('trip_request', normalizedTrip);
-      io.to(`role:${vehicleType}`).emit('notification:new', notificationPayload);
-    }
     io.to('role:driver').emit('trip_request', normalizedTrip);
     io.to('role:driver').emit('notification:new', notificationPayload);
     io.to('role:guide').emit('trip_request', normalizedTrip);
     io.to('role:guide').emit('notification:new', notificationPayload);
-    io.emit('trip_request', normalizedTrip);
-    io.emit('notification:new', notificationPayload);
     console.log(`📢 [BROADCAST REQUEST] Emitted to all drivers/guides for Trip ID: ${normalizedTrip.id}`);
   }
 }

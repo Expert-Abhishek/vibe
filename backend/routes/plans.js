@@ -57,18 +57,30 @@ router.get('/', async (req, res) => {
     });
 
 
-    const plans = plansRes.rows.map(p => ({
-      id: p.id,
-      name: p.name,
-      description: p.description || '',
-      km: parseFloat(p.km || 0),
-      duration: p.duration,
-      price: parseFloat(p.price || 0),
-      isActive: p.is_active,
-      checkpoints: checkpointsByPlan[p.id] || [],
-      createdAt: p.created_at,
-      updatedAt: p.updated_at
-    }));
+    const plans = plansRes.rows.map(p => {
+      const basePrice = parseFloat(p.price || 0);
+      const p5 = parseFloat(p.price_5_seater || 0) || basePrice;
+      const p7 = parseFloat(p.price_7_seater || 0) || Math.round(basePrice * 1.35);
+      const p4x4 = parseFloat(p.price_4x4 || 0) || Math.round(basePrice * 1.60);
+      const pAuto = parseFloat(p.price_auto || 0) || Math.round(basePrice * 0.65);
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description || '',
+        km: parseFloat(p.km || 0),
+        duration: p.duration,
+        price: basePrice,
+        price_5_seater: p5,
+        price_7_seater: p7,
+        price_4x4: p4x4,
+        price_auto: pAuto,
+        isActive: p.is_active,
+        checkpoints: checkpointsByPlan[p.id] || [],
+        createdAt: p.created_at,
+        updatedAt: p.updated_at
+      };
+    });
 
     res.json({ success: true, data: plans });
   } catch (error) {
@@ -79,12 +91,24 @@ router.get('/', async (req, res) => {
 
 /**
  * POST /api/plans
- * Create a new Plan with selected Destination / Checkpoint IDs
+ * Create a new Plan with selected Destination / Checkpoint IDs & Category Prices
  */
 router.post('/', async (req, res) => {
   const client = await db.pool.connect();
   try {
-    const { name, description = '', km = 0, duration = '1 Day', price = 0, destinationIds = [], isActive = true } = req.body;
+    const {
+      name,
+      description = '',
+      km = 0,
+      duration = '1 Day',
+      price = 0,
+      price_5_seater = 0,
+      price_7_seater = 0,
+      price_4x4 = 0,
+      price_auto = 0,
+      destinationIds = [],
+      isActive = true
+    } = req.body;
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Plan name is required' });
@@ -92,11 +116,17 @@ router.post('/', async (req, res) => {
 
     await client.query('BEGIN');
 
+    const baseP = parseFloat(price || 0);
+    const p5 = parseFloat(price_5_seater || 0) || baseP;
+    const p7 = parseFloat(price_7_seater || 0) || Math.round(baseP * 1.35);
+    const p4x4 = parseFloat(price_4x4 || 0) || Math.round(baseP * 1.60);
+    const pAuto = parseFloat(price_auto || 0) || Math.round(baseP * 0.65);
+
     const insertPlanRes = await client.query(
-      `INSERT INTO plans (name, description, km, duration, price, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO plans (name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [name.trim(), description, parseFloat(km), duration.trim(), parseFloat(price), isActive]
+      [name.trim(), description, parseFloat(km), duration.trim(), baseP, p5, p7, p4x4, pAuto, isActive]
     );
 
     const newPlan = insertPlanRes.rows[0];
@@ -115,9 +145,6 @@ router.post('/', async (req, res) => {
       }
     }
 
-
-
-
     await client.query('COMMIT');
 
     res.status(201).json({
@@ -130,6 +157,10 @@ router.post('/', async (req, res) => {
         km: parseFloat(newPlan.km || 0),
         duration: newPlan.duration,
         price: parseFloat(newPlan.price || 0),
+        price_5_seater: parseFloat(newPlan.price_5_seater || 0),
+        price_7_seater: parseFloat(newPlan.price_7_seater || 0),
+        price_4x4: parseFloat(newPlan.price_4x4 || 0),
+        price_auto: parseFloat(newPlan.price_auto || 0),
         isActive: newPlan.is_active,
         createdAt: newPlan.created_at,
         updatedAt: newPlan.updated_at
@@ -146,12 +177,12 @@ router.post('/', async (req, res) => {
 
 /**
  * PUT /api/plans/:id
- * Update plan details
+ * Update plan details & Category Prices
  */
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, km, duration, price, isActive } = req.body;
+    const { name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, isActive } = req.body;
 
     const result = await db.query(
       `UPDATE plans
@@ -160,11 +191,15 @@ router.put('/:id', async (req, res) => {
            km = COALESCE($3, km),
            duration = COALESCE($4, duration),
            price = COALESCE($5, price),
-           is_active = COALESCE($6, is_active),
+           price_5_seater = COALESCE($6, price_5_seater),
+           price_7_seater = COALESCE($7, price_7_seater),
+           price_4x4 = COALESCE($8, price_4x4),
+           price_auto = COALESCE($9, price_auto),
+           is_active = COALESCE($10, is_active),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7
+       WHERE id = $11
        RETURNING *`,
-      [name, description, km, duration, price, isActive, id]
+      [name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, isActive, id]
     );
 
     if (result.rows.length === 0) {
@@ -182,6 +217,10 @@ router.put('/:id', async (req, res) => {
         km: parseFloat(p.km || 0),
         duration: p.duration,
         price: parseFloat(p.price || 0),
+        price_5_seater: parseFloat(p.price_5_seater || 0),
+        price_7_seater: parseFloat(p.price_7_seater || 0),
+        price_4x4: parseFloat(p.price_4x4 || 0),
+        price_auto: parseFloat(p.price_auto || 0),
         isActive: p.is_active,
         updatedAt: p.updated_at
       }

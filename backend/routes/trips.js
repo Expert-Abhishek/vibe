@@ -21,8 +21,14 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lng NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS vehicle_category VARCHAR(50) DEFAULT '5_seater';
+      ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS vehicle_category VARCHAR(50) DEFAULT '5_seater';
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
+      ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_5_seater NUMERIC(10,2) DEFAULT 0.00;
+      ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_7_seater NUMERIC(10,2) DEFAULT 0.00;
+      ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_4x4 NUMERIC(10,2) DEFAULT 0.00;
+      ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_auto NUMERIC(10,2) DEFAULT 0.00;
     `);
   } catch (e) {
     console.warn('Trips table auto-migration warning:', e.message);
@@ -866,7 +872,10 @@ router.post('/book', async (req, res) => {
       paymentMode = 'UPI',
       bookingType = 'INSTANT',
       scheduledTime = null,
+      vehicleCategory = '5_seater',
     } = req.body;
+
+    const selectedVehicleCategory = req.body.vehicleCategory || req.body.vehicle_category || vehicleCategory || '5_seater';
 
     const numAmount = parseFloat(amount || 0);
     const isPreBooked = bookingType === 'PRE_BOOKED';
@@ -910,9 +919,9 @@ router.post('/book', async (req, res) => {
         `INSERT INTO trips (
           trip_type, title, customer_id, customer_name, pickup_name, drop_name,
           pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-          status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, created_at
+          status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
          RETURNING *`,
         [
           tripType,
@@ -932,6 +941,7 @@ router.post('/book', async (req, res) => {
           scheduledTime ? new Date(scheduledTime) : null,
           advanceDepositPaid,
           remainingCashBalance,
+          selectedVehicleCategory,
         ]
       );
     } catch (dbErr) {
@@ -942,9 +952,9 @@ router.post('/book', async (req, res) => {
           `INSERT INTO trips (
             trip_type, title, customer_id, customer_name, pickup_name, drop_name,
             pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-            status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, created_at
+            status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
            RETURNING *`,
           [
             tripType,
@@ -964,6 +974,7 @@ router.post('/book', async (req, res) => {
             scheduledTime ? new Date(scheduledTime) : null,
             advanceDepositPaid,
             remainingCashBalance,
+            selectedVehicleCategory,
           ]
         );
       } catch (retryErr) {
@@ -988,6 +999,7 @@ router.post('/book', async (req, res) => {
     }
 
     const newTrip = result.rows[0];
+    newTrip.vehicleCategory = selectedVehicleCategory;
     emitTripRequest(newTrip);
 
     // Query all driver / guide tokens to send push notification!
@@ -1185,14 +1197,16 @@ router.post('/', async (req, res) => {
 
     const targetDriverId = req.body.driverId || req.body.selectedDriverId || req.body.driver_id || req.body.assignedToId || null;
 
+    const selectedVehicleCategory = req.body.vehicleCategory || req.body.vehicle_category || '5_seater';
+
     const result = await db.query(
       `INSERT INTO trips (
         trip_type, title, customer_id, customer_name, driver_or_guide_name,
         plan_id, destination_ids, amount, payment_mode, status,
         duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
-        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id
+        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING *`,
       [
         tripType,
@@ -1217,10 +1231,12 @@ router.post('/', async (req, res) => {
         advanceDepositPaid,
         remainingCashBalance,
         targetDriverId || null,
+        selectedVehicleCategory,
       ]
     );
 
     const t = result.rows[0];
+    t.vehicleCategory = selectedVehicleCategory;
     if (targetDriverId) {
       t.driverId = targetDriverId;
       t.driver_id = targetDriverId;

@@ -185,29 +185,33 @@ export default function PlanRouteScreen() {
     },
   ];
 
-  const vehicleRatesPerDay = {
+  const vehicleRatesPerDay: Record<string, number> = {
+    '5_seater': 1800,
+    '7_seater': 2600,
+    '4x4': 4200,
+    'auto': 1200,
     '5seater': 1800,
     '7seater': 2600,
     '4x4jeep': 4200,
-    'auto': 1200,
   };
 
-  const calculatePackagePrice = (plan: TourPackage, vehicle: '5seater' | '7seater' | '4x4jeep' | 'auto') => {
-    // Admin set Plan Base Price (e.g. ₹4999)
-    const baseDayRate = (plan as any).price ? Number((plan as any).price) : (vehicleRatesPerDay[vehicle] || 1800);
+  const calculatePackagePrice = (plan: TourPackage, vehicle: string) => {
+    const baseP = (plan as any).price ? Number((plan as any).price) : 1800;
+    let baseDayRate = baseP;
+
+    if (vehicle === '5seater' || vehicle === '5_seater') {
+      baseDayRate = (plan as any).price_5_seater ? Number((plan as any).price_5_seater) : baseP;
+    } else if (vehicle === '7seater' || vehicle === '7_seater') {
+      baseDayRate = (plan as any).price_7_seater ? Number((plan as any).price_7_seater) : Math.round(baseP * 1.35);
+    } else if (vehicle === '4x4jeep' || vehicle === '4x4') {
+      baseDayRate = (plan as any).price_4x4 ? Number((plan as any).price_4x4) : Math.round(baseP * 1.60);
+    } else if (vehicle === 'auto') {
+      baseDayRate = (plan as any).price_auto ? Number((plan as any).price_auto) : Math.round(baseP * 0.65);
+    }
+
     const vehicleHourlyRate = selectedDriver?.hourly_addon_rate ? Number(selectedDriver.hourly_addon_rate) : (adminState.vehicleRatesPerHour[vehicle] || 150);
     const totalTripHours = plan.travelHours + (plan.checkpoints ? plan.checkpoints.length : 2);
 
-    let h = bookingHour;
-    if (bookingAmPm === 'PM' && bookingHour !== 12) {
-      h += 12;
-    } else if (bookingAmPm === 'AM' && bookingHour === 12) {
-      h = 0;
-    }
-    const startHourDec = h + (bookingMinute / 60);
-    const endHourDec = startHourDec + totalTripHours;
-
-    // Initial booking fare is strictly baseDayRate without pre-added extra hours charges
     const extraHoursRounded = 0;
     const extraAddonCharge = 0;
     const computedPrice = baseDayRate;
@@ -340,6 +344,8 @@ export default function PlanRouteScreen() {
         }
       }
 
+      const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
+
       await createTripApi({
         tripType: 'plan',
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
@@ -347,6 +353,7 @@ export default function PlanRouteScreen() {
         driverOrGuideName: driverName,
         driverId: driverId,
         planId: selectedPlan.id,
+        vehicleCategory: targetCategory,
         amount: totalPrice,
         paymentMode: paymentLabel,
         status: 'Pending',
@@ -410,6 +417,8 @@ export default function PlanRouteScreen() {
           ? `UPI Pre-Booking Fees: ₹${paymentAmount} (Bal ₹${remainingBalance})`
           : `UPI Full Payment: ₹${paymentAmount}`;
 
+        const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
+
         // Save trip to real backend DB
         await createTripApi({
           tripType: 'plan',
@@ -417,6 +426,7 @@ export default function PlanRouteScreen() {
           customerName: 'Abhishek (Tourist)',
           driverOrGuideName: driverName,
           planId: selectedPlan.id,
+          vehicleCategory: targetCategory,
           amount: totalPrice,
           paymentMode: paymentLabel,
           status: 'Confirmed',
@@ -562,6 +572,82 @@ export default function PlanRouteScreen() {
             {/* PLAN DETAILS HEADER */}
             <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
 
+            {/* RAPIDO / UBER STYLE DYNAMIC VEHICLE CATEGORY SELECTOR */}
+            <View style={{ marginVertical: verticalScale(10) }}>
+              <Text style={{ color: colors.textPrimary, fontWeight: '900', fontSize: moderateFontScale(14), marginBottom: verticalScale(8) }}>
+                Select Vehicle Category & Pricing
+              </Text>
+              <View style={{ gap: scale(8) }}>
+                {[
+                  { key: '5_seater', label: '5 Seater (Sedan / Hatchback)', icon: 'directions-car', capacity: '4 Pax + 2 Bags', desc: 'Comfortable standard AC cab' },
+                  { key: '7_seater', label: '7 Seater (SUV / Ertiga)', icon: 'airport-shuttle', capacity: '6 Pax + 4 Bags', desc: 'Spacious for family & extra luggage' },
+                  { key: '4x4', label: '4x4 Off-Road (Thar / Gypsy)', icon: 'terrain', capacity: '4 Pax + Adventure Gear', desc: 'Powerful 4WD for hills & rough terrain' },
+                  { key: 'auto', label: 'Auto Rickshaw (Tuk-Tuk)', icon: 'electric-rickshaw', capacity: '3 Pax Local Sightseeing', desc: 'Budget-friendly open air tour' },
+                ].map((cat) => {
+                  const isSelected = bookingVehicle === cat.key || (bookingVehicle === '5seater' && cat.key === '5_seater') || (bookingVehicle === '7seater' && cat.key === '7_seater') || (bookingVehicle === '4x4jeep' && cat.key === '4x4');
+                  const catPrice = calculatePackagePrice(selectedPlan, cat.key).computedPrice;
+                  const catDeposit = !adminState.instantBookingEnabled ? Math.round(catPrice * 0.20) : catPrice;
+
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: scale(12),
+                        borderRadius: scale(14),
+                        borderWidth: isSelected ? 2 : 1,
+                        borderColor: isSelected ? colors.amber : colors.border,
+                        backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                      }}
+                      onPress={() => setBookingVehicle(cat.key as any)}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), flex: 1 }}>
+                        <View style={{
+                          width: scale(38),
+                          height: scale(38),
+                          borderRadius: scale(10),
+                          backgroundColor: isSelected ? colors.amber : 'rgba(255, 255, 255, 0.08)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}>
+                          <MaterialIcons name={cat.icon as any} size={scale(22)} color={isSelected ? '#101014' : colors.textPrimary} />
+                        </View>
+
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
+                              {cat.label}
+                            </Text>
+                            {isSelected && (
+                              <View style={{ backgroundColor: colors.amber, paddingHorizontal: scale(6), paddingVertical: 1, borderRadius: scale(4) }}>
+                                <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(9) }}>SELECTED</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 2 }}>
+                            {cat.capacity} • {cat.desc}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ alignItems: 'flex-end', marginLeft: scale(8) }}>
+                        <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>
+                          ₹{catPrice}
+                        </Text>
+                        {!adminState.instantBookingEnabled && (
+                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5) }}>
+                            Deposit ₹{catDeposit}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
             {/* STEP 1: VEHICLE SELECTION BLOCK (CHOOSE CAR FIRST) */}
             {selectedDriver === null ? (
               <View style={{
@@ -573,10 +659,10 @@ export default function PlanRouteScreen() {
                 marginVertical: verticalScale(10),
               }}>
                 <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(14), marginBottom: verticalScale(4) }}>
-                  STEP 1: CHOOSE YOUR CAR FIRST
+                  STEP 2: CHOOSE CAPTAIN / VEHICLE DETAILS
                 </Text>
                 <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11.5), marginBottom: verticalScale(12), lineHeight: moderateFontScale(16) }}>
-                  Select your preferred vehicle from Fleet Showcase to unlock booking options and pricing.
+                  Select your preferred vehicle model and captain from Fleet Showcase.
                 </Text>
 
                 <TouchableOpacity
@@ -599,13 +685,14 @@ export default function PlanRouteScreen() {
                         mode: 'plan',
                         planId: currentPlanId,
                         planName: currentPlanName,
+                        vehicleCategory: bookingVehicle,
                       }
                     });
                   }}
                 >
                   <MaterialIcons name="directions-car" size={scale(20)} color="#101014" />
                   <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(13.5) }}>
-                    Choose Car / Select Vehicle
+                    Choose Captain / Select Vehicle
                   </Text>
                   <MaterialIcons name="arrow-forward" size={scale(18)} color="#101014" />
                 </TouchableOpacity>

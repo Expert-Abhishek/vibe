@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS driver_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     vehicle_type VARCHAR(50),      -- e.g. '5seater', '7seater', '4x4jeep', 'auto'
+    vehicle_category VARCHAR(50) DEFAULT '5_seater', -- '5_seater', '7_seater', '4x4', 'auto'
     vehicle_model VARCHAR(100),    -- e.g. 'Mahindra Thar', 'Swift Dzire'
     vehicle_number VARCHAR(30),   -- e.g. 'KA-03-MY-7788'
     license_number VARCHAR(50),
@@ -104,6 +105,10 @@ CREATE TABLE IF NOT EXISTS plans (
     km NUMERIC(10,2) DEFAULT 0.00,
     duration VARCHAR(100) NOT NULL DEFAULT '1 Day',
     price NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    price_5_seater NUMERIC(10,2) DEFAULT 0.00,
+    price_7_seater NUMERIC(10,2) DEFAULT 0.00,
+    price_4x4 NUMERIC(10,2) DEFAULT 0.00,
+    price_auto NUMERIC(10,2) DEFAULT 0.00,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -129,6 +134,7 @@ CREATE TABLE IF NOT EXISTS trips (
     customer_name VARCHAR(255) NOT NULL,
     driver_or_guide_name VARCHAR(255),
     plan_id UUID REFERENCES plans(id) ON DELETE SET NULL,
+    vehicle_category VARCHAR(50) DEFAULT '5_seater', -- '5_seater', '7_seater', '4x4', 'auto'
     destination_ids TEXT[] DEFAULT '{}',
     amount NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     payment_mode VARCHAR(50) DEFAULT 'UPI', -- 'UPI', 'Cash', 'Card'
@@ -148,6 +154,12 @@ CREATE TABLE IF NOT EXISTS trips (
 ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,6) DEFAULT 12.9716;
 ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,6) DEFAULT 77.5946;
 ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS vehicle_category VARCHAR(50) DEFAULT '5_seater';
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS vehicle_category VARCHAR(50) DEFAULT '5_seater';
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_5_seater NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_7_seater NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_4x4 NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_auto NUMERIC(10,2) DEFAULT 0.00;
 
 -- 10. Wallet Transactions Table
 CREATE TABLE IF NOT EXISTS wallet_transactions (
