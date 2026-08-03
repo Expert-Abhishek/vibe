@@ -353,6 +353,11 @@ export default function TripsHistoryScreen() {
 
   const handleCancelPress = (trip: any) => {
     if (!trip) return;
+    const stLower = String(trip.status || '').toLowerCase().trim();
+    if (stLower.includes('complete') || stLower.includes('finish') || stLower === 'done') {
+      Alert.alert('Action Not Allowed', 'This trip has already been completed by the captain and cannot be cancelled.');
+      return;
+    }
     const { feeAmount, reasonText } = calculateCancellationFine(trip);
 
     Alert.alert(

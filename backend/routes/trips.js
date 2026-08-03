@@ -310,6 +310,23 @@ router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
     const { id } = req.params;
     const { cancelledBy = 'user', role = 'tourist', reason = 'Cancelled by user' } = req.body || {};
 
+    // Guard: Prevent cancelling a trip that is already completed in database
+    const tripCheck = await db.query(
+      `SELECT status FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text`,
+      [id]
+    );
+
+    if (tripCheck.rows.length > 0) {
+      const currentSt = String(tripCheck.rows[0].status || '').toLowerCase();
+      if (currentSt.includes('complete') || currentSt.includes('finish') || currentSt === 'done') {
+        return res.status(400).json({
+          success: false,
+          code: 'TRIP_ALREADY_COMPLETED',
+          message: 'Cannot cancel a trip that is already completed.',
+        });
+      }
+    }
+
     const actor = cancelledBy === 'driver' || role === 'driver' ? 'driver' : 'user';
     const statusText = actor === 'driver' ? 'Cancelled by Driver' : 'Cancelled by User';
 
@@ -968,6 +985,9 @@ router.post('/book', async (req, res) => {
 
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
+    const isUuid = customerId && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(customerId));
+    const validCustomerId = isUuid ? customerId : null;
+
     let result;
     try {
       result = await db.query(
@@ -981,7 +1001,7 @@ router.post('/book', async (req, res) => {
         [
           tripType,
           title || `${pickupName} ➔ ${dropName}`,
-          customerId || null,
+          validCustomerId,
           customerName,
           pickupName,
           dropName,
@@ -1014,7 +1034,7 @@ router.post('/book', async (req, res) => {
           [
             tripType,
             title || `${pickupName} ➔ ${dropName}`,
-            customerId || null,
+            validCustomerId,
             customerName,
             pickupName,
             dropName,
@@ -1043,7 +1063,7 @@ router.post('/book', async (req, res) => {
           [
             tripType,
             title || `${pickupName} ➔ ${dropName}`,
-            customerId || null,
+            validCustomerId,
             customerName,
             parseFloat(amount),
             sanitizedPaymentMode,
