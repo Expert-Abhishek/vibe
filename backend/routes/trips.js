@@ -28,11 +28,30 @@ let migrationExecuted = false;
 async function ensureTripsColumnsExist() {
   if (migrationExecuted) return;
   migrationExecuted = true;
+
+  try {
+    await db.query("ALTER TYPE payment_mode_enum ADD VALUE IF NOT EXISTS 'Cash'");
+  } catch (e) {}
+  try {
+    await db.query("ALTER TYPE payment_mode_enum ADD VALUE IF NOT EXISTS 'cash'");
+  } catch (e) {}
+  try {
+    await db.query("ALTER TYPE payment_mode_enum ADD VALUE IF NOT EXISTS 'Wallet'");
+  } catch (e) {}
+  try {
+    await db.query("ALTER TYPE payment_mode_enum ADD VALUE IF NOT EXISTS 'wallet'");
+  } catch (e) {}
+
   try {
     await db.query(`
       ALTER TABLE trips ALTER COLUMN payment_mode DROP DEFAULT;
       ALTER TABLE trips ALTER COLUMN payment_mode TYPE VARCHAR(50) USING payment_mode::text;
-      ALTER TABLE trips ALTER COLUMN payment_mode SET DEFAULT 'UPI';
+      ALTER TABLE trips ALTER COLUMN payment_mode SET DEFAULT 'Wallet';
+    `);
+  } catch (e) {}
+
+  try {
+    await db.query(`
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS scheduled_time TIMESTAMP WITH TIME ZONE;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'INSTANT';
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS advance_deposit_paid NUMERIC(10,2) DEFAULT 0.00;
