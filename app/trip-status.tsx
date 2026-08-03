@@ -210,15 +210,22 @@ export default function TripStatusScreen() {
     const handleAccepted = (data: any) => {
       if (data) {
         setTripStatus('Accepted');
+        const dName = data.driverName || data.driver_or_guide_name || 'Captain';
         if (data.driverName || data.driver_or_guide_name) {
           setDriverInfo((prev: any) => ({
             ...prev,
-            name: data.driverName || data.driver_or_guide_name,
+            name: dName,
             phone: data.driverPhone || prev.phone,
             vehicleModel: data.vehicleModel || prev.vehicleModel,
             vehicleNumber: data.vehicleNumber || prev.vehicleNumber,
           }));
         }
+        sendLocalNotification('🎉 Captain Accepted Ride!', `${dName} has accepted your trip request.`);
+        Alert.alert(
+          '🎉 Ride Accepted by Captain!',
+          `Captain ${dName} has accepted your tour booking!\n\nYou can view all your trip details and live status on My Trips.`,
+          [{ text: 'View My Trips', onPress: () => router.replace('/(tabs)/trips') }]
+        );
       }
     };
 
@@ -369,7 +376,7 @@ export default function TripStatusScreen() {
     if (statusLower.includes('arrived')) return { text: 'DRIVER ARRIVED AT PICKUP', bg: '#F5C518', color: '#101014' };
     if (statusLower.includes('start') || statusLower.includes('active')) return { text: 'TRIP IN PROGRESS', bg: '#3B82F6', color: '#FFFFFF' };
     if (statusLower.includes('declined') || statusLower.includes('cancel')) return { text: 'TRIP CANCELLED / DECLINED', bg: '#EF4444', color: '#FFFFFF' };
-    return { text: 'SEARCHING FOR NEARBY DRIVER', bg: '#F5C518', color: '#101014' };
+    return { text: '⏳ WAITING FOR CAPTAIN TO ACCEPT YOUR RIDE...', bg: '#F5C518', color: '#101014' };
   };
 
   const badge = getStatusBadge();

@@ -4,6 +4,17 @@ const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined, e
 
 const router = express.Router();
 
+// Helper to sanitize payment_mode string to standard PostgreSQL enum values
+function sanitizePaymentMode(pm) {
+  const str = String(pm || 'Cash').toLowerCase().trim();
+  if (str.includes('cash')) return 'Cash';
+  if (str.includes('upi')) return 'UPI';
+  if (str.includes('wallet')) return 'Wallet';
+  if (str.includes('card')) return 'Card';
+  if (str.includes('online') || str.includes('razorpay')) return 'Online';
+  return 'Cash';
+}
+
 // Auto-migrate trips table columns if missing on production database
 async function ensureTripsColumnsExist() {
   try {
@@ -1219,7 +1230,7 @@ router.post('/', async (req, res) => {
         planId || null,
         Array.isArray(destinationIds) ? destinationIds : [],
         totalAmount,
-        paymentMode,
+        sanitizePaymentMode(paymentMode),
         status || 'Pending',
         parseFloat(durationHours),
         parseFloat(extraHours),
