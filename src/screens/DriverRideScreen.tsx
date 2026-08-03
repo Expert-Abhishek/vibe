@@ -30,6 +30,7 @@ interface DriverRideScreenProps {
   fareAmount?: number;
   bookingType?: BookingType;
   scheduledTime?: string | Date;
+  checkpoints?: string[];
   onBack?: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -43,6 +44,7 @@ export default function DriverRideScreen({
   fareAmount = 850,
   bookingType = 'PRE_BOOKED',
   scheduledTime,
+  checkpoints = [],
   onBack,
   style,
 }: DriverRideScreenProps) {
@@ -343,6 +345,28 @@ export default function DriverRideScreen({
               <Text style={[styles.locationVal, { color: colors.textPrimary }]}>{dropAddress}</Text>
             </View>
           </View>
+
+          {/* ITINERARY CHECKPOINTS TIMELINE FOR DRIVERS */}
+          {Array.isArray(checkpoints) && checkpoints.length > 0 && (
+            <>
+              <View style={styles.divider} />
+              <View style={{ marginTop: verticalScale(6) }}>
+                <Text style={[styles.locationLabel, { color: colors.amber, fontWeight: '800', marginBottom: verticalScale(6) }]}>
+                  PACKAGE TOUR CHECKPOINTS ({checkpoints.length} STOPS)
+                </Text>
+                <View style={{ gap: verticalScale(4) }}>
+                  {checkpoints.map((cp, idx) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                      <View style={{ width: scale(6), height: scale(6), borderRadius: scale(3), backgroundColor: colors.amber }} />
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: '600' }}>
+                        {typeof cp === 'string' ? cp : (cp as any).name || 'Tourist Place'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Primary Action Buttons Container */}

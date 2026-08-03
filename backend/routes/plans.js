@@ -3,6 +3,31 @@ const db = require('../config/db');
 
 const router = express.Router();
 
+function parseSqlArray(val, fallback = []) {
+  if (!val) return fallback;
+  if (Array.isArray(val)) return val.length > 0 ? val : fallback;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const arr = JSON.parse(trimmed);
+        if (Array.isArray(arr) && arr.length > 0) return arr;
+      } catch (e) {}
+    }
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const arr = trimmed.slice(1, -1).split(',').map(s => s.trim().replace(/^"/, '').replace(/"$/, '')).filter(Boolean);
+      if (arr.length > 0) return arr;
+    }
+    if (trimmed) return [trimmed];
+  }
+  return fallback;
+}
+
+const DEFAULT_CHECKPOINT_IMAGES = [
+  'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=600',
+  'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=600',
+];
+
 /**
  * GET /api/plans
  * Get all tour plans with included checkpoints pulled from Destinations Master
@@ -31,7 +56,6 @@ router.get('/', async (req, res) => {
       ORDER BY pc.order_index ASC, pc.created_at ASC
     `;
 
-
     const pcRes = await db.query(planCheckpointsQuery);
 
     // Group checkpoints by plan_id
@@ -40,14 +64,16 @@ router.get('/', async (req, res) => {
       if (!checkpointsByPlan[row.plan_id]) {
         checkpointsByPlan[row.plan_id] = [];
       }
+      const imgs = parseSqlArray(row.destination_images, DEFAULT_CHECKPOINT_IMAGES);
+      const vids = parseSqlArray(row.destination_videos, []);
       checkpointsByPlan[row.plan_id].push({
         planDestinationId: row.plan_checkpoint_id,
         destinationId: row.destination_id,
         name: row.destination_name,
         location: row.destination_location || '',
         description: row.destination_description || '',
-        images: Array.isArray(row.destination_images) ? row.destination_images : [],
-        videos: Array.isArray(row.destination_videos) ? row.destination_videos : [],
+        images: imgs,
+        videos: vids,
         latitude: row.destination_latitude ? parseFloat(row.destination_latitude) : 15.335000,
         longitude: row.destination_longitude ? parseFloat(row.destination_longitude) : 76.460000,
         isMasterActive: row.master_destination_active,

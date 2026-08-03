@@ -1000,6 +1000,8 @@ router.post('/book', async (req, res) => {
 
     const newTrip = result.rows[0];
     newTrip.vehicleCategory = selectedVehicleCategory;
+    newTrip.vehicle_category = selectedVehicleCategory;
+    newTrip.checkpoints = Array.isArray(req.body.checkpoints) ? req.body.checkpoints : (Array.isArray(req.body.route) ? req.body.route : []);
     emitTripRequest(newTrip);
 
     // Query all driver / guide tokens to send push notification!

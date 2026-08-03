@@ -1521,6 +1521,11 @@ export default function DriverDashboardScreen() {
                         <Text style={[styles.logTime, { color: colors.amber }]}>
                           Payment: {booking.paymentMode}
                         </Text>
+                        {Array.isArray(booking.checkpoints) && booking.checkpoints.length > 0 && (
+                          <Text style={[styles.logTime, { color: colors.textPrimary, fontWeight: '700', marginTop: 2 }]} numberOfLines={2}>
+                            Checkpoints: {booking.checkpoints.map((c: any) => typeof c === 'string' ? c : c.name).join(' ➔ ')}
+                          </Text>
+                        )}
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price}</Text>
