@@ -12,6 +12,21 @@ function getNotificationsModule(): any {
     if (Constants?.appOwnership === 'expo' || Constants?.executionEnvironment === 'storeClient') {
       return null;
     }
+
+    // Verify native ExpoPushTokenManager module exists before requiring expo-notifications
+    const { NativeModulesProxy, requireNativeModule } = require('expo-modules-core');
+    let hasNativeModule = !!NativeModulesProxy?.ExpoPushTokenManager;
+    if (!hasNativeModule && typeof requireNativeModule === 'function') {
+      try {
+        hasNativeModule = !!requireNativeModule('ExpoPushTokenManager');
+      } catch (err) {
+        hasNativeModule = false;
+      }
+    }
+
+    if (!hasNativeModule) {
+      return null;
+    }
     return require('expo-notifications');
   } catch (e) {
     return null;
