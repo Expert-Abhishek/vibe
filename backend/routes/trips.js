@@ -1007,7 +1007,22 @@ router.post('/book', async (req, res) => {
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
     const isUuid = customerId && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(customerId));
-    const validCustomerId = isUuid ? customerId : null;
+    let validCustomerId = isUuid ? customerId : null;
+    if (validCustomerId) {
+      try {
+        const uCheck = await db.query('SELECT id FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [validCustomerId]);
+        if (uCheck.rows.length === 0) {
+          await db.query(
+            `INSERT INTO users (id, name, phone, password, role, status)
+             VALUES ($1, $2, $3, 'hashed_demo_pass', 'tourist', 'Active')
+             ON CONFLICT (id) DO NOTHING`,
+            [validCustomerId, customerName || 'Tourist Client', `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`]
+          );
+        }
+      } catch (uErr) {
+        console.warn('Auto-user provisioning warning:', uErr.message);
+      }
+    }
 
     let result;
     try {
@@ -1296,8 +1311,34 @@ router.post('/', async (req, res) => {
     const targetDriverId = req.body.driverId || req.body.selectedDriverId || req.body.driver_id || req.body.assignedToId || null;
     const selectedVehicleCategory = req.body.vehicleCategory || req.body.vehicle_category || '5_seater';
 
-    const validCustomerId = toValidUuidOrNull(customerId);
-    const validPlanId = toValidUuidOrNull(planId);
+    let validCustomerId = toValidUuidOrNull(customerId);
+    if (validCustomerId) {
+      try {
+        const uCheck = await db.query('SELECT id FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [validCustomerId]);
+        if (uCheck.rows.length === 0) {
+          await db.query(
+            `INSERT INTO users (id, name, phone, password, role, status)
+             VALUES ($1, $2, $3, 'hashed_demo_pass', 'tourist', 'Active')
+             ON CONFLICT (id) DO NOTHING`,
+            [validCustomerId, customerName || 'Tourist Client', `+91${Math.floor(1000000000 + Math.random() * 9000000000)}`]
+          );
+        }
+      } catch (uErr) {
+        console.warn('Auto-user provisioning warning:', uErr.message);
+      }
+    }
+
+    let validPlanId = toValidUuidOrNull(planId);
+    if (validPlanId) {
+      try {
+        const pCheck = await db.query('SELECT id FROM plans WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [validPlanId]);
+        if (pCheck.rows.length === 0) {
+          validPlanId = null;
+        }
+      } catch (pErr) {
+        validPlanId = null;
+      }
+    }
 
     const result = await db.query(
       `INSERT INTO trips (
