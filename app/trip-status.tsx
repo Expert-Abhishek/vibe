@@ -6,9 +6,9 @@ import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
-import { initSocketService, joinTripRoom, getSocket } from '@src/services/socketService';
+import { getSocket, initSocketService, joinTripRoom } from '@src/services/socketService';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -122,7 +122,7 @@ export default function TripStatusScreen() {
           if (res.data.pickup_lng || res.data.pickupLng) setPickupLng(parseFloat(res.data.pickup_lng || res.data.pickupLng));
           if (res.data.drop_lat || res.data.dropLat) setDropLat(parseFloat(res.data.drop_lat || res.data.dropLat));
           if (res.data.drop_lng || res.data.dropLng) setDropLng(parseFloat(res.data.drop_lng || res.data.dropLng));
-          
+
           const totalAmt = parseFloat(res.data.amount || res.data.price || 0);
           if (totalAmt > 0) setFareAmount(totalAmt);
           if (res.data.payment_mode || res.data.paymentMode) setPaymentMode(res.data.payment_mode || res.data.paymentMode);
@@ -192,11 +192,13 @@ export default function TripStatusScreen() {
             animated: true,
           }
         );
-      } catch (e) {}
+      } catch (e) { }
     }
   }, [driverInfo.latitude, driverInfo.longitude, pickupLat, pickupLng, dropLat, dropLng]);
 
   // Socket & DeviceEventEmitter listeners
+  const hasShownAcceptedAlertRef = useRef(false);
+
   useEffect(() => {
     const session = getUserSessionSync();
     initSocketService(session?.id, session?.role || 'tourist');
@@ -220,12 +222,15 @@ export default function TripStatusScreen() {
             vehicleNumber: data.vehicleNumber || prev.vehicleNumber,
           }));
         }
-        sendLocalNotification('🎉 Captain Accepted Ride!', `${dName} has accepted your trip request.`);
-        Alert.alert(
-          '🎉 Ride Accepted by Captain!',
-          `Captain ${dName} has accepted your tour booking!\n\nYou can view all your trip details and live status on My Trips.`,
-          [{ text: 'View My Trips', onPress: () => router.replace('/(tabs)/trips') }]
-        );
+        if (!hasShownAcceptedAlertRef.current) {
+          hasShownAcceptedAlertRef.current = true;
+          sendLocalNotification('🎉 Captain Accepted Ride!', `${dName} has accepted your trip request.`);
+          Alert.alert(
+            '🎉 Ride Accepted by Captain!',
+            `Captain ${dName} has accepted your tour booking!\n\nYou can view all your trip details and live status on My Trips.`,
+            [{ text: 'View My Trips', onPress: () => router.replace('/(tabs)/trips') }]
+          );
+        }
       }
     };
 
@@ -274,7 +279,7 @@ export default function TripStatusScreen() {
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             }, 1000);
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     };

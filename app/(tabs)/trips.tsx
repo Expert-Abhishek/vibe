@@ -108,6 +108,16 @@ export default function TripsHistoryScreen() {
         if (isComp) {
           setActiveTripData(null);
           setHasActiveTripState(false);
+        } else {
+          setActiveTripData((prev: any) => ({
+            ...(prev || {}),
+            ...data,
+            id: tripId || prev?.id,
+            status: newStatus,
+            driverName: driverName || prev?.driverName || prev?.driverOrGuideName || 'Assigned Captain',
+            driverOrGuideName: driverName || prev?.driverName || prev?.driverOrGuideName || 'Assigned Captain',
+          }));
+          setHasActiveTripState(true);
         }
 
         adminState.userTrips.forEach(t => {
@@ -118,7 +128,7 @@ export default function TripsHistoryScreen() {
         });
         adminState.advanceBookings.forEach(b => {
           if (b && (String(b.id) === tripId || (tripId && String(b.id).includes(tripId)))) {
-            b.status = newStatus;
+            b.status = newStatus as any;
             if (driverName) b.driverOrGuideName = driverName;
           }
         });
@@ -359,15 +369,15 @@ export default function TripsHistoryScreen() {
               cancelledTripIdsRef.current.add(tid);
               setCancelledIds(prev => [...prev, tid]);
 
-              await cancelTripApi(tid, 'Cancelled by user', 'user');
+              await cancelTripApi(tid, { reason: 'Cancelled by user', cancelledBy: 'user', role: 'user' });
 
               if (feeAmount > 0) {
                 try {
-                  await submitWalletDeductionRequestApi(
-                    userId || 'customer',
-                    feeAmount,
-                    `Cancellation Fee for Trip #${tid}`
-                  );
+                  await submitWalletDeductionRequestApi({
+                    userId: userId || 'customer',
+                    amount: feeAmount,
+                    description: `Cancellation Fee for Trip #${tid}`,
+                  });
                 } catch (e) {
                   console.warn('Wallet deduction error:', e);
                 }
@@ -378,8 +388,32 @@ export default function TripsHistoryScreen() {
                 setActiveTripData(null);
               }
 
-              adminState.userTrips = adminState.userTrips.filter(t => String(t.id) !== tid);
+              const userTripIdx = adminState.userTrips.findIndex(t => String(t.id) === tid);
+              if (userTripIdx !== -1) {
+                adminState.userTrips[userTripIdx] = {
+                  ...adminState.userTrips[userTripIdx],
+                  status: 'Cancelled by User',
+                };
+              } else {
+                adminState.userTrips.push({
+                  id: tid,
+                  tripId: tid,
+                  title: trip.title,
+                  price: trip.price,
+                  amount: trip.price,
+                  date: trip.date || 'Today',
+                  time: trip.time || '',
+                  status: 'Cancelled by User',
+                } as any);
+              }
               adminState.advanceBookings = adminState.advanceBookings.filter(b => String(b.id) !== tid);
+
+              const socket = getSocket();
+              if (socket && socket.connected) {
+                socket.emit('trip_cancelled', { tripId: tid, userId: userId, cancelledBy: 'tourist' });
+              }
+              DeviceEventEmitter.emit('trip_cancelled', { tripId: tid });
+              DeviceEventEmitter.emit('trip_status_updated', { tripId: tid, status: 'Cancelled' });
 
               Alert.alert('Booking Cancelled', 'Your booking has been cancelled and recorded in your History ledger.');
               setCancelTrigger(prev => prev + 1);
@@ -416,17 +450,27 @@ export default function TripsHistoryScreen() {
             onPress={() => router.push({ pathname: '/trip-status', params: { tripId: activeTripObj.id } })}
           >
             {/* Live Indicator Bar */}
-            <View style={styles.liveBadgeRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-                <View style={styles.pulsingDot} />
-                <Text style={[styles.activeTagText, { color: colors.amber }]}>LIVE RIDE IN PROGRESS</Text>
-              </View>
-              <View style={[styles.typeBadge, { backgroundColor: 'rgba(245, 197, 24, 0.15)' }]}>
-                <Text style={[styles.typeBadgeText, { color: colors.amber }]}>
-                  {String(activeTripObj.status || 'Active').toUpperCase()}
-                </Text>
-              </View>
-            </View>
+            {(() => {
+              const stLower = String(activeTripObj.status || '').toLowerCase();
+              const isAcceptedOrProgress = stLower.includes('accepted') || stLower.includes('en_route') || stLower.includes('progress') || stLower.includes('active') || stLower.includes('start');
+              const tagTitle = isAcceptedOrProgress ? 'LIVE RIDE IN PROGRESS' : 'SEARCHING FOR CAPTAIN ⏳';
+              const tagColor = isAcceptedOrProgress ? '#10B981' : colors.amber;
+              const bgAlpha = isAcceptedOrProgress ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 197, 24, 0.15)';
+
+              return (
+                <View style={styles.liveBadgeRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                    <View style={[styles.pulsingDot, { backgroundColor: tagColor }]} />
+                    <Text style={[styles.activeTagText, { color: tagColor }]}>{tagTitle}</Text>
+                  </View>
+                  <View style={[styles.typeBadge, { backgroundColor: bgAlpha }]}>
+                    <Text style={[styles.typeBadgeText, { color: tagColor }]}>
+                      {String(activeTripObj.status || 'Pending').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             {/* Trip Title */}
             <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.textPrimary, marginBottom: verticalScale(8) }} numberOfLines={1}>

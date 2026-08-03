@@ -24,7 +24,7 @@ import {
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { useLanguage } from '@/hooks/use-language';
-import { getPendingTripRequestsSync, listenForTripRequests } from '@/constants/tripSync';
+import { getPendingTripRequestsSync, listenForTripRequests, updateTripStatusGlobally } from '@/constants/tripSync';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { useAppModal } from '@src/context/ModalContext';
@@ -1147,17 +1147,20 @@ export default function DriverDashboardScreen() {
     if (!activeTrip) return;
     const expectedOtp = String((activeTrip as any).otp || '8240').trim();
     const entered = String(enteredOtp).trim();
+    const tripId = String((activeTrip as any).tripId || (activeTrip as any).id || '');
 
     if (entered === expectedOtp || entered === '8240') {
       setOtpVisible(false);
       setEnteredOtp('');
       setTripPhase('trip');
+      if (tripId) {
+        updateTripStatusGlobally(tripId, 'IN_PROGRESS', { status: 'IN_PROGRESS', driverName: driverDisplayName });
+      }
       sendLocalNotification('🚀 Ride Started!', `OTP Verified. Navigation started towards ${activeTrip.drop}.`);
       showSuccess('Verification Success!', 'OTP code matched. Ride started.');
       return;
     }
 
-    const tripId = (activeTrip as any).tripId || (activeTrip as any).id;
     if (tripId) {
       try {
         const res = await verifyTripOtpApi(String(tripId), entered);
@@ -1165,6 +1168,7 @@ export default function DriverDashboardScreen() {
           setOtpVisible(false);
           setEnteredOtp('');
           setTripPhase('trip');
+          updateTripStatusGlobally(tripId, 'IN_PROGRESS', { status: 'IN_PROGRESS', driverName: driverDisplayName });
           sendLocalNotification('🚀 Ride Started!', `OTP Verified. Navigation started towards ${activeTrip.drop}.`);
           showSuccess('Verification Success!', 'OTP code matched. Ride started.');
           return;
@@ -1216,7 +1220,7 @@ export default function DriverDashboardScreen() {
 
     const session = getUserSessionSync();
     const driverId = session?.id;
-    const tripId = (activeTrip as any).tripId;
+    const tripId = String((activeTrip as any).tripId || (activeTrip as any).id || `ride_${Date.now()}`);
 
     if (tripId && driverId) {
       await respondDriverRequestApi(tripId, driverId, 'complete', session?.name || driverName);
@@ -1238,22 +1242,38 @@ export default function DriverDashboardScreen() {
       extraHoursFee: extraHoursFee,
     };
 
+    const customerIdVal = (activeTrip as any).customerId || (activeTrip as any).userId || session?.id;
+
     const completedHistoryRecord = {
-      id: tripId || `ride_${Date.now()}`,
+      id: tripId,
+      tripId: tripId,
+      type: ((activeTrip as any).tripType || (activeTrip as any).type || 'cab') as any,
       title: summary.title,
       pickupName: activeTrip.pickup,
       dropName: activeTrip.drop,
+      route: (activeTrip as any).checkpoints || [activeTrip.pickup, activeTrip.drop],
       date: 'Today',
-      time: 'Just Now',
-      amount: fareEarned,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       price: fareEarned,
+      amount: fareEarned,
       commission: (fareEarned * 0.1),
       driverEarnings: (fareEarned * 0.9),
       touristName: activeTrip.touristName || 'Passenger',
-      status: 'COMPLETED',
+      customerName: activeTrip.touristName || 'Passenger',
+      customerId: customerIdVal,
+      driverOrGuideName: driverDisplayName,
+      status: 'Completed',
       paymentMode: (activeTrip as any).paymentMode || 'Wallet',
     };
+
+    adminState.userTrips.unshift(completedHistoryRecord as any);
     adminState.advanceBookings.unshift(completedHistoryRecord as any);
+
+    updateTripStatusGlobally(tripId, 'Completed', {
+      driverName: driverDisplayName,
+      status: 'Completed',
+      amount: fareEarned,
+    });
 
     setLastCompletedTrip(summary);
     setDriverTrips(prev => [

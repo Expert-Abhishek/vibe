@@ -65,7 +65,7 @@ export interface AdvanceBooking {
   assignedToId?: string;
   touristName: string;
   bookingDate: string;
-  status: 'Pending' | 'Accepted' | 'Cancelled';
+  status: 'Pending' | 'Accepted' | 'Cancelled' | 'Completed' | string;
   paymentMode?: string;
 }
 

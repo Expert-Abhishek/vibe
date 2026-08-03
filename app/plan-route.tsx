@@ -1,12 +1,14 @@
+import React, { useEffect, useState } from 'react';
 import { adminState } from '@/constants/admin-state';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { getSocket } from '@src/services/socketService';
 import {
   Alert,
+  DeviceEventEmitter,
   Image,
   ScrollView,
   StatusBar,
@@ -28,6 +30,7 @@ interface TourPackage {
 }
 
 import { createTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
 
 export default function PlanRouteScreen() {
   const router = useRouter();
@@ -338,11 +341,15 @@ export default function PlanRouteScreen() {
         }
       }
 
+      const session = getUserSessionSync();
+      const currentUserId = session?.id || session?.profile?.user_id;
+
       const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
       const createdTrip = await createTripApi({
         tripType: 'plan',
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-        customerName: 'Abhishek (Tourist)',
+        customerId: currentUserId,
+        customerName: session?.name || 'Abhishek (Tourist)',
         driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
         driverId: selectedDriver ? driverId : null,
         planId: selectedPlan.id,
@@ -370,8 +377,9 @@ export default function PlanRouteScreen() {
         time: finalTime,
         price: totalPrice,
         amount: totalPrice,
-        touristName: 'Abhishek (Tourist)',
-        customerName: 'Abhishek (Tourist)',
+        touristName: session?.name || 'Abhishek (Tourist)',
+        customerName: session?.name || 'Abhishek (Tourist)',
+        customerId: currentUserId,
         driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
         assignedToId: selectedDriver ? driverId : null,
         status: 'Pending' as const,
@@ -384,6 +392,22 @@ export default function PlanRouteScreen() {
       adminState.advanceBookings.push(newTripObj as any);
       adminState.userTrips.push(newTripObj as any);
 
+      if (!Array.isArray((adminState as any).pendingDriverRequests)) {
+        (adminState as any).pendingDriverRequests = [];
+      }
+      (adminState as any).pendingDriverRequests.push(newTripObj);
+
+      try {
+        const socket = getSocket();
+        if (socket && socket.connected) {
+          socket.emit('broadcast_trip_request', newTripObj);
+          socket.emit('trip_requested', newTripObj);
+        }
+        DeviceEventEmitter.emit('new_driver_request', { trip: newTripObj });
+      } catch (e) {
+        console.warn('Socket emit error on plan booking:', e);
+      }
+
       setSelectedPlan(null);
       setBookingStep('details');
       router.replace({ pathname: '/trip-status', params: { tripId: realTripId, id: realTripId } });
@@ -395,6 +419,8 @@ export default function PlanRouteScreen() {
       title: selectedPlan.name,
       customerName: 'Abhishek (Tourist)',
       onSuccess: async (paymentId: string) => {
+        const session = getUserSessionSync();
+        const currentUserId = session?.id || session?.profile?.user_id;
         const paymentLabel = isPreBooking
           ? `UPI Pre-Booking Fees: ₹${paymentAmount} (Bal ₹${remainingBalance})`
           : `UPI Full Payment: ₹${paymentAmount}`;
@@ -405,7 +431,8 @@ export default function PlanRouteScreen() {
         const createdTrip = await createTripApi({
           tripType: 'plan',
           title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-          customerName: 'Abhishek (Tourist)',
+          customerId: currentUserId,
+          customerName: session?.name || 'Abhishek (Tourist)',
           driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
           driverId: selectedDriver ? driverId : null,
           planId: selectedPlan.id,
@@ -440,6 +467,22 @@ export default function PlanRouteScreen() {
         };
 
         adminState.userTrips.push(newTripObj as any);
+
+        if (!Array.isArray((adminState as any).pendingDriverRequests)) {
+          (adminState as any).pendingDriverRequests = [];
+        }
+        (adminState as any).pendingDriverRequests.push(newTripObj);
+
+        try {
+          const socket = getSocket();
+          if (socket && socket.connected) {
+            socket.emit('broadcast_trip_request', newTripObj);
+            socket.emit('trip_requested', newTripObj);
+          }
+          DeviceEventEmitter.emit('new_driver_request', { trip: newTripObj });
+        } catch (e) {
+          console.warn('Socket emit error on plan booking:', e);
+        }
 
         setSelectedPlan(null);
         setBookingStep('details');
