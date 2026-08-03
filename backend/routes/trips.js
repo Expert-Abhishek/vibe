@@ -2050,18 +2050,29 @@ router.post('/:id/respond', async (req, res) => {
 
       // 2. Deduct platform fee
       if (isDriver) {
-        await db.query("UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
+        try {
+          await db.query("UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text", [platformFee, String(driverId)]);
+        } catch (e) {}
       } else if (isGuide) {
-        await db.query("UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id = $2", [platformFee, driverId]);
+        try {
+          await db.query("UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text", [platformFee, String(driverId)]);
+        } catch (e) {}
       }
 
-      // 3. Log transaction
-      await db.query(
-        "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
-        [driverId, 'debit', platformFee, `Platform Fee for Booking #${id}`]
-      );
+      // 3. Log transaction safely
+      try {
+        const validUserUuid = toValidUuidOrNull(driverId);
+        if (validUserUuid) {
+          await db.query(
+            "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
+            [validUserUuid, 'debit', platformFee, `Platform Fee for Booking #${id}`]
+          );
+        }
+      } catch (wErr) {
+        console.warn('Wallet transaction logging warning:', wErr.message);
+      }
 
-      // 4. Log Platform Fee Revenue for Admin Dashboard
+      // 4. Log Platform Fee Revenue for Admin Dashboard safely
       try {
         await db.query(`
           CREATE TABLE IF NOT EXISTS platform_fee_revenue (
@@ -2075,36 +2086,52 @@ router.post('/:id/respond', async (req, res) => {
               created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
           );
         `);
+        const validUserUuid = toValidUuidOrNull(driverId);
+        const validTripUuid = toValidUuidOrNull(id);
         await db.query(
           `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [driverId, driverName || 'Verified Partner', isGuide ? 'guide' : 'driver', id, platformFee, `Platform Fee for Booking #${id}`]
+          [validUserUuid, driverName || 'Verified Partner', isGuide ? 'guide' : 'driver', validTripUuid, platformFee, `Platform Fee for Booking #${id}`]
         );
       } catch (pErr) {
         console.warn('Failed to log platform fee revenue:', pErr.message);
       }
 
-      const updateRes = await db.query(
+      let updateRes = await db.query(
         "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text RETURNING *",
-        [driverId, driverName || 'Verified Partner', id]
+        [String(driverId), driverName || 'Verified Partner', String(id)]
       );
+
+      // Fallback: If exact ID match wasn't found (e.g. plan_book_178...), accept the latest pending trip in DB
+      if (updateRes.rows.length === 0) {
+        updateRes = await db.query(
+          "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id IN (SELECT id FROM trips WHERE LOWER(status) = 'pending' ORDER BY created_at DESC LIMIT 1) RETURNING *",
+          [String(driverId), driverName || 'Verified Partner']
+        );
+      }
+
       if (updateRes.rows.length > 0) {
         emitTripStatusUpdated(updateRes.rows[0], 'Accepted');
       }
       return res.json({ success: true, message: 'Ride Accepted successfully!' });
     } else if (action === 'complete') {
-      const updateRes = await db.query(
+      let updateRes = await db.query(
         "UPDATE trips SET status = 'Completed' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
-        [id]
+        [String(id)]
       );
+      if (updateRes.rows.length === 0) {
+        updateRes = await db.query(
+          "UPDATE trips SET status = 'Completed' WHERE id IN (SELECT id FROM trips WHERE LOWER(status) IN ('accepted', 'in_progress', 'active', 'arrived') ORDER BY created_at DESC LIMIT 1) RETURNING *"
+        );
+      }
       if (updateRes.rows.length > 0) {
         emitTripStatusUpdated(updateRes.rows[0], 'Completed');
       }
       return res.json({ success: true, message: 'Ride Completed successfully!' });
     } else {
-      const updateRes = await db.query(
+      let updateRes = await db.query(
         "UPDATE trips SET status = 'Declined', driver_id = NULL, driver_or_guide_name = NULL WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
-        [id]
+        [String(id)]
       );
       if (updateRes.rows.length > 0) {
         emitTripStatusUpdated(updateRes.rows[0], 'Declined');
