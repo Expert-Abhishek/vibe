@@ -291,6 +291,8 @@ export default function TripStatusScreen() {
     };
 
     if (socket) {
+      socket.on('trip_accepted', handleAccepted);
+      socket.on('trip_status_updated', handleStageUpdate);
       socket.on('driver_location_stream', handleLocationStream);
       socket.on('driver_location_update', handleLocationStream);
       socket.on('trip_completed', handleCompleted);
@@ -308,6 +310,8 @@ export default function TripStatusScreen() {
 
     return () => {
       if (socket) {
+        socket.off('trip_accepted', handleAccepted);
+        socket.off('trip_status_updated', handleStageUpdate);
         socket.off('driver_location_stream', handleLocationStream);
         socket.off('driver_location_update', handleLocationStream);
         socket.off('trip_completed', handleCompleted);

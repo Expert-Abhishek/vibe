@@ -140,6 +140,9 @@ export default function DriverDashboardScreen() {
   const [vehicleModel, setVehicleModel] = useState(currentSession?.profile?.vehicle_model || 'Innova Crysta AC');
   const [vehicleNumber, setVehicleNumber] = useState(currentSession?.profile?.vehicle_number || 'KA-01-EX-8240');
   const [vehicleType, setVehicleType] = useState(currentSession?.profile?.vehicle_type || '7 Seater Cab');
+  const [vehicleCategory, setVehicleCategory] = useState<'5_seater' | '7_seater' | '4x4' | 'auto'>(
+    currentSession?.profile?.vehicle_category || currentSession?.profile?.vehicleCategory || '5_seater'
+  );
   const [photoUrl, setPhotoUrl] = useState(currentSession?.profile?.photo_url || currentSession?.profile?.photoUrl || '');
   const [upiId, setUpiId] = useState(currentSession?.profile?.upi_id || currentSession?.profile?.upiId || 'ka03md8240@okaxis');
 
@@ -500,13 +503,15 @@ export default function DriverDashboardScreen() {
 
     setIsSavingProfile(true);
 
-    // 1. Update Profile (Name, Phone, Photo, Vehicle details)
+    // 1. Update Profile (Name, Phone, Photo, Vehicle details & Category)
     const apiRes = await updateUserProfileApi(userId, {
       name: driverName,
       phone: driverPhone,
       role: 'driver',
       vehicle_model: vehicleModel,
       vehicle_number: vehicleNumber,
+      vehicle_category: vehicleCategory,
+      vehicleCategory: vehicleCategory,
       photo_url: photoUrl,
       photoUrl: photoUrl,
       upiId: upiId,
@@ -1846,6 +1851,39 @@ export default function DriverDashboardScreen() {
                   placeholder="Driver Full Name"
                   placeholderTextColor={colors.textMuted}
                 />
+              </View>
+
+              {/* Registered Vehicle Category Selector */}
+              <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>
+                Registered Vehicle Category (Targeted Dispatching)
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(6), marginTop: verticalScale(4) }}>
+                {[
+                  { key: '5_seater', label: '🚘 5-Seater (Sedan)' },
+                  { key: '7_seater', label: '🚐 7-Seater (SUV)' },
+                  { key: '4x4', label: '🏔️ 4x4 Off-Road' },
+                  { key: 'auto', label: '🛺 Auto Rickshaw' },
+                ].map(cat => {
+                  const isSelected = vehicleCategory === cat.key;
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={{
+                        paddingVertical: scale(6),
+                        paddingHorizontal: scale(10),
+                        borderRadius: scale(8),
+                        borderWidth: isSelected ? 1.5 : 1,
+                        borderColor: isSelected ? colors.amber : colors.border,
+                        backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                      }}
+                      onPress={() => setVehicleCategory(cat.key as any)}
+                    >
+                      <Text style={{ fontSize: moderateFontScale(11), fontWeight: isSelected ? '800' : '500', color: isSelected ? colors.amber : colors.textPrimary }}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Current Password (Required to change password)</Text>

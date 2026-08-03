@@ -1044,22 +1044,24 @@ router.put('/users/:id/profile', async (req, res) => {
 
     // 2. Update role-specific profile
     if (userRole === 'driver' || userRole === 'captain') {
+      const vCat = vehicle_category || vehicleCategory || null;
       const updateRes = await db.query(
         `UPDATE driver_profiles
          SET photo_url = COALESCE($1, photo_url),
              vehicle_model = COALESCE($2, vehicle_model),
              vehicle_number = COALESCE($3, vehicle_number),
              upi_id = COALESCE($4, upi_id),
+             vehicle_category = COALESCE($5, vehicle_category),
              updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $5 OR id = $5`,
-        [photo || null, vehicle_model || null, vehicle_number || null, upi || null, targetUserId]
+         WHERE user_id = $6 OR id = $6`,
+        [photo || null, vehicle_model || null, vehicle_number || null, upi || null, vCat, targetUserId]
       ).catch(e => console.warn('Driver profile update warning:', e.message));
 
       if (!updateRes || updateRes.rowCount === 0) {
         await db.query(
-          `INSERT INTO driver_profiles (user_id, photo_url, vehicle_model, vehicle_number, upi_id)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [targetUserId, photo || null, vehicle_model || null, vehicle_number || null, upi || null]
+          `INSERT INTO driver_profiles (user_id, photo_url, vehicle_model, vehicle_number, upi_id, vehicle_category)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [targetUserId, photo || null, vehicle_model || null, vehicle_number || null, upi || null, vCat || '5_seater']
         ).catch(e => console.warn('Insert driver_profile warning:', e.message));
       }
     } else if (userRole === 'guide') {

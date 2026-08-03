@@ -1,24 +1,22 @@
+import { adminState } from '@/constants/admin-state';
+import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
-  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from '@/constants/admin-state';
-import { openRazorpayPayment } from '@/constants/razorpay';
 
 interface TourPackage {
   id: string;
@@ -29,7 +27,7 @@ interface TourPackage {
   image: string;
 }
 
-import { fetchPlansApi, fetchDriversApi, createTripApi } from '@/constants/api';
+import { createTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
 
 export default function PlanRouteScreen() {
   const router = useRouter();
@@ -341,13 +339,12 @@ export default function PlanRouteScreen() {
       }
 
       const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
-
-      await createTripApi({
+      const createdTrip = await createTripApi({
         tripType: 'plan',
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
         customerName: 'Abhishek (Tourist)',
-        driverOrGuideName: driverName,
-        driverId: driverId,
+        driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
+        driverId: selectedDriver ? driverId : null,
         planId: selectedPlan.id,
         vehicleCategory: targetCategory,
         amount: totalPrice,
@@ -360,47 +357,36 @@ export default function PlanRouteScreen() {
         scheduledTime: calculatedScheduledTime,
       });
 
-      const newAdvBooking = {
-        id: `plan_adv_${Date.now()}`,
-        type: 'cab' as const,
+      const realTripId = createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
+
+      const newTripObj = {
+        id: realTripId,
+        tripId: realTripId,
+        type: 'plan' as const,
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
         route: selectedPlan.checkpoints,
+        checkpoints: selectedPlan.checkpoints,
         date: finalDate,
         time: finalTime,
         price: totalPrice,
+        amount: totalPrice,
         touristName: 'Abhishek (Tourist)',
-        driverOrGuideName: driverName,
-        assignedToId: driverId,
-        bookingDate: new Date().toISOString().split('T')[0],
+        customerName: 'Abhishek (Tourist)',
+        driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
+        assignedToId: selectedDriver ? driverId : null,
         status: 'Pending' as const,
         paymentMode: paymentLabel,
-      };
-      adminState.advanceBookings.push(newAdvBooking);
-
-      adminState.userTrips.push({
-        id: `plan_book_${Date.now()}`,
-        type: 'plan',
-        title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-        route: selectedPlan.checkpoints,
-        driverOrGuideName: driverName,
-        date: finalDate,
-        time: finalTime,
-        price: totalPrice,
-        paymentMode: paymentLabel,
-        status: 'Upcoming',
         passengerCount: bookingPax,
-      });
+        otp: createdTrip?.otp || '8240',
+        endOtp: createdTrip?.end_otp || createdTrip?.endOtp || '4321',
+      };
 
-      Alert.alert(
-        '🎉 Cash Booking Confirmed!',
-        isPreBooking
-          ? `Cash Payment Mode Selected!\nPre-Booking Fees: ₹${paymentAmount}\nRemaining Balance: ₹${remainingBalance} (Payable at trip time to Captain)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-          : `Cash Payment Mode Selected!\nFull Payment: ₹${totalPrice} (Payable to Captain)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-      );
+      adminState.advanceBookings.push(newTripObj as any);
+      adminState.userTrips.push(newTripObj as any);
 
       setSelectedPlan(null);
       setBookingStep('details');
-      router.replace('/(tabs)/trips');
+      router.replace({ pathname: '/trip-status', params: { tripId: realTripId, id: realTripId } });
       return;
     }
 
@@ -416,11 +402,12 @@ export default function PlanRouteScreen() {
         const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
 
         // Save trip to real backend DB
-        await createTripApi({
+        const createdTrip = await createTripApi({
           tripType: 'plan',
           title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
           customerName: 'Abhishek (Tourist)',
-          driverOrGuideName: driverName,
+          driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
+          driverId: selectedDriver ? driverId : null,
           planId: selectedPlan.id,
           vehicleCategory: targetCategory,
           amount: totalPrice,
@@ -431,20 +418,33 @@ export default function PlanRouteScreen() {
           addonCharge: priceInfo.extraAddonCharge,
         });
 
-        // Store in local adminState as well
-        adminState.userTrips.push({
-          id: `plan_book_${Date.now()}`,
-          type: 'plan',
+        const realTripId = createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
+
+        const newTripObj = {
+          id: realTripId,
+          tripId: realTripId,
+          type: 'plan' as const,
           title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
           route: selectedPlan.checkpoints,
-          driverOrGuideName: driverName,
+          checkpoints: selectedPlan.checkpoints,
+          driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
           date: finalDate,
           time: finalTime,
           price: totalPrice,
+          amount: totalPrice,
           paymentMode: paymentLabel,
-          status: 'Upcoming',
+          status: 'Pending' as const,
           passengerCount: bookingPax,
-        });
+          otp: createdTrip?.otp || '8240',
+          endOtp: createdTrip?.end_otp || createdTrip?.endOtp || '4321',
+        };
+
+        adminState.userTrips.push(newTripObj as any);
+
+        setSelectedPlan(null);
+        setBookingStep('details');
+        router.replace({ pathname: '/trip-status', params: { tripId: realTripId, id: realTripId } });
+      },
 
         Alert.alert(
           '🎉 UPI Booking Confirmed!',
@@ -644,112 +644,7 @@ export default function PlanRouteScreen() {
               </View>
             </View>
 
-            {/* OPTIONAL STEP: SPECIFIC CAPTAIN CHOICE */}
-            {selectedDriver === null ? (
-              <View style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: scale(14),
-                padding: scale(12),
-                marginVertical: verticalScale(8),
-              }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1, marginRight: scale(8) }}>
-                    <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>
-                      ⚡ Auto-Assigned Captain
-                    </Text>
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 2 }}>
-                      Online driver in your chosen vehicle category will accept automatically.
-                    </Text>
-                  </View>
 
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: 'rgba(245, 197, 24, 0.15)',
-                      borderRadius: scale(8),
-                      paddingVertical: verticalScale(6),
-                      paddingHorizontal: scale(10),
-                      borderWidth: 1,
-                      borderColor: colors.amber,
-                    }}
-                    onPress={() => {
-                      const currentPlanId = selectedPlan?.id || '';
-                      const currentPlanName = selectedPlan?.name || '';
-                      router.push({
-                        pathname: '/cars',
-                        params: {
-                          mode: 'plan',
-                          planId: currentPlanId,
-                          planName: currentPlanName,
-                          vehicleCategory: bookingVehicle,
-                        }
-                      });
-                    }}
-                  >
-                    <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(10.5) }}>
-                      Pick Specific Driver
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <View style={{
-                backgroundColor: 'rgba(245, 197, 24, 0.08)',
-                borderWidth: 1.5,
-                borderColor: colors.amber,
-                borderRadius: scale(14),
-                padding: scale(12),
-                marginVertical: verticalScale(10),
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}>
-                <View style={{ width: scale(52), height: scale(52), borderRadius: scale(10), backgroundColor: '#212129', overflow: 'hidden', marginRight: scale(12), borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' }}>
-                  {selectedDriver.car_front_url || selectedDriver.photo_url ? (
-                    <Image source={{ uri: selectedDriver.car_front_url || selectedDriver.photo_url }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
-                  ) : (
-                    <MaterialIcons name="directions-car" size={scale(28)} color={colors.amber} />
-                  )}
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13.5), fontWeight: '800' }} numberOfLines={1}>
-                    {selectedDriver.vehicle_model || 'Standard AC Cab'}
-                  </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 1 }}>
-                    Driver: {selectedDriver.name} ({selectedDriver.vehicle_number || 'KA-01-EX-0000'})
-                  </Text>
-                  <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '900', marginTop: 2 }}>
-                    ✓ Preferred Captain Selected
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: 'rgba(245, 197, 24, 0.2)',
-                    paddingVertical: scale(6),
-                    paddingHorizontal: scale(10),
-                    borderRadius: scale(8),
-                    borderWidth: 1,
-                    borderColor: colors.amber,
-                  }}
-                  onPress={() => {
-                    const currentPlanId = selectedPlan?.id || '';
-                    const currentPlanName = selectedPlan?.name || '';
-                    router.push({
-                      pathname: '/cars',
-                      params: {
-                        mode: 'plan',
-                        planId: currentPlanId,
-                        planName: currentPlanName,
-                      }
-                    });
-                  }}
-                >
-                  <Text style={{ color: colors.amber, fontSize: moderateFontScale(10.5), fontWeight: '800' }}>Change</Text>
-                </TouchableOpacity>
-              </View>
-            )}
 
             {/* CHECKPOINTS & MEDIA HIGHLIGHTS CARD */}
             <View style={{ width: '100%' }}>
@@ -1097,11 +992,11 @@ export default function PlanRouteScreen() {
                 <Text style={styles.confirmBtnText}>
                   {paymentMethod === 'cash'
                     ? (!adminState.instantBookingEnabled
-                        ? `Book via Cash (Pre-Booking Fees ₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
-                        : `Book via Cash (Total Fare ₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)
+                      ? `Book via Cash (Pre-Booking Fees ₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
+                      : `Book via Cash (Total Fare ₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)
                     : (!adminState.instantBookingEnabled
-                        ? `Pay Pre-Booking Fees (₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
-                        : `Pay Total Fare (₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)}
+                      ? `Pay Pre-Booking Fees (₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
+                      : `Pay Total Fare (₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)}
                 </Text>
               </TouchableOpacity>
 
