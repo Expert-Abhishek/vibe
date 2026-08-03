@@ -58,6 +58,9 @@ async function ensureTripsColumnsExist() {
   }
 }
 
+// Run migration safely on route module load
+ensureTripsColumnsExist();
+
 /**
  * GET /api/trips/admin/all
  * Fetch all user trips (Active, Scheduled, Completed, Cancelled) for Admin Panel
