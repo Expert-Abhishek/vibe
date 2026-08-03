@@ -983,11 +983,11 @@ router.post('/book', async (req, res) => {
 
     const sanitizedPaymentMode = sanitizePaymentMode(paymentMode);
 
-    // Wallet Balance Check for Wallet/UPI payment mode
-    if (rawPm.includes('upi') || rawPm.includes('wallet')) {
-      if (customerId) {
-        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(customerId);
-        if (isUuid) {
+    // Wallet Balance Check for Wallet payment mode
+    if (sanitizedPaymentMode === 'Wallet' && customerId) {
+      const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(customerId);
+      if (isUuid) {
+        try {
           const dWallet = await db.query('SELECT wallet_balance FROM driver_profiles WHERE user_id = $1', [customerId]);
           const gWallet = await db.query('SELECT wallet_balance FROM guide_profiles WHERE user_id = $1', [customerId]);
           const userWallet = (dWallet.rows[0]?.wallet_balance || 0) || (gWallet.rows[0]?.wallet_balance || 0);
@@ -1000,7 +1000,7 @@ router.post('/book', async (req, res) => {
               message: `Insufficient wallet balance (₹${userWallet}). Required: ₹${requiredPayment}. Please add money to wallet.`,
             });
           }
-        }
+        } catch (e) {}
       }
     }
 
@@ -1025,87 +1025,57 @@ router.post('/book', async (req, res) => {
     }
 
     let result;
+    const queryParams = [
+      tripType,
+      title || `${pickupName} ➔ ${dropName}`,
+      validCustomerId,
+      customerName,
+      pickupName,
+      dropName,
+      pickupLat,
+      pickupLng,
+      dropLat,
+      dropLng,
+      parseFloat(amount),
+      sanitizedPaymentMode,
+      otpCode,
+      bookingType,
+      scheduledTime ? new Date(scheduledTime) : null,
+      advanceDepositPaid,
+      remainingCashBalance,
+      selectedVehicleCategory,
+    ];
+
+    const insertSql = `INSERT INTO trips (
+      trip_type, title, customer_id, customer_name, pickup_name, drop_name,
+      pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
+      status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
+     RETURNING *`;
+
     try {
-      result = await db.query(
-        `INSERT INTO trips (
-          trip_type, title, customer_id, customer_name, pickup_name, drop_name,
-          pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-          status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
-         RETURNING *`,
-        [
-          tripType,
-          title || `${pickupName} ➔ ${dropName}`,
-          validCustomerId,
-          customerName,
-          pickupName,
-          dropName,
-          pickupLat,
-          pickupLng,
-          dropLat,
-          dropLng,
-          parseFloat(amount),
-          sanitizedPaymentMode,
-          otpCode,
-          bookingType,
-          scheduledTime ? new Date(scheduledTime) : null,
-          advanceDepositPaid,
-          remainingCashBalance,
-          selectedVehicleCategory,
-        ]
-      );
+      result = await db.query(insertSql, queryParams);
     } catch (dbErr) {
-      console.warn('Trips insert column error caught, attempting auto-migration:', dbErr.message);
-      await ensureTripsColumnsExist();
+      console.warn('Primary insert failed, trying lowercase payment_mode:', dbErr.message);
       try {
-        result = await db.query(
-          `INSERT INTO trips (
-            trip_type, title, customer_id, customer_name, pickup_name, drop_name,
-            pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-            status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
-           RETURNING *`,
-          [
-            tripType,
-            title || `${pickupName} ➔ ${dropName}`,
-            validCustomerId,
-            customerName,
-            pickupName,
-            dropName,
-            pickupLat,
-            pickupLng,
-            dropLat,
-            dropLng,
-            parseFloat(amount),
-            sanitizedPaymentMode,
-            otpCode,
-            bookingType,
-            scheduledTime ? new Date(scheduledTime) : null,
-            advanceDepositPaid,
-            remainingCashBalance,
-            selectedVehicleCategory,
-          ]
-        );
-      } catch (retryErr) {
-        console.warn('Retry with full columns failed, executing basic insert fallback:', retryErr.message);
-        result = await db.query(
-          `INSERT INTO trips (
-            trip_type, title, customer_id, customer_name, amount, payment_mode, status, otp, created_at
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7, CURRENT_TIMESTAMP)
-           RETURNING *`,
-          [
-            tripType,
-            title || `${pickupName} ➔ ${dropName}`,
-            validCustomerId,
-            customerName,
-            parseFloat(amount),
-            sanitizedPaymentMode,
-            otpCode,
-          ]
-        );
+        const lowerParams = [...queryParams];
+        lowerParams[11] = sanitizedPaymentMode.toLowerCase();
+        result = await db.query(insertSql, lowerParams);
+      } catch (retryErr1) {
+        console.warn('Lowercase retry failed, running schema migration:', retryErr1.message);
+        await ensureTripsColumnsExist();
+        try {
+          result = await db.query(insertSql, queryParams);
+        } catch (retryErr2) {
+          console.warn('Migration retry failed, running basic fallback insert:', retryErr2.message);
+          result = await db.query(
+            `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
+             VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
+             RETURNING *`,
+            [tripType, title || `${pickupName} ➔ ${dropName}`, validCustomerId, customerName, parseFloat(amount), otpCode]
+          );
+        }
       }
     }
 
@@ -1340,41 +1310,67 @@ router.post('/', async (req, res) => {
       }
     }
 
-    const result = await db.query(
-      `INSERT INTO trips (
-        trip_type, title, customer_id, customer_name, driver_or_guide_name,
-        plan_id, destination_ids, amount, payment_mode, status,
-        duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
-        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
-       RETURNING *`,
-      [
-        tripType,
-        title.trim(),
-        validCustomerId,
-        customerName.trim(),
-        driverOrGuideName || 'Assigned Driver',
-        validPlanId,
-        Array.isArray(destinationIds) ? destinationIds : [],
-        totalAmount,
-        sanitizePaymentMode(paymentMode),
-        status || 'Pending',
-        parseFloat(durationHours),
-        parseFloat(extraHours),
-        parseFloat(addonCharge),
-        parseInt(rating, 10),
-        otpCode,
-        req.body.pickupName || 'Bengaluru City Center',
-        req.body.dropName || title.trim(),
-        bookingType,
-        scheduledTime ? new Date(scheduledTime) : null,
-        advanceDepositPaid,
-        remainingCashBalance,
-        targetDriverId || null,
-        selectedVehicleCategory,
-      ]
-    );
+    const sanitizedPaymentMode = sanitizePaymentMode(paymentMode);
+    const queryParams = [
+      tripType,
+      title.trim(),
+      validCustomerId,
+      customerName.trim(),
+      driverOrGuideName || 'Assigned Driver',
+      validPlanId,
+      Array.isArray(destinationIds) ? destinationIds : [],
+      totalAmount,
+      sanitizedPaymentMode,
+      status || 'Pending',
+      parseFloat(durationHours),
+      parseFloat(extraHours),
+      parseFloat(addonCharge),
+      parseInt(rating, 10),
+      otpCode,
+      req.body.pickupName || 'Bengaluru City Center',
+      req.body.dropName || title.trim(),
+      bookingType,
+      scheduledTime ? new Date(scheduledTime) : null,
+      advanceDepositPaid,
+      remainingCashBalance,
+      targetDriverId || null,
+      selectedVehicleCategory,
+    ];
+
+    const insertSql = `INSERT INTO trips (
+      trip_type, title, customer_id, customer_name, driver_or_guide_name,
+      plan_id, destination_ids, amount, payment_mode, status,
+      duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
+      booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+     RETURNING *`;
+
+    let result;
+    try {
+      result = await db.query(insertSql, queryParams);
+    } catch (dbErr) {
+      console.warn('POST / primary insert failed, trying lowercase payment_mode:', dbErr.message);
+      try {
+        const lowerParams = [...queryParams];
+        lowerParams[8] = sanitizedPaymentMode.toLowerCase();
+        result = await db.query(insertSql, lowerParams);
+      } catch (retryErr1) {
+        console.warn('Lowercase retry failed, executing schema migration:', retryErr1.message);
+        await ensureTripsColumnsExist();
+        try {
+          result = await db.query(insertSql, queryParams);
+        } catch (retryErr2) {
+          console.warn('Migration retry failed, executing basic fallback insert:', retryErr2.message);
+          result = await db.query(
+            `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+             RETURNING *`,
+            [tripType, title.trim(), validCustomerId, customerName.trim(), totalAmount, status || 'Pending', otpCode]
+          );
+        }
+      }
+    }
 
     const t = result.rows[0];
     t.vehicleCategory = selectedVehicleCategory;
