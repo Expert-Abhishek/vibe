@@ -55,15 +55,19 @@ export default function HistoryScreen() {
         const effectiveUserId = userId || 't1';
         const userHistoryRes = await fetchUserTripHistoryApi(effectiveUserId);
         if (userHistoryRes && userHistoryRes.success && userHistoryRes.data) {
-          apiCompletedTrips = userHistoryRes.data.completed || [];
+          const comp = userHistoryRes.data.completed || [];
+          const canc = userHistoryRes.data.cancelled || userHistoryRes.data.cancelledTrips || [];
+          apiCompletedTrips = [...comp, ...canc];
         }
 
-        // Fallback to customer trips API if dedicated endpoint returned empty
-        if (apiCompletedTrips.length === 0) {
-          const fallbackData = await fetchCustomerTripsApi(effectiveUserId);
-          if (Array.isArray(fallbackData)) {
-            apiCompletedTrips = fallbackData;
-          }
+        // Always merge with customer trips API to ensure no cancelled trips are missed
+        const fallbackData = await fetchCustomerTripsApi(effectiveUserId);
+        if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+          const historicalFallback = fallbackData.filter((t: any) => {
+            const st = String(t?.status || '').toLowerCase().trim();
+            return st.includes('complete') || st.includes('cancel') || st.includes('decline') || st.includes('finish') || st === 'done';
+          });
+          apiCompletedTrips = [...apiCompletedTrips, ...historicalFallback];
         }
 
         const localUserTrips = Array.isArray(adminState.userTrips) ? adminState.userTrips : [];
@@ -85,13 +89,15 @@ export default function HistoryScreen() {
             if (acc.some(existing => existing.id === idStr)) return acc;
 
             const stLower = String(item.status || '').toLowerCase();
+            const cancelledBy = String(item.cancelled_by || item.cancelledBy || '').toLowerCase();
+
             let statusLabel = 'Completed';
-            if (stLower.includes('driver') || item.cancelled_by === 'driver') {
-              statusLabel = 'Cancelled by Driver';
-            } else if (stLower.includes('user') || stLower.includes('tourist') || item.cancelled_by === 'user' || item.cancelled_by === 'tourist') {
-              statusLabel = 'Cancelled by User';
-            } else if (stLower.includes('cancel') || stLower.includes('decline')) {
-              statusLabel = 'Cancelled';
+            if (stLower.includes('cancel') || stLower.includes('decline') || stLower.includes('withdraw')) {
+              if (cancelledBy.includes('driver') || stLower.includes('driver')) {
+                statusLabel = 'Cancelled by Driver';
+              } else {
+                statusLabel = 'Cancelled by You';
+              }
             }
 
             const titleStr = item.title || (item.pickupName && item.dropName ? `${item.pickupName} ➔ ${item.dropName}` : (item.pickup ? `${item.pickup} ➔ Destination` : 'Tour Booking'));
@@ -132,21 +138,29 @@ export default function HistoryScreen() {
 
     if (socket) {
       socket.on('trip_completed', handleRefresh);
+      socket.on('trip_cancelled', handleRefresh);
+      socket.on('trip_declined', handleRefresh);
       socket.on('trip_status_updated', handleRefresh);
       socket.on('RIDE_COMPLETED', handleRefresh);
+      socket.on('RIDE_CANCELLED', handleRefresh);
     }
 
     const subComp = DeviceEventEmitter.addListener('trip_completed', handleRefresh);
+    const subCancel = DeviceEventEmitter.addListener('trip_cancelled', handleRefresh);
     const subRideComp = DeviceEventEmitter.addListener('RIDE_COMPLETED', handleRefresh);
     const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleRefresh);
 
     return () => {
       if (socket) {
         socket.off('trip_completed', handleRefresh);
+        socket.off('trip_cancelled', handleRefresh);
+        socket.off('trip_declined', handleRefresh);
         socket.off('trip_status_updated', handleRefresh);
         socket.off('RIDE_COMPLETED', handleRefresh);
+        socket.off('RIDE_CANCELLED', handleRefresh);
       }
       subComp.remove();
+      subCancel.remove();
       subRideComp.remove();
       subStatus.remove();
     };

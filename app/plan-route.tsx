@@ -445,18 +445,6 @@ export default function PlanRouteScreen() {
         setBookingStep('details');
         router.replace({ pathname: '/trip-status', params: { tripId: realTripId, id: realTripId } });
       },
-
-        Alert.alert(
-          '🎉 UPI Booking Confirmed!',
-          isPreBooking
-            ? `Pre-Booking Fees Paid: ₹${paymentAmount}\nRemaining Balance: ₹${remainingBalance} (Payable at trip time)\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-            : `Full Payment Paid: ₹${paymentAmount}\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`
-        );
-
-        setSelectedPlan(null);
-        setBookingStep('details');
-        router.replace('/(tabs)/trips');
-      },
       onCancel: () => {
         Alert.alert('Payment Cancelled', 'Razorpay payment was cancelled.');
       },
@@ -824,7 +812,7 @@ export default function PlanRouteScreen() {
                       }}
                       onPress={() => setPaymentMethod('cash')}
                     >
-                      <MaterialIcons name="attach-money" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
+                      <MaterialIcons name="currency-rupee" size={scale(18)} color={paymentMethod === 'cash' ? colors.amber : colors.textMuted} />
                       <Text style={{ color: paymentMethod === 'cash' ? colors.amber : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
                         Cash
                       </Text>
@@ -988,12 +976,12 @@ export default function PlanRouteScreen() {
                 disabled={!selectedPlan}
                 onPress={handleConfirmBooking}
               >
-                <MaterialIcons name={paymentMethod === 'cash' ? "attach-money" : "payment"} size={scale(20)} color="#101014" />
+                <MaterialIcons name={paymentMethod === 'cash' ? "currency-rupee" : "payment"} size={scale(20)} color="#101014" />
                 <Text style={styles.confirmBtnText}>
                   {paymentMethod === 'cash'
                     ? (!adminState.instantBookingEnabled
                       ? `Book via Cash (Pre-Booking Fees ₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
-                      : `Book via Cash (Total Fare ₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)
+                      : `Total Fare ₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice}`)
                     : (!adminState.instantBookingEnabled
                       ? `Pay Pre-Booking Fees (₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
                       : `Pay Total Fare (₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)}

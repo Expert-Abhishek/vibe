@@ -2283,13 +2283,15 @@ router.get('/user-history/:customerId', async (req, res) => {
     });
 
     const active = formattedTrips.filter(t => !['Completed', 'Cancelled', 'Cancelled by Driver', 'Cancelled by User'].includes(t.status));
-    const completed = formattedTrips.filter(t => ['Completed', 'Cancelled', 'Cancelled by Driver', 'Cancelled by User'].includes(t.status));
+    const completed = formattedTrips.filter(t => t.status === 'Completed');
+    const cancelled = formattedTrips.filter(t => ['Cancelled', 'Cancelled by Driver', 'Cancelled by User'].includes(t.status));
 
     res.json({
       success: true,
       data: {
         active,
         completed,
+        cancelled,
         all: formattedTrips,
       },
     });

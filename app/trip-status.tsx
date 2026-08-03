@@ -336,13 +336,20 @@ export default function TripStatusScreen() {
   }, [tripIdParam]);
 
   const handleCancelTrip = () => {
+    const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || driverInfo.name.toLowerCase().includes('search') || driverInfo.name.toLowerCase().includes('auto');
+
+    const alertTitle = isPendingDriver ? 'Withdraw Ride Request?' : `Cancel Booking with Captain ${driverInfo.name}?`;
+    const alertBody = isPendingDriver
+      ? 'Are you sure you want to withdraw this booking request from nearby searching captains?'
+      : `Are you sure you want to cancel this trip with Captain ${driverInfo.name}?`;
+
     Alert.alert(
-      'Cancel Trip',
-      'Are you sure you want to cancel this booking?',
+      alertTitle,
+      alertBody,
       [
         { text: 'Keep Booking', style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: isPendingDriver ? 'Yes, Withdraw' : 'Yes, Cancel Trip',
           style: 'destructive',
           onPress: async () => {
             setCancelling(true);
@@ -355,7 +362,7 @@ export default function TripStatusScreen() {
               }
               DeviceEventEmitter.emit('trip_cancelled', { tripId: tripIdParam });
               sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
-              Alert.alert('Cancelled', 'Your trip has been cancelled.', [
+              Alert.alert('Trip Cancelled', isPendingDriver ? 'Your ride request was withdrawn.' : `Trip with Captain ${driverInfo.name} was cancelled.`, [
                 { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
               ]);
             } catch (e) {
@@ -477,32 +484,46 @@ export default function TripStatusScreen() {
         </View>
 
         {/* Driver Details Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>ASSIGNED CAPTAIN</Text>
-          <View style={styles.driverInfoRow}>
-            <View style={styles.avatarCircle}>
-              <FontAwesome5 name="user-tie" size={scale(22)} color="#101014" />
-            </View>
+        {(() => {
+          const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || driverInfo.name.toLowerCase().includes('search') || driverInfo.name.toLowerCase().includes('auto');
+          const captainTitle = isPendingDriver ? 'Searching Captain...' : driverInfo.name;
+          const vehicleNumberDisplay = isPendingDriver ? 'Assigning Captain...' : (driverInfo.vehicleNumber || 'Assigning Captain...');
 
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.driverName, { color: colors.textPrimary }]}>{driverInfo.name}</Text>
-              <Text style={[styles.driverVehicle, { color: colors.textMuted }]}>
-                {driverInfo.vehicleModel} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{driverInfo.vehicleNumber}</Text>
+          return (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>
+                {isPendingDriver ? 'SEARCHING NEARBY CAPTAINS' : 'ASSIGNED CAPTAIN'}
               </Text>
-              <View style={styles.ratingRow}>
-                <MaterialIcons name="star" size={scale(14)} color={colors.amber} />
-                <Text style={[styles.ratingText, { color: colors.textPrimary }]}>{driverInfo.rating || 4.9} ⭐ Verified Partner</Text>
+              <View style={styles.driverInfoRow}>
+                <View style={styles.avatarCircle}>
+                  <FontAwesome5 name="user-tie" size={scale(22)} color="#101014" />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.driverName, { color: colors.textPrimary }]}>{captainTitle}</Text>
+                  <Text style={[styles.driverVehicle, { color: colors.textMuted }]}>
+                    {driverInfo.vehicleModel} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{vehicleNumberDisplay}</Text>
+                  </Text>
+                  <View style={styles.ratingRow}>
+                    <MaterialIcons name="star" size={scale(14)} color={colors.amber} />
+                    <Text style={[styles.ratingText, { color: colors.textPrimary }]}>
+                      {isPendingDriver ? 'Targeted Category Captains' : `${driverInfo.rating || 4.9} ⭐ Verified Partner`}
+                    </Text>
+                  </View>
+                </View>
+
+                {!isPendingDriver && (
+                  <TouchableOpacity
+                    style={styles.callBtn}
+                    onPress={() => Linking.openURL(`tel:${driverInfo.phone || '+919900082400'}`)}
+                  >
+                    <MaterialIcons name="call" size={scale(18)} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
-
-            <TouchableOpacity
-              style={styles.callBtn}
-              onPress={() => Linking.openURL(`tel:${driverInfo.phone || '+919900082400'}`)}
-            >
-              <MaterialIcons name="call" size={scale(18)} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
+          );
+        })()}
 
         {/* Start OTP & End OTP Share Card */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>

@@ -1045,7 +1045,7 @@ export default function BookCabScreen() {
                   style={[styles.payMethodBtn, paymentMethod === 'cash' && styles.payMethodBtnActive]}
                   onPress={() => setPaymentMethod('cash')}
                 >
-                  <MaterialIcons name="attach-money" size={scale(14)} color={paymentMethod === 'cash' ? '#101010' : colors.textPrimary} />
+                  <MaterialIcons name="currency-rupee" size={scale(14)} color={paymentMethod === 'cash' ? '#101010' : colors.textPrimary} />
                   <Text style={[styles.payMethodText, { color: paymentMethod === 'cash' ? '#101010' : colors.textPrimary }]}>Cash</Text>
                 </TouchableOpacity>
 

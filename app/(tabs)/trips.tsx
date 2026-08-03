@@ -434,19 +434,38 @@ export default function TripsHistoryScreen() {
             </Text>
 
             {/* Assigned Partner & Vehicle Info */}
-            <View style={styles.partnerInfoRow}>
-              <View style={styles.avatarCircle}>
-                <FontAwesome5 name="user-tie" size={scale(16)} color={colors.amber} />
-              </View>
-              <View style={{ flex: 1, marginLeft: scale(10) }}>
-                <Text style={[styles.partnerName, { color: colors.textPrimary }]}>
-                  Captain: {activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Partner'}
-                </Text>
-                <Text style={[styles.partnerVehicle, { color: colors.textMuted }]}>
-                  {activeTripObj.vehicleModel || 'Verified Cab'} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{activeTripObj.vehicleNumber || 'KA-03-EX-8240'}</Text>
-                </Text>
-              </View>
-            </View>
+            {(() => {
+              const hasAssignedDriver = Boolean(
+                activeTripObj.driver_id ||
+                activeTripObj.driverId ||
+                activeTripObj.assignedToId ||
+                (activeTripObj.driverOrGuideName &&
+                 !activeTripObj.driverOrGuideName.toLowerCase().includes('search') &&
+                 !activeTripObj.driverOrGuideName.toLowerCase().includes('auto'))
+              );
+              const displayCaptain = hasAssignedDriver
+                ? (activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Partner')
+                : 'Searching Captain...';
+              const displayVehicleNo = hasAssignedDriver
+                ? (activeTripObj.vehicleNumber || activeTripObj.vehicle_number || 'KA-03-EX-8240')
+                : 'Assigning Captain...';
+
+              return (
+                <View style={styles.partnerInfoRow}>
+                  <View style={styles.avatarCircle}>
+                    <FontAwesome5 name="user-tie" size={scale(16)} color={colors.amber} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: scale(10) }}>
+                    <Text style={[styles.partnerName, { color: colors.textPrimary }]}>
+                      Captain: {displayCaptain}
+                    </Text>
+                    <Text style={[styles.partnerVehicle, { color: colors.textMuted }]}>
+                      {activeTripObj.vehicleModel || 'Verified Cab'} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{displayVehicleNo}</Text>
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             {/* Pickup & Destination */}
             <View style={styles.locationBlock}>
