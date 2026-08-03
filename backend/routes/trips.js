@@ -4,6 +4,14 @@ const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined, e
 
 const router = express.Router();
 
+// Helper to validate and convert UUID values for PostgreSQL foreign key constraints
+function toValidUuidOrNull(val) {
+  if (!val) return null;
+  const str = String(val).trim();
+  const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  return UUID_REGEX.test(str) ? str : null;
+}
+
 // Helper to sanitize payment_mode string to standard PostgreSQL enum values
 function sanitizePaymentMode(pm) {
   const str = String(pm || 'Cash').toLowerCase().trim();
@@ -254,15 +262,27 @@ router.post('/admin-notify', async (req, res) => {
 router.get('/active-trip/:customerId', async (req, res) => {
   try {
     const { customerId } = req.params;
+    const validUuid = toValidUuidOrNull(customerId);
 
-    const result = await db.query(
-      `SELECT * FROM trips
-       WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
-         AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done')
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [customerId]
-    );
+    let result;
+    if (validUuid) {
+      result = await db.query(
+        `SELECT * FROM trips
+         WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
+           AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [validUuid]
+      );
+    } else {
+      result = await db.query(
+        `SELECT * FROM trips
+         WHERE (customer_id IS NULL OR LOWER(customer_name) LIKE '%tourist%' OR LOWER(status) IN ('pending', 'in_progress', 'active', 'accepted', 'arrived'))
+           AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done')
+         ORDER BY created_at DESC
+         LIMIT 1`
+      );
+    }
 
     if (result.rows.length === 0) {
       return res.json({ success: true, hasActiveTrip: false, trip: null });
@@ -354,6 +374,7 @@ router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
     console.error('Error cancelling trip:', error);
     res.status(500).json({ success: false, message: 'Failed to cancel trip', error: error.message });
   }
+});
 /**
  * GET /api/trips/pending-requests
  * Fetch all pending unassigned trip requests for driver / guide dashboard
