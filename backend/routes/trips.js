@@ -976,13 +976,7 @@ router.post('/book', async (req, res) => {
     const advanceDepositPaid = isPreBooked ? Math.round(numAmount * 0.20) : 0;
     const remainingCashBalance = isPreBooked ? numAmount - advanceDepositPaid : numAmount;
 
-    let sanitizedPaymentMode = 'Wallet';
-    const rawPm = String(paymentMode || 'Wallet').toLowerCase();
-    if (rawPm.includes('cash')) {
-      sanitizedPaymentMode = 'Cash';
-    } else if (rawPm.includes('wallet') || rawPm.includes('upi') || rawPm.includes('online')) {
-      sanitizedPaymentMode = 'Wallet';
-    }
+    const sanitizedPaymentMode = sanitizePaymentMode(paymentMode);
 
     // Wallet Balance Check for Wallet/UPI payment mode
     if (rawPm.includes('upi') || rawPm.includes('wallet')) {
