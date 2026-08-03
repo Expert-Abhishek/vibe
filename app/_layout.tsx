@@ -1,8 +1,8 @@
 // Optional dev logging config
 if (__DEV__) {
   try {
-    // require('../ReactotronConfig');
-  } catch (e) {}
+    require('../ReactotronConfig');
+  } catch (e) { }
 }
 
 import { Platform } from 'react-native';
@@ -20,7 +20,7 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
         event.preventDefault();
       }
     });
-  } catch (e) {}
+  } catch (e) { }
 }
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';

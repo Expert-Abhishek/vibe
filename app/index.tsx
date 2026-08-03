@@ -1,5 +1,5 @@
-import { Redirect } from 'expo-router';
 import { getUserSessionSync } from '@/constants/authStore';
+import { Redirect } from 'expo-router';
 
 export default function Index() {
   const session = getUserSessionSync();
