@@ -1076,25 +1076,52 @@ router.post('/book', async (req, res) => {
     try {
       result = await db.query(insertSql, queryParams);
     } catch (dbErr) {
-      console.warn('Primary insert failed, trying lowercase payment_mode:', dbErr.message);
+      console.warn('Primary insert failed, attempting safe insert without payment_mode column:', dbErr.message);
       try {
-        const lowerParams = [...queryParams];
-        lowerParams[11] = sanitizedPaymentMode.toLowerCase();
-        result = await db.query(insertSql, lowerParams);
-      } catch (retryErr1) {
-        console.warn('Lowercase retry failed, running schema migration:', retryErr1.message);
-        await ensureTripsColumnsExist();
-        try {
-          result = await db.query(insertSql, queryParams);
-        } catch (retryErr2) {
-          console.warn('Migration retry failed, running basic fallback insert:', retryErr2.message);
-          result = await db.query(
-            `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
-             VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
-             RETURNING *`,
-            [tripType, title || `${pickupName} ➔ ${dropName}`, validCustomerId, customerName, parseFloat(amount), otpCode]
-          );
+        const safeSql = `INSERT INTO trips (
+          trip_type, title, customer_id, customer_name, pickup_name, drop_name,
+          pickup_lat, pickup_lng, drop_lat, drop_lng, amount,
+          status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Pending', $12, $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+         RETURNING *`;
+        const safeParams = [
+          tripType,
+          title || `${pickupName} ➔ ${dropName}`,
+          validCustomerId,
+          customerName,
+          pickupName,
+          dropName,
+          pickupLat,
+          pickupLng,
+          dropLat,
+          dropLng,
+          parseFloat(amount),
+          otpCode,
+          bookingType,
+          scheduledTime ? new Date(scheduledTime) : null,
+          advanceDepositPaid,
+          remainingCashBalance,
+          selectedVehicleCategory,
+        ];
+        result = await db.query(safeSql, safeParams);
+        if (result.rows[0]?.id) {
+          try {
+            await db.query("UPDATE trips SET payment_mode = $1 WHERE id = $2", [sanitizedPaymentMode, result.rows[0].id]);
+          } catch (uErr) {
+            try {
+              await db.query("UPDATE trips SET payment_mode = $1 WHERE id = $2", [sanitizedPaymentMode.toLowerCase(), result.rows[0].id]);
+            } catch (e2) {}
+          }
         }
+      } catch (fallbackErr) {
+        console.warn('Safe insert failed, running minimal fallback:', fallbackErr.message);
+        result = await db.query(
+          `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
+           VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
+           RETURNING *`,
+          [tripType, title || `${pickupName} ➔ ${dropName}`, validCustomerId, customerName, parseFloat(amount), otpCode]
+        );
       }
     }
 
@@ -1369,25 +1396,58 @@ router.post('/', async (req, res) => {
     try {
       result = await db.query(insertSql, queryParams);
     } catch (dbErr) {
-      console.warn('POST / primary insert failed, trying lowercase payment_mode:', dbErr.message);
+      console.warn('POST / primary insert failed, attempting safe insert without payment_mode column:', dbErr.message);
       try {
-        const lowerParams = [...queryParams];
-        lowerParams[8] = sanitizedPaymentMode.toLowerCase();
-        result = await db.query(insertSql, lowerParams);
-      } catch (retryErr1) {
-        console.warn('Lowercase retry failed, executing schema migration:', retryErr1.message);
-        await ensureTripsColumnsExist();
-        try {
-          result = await db.query(insertSql, queryParams);
-        } catch (retryErr2) {
-          console.warn('Migration retry failed, executing basic fallback insert:', retryErr2.message);
-          result = await db.query(
-            `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-             RETURNING *`,
-            [tripType, title.trim(), validCustomerId, customerName.trim(), totalAmount, status || 'Pending', otpCode]
-          );
+        const safeSql = `INSERT INTO trips (
+          trip_type, title, customer_id, customer_name, driver_or_guide_name,
+          plan_id, destination_ids, amount, status,
+          duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
+          booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+         RETURNING *`;
+        const safeParams = [
+          tripType,
+          title.trim(),
+          validCustomerId,
+          customerName.trim(),
+          driverOrGuideName || 'Assigned Driver',
+          validPlanId,
+          Array.isArray(destinationIds) ? destinationIds : [],
+          totalAmount,
+          status || 'Pending',
+          parseFloat(durationHours),
+          parseFloat(extraHours),
+          parseFloat(addonCharge),
+          parseInt(rating, 10),
+          otpCode,
+          req.body.pickupName || 'Bengaluru City Center',
+          req.body.dropName || title.trim(),
+          bookingType,
+          scheduledTime ? new Date(scheduledTime) : null,
+          advanceDepositPaid,
+          remainingCashBalance,
+          targetDriverId || null,
+          selectedVehicleCategory,
+        ];
+        result = await db.query(safeSql, safeParams);
+        if (result.rows[0]?.id) {
+          try {
+            await db.query("UPDATE trips SET payment_mode = $1 WHERE id = $2", [sanitizedPaymentMode, result.rows[0].id]);
+          } catch (uErr) {
+            try {
+              await db.query("UPDATE trips SET payment_mode = $1 WHERE id = $2", [sanitizedPaymentMode.toLowerCase(), result.rows[0].id]);
+            } catch (e2) {}
+          }
         }
+      } catch (fallbackErr) {
+        console.warn('POST / safe insert failed, running minimal fallback:', fallbackErr.message);
+        result = await db.query(
+          `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+           RETURNING *`,
+          [tripType, title.trim(), validCustomerId, customerName.trim(), totalAmount, status || 'Pending', otpCode]
+        );
       }
     }
 
