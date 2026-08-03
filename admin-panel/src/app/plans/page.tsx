@@ -55,6 +55,10 @@ export default function PlansPage() {
     km: 150,
     duration: '2 Days / 1 Night',
     price: 4999,
+    price_5_seater: 4999,
+    price_7_seater: 6749,
+    price_4x4: 7999,
+    price_auto: 3249,
     selectedDestinationIds: [] as string[],
     isActive: true,
   });
@@ -68,6 +72,10 @@ export default function PlansPage() {
     km: 0,
     duration: '',
     price: 0,
+    price_5_seater: 0,
+    price_7_seater: 0,
+    price_4x4: 0,
+    price_auto: 0,
     isActive: true,
   });
 
@@ -106,6 +114,10 @@ export default function PlansPage() {
       km: 150,
       duration: '2 Days / 1 Night',
       price: 4999,
+      price_5_seater: 4999,
+      price_7_seater: 6749,
+      price_4x4: 7999,
+      price_auto: 3249,
       selectedDestinationIds: [],
       isActive: true,
     });
@@ -128,12 +140,22 @@ export default function PlansPage() {
     e.preventDefault();
     if (!addPlanForm.name.trim()) return;
 
+    const baseP = addPlanForm.price || 4999;
+    const p5 = addPlanForm.price_5_seater || baseP;
+    const p7 = addPlanForm.price_7_seater || Math.round(baseP * 1.35);
+    const p4x4 = addPlanForm.price_4x4 || Math.round(baseP * 1.60);
+    const pAuto = addPlanForm.price_auto || Math.round(baseP * 0.65);
+
     const created = await createPlanApi({
       name: addPlanForm.name,
       description: addPlanForm.description,
       km: addPlanForm.km,
       duration: addPlanForm.duration,
-      price: addPlanForm.price,
+      price: baseP,
+      price_5_seater: p5,
+      price_7_seater: p7,
+      price_4x4: p4x4,
+      price_auto: pAuto,
       destinationIds: addPlanForm.selectedDestinationIds,
     });
 
@@ -153,14 +175,17 @@ export default function PlansPage() {
       };
     });
 
-
     const newPlan: Plan = created || {
       id: `plan-${Date.now()}`,
       name: addPlanForm.name,
       description: addPlanForm.description,
       km: addPlanForm.km,
       duration: addPlanForm.duration,
-      price: addPlanForm.price,
+      price: baseP,
+      price_5_seater: p5,
+      price_7_seater: p7,
+      price_4x4: p4x4,
+      price_auto: pAuto,
       isActive: addPlanForm.isActive,
       checkpoints: populatedCheckpoints,
     };
@@ -170,7 +195,6 @@ export default function PlansPage() {
     showToast(`Plan Package "${addPlanForm.name}" created!`);
     await loadData();
   };
-
 
   const handleTogglePlan = async (planId: string) => {
     setPlans(prev =>
@@ -190,12 +214,17 @@ export default function PlansPage() {
 
   const handleOpenEditPlan = (plan: Plan) => {
     setEditingPlan(plan);
+    const baseP = plan.price || 4999;
     setEditPlanForm({
       name: plan.name,
       description: plan.description,
       km: plan.km,
       duration: plan.duration,
-      price: plan.price,
+      price: baseP,
+      price_5_seater: plan.price_5_seater || baseP,
+      price_7_seater: plan.price_7_seater || Math.round(baseP * 1.35),
+      price_4x4: plan.price_4x4 || Math.round(baseP * 1.60),
+      price_auto: plan.price_auto || Math.round(baseP * 0.65),
       isActive: plan.isActive,
     });
     setIsEditPlanModalOpen(true);
@@ -215,7 +244,9 @@ export default function PlansPage() {
       )
     );
     setEditingPlan(prev => prev ? { ...prev, ...editPlanForm } : null);
+    setIsEditPlanModalOpen(false);
     showToast('Plan details updated!');
+    await loadData();
   };
 
   const handleTogglePlanCheckpoint = async (planId: string, destId: string) => {
@@ -433,6 +464,29 @@ export default function PlansPage() {
                   </div>
                 </div>
 
+                {/* Category-Wise Pricing Matrix */}
+                <div className="p-3 bg-dark-hover/30 rounded-xl border border-dark-border/60">
+                  <span className="text-[10px] text-brand-400 font-bold uppercase block mb-2">Category Vehicle Pricing</span>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
+                      <span className="text-[11px] text-gray-300">🚘 5 Seater</span>
+                      <strong className="text-brand-400">₹{(plan.price_5_seater || plan.price).toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
+                      <span className="text-[11px] text-gray-300">🚐 7 Seater</span>
+                      <strong className="text-brand-400">₹{(plan.price_7_seater || Math.round(plan.price * 1.35)).toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
+                      <span className="text-[11px] text-gray-300">🏔️ 4x4 Off-Road</span>
+                      <strong className="text-brand-400">₹{(plan.price_4x4 || Math.round(plan.price * 1.60)).toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
+                      <span className="text-[11px] text-gray-300">🛺 Auto Rickshaw</span>
+                      <strong className="text-brand-400">₹{(plan.price_auto || Math.round(plan.price * 0.65)).toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Included Destinations / Checkpoints List */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
@@ -605,16 +659,71 @@ export default function PlansPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Price (₹) *
+                    Base Package Price (₹) *
                   </label>
                   <input
                     type="number"
                     required
                     placeholder="4999"
                     value={addPlanForm.price}
-                    onChange={e => setAddPlanForm({ ...addPlanForm, price: Number(e.target.value) })}
+                    onChange={e => {
+                      const newP = Number(e.target.value);
+                      setAddPlanForm({
+                        ...addPlanForm,
+                        price: newP,
+                        price_5_seater: newP,
+                        price_7_seater: Math.round(newP * 1.35),
+                        price_4x4: Math.round(newP * 1.60),
+                        price_auto: Math.round(newP * 0.65),
+                      });
+                    }}
                     className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
                   />
+                </div>
+
+                {/* Category Vehicle Pricing Inputs */}
+                <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-3">
+                  <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
+                    Category Vehicle Pricing Rates (₹)
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🚘 5-Seater</label>
+                      <input
+                        type="number"
+                        value={addPlanForm.price_5_seater}
+                        onChange={e => setAddPlanForm({ ...addPlanForm, price_5_seater: Number(e.target.value) })}
+                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🚐 7-Seater</label>
+                      <input
+                        type="number"
+                        value={addPlanForm.price_7_seater}
+                        onChange={e => setAddPlanForm({ ...addPlanForm, price_7_seater: Number(e.target.value) })}
+                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🏔️ 4x4 Off-Road</label>
+                      <input
+                        type="number"
+                        value={addPlanForm.price_4x4}
+                        onChange={e => setAddPlanForm({ ...addPlanForm, price_4x4: Number(e.target.value) })}
+                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🛺 Auto Rickshaw</label>
+                      <input
+                        type="number"
+                        value={addPlanForm.price_auto}
+                        onChange={e => setAddPlanForm({ ...addPlanForm, price_auto: Number(e.target.value) })}
+                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between sm:pt-6">
@@ -747,13 +856,68 @@ export default function PlansPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Price (₹)</label>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Base Package Price (₹)</label>
                     <input
                       type="number"
                       value={editPlanForm.price}
-                      onChange={e => setEditPlanForm({ ...editPlanForm, price: Number(e.target.value) })}
+                      onChange={e => {
+                        const newP = Number(e.target.value);
+                        setEditPlanForm({
+                          ...editPlanForm,
+                          price: newP,
+                          price_5_seater: newP,
+                          price_7_seater: Math.round(newP * 1.35),
+                          price_4x4: Math.round(newP * 1.60),
+                          price_auto: Math.round(newP * 0.65),
+                        });
+                      }}
                       className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
                     />
+                  </div>
+
+                  {/* Category Vehicle Pricing Inputs for Edit Modal */}
+                  <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-3">
+                    <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
+                      Category Vehicle Pricing Rates (₹)
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🚘 5-Seater</label>
+                        <input
+                          type="number"
+                          value={editPlanForm.price_5_seater}
+                          onChange={e => setEditPlanForm({ ...editPlanForm, price_5_seater: Number(e.target.value) })}
+                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🚐 7-Seater</label>
+                        <input
+                          type="number"
+                          value={editPlanForm.price_7_seater}
+                          onChange={e => setEditPlanForm({ ...editPlanForm, price_7_seater: Number(e.target.value) })}
+                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🏔️ 4x4 Off-Road</label>
+                        <input
+                          type="number"
+                          value={editPlanForm.price_4x4}
+                          onChange={e => setEditPlanForm({ ...editPlanForm, price_4x4: Number(e.target.value) })}
+                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🛺 Auto Rickshaw</label>
+                        <input
+                          type="number"
+                          value={editPlanForm.price_auto}
+                          onChange={e => setEditPlanForm({ ...editPlanForm, price_auto: Number(e.target.value) })}
+                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between sm:pt-5">

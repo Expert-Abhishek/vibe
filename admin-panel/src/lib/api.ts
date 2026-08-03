@@ -366,7 +366,18 @@ export async function fetchPlansApi(): Promise<Plan[]> {
   return [];
 }
 
-export async function createPlanApi(payload: { name: string; description: string; km: number; duration: string; price: number; destinationIds: string[] }): Promise<Plan | null> {
+export async function createPlanApi(payload: {
+  name: string;
+  description: string;
+  km: number;
+  duration: string;
+  price: number;
+  price_5_seater?: number;
+  price_7_seater?: number;
+  price_4x4?: number;
+  price_auto?: number;
+  destinationIds: string[];
+}): Promise<Plan | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/plans`, {
       method: 'POST',

@@ -156,6 +156,10 @@ export interface Plan {
   km: number;
   duration: string; // e.g. "2 Days / 1 Night", "8 Hours"
   price: number;
+  price_5_seater?: number;
+  price_7_seater?: number;
+  price_4x4?: number;
+  price_auto?: number;
   isActive: boolean;
   checkpoints: PlanCheckpoint[];
   createdAt?: string;
