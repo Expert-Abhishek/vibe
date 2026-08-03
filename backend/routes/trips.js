@@ -23,8 +23,11 @@ function sanitizePaymentMode(pm) {
   return 'Cash';
 }
 
-// Auto-migrate trips table columns if missing on production database
+// Auto-migrate trips table columns if missing on production database (deferred execution)
+let migrationExecuted = false;
 async function ensureTripsColumnsExist() {
+  if (migrationExecuted) return;
+  migrationExecuted = true;
   try {
     await db.query(`
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS scheduled_time TIMESTAMP WITH TIME ZONE;
@@ -53,9 +56,6 @@ async function ensureTripsColumnsExist() {
     console.warn('Trips table auto-migration warning:', e.message);
   }
 }
-
-// Run migration on route load
-ensureTripsColumnsExist();
 
 /**
  * GET /api/trips/admin/all
@@ -1294,8 +1294,10 @@ router.post('/', async (req, res) => {
     const remainingCashBalance = isPreBooked ? totalAmount - advanceDepositPaid : totalAmount;
 
     const targetDriverId = req.body.driverId || req.body.selectedDriverId || req.body.driver_id || req.body.assignedToId || null;
-
     const selectedVehicleCategory = req.body.vehicleCategory || req.body.vehicle_category || '5_seater';
+
+    const validCustomerId = toValidUuidOrNull(customerId);
+    const validPlanId = toValidUuidOrNull(planId);
 
     const result = await db.query(
       `INSERT INTO trips (
@@ -1309,10 +1311,10 @@ router.post('/', async (req, res) => {
       [
         tripType,
         title.trim(),
-        customerId || null,
+        validCustomerId,
         customerName.trim(),
         driverOrGuideName || 'Assigned Driver',
-        planId || null,
+        validPlanId,
         Array.isArray(destinationIds) ? destinationIds : [],
         totalAmount,
         sanitizePaymentMode(paymentMode),
