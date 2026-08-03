@@ -14,13 +14,13 @@ function toValidUuidOrNull(val) {
 
 // Helper to sanitize payment_mode string to standard PostgreSQL enum values
 function sanitizePaymentMode(pm) {
-  const str = String(pm || 'Cash').toLowerCase().trim();
-  if (str.includes('cash')) return 'Cash';
-  if (str.includes('upi')) return 'UPI';
-  if (str.includes('wallet')) return 'Wallet';
-  if (str.includes('card')) return 'Card';
-  if (str.includes('online') || str.includes('razorpay')) return 'Online';
-  return 'Cash';
+  const str = String(pm || 'cash').toLowerCase().trim();
+  if (str.includes('cash')) return 'cash';
+  if (str.includes('upi')) return 'upi';
+  if (str.includes('wallet')) return 'wallet';
+  if (str.includes('card')) return 'card';
+  if (str.includes('online') || str.includes('razorpay')) return 'online';
+  return 'cash';
 }
 
 // Auto-migrate trips table columns if missing on production database (deferred execution)
@@ -30,6 +30,7 @@ async function ensureTripsColumnsExist() {
   migrationExecuted = true;
   try {
     await db.query(`
+      ALTER TABLE trips ALTER COLUMN payment_mode TYPE VARCHAR(50) USING payment_mode::text;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS scheduled_time TIMESTAMP WITH TIME ZONE;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'INSTANT';
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS advance_deposit_paid NUMERIC(10,2) DEFAULT 0.00;
