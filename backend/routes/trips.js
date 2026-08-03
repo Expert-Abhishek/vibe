@@ -1443,8 +1443,8 @@ router.post('/', async (req, res) => {
       } catch (fallbackErr) {
         console.warn('POST / safe insert failed, running minimal fallback:', fallbackErr.message);
         result = await db.query(
-          `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+          `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING *`,
           [tripType, title.trim(), validCustomerId, customerName.trim(), totalAmount, status || 'Pending', otpCode]
         );
