@@ -337,6 +337,50 @@ router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
     console.error('Error cancelling trip:', error);
     res.status(500).json({ success: false, message: 'Failed to cancel trip', error: error.message });
   }
+/**
+ * GET /api/trips/pending-requests
+ * Fetch all pending unassigned trip requests for driver / guide dashboard
+ */
+router.get('/pending-requests', async (req, res) => {
+  try {
+    const { role, vehicleCategory, driverId } = req.query;
+
+    const result = await db.query(
+      `SELECT * FROM trips 
+       WHERE LOWER(status) IN ('pending', 'dispatched', 'requested')
+       ORDER BY created_at DESC LIMIT 50`
+    );
+
+    const formattedTrips = result.rows.map(t => ({
+      id: t.id,
+      tripId: t.id,
+      title: t.title,
+      customerName: t.customer_name || 'Tourist Client',
+      touristName: t.customer_name || 'Tourist Client',
+      pickup: t.pickup_name || 'Pickup Location',
+      drop: t.drop_name || t.title || 'Drop Location',
+      amount: parseFloat(t.amount || 0),
+      estimatedFare: parseFloat(t.amount || 0),
+      price: parseFloat(t.amount || 0),
+      vehicleCategory: t.vehicle_category || '5_seater',
+      vehicle_category: t.vehicle_category || '5_seater',
+      status: t.status,
+      bookingType: t.booking_type || 'INSTANT',
+      otp: t.otp || '8240',
+      endOtp: t.end_otp || '4321',
+      checkpoints: t.destination_ids || [],
+      scheduledTime: t.scheduled_time,
+      createdAt: t.created_at,
+    }));
+
+    res.json({
+      success: true,
+      data: formattedTrips,
+    });
+  } catch (error) {
+    console.error('Error fetching pending requests:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch pending requests', data: [] });
+  }
 });
 
 /**

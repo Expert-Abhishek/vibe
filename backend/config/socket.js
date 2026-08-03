@@ -49,12 +49,15 @@ function initSocket(server) {
         const roleRoom = `role:${role}`;
         socket.join(roleRoom);
         console.log(`[Socket.io] Socket ${socket.id} joined role room [${roleRoom}]`);
+      } else {
+        socket.join('role:driver');
       }
 
       if (cat) {
-        const vehicleRoom = `role:${cat}`;
-        socket.join(vehicleRoom);
-        console.log(`[Socket.io] Socket ${socket.id} joined targeted category room [${vehicleRoom}]`);
+        const normCat = String(cat).toLowerCase().replace('5seater', '5_seater').replace('7seater', '7_seater');
+        socket.join(`role:${normCat}`);
+        socket.join(`role:${cat}`);
+        console.log(`[Socket.io] Socket ${socket.id} joined targeted category rooms [role:${normCat}] & [role:${cat}]`);
       }
     });
 
@@ -246,27 +249,34 @@ function emitTripRequest(tripObject) {
     createdAt: new Date().toISOString(),
   };
 
+  const normalizedCat = String(vehicleCategory || '5_seater').toLowerCase().replace('5seater', '5_seater').replace('7seater', '7_seater');
+
+  // Multi-event emission helper for max compatibility
+  const emitRequestToRoom = (roomName) => {
+    if (!io) return;
+    io.to(roomName).emit('trip_request', normalizedTrip);
+    io.to(roomName).emit('trip_requested', normalizedTrip);
+    io.to(roomName).emit('new_driver_request', normalizedTrip);
+    io.to(roomName).emit('RIDE_REQUESTED', normalizedTrip);
+    io.to(roomName).emit('notification:new', notificationPayload);
+  };
+
   if (driverId) {
     // TARGETED DIRECT REQUEST: Emit STRICTLY to specific driver/guide room
     const targetRoom = `user:${driverId}`;
-    io.to(targetRoom).emit('trip_request', normalizedTrip);
-    io.to(targetRoom).emit('notification:new', notificationPayload);
+    emitRequestToRoom(targetRoom);
     console.log(`🎯 [DIRECT TARGETED REQUEST] Sent strictly to room: [${targetRoom}] for Trip ID: ${normalizedTrip.id}`);
-  } else if (vehicleCategory) {
-    // TARGETED CATEGORY ROOM DISPATCH (e.g. role:5_seater, role:7_seater, role:4x4, role:auto)
-    const categoryRoom = `role:${vehicleCategory}`;
-    io.to(categoryRoom).emit('trip_request', normalizedTrip);
-    io.to(categoryRoom).emit('notification:new', notificationPayload);
-    io.to('role:driver').emit('trip_request', normalizedTrip);
-    io.to('role:driver').emit('notification:new', notificationPayload);
-    console.log(`🎯 [CATEGORY TARGETED REQUEST] Sent to room [${categoryRoom}] & [role:driver] for Trip ID: ${normalizedTrip.id}`);
   } else {
-    // GENERAL BROADCAST
-    io.to('role:driver').emit('trip_request', normalizedTrip);
-    io.to('role:driver').emit('notification:new', notificationPayload);
-    io.to('role:guide').emit('trip_request', normalizedTrip);
-    io.to('role:guide').emit('notification:new', notificationPayload);
-    console.log(`📢 [BROADCAST REQUEST] Emitted to all drivers/guides for Trip ID: ${normalizedTrip.id}`);
+    // TARGETED CATEGORY ROOM DISPATCH (e.g. role:5_seater, role:7_seater, role:4x4, role:auto)
+    emitRequestToRoom(`role:${normalizedCat}`);
+    emitRequestToRoom(`role:${vehicleCategory}`);
+    emitRequestToRoom('role:driver');
+    
+    // Global socket broadcast fallback
+    io.emit('trip_request', normalizedTrip);
+    io.emit('trip_requested', normalizedTrip);
+    io.emit('new_driver_request', normalizedTrip);
+    console.log(`🎯 [CATEGORY DISPATCH] Emitted trip ${normalizedTrip.id} to rooms [role:${normalizedCat}] & [role:driver]`);
   }
 }
 

@@ -802,10 +802,12 @@ export default function DriverDashboardScreen() {
     const socket = initSocketService(String(driverId), 'driver');
 
     if (socket) {
+      const currentCat = vehicleCategory || (session as any)?.profile?.vehicle_category || (session as any)?.profile?.vehicleCategory || '5_seater';
       const joinData = {
         userId: String(driverId), // String normalization is critical
         role: session?.role || 'driver',
-        vehicleType: (session as any)?.vehicleType || '5seater',
+        vehicleType: currentCat,
+        vehicleCategory: currentCat,
       };
 
       // Emit join_room immediately if already connected
@@ -885,6 +887,9 @@ export default function DriverDashboardScreen() {
       };
 
       socket.on('trip_request', handleIncomingTripData);
+      socket.on('trip_requested', handleIncomingTripData);
+      socket.on('new_driver_request', handleIncomingTripData);
+      socket.on('RIDE_REQUESTED', handleIncomingTripData);
       socket.on('notification:new', handleIncomingTripData);
       socket.on('trip_cancelled', handleTripCancelled);
       socket.on('RIDE_CANCELLED', handleTripCancelled);
@@ -930,7 +935,12 @@ export default function DriverDashboardScreen() {
       if (socket) {
         socket.off('connect');
         socket.off('trip_request');
+        socket.off('trip_requested');
+        socket.off('new_driver_request');
+        socket.off('RIDE_REQUESTED');
         socket.off('notification:new');
+        socket.off('trip_cancelled');
+        socket.off('RIDE_CANCELLED');
       }
     };
   }, []);
