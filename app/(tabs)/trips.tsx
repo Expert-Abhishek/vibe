@@ -390,10 +390,8 @@ export default function TripsHistoryScreen() {
                 }
               }
 
-              if (hasActiveTripState && activeTripData && String(activeTripData.id) === tid) {
-                setHasActiveTripState(false);
-                setActiveTripData(null);
-              }
+              setHasActiveTripState(false);
+              setActiveTripData(null);
 
               const userTripIdx = adminState.userTrips.findIndex(t => String(t.id) === tid);
               if (userTripIdx !== -1) {

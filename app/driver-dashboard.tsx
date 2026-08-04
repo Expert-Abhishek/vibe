@@ -1054,9 +1054,15 @@ export default function DriverDashboardScreen() {
       handledTripIdsRef.current.add(String(tripId));
 
       try {
-        // 1. Call API POST /api/trips/:id/accept and wait for 200 OK
+        // 1. Call API POST /api/trips/:id/accept
         const apiRes = await acceptTripApi(String(tripId), driverId, session?.name || driverName);
-        console.log('[DriverDashboard] 🟢 acceptTripApi 200 OK response:', apiRes);
+        console.log('[DriverDashboard] 🟢 acceptTripApi response:', apiRes);
+        if (apiRes && apiRes.success === false && String(apiRes.message || '').toLowerCase().includes('already accepted')) {
+          setRequestVisible(false);
+          setIncomingRequest(null);
+          Alert.alert('Trip Already Taken', apiRes.message || 'Another captain accepted this booking request first.');
+          return;
+        }
       } catch (e) {
         console.warn('[DriverDashboard] acceptTripApi error:', e);
       }

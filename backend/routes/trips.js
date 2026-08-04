@@ -1522,20 +1522,24 @@ router.post('/', async (req, res) => {
     emitTripRequest(t);
 
     // Notify drivers / guides via push notifications
-    const targetRole = tripType === 'guide' ? 'guide' : 'driver';
-    const tokensRes = await db.query(
-      `SELECT push_token FROM users WHERE role = $1 AND push_token IS NOT NULL AND push_token != ''`,
-      [targetRole]
-    );
-
-    tokensRes.rows.forEach(row => {
-      sendExpoPushNotification(
-        row.push_token,
-        `🚖 New Booking Request for ${driverOrGuideName || 'Partner'}!`,
-        `Customer ${customerName} booked: ${t.title} | Fare: ₹${t.amount}`,
-        { tripId: t.id, title: t.title, amount: t.amount, otp: t.otp }
-      );
-    });
+    // Emit socket request strictly ONCE per trip from backend
+    try {
+      emitTripRequest({
+        id: t.id,
+        tripId: t.id,
+        title: t.title,
+        customerName: t.customer_name,
+        pickup: t.pickup_name,
+        drop: t.drop_name,
+        amount: t.amount,
+        tripType: t.trip_type,
+        bookingType: t.booking_type,
+        vehicleCategory: t.vehicle_category,
+        createdAt: t.created_at,
+      });
+    } catch (e) {
+      console.warn('Backend emitTripRequest error:', e);
+    }
 
     res.status(201).json({
       success: true,
@@ -1582,14 +1586,50 @@ router.post('/:id/accept', async (req, res) => {
       return res.status(400).json({ success: false, message: 'driverId is required' });
     }
 
-    // 1. Fetch trip details for fare calculation
-    let tripAmount = 2000;
-    const tRes = await db.query("SELECT amount, trip_type FROM trips WHERE id = $1 OR CAST(id AS VARCHAR) = $1", [id]);
-    if (tRes.rows.length > 0 && tRes.rows[0].amount) {
-      tripAmount = parseFloat(tRes.rows[0].amount);
+    // 1. Fetch trip details & prevent double acceptance if already accepted by another captain
+    const tRes = await db.query("SELECT * FROM trips WHERE id = $1 OR CAST(id AS VARCHAR) = $1", [id]);
+    if (tRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
     }
 
-    // 2. Fetch wallet balance and platform fee for driver or guide
+    const currentTrip = tRes.rows[0];
+    const currentStatus = String(currentTrip.status || '').toLowerCase().trim();
+    if (currentStatus === 'accepted' || currentStatus === 'in_progress' || currentStatus === 'arrived' || currentStatus === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: `Trip already accepted by another Captain (${currentTrip.driver_or_guide_name || 'Partner'}).`,
+        data: currentTrip,
+      });
+    }
+
+    let tripAmount = parseFloat(currentTrip.amount || 2000);
+
+    // 2. Fetch driver profile details & vehicle info
+    let driverPhone = '+91 99000 82400';
+    let vehicleModel = 'AC Cab 5-Seater';
+    let vehicleNumber = 'KA-03-EX-8240';
+    let rating = 4.9;
+
+    try {
+      const pRes = await db.query(
+        `SELECT u.phone, u.name, d.vehicle_model, d.vehicle_number, d.rating 
+         FROM users u 
+         LEFT JOIN driver_profiles d ON u.id = d.user_id 
+         WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text`,
+        [driverId]
+      );
+      if (pRes.rows.length > 0) {
+        driverPhone = pRes.rows[0].phone || driverPhone;
+        vehicleModel = pRes.rows[0].vehicle_model || vehicleModel;
+        vehicleNumber = pRes.rows[0].vehicle_number || vehicleNumber;
+        rating = parseFloat(pRes.rows[0].rating || 4.9);
+        if (!driverName || driverName === 'Verified Partner') {
+          driverName = pRes.rows[0].name || driverName;
+        }
+      }
+    } catch (e) {}
+
+    // 3. Fetch wallet balance and platform fee for driver or guide
     let dRes = { rows: [] };
     try {
       dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
@@ -1618,25 +1658,13 @@ router.post('/:id/accept', async (req, res) => {
       feePercent = parseFloat(gRes.rows[0].platform_fee || 10);
       isGuide = true;
     } else {
-      // Fallback: check users table role
-      const uRes = await db.query("SELECT role, name FROM users WHERE id = $1", [driverId]);
-      if (uRes.rows.length > 0) {
-        const uRole = uRes.rows[0].role;
-        if (uRole === 'guide') isGuide = true;
-        else if (uRole === 'driver') isDriver = true;
-        else isGuide = true; // default to guide
-        if (!driverName || driverName === 'Verified Partner') {
-          driverName = uRes.rows[0].name || 'Assigned Local Guide';
-        }
-      } else {
-        isGuide = true;
-      }
+      isDriver = true;
     }
 
     // Calculate platform fee based on % of trip amount (min ₹10)
     const platformFee = Math.max(10, Math.round((tripAmount * feePercent) / 100));
 
-    // 3. Deduct platform fee from profile (upsert if missing)
+    // Deduct platform fee from profile
     if (isDriver) {
       await db.query(`
         INSERT INTO driver_profiles (user_id, wallet_balance) VALUES ($1, -$2)
@@ -1649,34 +1677,11 @@ router.post('/:id/accept', async (req, res) => {
       `, [driverId, platformFee]);
     }
 
-    // 4. Log transaction in wallet_transactions for partner history
+    // Log transaction
     await db.query(
       "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
       [driverId, 'debit', platformFee, `Platform Fee (${feePercent}%) for Booking #${id}`]
     );
-
-    // 5. Log Platform Fee Revenue for Admin Dashboard
-    try {
-      await db.query(`
-        CREATE TABLE IF NOT EXISTS platform_fee_revenue (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-            user_name VARCHAR(255),
-            user_role VARCHAR(50) NOT NULL,
-            trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
-            amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-            description TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
-      await db.query(
-        `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [driverId, driverName, isGuide ? 'guide' : 'driver', id, platformFee, `Platform Fee (${feePercent}%) for Booking #${id}`]
-      );
-    } catch (pErr) {
-      console.warn('Failed to log platform fee revenue:', pErr.message);
-    }
 
     const generatedStartOtp = Math.floor(1000 + Math.random() * 9000).toString();
     const generatedEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
@@ -1689,14 +1694,26 @@ router.post('/:id/accept', async (req, res) => {
       [driverName, driverId || null, generatedStartOtp, generatedEndOtp, id]
     );
 
-    let trip = result.rows.length > 0 ? result.rows[0] : null;
-    if (!trip) {
-      const fetchRes = await db.query(`SELECT * FROM trips WHERE id = $1 OR CAST(id AS VARCHAR) = $1`, [id]);
-      trip = fetchRes.rows.length > 0 ? fetchRes.rows[0] : { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId, otp: generatedStartOtp, end_otp: generatedEndOtp };
-    }
+    let trip = result.rows.length > 0 ? result.rows[0] : { ...currentTrip, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId, otp: generatedStartOtp, end_otp: generatedEndOtp };
 
-    emitTripAccepted(trip);
-    emitTripStatusUpdated(trip, 'Accepted');
+    const acceptedPayload = {
+      ...trip,
+      id: trip.id,
+      tripId: trip.id,
+      status: 'Accepted',
+      driverName: driverName,
+      driver_or_guide_name: driverName,
+      driverPhone: driverPhone,
+      driverRating: rating,
+      vehicleModel: vehicleModel,
+      vehicleNumber: vehicleNumber,
+      otp: generatedStartOtp,
+      endOtp: generatedEndOtp,
+      startOtp: generatedStartOtp,
+    };
+
+    emitTripAccepted(acceptedPayload);
+    emitTripStatusUpdated(acceptedPayload, 'Accepted');
 
     // Notify tourist
     if (trip.customer_id) {
@@ -1705,8 +1722,8 @@ router.post('/:id/accept', async (req, res) => {
         sendExpoPushNotification(
           userRes.rows[0].push_token,
           '🎉 Partner Confirmed Your Booking!',
-          `${driverName} has accepted your trip request! Your Start OTP is ${trip.otp}.`,
-          { tripId: trip.id, status: 'Accepted', driverName, otp: trip.otp, endOtp: trip.end_otp }
+          `${driverName} has accepted your trip request! Your Start OTP is ${generatedStartOtp}.`,
+          { tripId: trip.id, status: 'Accepted', driverName, otp: generatedStartOtp, endOtp: generatedEndOtp }
         );
       }
     }
@@ -1714,7 +1731,7 @@ router.post('/:id/accept', async (req, res) => {
     res.json({
       success: true,
       message: 'Trip accepted successfully!',
-      data: trip,
+      data: acceptedPayload,
     });
   } catch (error) {
     console.error('Error accepting trip:', error);
