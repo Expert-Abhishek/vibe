@@ -535,6 +535,27 @@ router.get('/live-location/:tripId', async (req, res) => {
       }
     }
 
+    let planData = {
+      name: trip.title,
+      duration_hours: parseFloat(trip.duration_hours || 8),
+      distance_km: 120,
+      checkpoints: trip.destination_ids || [],
+    };
+    if (trip.plan_id) {
+      try {
+        const planRes = await db.query('SELECT * FROM plans WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [trip.plan_id]);
+        if (planRes.rows.length > 0) {
+          const p = planRes.rows[0];
+          planData = {
+            name: p.name || trip.title,
+            duration_hours: parseFloat(trip.duration_hours || p.duration_hours || 8),
+            distance_km: parseFloat(p.distance_km || 120),
+            checkpoints: (Array.isArray(trip.destination_ids) && trip.destination_ids.length > 0) ? trip.destination_ids : (p.checkpoints || []),
+          };
+        }
+      } catch (e) {}
+    }
+
     res.json({
       success: true,
       data: {
@@ -542,6 +563,11 @@ router.get('/live-location/:tripId', async (req, res) => {
         id: trip.id,
         tripId: trip.id,
         status: trip.status,
+        planName: planData.name,
+        durationHours: planData.duration_hours,
+        distanceKm: planData.distance_km,
+        checkpoints: Array.isArray(trip.destination_ids) && trip.destination_ids.length > 0 ? trip.destination_ids : planData.checkpoints,
+        trip_checkpoints: Array.isArray(trip.destination_ids) && trip.destination_ids.length > 0 ? trip.destination_ids : planData.checkpoints,
         otp: trip.otp,
         endOtp: trip.end_otp,
         end_otp: trip.end_otp,

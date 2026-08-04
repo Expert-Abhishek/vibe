@@ -88,6 +88,9 @@ export default function TripStatusScreen() {
   const [tripCheckpoints, setTripCheckpoints] = useState<any[]>(initialLocalTrip?.checkpoints || initialLocalTrip?.route || []);
   const [startOtp, setStartOtp] = useState(initialLocalTrip?.otp || '8240');
   const [endOtp, setEndOtp] = useState(initialLocalTrip?.endOtp || '4321');
+  const [planName, setPlanName] = useState<string>(initialLocalTrip?.title || 'Tour Plan Package');
+  const [durationHours, setDurationHours] = useState<number>(initialLocalTrip?.durationHours || 8);
+  const [distanceKm, setDistanceKm] = useState<number>(initialLocalTrip?.distanceKm || 120);
 
   const colors = {
     bg: isDark ? '#101014' : '#F5F5F7',
@@ -143,6 +146,10 @@ export default function TripStatusScreen() {
             }
             setTripCheckpoints(parsed);
           }
+
+          if (res.data.planName || res.data.title) setPlanName(res.data.planName || res.data.title);
+          if (res.data.durationHours || res.data.duration_hours) setDurationHours(parseFloat(res.data.durationHours || res.data.duration_hours || 8));
+          if (res.data.distanceKm || res.data.distance_km) setDistanceKm(parseFloat(res.data.distanceKm || res.data.distance_km || 120));
 
           // Direct API OTP bindings
           if (res.data.otp) setStartOtp(String(res.data.otp));
@@ -432,68 +439,129 @@ export default function TripStatusScreen() {
 
         {/* Live Map Visual */}
         <View style={[styles.mapFrame, { borderColor: colors.border }]}>
-          {Platform.OS === 'web' || !MapView ? (
-            <View style={styles.webMapPlaceholder}>
-              <MaterialIcons name="map" size={scale(42)} color={colors.amber} />
-              <Text style={{ color: colors.textPrimary, fontWeight: '800', marginTop: 8 }}>
-                Live GPS Tracking Active
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: 2 }}>
-                Driver: {driverInfo.name} ({driverInfo.latitude.toFixed(4)}, {driverInfo.longitude.toFixed(4)})
-              </Text>
-            </View>
-          ) : (
-            <MapView
-              ref={mapRef}
-              provider="google"
-              style={StyleSheet.absoluteFillObject}
-              initialRegion={{
-                latitude: driverInfo.latitude || pickupLat || 12.9716,
-                longitude: driverInfo.longitude || pickupLng || 77.5946,
-                latitudeDelta: 0.04,
-                longitudeDelta: 0.04,
-              }}
-            >
-              {/* Driver Marker */}
-              <Marker
-                coordinate={{ latitude: driverInfo.latitude || 12.9716, longitude: driverInfo.longitude || 77.5946 }}
-                title={`Driver: ${driverInfo.name}`}
-                description={driverInfo.vehicleModel}
-                pinColor={colors.amber}
-                rotation={driverInfo.heading || 0}
-                flat={true}
-              />
+          {(() => {
+            // Build 100% connected points sequence (Driver ➔ Pickup ➔ Checkpoints ➔ Destination)
+            const connectedPoints = [
+              { latitude: driverInfo.latitude || pickupLat || 12.9716, longitude: driverInfo.longitude || pickupLng || 77.5946, label: `Driver: ${driverInfo.name}` },
+              { latitude: pickupLat || 12.9716, longitude: pickupLng || 77.5946, label: `Pickup: ${pickupLocation}` },
+              ...(Array.isArray(tripCheckpoints)
+                ? tripCheckpoints
+                    .filter((cp: any) => cp && (cp.latitude || cp.lat) && (cp.longitude || cp.lng))
+                    .map((cp: any, idx: number) => ({
+                      latitude: parseFloat(cp.latitude || cp.lat),
+                      longitude: parseFloat(cp.longitude || cp.lng),
+                      label: typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp),
+                    }))
+                : []),
+              { latitude: dropLat || 12.2958, longitude: dropLng || 76.6394, label: `Destination: ${dropLocation}` },
+            ].filter((pt: any) => !isNaN(pt.latitude) && !isNaN(pt.longitude));
 
-              {/* Pickup Marker */}
-              <Marker
-                coordinate={{ latitude: pickupLat, longitude: pickupLng }}
-                title="Pickup Spot"
-                description={pickupLocation}
-                pinColor="#10B981"
-              />
+            if (Platform.OS === 'web' || !MapView) {
+              return (
+                <View style={styles.webMapPlaceholder}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(8) }}>
+                    <MaterialIcons name="map" size={scale(24)} color={colors.amber} />
+                    <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(14) }}>
+                      Live Connected GPS Route
+                    </Text>
+                  </View>
+                  
+                  {/* Connected Route Line Visual */}
+                  <View style={{ paddingHorizontal: scale(10), width: '100%' }}>
+                    {connectedPoints.map((pt: any, idx: number) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ alignItems: 'center', width: scale(24) }}>
+                          <View
+                            style={{
+                              width: scale(12),
+                              height: scale(12),
+                              borderRadius: scale(6),
+                              backgroundColor: idx === 0 ? colors.amber : idx === connectedPoints.length - 1 ? '#EF4444' : '#10B981',
+                              borderWidth: 2,
+                              borderColor: '#FFFFFF',
+                            }}
+                          />
+                          {idx < connectedPoints.length - 1 && (
+                            <View style={{ width: 2, height: verticalScale(20), backgroundColor: colors.amber }} />
+                          )}
+                        </View>
+                        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '600', marginLeft: scale(8) }} numberOfLines={1}>
+                          {pt.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            }
 
-              {/* Drop Marker */}
-              <Marker
-                coordinate={{ latitude: dropLat, longitude: dropLng }}
-                title="Destination"
-                description={dropLocation}
-                pinColor="#EF4444"
-              />
-
-              {/* Live Route Polyline */}
-              {Polyline && (
-                <Polyline
-                  coordinates={[
-                    { latitude: driverInfo.latitude || pickupLat, longitude: driverInfo.longitude || pickupLng },
-                    { latitude: pickupLat, longitude: pickupLng },
-                    { latitude: dropLat, longitude: dropLng },
-                  ]}
-                  strokeColor="#F5C518"
-                  strokeWidth={4}
+            return (
+              <MapView
+                ref={mapRef}
+                provider="google"
+                style={StyleSheet.absoluteFillObject}
+                initialRegion={{
+                  latitude: driverInfo.latitude || pickupLat || 12.9716,
+                  longitude: driverInfo.longitude || pickupLng || 77.5946,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }}
+              >
+                {/* Driver Marker */}
+                <Marker
+                  coordinate={{ latitude: driverInfo.latitude || 12.9716, longitude: driverInfo.longitude || 77.5946 }}
+                  title={`Driver: ${driverInfo.name}`}
+                  description={driverInfo.vehicleModel}
+                  pinColor={colors.amber}
+                  rotation={driverInfo.heading || 0}
+                  flat={true}
                 />
-              )}
-            </MapView>
-          )}
+
+                {/* Pickup Marker */}
+                <Marker
+                  coordinate={{ latitude: pickupLat, longitude: pickupLng }}
+                  title="Pickup Spot"
+                  description={pickupLocation}
+                  pinColor="#10B981"
+                />
+
+                {/* Intermediate Checkpoint Markers */}
+                {Array.isArray(tripCheckpoints) &&
+                  tripCheckpoints.map((cp: any, idx: number) => {
+                    const cpLat = parseFloat(cp.latitude || cp.lat);
+                    const cpLng = parseFloat(cp.longitude || cp.lng);
+                    if (isNaN(cpLat) || isNaN(cpLng)) return null;
+                    const cpName = typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp);
+                    return (
+                      <Marker
+                        key={idx}
+                        coordinate={{ latitude: cpLat, longitude: cpLng }}
+                        title={`Stop #${idx + 1}`}
+                        description={cpName}
+                        pinColor="#3B82F6"
+                      />
+                    );
+                  })}
+
+                {/* Drop Marker */}
+                <Marker
+                  coordinate={{ latitude: dropLat, longitude: dropLng }}
+                  title="Destination"
+                  description={dropLocation}
+                  pinColor="#EF4444"
+                />
+
+                {/* Connected Live Route Polyline */}
+                {Polyline && connectedPoints.length >= 2 && (
+                  <Polyline
+                    coordinates={connectedPoints}
+                    strokeColor="#F5C518"
+                    strokeWidth={4}
+                  />
+                )}
+              </MapView>
+            );
+          })()}
         </View>
 
         {/* Driver Details Card */}
@@ -574,53 +642,106 @@ export default function TripStatusScreen() {
           );
         })()}
 
-        {/* Route & Waypoints Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>ROUTE & WAYPOINTS</Text>
-
-          {/* Pickup */}
-          <View style={styles.routeRow}>
-            <View style={[styles.dot, { backgroundColor: colors.success }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.routeTypeLabel, { color: colors.success }]}>PICKUP LOCATION</Text>
-              <Text style={[styles.routeAddressText, { color: colors.textPrimary }]}>{pickupLocation}</Text>
+        {/* Package Plan Details & Waypoints Card */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1 }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(10) }}>
+            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🗺️ TOUR PACKAGE & ITINERARY</Text>
+            <View style={{ backgroundColor: 'rgba(245, 197, 24, 0.15)', paddingHorizontal: scale(8), paddingVertical: verticalScale(2), borderRadius: scale(12) }}>
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>
+                {durationHours} HOURS TOUR
+              </Text>
             </View>
           </View>
 
-          {/* Intermediate Trip Checkpoints */}
-          {Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 && (
-            <>
-              <View style={styles.routeDividerLine} />
-              <View style={{ paddingLeft: scale(20), paddingVertical: verticalScale(4) }}>
-                <Text style={{ fontSize: moderateFontScale(11), fontWeight: '700', color: colors.amber, marginBottom: verticalScale(4) }}>
-                  📍 INTERMEDIATE STOPS ({tripCheckpoints.length})
-                </Text>
-                {tripCheckpoints.map((cp: any, idx: number) => {
+          {/* Package Name & Metadata Grid */}
+          <Text style={{ fontSize: moderateFontScale(15), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(8) }}>
+            {planName}
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: scale(12), marginBottom: verticalScale(14), paddingBottom: verticalScale(10), borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+              <MaterialIcons name="schedule" size={scale(14)} color={colors.amber} />
+              <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted, fontWeight: '600' }}>
+                Duration: <Text style={{ color: colors.textPrimary }}>{durationHours} Hours</Text>
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+              <MaterialIcons name="directions-car" size={scale(14)} color={colors.success} />
+              <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted, fontWeight: '600' }}>
+                Est. Distance: <Text style={{ color: colors.textPrimary }}>{distanceKm} KM</Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* Checkpoint Nodes Timeline (Stop 1 to Final Drop) */}
+          <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(10), letterSpacing: 0.5 }}>
+            📍 TOUR ITINERARY STOPS ({Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 ? tripCheckpoints.length : 2} STOPS)
+          </Text>
+
+          {(() => {
+            const stopsList = Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0
+              ? tripCheckpoints.map((cp: any, idx: number) => {
                   const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `Stop ${idx + 1}`) : String(cp);
-                  const stepNum = typeof cp === 'object' && cp !== null && cp.step_order ? `#${cp.step_order} ` : `${idx + 1}. `;
+                  return cpName;
+                })
+              : [pickupLocation, dropLocation];
+
+            return (
+              <View style={{ paddingLeft: scale(4) }}>
+                {stopsList.map((stopName: string, idx: number) => {
+                  const isFirst = idx === 0;
+                  const isLast = idx === stopsList.length - 1;
+                  const tagTitle = isFirst ? 'STOP 1 (PICKUP POINT)' : isLast ? `STOP ${idx + 1} (FINAL DROP)` : `STOP ${idx + 1} (WAYPOINT)`;
+                  const tagColor = isFirst ? colors.success : isLast ? colors.danger : colors.amber;
+
                   return (
-                    <Text key={idx} style={{ fontSize: moderateFontScale(12), color: colors.textPrimary, marginBottom: verticalScale(2) }}>
-                      {stepNum}{cpName}
-                    </Text>
+                    <View key={idx} style={{ flexDirection: 'row', marginBottom: idx === stopsList.length - 1 ? 0 : verticalScale(14) }}>
+                      {/* Timeline Dot & Line */}
+                      <View style={{ alignItems: 'center', width: scale(22) }}>
+                        <View
+                          style={{
+                            width: scale(14),
+                            height: scale(14),
+                            borderRadius: scale(7),
+                            backgroundColor: tagColor,
+                            borderWidth: 2,
+                            borderColor: '#FFFFFF',
+                          }}
+                        />
+                        {!isLast && (
+                          <View style={{ width: 2, height: verticalScale(28), backgroundColor: colors.border, marginTop: verticalScale(2) }} />
+                        )}
+                      </View>
+
+                      {/* Stop Address Details */}
+                      <View style={{ flex: 1, marginLeft: scale(10) }}>
+                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '800', color: tagColor, letterSpacing: 0.5 }}>
+                          {tagTitle}
+                        </Text>
+                        <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary, marginTop: verticalScale(2) }}>
+                          {stopName}
+                        </Text>
+                        {isFirst && (
+                          <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: verticalScale(1) }}>
+                            * Driver will pick tourist up from Stop 1
+                          </Text>
+                        )}
+                        {isLast && (
+                          <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: verticalScale(1) }}>
+                            * Final tour destination drop point
+                          </Text>
+                        )}
+                      </View>
+                    </View>
                   );
                 })}
               </View>
-            </>
-          )}
+            );
+          })()}
 
-          <View style={styles.routeDividerLine} />
-
-          {/* Drop */}
-          <View style={styles.routeRow}>
-            <View style={[styles.dot, { backgroundColor: colors.danger }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.routeTypeLabel, { color: colors.danger }]}>DESTINATION</Text>
-              <Text style={[styles.routeAddressText, { color: colors.textPrimary }]}>{dropLocation}</Text>
-            </View>
-          </View>
-
-          {/* Payment & Fare Breakdown */}
-          <View style={[styles.fareRow, { borderTopColor: colors.border, marginTop: verticalScale(12) }]}>
+          {/* Payment Breakdown */}
+          <View style={[styles.fareRow, { borderTopColor: colors.border, marginTop: verticalScale(14) }]}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Payment Mode</Text>
               <Text style={[styles.paymentModeText, { color: colors.textPrimary }]}>{paymentMode}</Text>

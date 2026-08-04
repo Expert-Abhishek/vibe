@@ -1572,16 +1572,24 @@ export default function DriverDashboardScreen() {
                           Payment: {booking.paymentMode}
                         </Text>
                         {Array.isArray(booking.checkpoints) && booking.checkpoints.length > 0 && (
-                          <Text style={[styles.logTime, { color: colors.textPrimary, fontWeight: '700', marginTop: 2 }]} numberOfLines={2}>
-                            Checkpoints: {booking.checkpoints.map((c: any) => typeof c === 'string' ? c : c.name).join(' ➔ ')}
-                          </Text>
+                          <View style={{ marginTop: verticalScale(4) }}>
+                            <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '800' }}>
+                              📍 Tour Stops ({booking.checkpoints.length}):
+                            </Text>
+                            <Text style={{ fontSize: moderateFontScale(11), color: colors.textPrimary, fontWeight: '600', marginTop: 1 }}>
+                              Stop 1 (Pickup): {typeof booking.checkpoints[0] === 'string' ? booking.checkpoints[0] : (booking.checkpoints[0]?.name || booking.pickup)}
+                            </Text>
+                            <Text style={{ fontSize: moderateFontScale(11), color: colors.textPrimary, fontWeight: '600', marginTop: 1 }}>
+                              Final Drop: {typeof booking.checkpoints[booking.checkpoints.length - 1] === 'string' ? booking.checkpoints[booking.checkpoints.length - 1] : (booking.checkpoints[booking.checkpoints.length - 1]?.name || booking.drop)}
+                            </Text>
+                          </View>
                         )}
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price}</Text>
-                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
-                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' ? '#10B981' : colors.amber }}>
-                            {booking.status === 'Accepted' ? (isAcceptedByMe ? 'My Job' : 'Accepted') : 'Pending Request'}
+                        <View style={[styles.statusBadgeCompact, { backgroundColor: booking.status === 'Accepted' || isAcceptedByMe ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245,197,24,0.1)', marginTop: verticalScale(4) }]}>
+                          <Text style={{ fontSize: moderateFontScale(9), fontWeight: '700', color: booking.status === 'Accepted' || isAcceptedByMe ? '#10B981' : colors.amber }}>
+                            {booking.status === 'Accepted' || isAcceptedByMe ? 'ACCEPTED / MY JOB' : 'PENDING REQUEST'}
                           </Text>
                         </View>
                       </View>
