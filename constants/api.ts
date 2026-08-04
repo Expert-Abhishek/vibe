@@ -189,6 +189,27 @@ export async function fetchDestinationsApi(): Promise<any[]> {
 }
 
 /**
+ * Fetch destination/checkpoint details by IDs from backend
+ */
+export async function fetchDestinationsByIdsApi(ids: string[]): Promise<any[]> {
+  try {
+    if (!ids || ids.length === 0) return [];
+    const res = await fetch(`${API_BASE_URL}/api/destinations/by-ids`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchDestinationsByIdsApi error:', e);
+  }
+  return [];
+}
+
+/**
  * Fetch official Pickup & Drop Preset Locations from backend
  */
 export async function fetchPresetLocationsApi(): Promise<any[]> {

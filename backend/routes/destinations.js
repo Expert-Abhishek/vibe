@@ -164,22 +164,70 @@ router.patch('/:id/toggle', async (req, res) => {
 });
 
 /**
- * DELETE /api/destinations/:id
- * Delete destination
+ * POST /api/destinations/by-ids
+ * Get checkpoint / destination details by array of IDs
  */
-router.delete('/:id', async (req, res) => {
+router.post('/by-ids', async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : (req.body.id ? [req.body.id] : []);
+    if (ids.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const result = await db.query(
+      `SELECT * FROM destinations WHERE id::text = ANY($1::text[]) OR name = ANY($1::text[])`,
+      [ids.map(String)]
+    );
+
+    const data = result.rows.map(d => ({
+      id: d.id,
+      name: d.name,
+      location: d.location || '',
+      description: d.description || '',
+      images: Array.isArray(d.images) ? d.images : [],
+      latitude: d.latitude ? parseFloat(d.latitude) : 15.335000,
+      longitude: d.longitude ? parseFloat(d.longitude) : 76.460000,
+    }));
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error fetching destinations by ids:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch destinations', error: error.message });
+  }
+});
+
+/**
+ * GET /api/destinations/:id
+ * Get single destination details by ID
+ */
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query('DELETE FROM destinations WHERE id = $1 RETURNING id', [id]);
+    const result = await db.query(
+      `SELECT * FROM destinations WHERE id::text = $1::text OR name = $1`,
+      [id]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Destination not found' });
     }
 
-    res.json({ success: true, message: 'Destination deleted successfully', id });
+    const d = result.rows[0];
+    res.json({
+      success: true,
+      data: {
+        id: d.id,
+        name: d.name,
+        location: d.location || '',
+        description: d.description || '',
+        images: Array.isArray(d.images) ? d.images : [],
+        latitude: d.latitude ? parseFloat(d.latitude) : 15.335000,
+        longitude: d.longitude ? parseFloat(d.longitude) : 76.460000,
+      }
+    });
   } catch (error) {
-    console.error('Error deleting destination:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete destination', error: error.message });
+    console.error('Error fetching destination by id:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch destination', error: error.message });
   }
 });
 

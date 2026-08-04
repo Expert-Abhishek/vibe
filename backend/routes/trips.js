@@ -278,7 +278,6 @@ function mapTripRecord(t) {
     durationHours: parseFloat(t.duration_hours || 8),
     extraHours: parseFloat(t.extra_hours || 0),
     addonCharge: parseFloat(t.addon_charge || 0),
-    rating: t.rating || 5,
     otp: t.otp || null,
     endOtp: t.end_otp || t.endOtp || '4321',
     bookingType: t.booking_type || 'INSTANT',

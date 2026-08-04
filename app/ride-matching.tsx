@@ -737,7 +737,7 @@ export default function RideMatchingScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.pName, { color: colors.textPrimary }]}>{demoDriver.name}</Text>
-                  <Text style={[styles.pSub, { color: colors.textMuted }]}>{demoDriver.vehicleNumber} · {demoDriver.rating}</Text>
+                  <Text style={[styles.pSub, { color: colors.textMuted }]}>{demoDriver.vehicleNumber} · Verified Partner</Text>
                 </View>
                 <View style={styles.actionPills}>
                   <TouchableOpacity style={[styles.pillIcon, { backgroundColor: colors.border }]}>

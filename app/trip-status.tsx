@@ -586,9 +586,9 @@ export default function TripStatusScreen() {
                     {driverInfo.vehicleModel} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{vehicleNumberDisplay}</Text>
                   </Text>
                   <View style={styles.ratingRow}>
-                    <MaterialIcons name="star" size={scale(14)} color={colors.amber} />
+                    <MaterialIcons name="verified" size={scale(14)} color={colors.amber} />
                     <Text style={[styles.ratingText, { color: colors.textPrimary }]}>
-                      {isPendingDriver ? 'Targeted Category Captains' : `${driverInfo.rating || 4.9} ⭐ Verified Partner`}
+                      {isPendingDriver ? 'Targeted Category Captains' : 'Verified Partner'}
                     </Text>
                   </View>
                 </View>
