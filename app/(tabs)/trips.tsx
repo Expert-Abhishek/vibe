@@ -192,7 +192,7 @@ export default function TripsHistoryScreen() {
       time: bt.createdAt ? new Date(bt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
       price: Number(bt.amount) || 0,
       paymentMode: String(bt.paymentMode || bt.payment_mode || 'Cash'),
-      status: String(bt.status || 'Scheduled'),
+      status: String(bt.status || '').toLowerCase().includes('cancel') ? 'Cancelled' : String(bt.status || 'Scheduled'),
       passengerCount: 1,
       otp: bt.otp,
       endOtp: bt.end_otp || bt.endOtp,

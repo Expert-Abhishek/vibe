@@ -52,6 +52,10 @@ async function ensureTripsColumnsExist() {
 
   try {
     await db.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS has_trip INT DEFAULT 0;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(50);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS status_code INT DEFAULT 0;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS scheduled_time TIMESTAMP WITH TIME ZONE;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'INSTANT';
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS advance_deposit_paid NUMERIC(10,2) DEFAULT 0.00;
@@ -83,8 +87,32 @@ async function ensureTripsColumnsExist() {
   }
 }
 
+}
+
 // Run migration safely on route module load
 ensureTripsColumnsExist();
+
+function getStatusCode(status) {
+  if (!status) return 0;
+  const s = String(status).toLowerCase().trim();
+  if (s.includes('complete') || s.includes('finish') || s === 'done') return 3;
+  if (s.includes('cancel') || s.includes('decline') || s.includes('reject')) return 4;
+  if (s.includes('accept')) return 1;
+  if (s.includes('ongoing') || s.includes('in_progress') || s.includes('arrived') || s.includes('active')) return 2;
+  return 0; // Pending
+}
+
+async function setUserHasTrip(customerId, hasTripVal) {
+  if (!customerId) return;
+  try {
+    await db.query(
+      `UPDATE users SET has_trip = $1 WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text`,
+      [hasTripVal ? 1 : 0, String(customerId)]
+    );
+  } catch (e) {
+    console.warn('setUserHasTrip error:', e.message);
+  }
+}
 
 /**
  * GET /api/trips/admin/all
@@ -295,9 +323,19 @@ router.get('/active-trip/:customerId', async (req, res) => {
       return res.json({ success: true, hasActiveTrip: false, trip: null });
     }
 
+    const userCheck = await db.query(
+      `SELECT has_trip FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text`,
+      [String(customerId)]
+    );
+
+    if (userCheck.rows.length > 0 && Number(userCheck.rows[0].has_trip) === 0) {
+      return res.json({ success: true, hasActiveTrip: false, trip: null });
+    }
+
     const result = await db.query(
       `SELECT * FROM trips
        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
+         AND status_code NOT IN (3, 4)
          AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish')
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -305,6 +343,7 @@ router.get('/active-trip/:customerId', async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await setUserHasTrip(customerId, false);
       return res.json({ success: true, hasActiveTrip: false, trip: null });
     }
 
@@ -367,12 +406,13 @@ router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
       }
     }
 
-    const actor = cancelledBy === 'driver' || role === 'driver' ? 'driver' : 'user';
-    const statusText = actor === 'driver' ? 'Cancelled by Driver' : 'Cancelled by User';
+    const actor = cancelledBy === 'driver' || role === 'driver' ? 'by driver' : 'by user';
+    const statusText = 'Cancelled';
 
     const result = await db.query(
       `UPDATE trips
        SET status = $1,
+           status_code = 4,
            cancelled_by = $2,
            cancel_reason = $3,
            updated_at = NOW()
@@ -382,6 +422,10 @@ router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
     );
 
     const trip = result.rows.length > 0 ? result.rows[0] : { id, status: statusText, cancelled_by: actor };
+    if (trip && trip.customer_id) {
+      await setUserHasTrip(trip.customer_id, false);
+    }
+
     emitTripStatusUpdated(trip, statusText);
     emitTripCancelled(trip);
 
@@ -794,9 +838,19 @@ router.post('/:id/complete', async (req, res) => {
     const remainingCashBalance = isPreBooked ? totalFare - advanceDepositPaid : totalFare;
 
     const updateRes = await db.query(
-      `UPDATE trips SET status = 'Completed', driver_or_guide_name = COALESCE($1, driver_or_guide_name) WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text RETURNING *`,
+      `UPDATE trips 
+       SET status = 'Completed', 
+           status_code = 3, 
+           driver_or_guide_name = COALESCE($1, driver_or_guide_name) 
+       WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text 
+       RETURNING *`,
       [driverName, id]
     );
+
+    const compTrip = updateRes.rows[0];
+    if (compTrip && compTrip.customer_id) {
+      await setUserHasTrip(compTrip.customer_id, false);
+    }
 
     res.json({
       success: true,
@@ -1514,6 +1568,9 @@ router.post('/', async (req, res) => {
     }
 
     const t = result.rows[0];
+    if (t && (t.customer_id || customerId || validCustomerId)) {
+      await setUserHasTrip(t.customer_id || customerId || validCustomerId, true);
+    }
     t.vehicleCategory = selectedVehicleCategory;
     if (targetDriverId) {
       t.driverId = targetDriverId;
@@ -1870,6 +1927,9 @@ router.post('/book', async (req, res) => {
       );
       if (dbRes.rows.length > 0) {
         newTrip = dbRes.rows[0];
+        if (newTrip && (newTrip.customer_id || customerId)) {
+          await setUserHasTrip(newTrip.customer_id || customerId, true);
+        }
       }
     } catch (dbErr) {
       console.warn('Trips table insert warning:', dbErr.message);
