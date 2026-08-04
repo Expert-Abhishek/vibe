@@ -2412,16 +2412,27 @@ router.post('/:id/respond', async (req, res) => {
       return res.json({ success: true, message: 'Ride Accepted successfully!' });
     } else if (action === 'complete') {
       let updateRes = await db.query(
-        "UPDATE trips SET status = 'Completed' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
+        "UPDATE trips SET status = 'Completed', status_code = 3 WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
         [String(id)]
       );
       if (updateRes.rows.length === 0) {
         updateRes = await db.query(
-          "UPDATE trips SET status = 'Completed' WHERE id IN (SELECT id FROM trips WHERE LOWER(status) IN ('accepted', 'in_progress', 'active', 'arrived') ORDER BY created_at DESC LIMIT 1) RETURNING *"
+          "UPDATE trips SET status = 'Completed', status_code = 3 WHERE id IN (SELECT id FROM trips WHERE LOWER(status) IN ('accepted', 'in_progress', 'active', 'arrived') ORDER BY created_at DESC LIMIT 1) RETURNING *"
         );
       }
       if (updateRes.rows.length > 0) {
-        emitTripStatusUpdated(updateRes.rows[0], 'Completed');
+        const compTrip = updateRes.rows[0];
+        if (compTrip && compTrip.customer_id) {
+          await setUserHasTrip(compTrip.customer_id, false);
+        }
+        emitTripStatusUpdated(compTrip, 'Completed');
+        try {
+          const io = getIO();
+          if (io) {
+            io.to(`user:${compTrip.customer_id}`).emit('trip_completed', compTrip);
+            io.to(`trip:${compTrip.id}`).emit('trip_completed', compTrip);
+          }
+        } catch (e) {}
       }
       return res.json({ success: true, message: 'Ride Completed successfully!' });
     } else {

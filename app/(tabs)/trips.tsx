@@ -1,14 +1,13 @@
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
-import { cancelTripApi, deductWalletApi, fetchActiveTripApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi } from '@/constants/api';
+import { cancelTripApi, fetchActiveTripApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { initSocketService, getSocket } from '@src/services/socketService';
-import { calculateTripFare, validatePreBookedDispatch } from '@src/services/fareCalculator';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { getSocket, initSocketService } from '@src/services/socketService';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   DeviceEventEmitter,
@@ -140,6 +139,7 @@ export default function TripsHistoryScreen() {
       socket.on('trip_completed', handleTripUpdate);
       socket.on('trip_status_updated', handleTripUpdate);
       socket.on('trip_accepted', handleTripUpdate);
+      socket.on('trip_cancelled', handleTripUpdate);
       socket.on('RIDE_ACCEPTED', handleTripUpdate);
     }
 
@@ -147,18 +147,21 @@ export default function TripsHistoryScreen() {
     const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleTripUpdate);
     const subRideAcc = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleTripUpdate);
     const subComp = DeviceEventEmitter.addListener('trip_completed', handleTripUpdate);
+    const subCancel = DeviceEventEmitter.addListener('trip_cancelled', handleTripUpdate);
 
     return () => {
       if (socket) {
         socket.off('trip_completed', handleTripUpdate);
         socket.off('trip_status_updated', handleTripUpdate);
         socket.off('trip_accepted', handleTripUpdate);
+        socket.off('trip_cancelled', handleTripUpdate);
         socket.off('RIDE_ACCEPTED', handleTripUpdate);
       }
       subStatus.remove();
       subAccepted.remove();
       subRideAcc.remove();
       subComp.remove();
+      subCancel.remove();
     };
   }, [cancelTrigger, userId]);
 
@@ -274,7 +277,7 @@ export default function TripsHistoryScreen() {
     }));
 
   const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips, ...mappedPendingReqs].filter(Boolean);
-  
+
   // Deduplicate and prefer Accepted/in_progress over Pending
   const validTrips = rawAllTrips
     .reduce((acc: TripItem[], current) => {
@@ -496,8 +499,8 @@ export default function TripsHistoryScreen() {
                 activeTripObj.driverId ||
                 activeTripObj.assignedToId ||
                 (activeTripObj.driverOrGuideName &&
-                 !activeTripObj.driverOrGuideName.toLowerCase().includes('search') &&
-                 !activeTripObj.driverOrGuideName.toLowerCase().includes('auto'))
+                  !activeTripObj.driverOrGuideName.toLowerCase().includes('search') &&
+                  !activeTripObj.driverOrGuideName.toLowerCase().includes('auto'))
               );
               const displayCaptain = hasAssignedDriver
                 ? (activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Partner')
