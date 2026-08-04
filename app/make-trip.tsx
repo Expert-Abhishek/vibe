@@ -204,8 +204,8 @@ export default function MakeTripScreen() {
   }, [searchParams.fromVehicle, searchParams.selectedDriverId, searchParams.checkpoints]);
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
-    { id: 'start', name: 'Bengaluru (Start)', latitude: 12.9716, longitude: 77.5946, address: 'Bengaluru City Center' },
-    { id: 'stop-1', name: 'Mysuru Palace', latitude: 12.3053, longitude: 76.6552, address: 'Mysuru, Karnataka' },
+    { id: 'start', name: 'KSRTC Bus Stand Sakleshpur (Start)', latitude: 12.9416, longitude: 75.7790, address: 'Sakleshpura, Karnataka 573134' },
+    { id: 'stop-1', name: 'Sakleshpur Town Center', latitude: 12.9455178, longitude: 75.7789167, address: 'Main Road, Sakleshpur, Karnataka 573134' },
   ]);
 
 

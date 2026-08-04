@@ -17,6 +17,7 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import { fetchDestinationsApi } from '@/constants/api';
+import { PRESET_PICKUP_DROP_LOCATIONS } from '@/constants/preset-locations';
 
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
@@ -191,24 +192,24 @@ export default function SearchLocationScreen() {
         )}
 
         {/* Popular Locations Presets */}
-        {suggestions.length === 0 && liveDestinations.length > 0 && (
+        {suggestions.length === 0 && (
           <View style={styles.popularSection}>
-            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Admin Curated Destinations</Text>
-            {liveDestinations.map((dest, idx) => {
-              const loc: PresetDestination = {
-                name: dest.name,
-                address: dest.location || dest.description || '',
-                latitude: Number(dest.latitude) || 12.9716,
-                longitude: Number(dest.longitude) || 77.5946,
+            <Text style={[styles.sectionTitle, { color: colors.amber }]}>Official Sakleshpur Pickup & Drop Locations</Text>
+            {PRESET_PICKUP_DROP_LOCATIONS.map((loc) => {
+              const item: PresetDestination = {
+                name: loc.name,
+                address: loc.address,
+                latitude: loc.latitude,
+                longitude: loc.longitude,
               };
               return (
                 <TouchableOpacity
-                  key={dest.id || idx}
+                  key={loc.id}
                   style={[styles.presetRow, { borderBottomColor: colors.border }]}
-                  onPress={() => navigateToBooking(loc)}
+                  onPress={() => navigateToBooking(item)}
                 >
                   <View style={[styles.presetIconBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
-                    <MaterialIcons name="place" size={scale(16)} color={colors.amber} />
+                    <MaterialIcons name={(loc.icon as any) || 'place'} size={scale(16)} color={colors.amber} />
                   </View>
                   <View style={styles.presetDetails}>
                     <Text style={[styles.presetName, { color: colors.textPrimary }]}>{loc.name}</Text>
@@ -219,6 +220,37 @@ export default function SearchLocationScreen() {
                 </TouchableOpacity>
               );
             })}
+
+            {liveDestinations.length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { color: colors.amber, marginTop: verticalScale(16) }]}>Other Destinations</Text>
+                {liveDestinations.map((dest, idx) => {
+                  const loc: PresetDestination = {
+                    name: dest.name,
+                    address: dest.location || dest.description || '',
+                    latitude: Number(dest.latitude) || 12.9716,
+                    longitude: Number(dest.longitude) || 77.5946,
+                  };
+                  return (
+                    <TouchableOpacity
+                      key={dest.id || idx}
+                      style={[styles.presetRow, { borderBottomColor: colors.border }]}
+                      onPress={() => navigateToBooking(loc)}
+                    >
+                      <View style={[styles.presetIconBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}>
+                        <MaterialIcons name="place" size={scale(16)} color={colors.amber} />
+                      </View>
+                      <View style={styles.presetDetails}>
+                        <Text style={[styles.presetName, { color: colors.textPrimary }]}>{loc.name}</Text>
+                        <Text style={[styles.presetAddress, { color: colors.textMuted }]} numberOfLines={1}>
+                          {loc.address}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
           </View>
         )}
 

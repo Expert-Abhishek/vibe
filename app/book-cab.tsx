@@ -48,6 +48,8 @@ interface LocationNode {
   address?: string;
 }
 
+import { PRESET_PICKUP_DROP_LOCATIONS } from '@/constants/preset-locations';
+
 export default function BookCabScreen() {
   const router = useRouter();
   const searchParams = useLocalSearchParams();
@@ -55,10 +57,10 @@ export default function BookCabScreen() {
   const isDark = colorScheme === 'dark';
 
   const [pickup, setPickup] = useState<LocationNode>({
-    name: 'Bengaluru Palace (Pickup)',
-    latitude: 12.9982,
-    longitude: 77.5920,
-    address: 'Vasanth Nagar, Bengaluru, Karnataka',
+    name: PRESET_PICKUP_DROP_LOCATIONS[0].name,
+    latitude: PRESET_PICKUP_DROP_LOCATIONS[0].latitude,
+    longitude: PRESET_PICKUP_DROP_LOCATIONS[0].longitude,
+    address: PRESET_PICKUP_DROP_LOCATIONS[0].address,
   });
 
   const [drop, setDrop] = useState<LocationNode | null>(null);
@@ -776,20 +778,20 @@ export default function BookCabScreen() {
               </TouchableOpacity>
             ))}
 
-            {/* Presets list from backend */}
-            {suggestions.length === 0 && liveDestinations.length > 0 && (
+            {/* Presets list from Sakleshpur locations & backend */}
+            {suggestions.length === 0 && (
               <View style={styles.presetsListContainer}>
-                <Text style={[styles.presetsTitle, { color: colors.amber }]}>Curated destinations from Admin:</Text>
-                {liveDestinations.map((dest, idx) => {
+                <Text style={[styles.presetsTitle, { color: colors.amber }]}>Official Sakleshpur Pickup & Drop Locations:</Text>
+                {PRESET_PICKUP_DROP_LOCATIONS.map((loc) => {
                   const node: LocationNode = {
-                    name: dest.name,
-                    latitude: Number(dest.latitude) || 12.9716,
-                    longitude: Number(dest.longitude) || 77.5946,
-                    address: dest.location || dest.description || '',
+                    name: loc.name,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    address: loc.address,
                   };
                   return (
                     <TouchableOpacity
-                      key={dest.id || idx}
+                      key={loc.id}
                       style={[styles.presetRowItem, { borderBottomColor: colors.border }]}
                       onPress={() => {
                         if (searchField === 'pickup') {
@@ -806,14 +808,54 @@ export default function BookCabScreen() {
                         setSearchField(null);
                       }}
                     >
-                      <MaterialIcons name="place" size={scale(18)} color={colors.amber} style={{ marginRight: scale(10) }} />
-                      <View>
-                        <Text style={[styles.presetRowName, { color: colors.textPrimary }]}>{dest.name}</Text>
-                        <Text style={[styles.presetRowAddress, { color: colors.textMuted }]}>{dest.location || dest.description || ''}</Text>
+                      <MaterialIcons name={(loc.icon as any) || 'place'} size={scale(18)} color={colors.amber} style={{ marginRight: scale(10) }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.presetRowName, { color: colors.textPrimary }]}>{loc.name}</Text>
+                        <Text style={[styles.presetRowAddress, { color: colors.textMuted }]}>{loc.address}</Text>
                       </View>
                     </TouchableOpacity>
                   );
                 })}
+
+                {liveDestinations.length > 0 && (
+                  <>
+                    <Text style={[styles.presetsTitle, { color: colors.amber, marginTop: verticalScale(12) }]}>Other Destinations:</Text>
+                    {liveDestinations.map((dest, idx) => {
+                      const node: LocationNode = {
+                        name: dest.name,
+                        latitude: Number(dest.latitude) || 12.9716,
+                        longitude: Number(dest.longitude) || 77.5946,
+                        address: dest.location || dest.description || '',
+                      };
+                      return (
+                        <TouchableOpacity
+                          key={dest.id || idx}
+                          style={[styles.presetRowItem, { borderBottomColor: colors.border }]}
+                          onPress={() => {
+                            if (searchField === 'pickup') {
+                              setPickup(node);
+                            } else if (searchField === 'drop') {
+                              setDrop(node);
+                            } else if (typeof searchField === 'number') {
+                              const updated = [...stops];
+                              updated[searchField] = node;
+                              setStops(updated);
+                            } else if (searchField === 'newstop') {
+                              setStops([...stops, node]);
+                            }
+                            setSearchField(null);
+                          }}
+                        >
+                          <MaterialIcons name="place" size={scale(18)} color={colors.amber} style={{ marginRight: scale(10) }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.presetRowName, { color: colors.textPrimary }]}>{dest.name}</Text>
+                            <Text style={[styles.presetRowAddress, { color: colors.textMuted }]}>{dest.location || dest.description || ''}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )}
               </View>
             )}
           </ScrollView>

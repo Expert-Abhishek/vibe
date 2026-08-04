@@ -32,6 +32,7 @@ interface TourPackage {
 
 import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
+import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 
 export default function PlanRouteScreen() {
   const router = useRouter();
@@ -51,6 +52,8 @@ export default function PlanRouteScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('upi');
   const [preBookingPaymentChoice, setPreBookingPaymentChoice] = useState<'advance_20' | 'full_100'>('advance_20');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
+  const [selectedPickup, setSelectedPickup] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[0]);
+  const [selectedDrop, setSelectedDrop] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[1]);
 
   const getInitialTimeParts = () => {
     const d = new Date();
@@ -376,7 +379,7 @@ export default function PlanRouteScreen() {
 
       const createdTrip = await createTripApi({
         tripType: 'plan',
-        title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+        title: `${selectedPlan.name}`,
         customerId: currentUserId,
         customerName: session?.name || 'Abhishek (Tourist)',
         driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
@@ -384,6 +387,12 @@ export default function PlanRouteScreen() {
         planId: selectedPlan.id,
         destinationId: primaryDestId || undefined,
         destinationIds: planDestIds,
+        pickupName: selectedPickup.name,
+        pickupLat: selectedPickup.latitude,
+        pickupLng: selectedPickup.longitude,
+        dropName: selectedDrop.name,
+        dropLat: selectedDrop.latitude,
+        dropLng: selectedDrop.longitude,
         vehicleCategory: targetCategory,
         amount: totalPrice,
         paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
@@ -416,6 +425,14 @@ export default function PlanRouteScreen() {
         tripId: realTripId,
         type: 'plan' as const,
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+        pickup: selectedPickup.name,
+        pickupName: selectedPickup.name,
+        pickupLat: selectedPickup.latitude,
+        pickupLng: selectedPickup.longitude,
+        drop: selectedDrop.name,
+        dropName: selectedDrop.name,
+        dropLat: selectedDrop.latitude,
+        dropLng: selectedDrop.longitude,
         route: selectedPlan.checkpoints,
         checkpoints: selectedPlan.checkpoints,
         date: finalDate,
@@ -659,6 +676,83 @@ export default function PlanRouteScreen() {
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* PLAN DETAILS HEADER */}
             <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
+
+            {/* PICKUP & DROP LOCATION SELECTOR FOR TOUR PLAN */}
+            <View style={{ marginVertical: verticalScale(10), backgroundColor: colors.surface, padding: scale(14), borderRadius: scale(16), borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ color: colors.textPrimary, fontWeight: '900', fontSize: moderateFontScale(14), marginBottom: verticalScale(10) }}>
+                📍 Select Pickup & Drop Location
+              </Text>
+
+              {/* Pickup Location Selector */}
+              <View style={{ marginBottom: verticalScale(12) }}>
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', letterSpacing: 0.5, marginBottom: verticalScale(6) }}>
+                  PICKUP LOCATION
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {PRESET_PICKUP_DROP_LOCATIONS.map((loc) => {
+                    const isSelected = selectedPickup.id === loc.id;
+                    return (
+                      <TouchableOpacity
+                        key={`p_${loc.id}`}
+                        style={{
+                          paddingHorizontal: scale(12),
+                          paddingVertical: verticalScale(8),
+                          borderRadius: scale(10),
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? colors.amber : colors.border,
+                          backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                          marginRight: scale(8),
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: scale(6),
+                        }}
+                        onPress={() => setSelectedPickup(loc)}
+                      >
+                        <MaterialIcons name="trip-origin" size={scale(14)} color={isSelected ? colors.amber : colors.textMuted} />
+                        <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: isSelected ? '800' : '600' }}>
+                          {loc.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Drop Location Selector */}
+              <View style={{ marginBottom: verticalScale(4) }}>
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', letterSpacing: 0.5, marginBottom: verticalScale(6) }}>
+                  DROP LOCATION
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {PRESET_PICKUP_DROP_LOCATIONS.map((loc) => {
+                    const isSelected = selectedDrop.id === loc.id;
+                    return (
+                      <TouchableOpacity
+                        key={`d_${loc.id}`}
+                        style={{
+                          paddingHorizontal: scale(12),
+                          paddingVertical: verticalScale(8),
+                          borderRadius: scale(10),
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? colors.amber : colors.border,
+                          backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
+                          marginRight: scale(8),
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: scale(6),
+                        }}
+                        onPress={() => setSelectedDrop(loc)}
+                      >
+                        <MaterialIcons name="location-on" size={scale(14)} color={isSelected ? '#EF4444' : colors.textMuted} />
+                        <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: isSelected ? '800' : '600' }}>
+                          {loc.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
 
             {/* RAPIDO / UBER STYLE DYNAMIC VEHICLE CATEGORY SELECTOR */}
             <View style={{ marginVertical: verticalScale(10) }}>

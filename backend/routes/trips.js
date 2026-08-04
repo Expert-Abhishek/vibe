@@ -31,6 +31,50 @@ function sanitizePaymentMode(pm) {
   return 'cash';
 }
 
+/**
+ * GET /api/trips/preset-locations
+ * Official Sakleshpur Pickup & Drop Location presets for user trips
+ */
+router.get('/preset-locations', (req, res) => {
+  res.json({
+    success: true,
+    data: [
+      {
+        id: 'loc_ksrtc_bus_stand',
+        name: 'KSRTC Bus Stand Sakleshpur',
+        address: 'Sakleshpura, Karnataka 573134',
+        latitude: 12.9416,
+        longitude: 75.7790,
+        icon: 'directions-bus',
+      },
+      {
+        id: 'loc_sakleshpur_town',
+        name: 'Sakleshpur Town Center',
+        address: 'Main Road, Sakleshpur, Karnataka 573134',
+        latitude: 12.9455178,
+        longitude: 75.7789167,
+        icon: 'location-city',
+      },
+      {
+        id: 'loc_azad_road_junction',
+        name: 'Azad Road Junction (Sakleshpur)',
+        address: 'Azad Road, Sakleshpur, Karnataka 573134',
+        latitude: 12.9403832,
+        longitude: 75.7789866,
+        icon: 'traffic',
+      },
+      {
+        id: 'loc_ksrtc_old_bus_stand_ballupet',
+        name: 'KSRTC Old Bus Stand Ballupet',
+        address: 'J.P Nagar, Ballupet, Sakleshpura, Karnataka 573134',
+        latitude: 12.9155,
+        longitude: 75.8456,
+        icon: 'departure-board',
+      },
+    ],
+  });
+});
+
 // Auto-migrate trips table columns if missing on production database (deferred execution)
 let migrationExecuted = false;
 async function ensureTripsColumnsExist() {
@@ -1523,8 +1567,8 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       parseFloat(addonCharge),
       parseInt(rating, 10),
       otpCode,
-      req.body.pickupName || 'Bengaluru City Center',
-      req.body.dropName || title.trim(),
+      req.body.pickupName || req.body.pickup_name || 'KSRTC Bus Stand Sakleshpur',
+      req.body.dropName || req.body.drop_name || title.trim(),
       bookingType,
       scheduledTime ? new Date(scheduledTime) : null,
       advanceDepositPaid,

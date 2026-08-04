@@ -446,12 +446,12 @@ export default function TripStatusScreen() {
               { latitude: pickupLat || 12.9716, longitude: pickupLng || 77.5946, label: `Pickup: ${pickupLocation}` },
               ...(Array.isArray(tripCheckpoints)
                 ? tripCheckpoints
-                    .filter((cp: any) => cp && (cp.latitude || cp.lat) && (cp.longitude || cp.lng))
-                    .map((cp: any, idx: number) => ({
-                      latitude: parseFloat(cp.latitude || cp.lat),
-                      longitude: parseFloat(cp.longitude || cp.lng),
-                      label: typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp),
-                    }))
+                  .filter((cp: any) => cp && (cp.latitude || cp.lat) && (cp.longitude || cp.lng))
+                  .map((cp: any, idx: number) => ({
+                    latitude: parseFloat(cp.latitude || cp.lat),
+                    longitude: parseFloat(cp.longitude || cp.lng),
+                    label: typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp),
+                  }))
                 : []),
               { latitude: dropLat || 12.2958, longitude: dropLng || 76.6394, label: `Destination: ${dropLocation}` },
             ].filter((pt: any) => !isNaN(pt.latitude) && !isNaN(pt.longitude));
@@ -465,7 +465,7 @@ export default function TripStatusScreen() {
                       Live Connected GPS Route
                     </Text>
                   </View>
-                  
+
                   {/* Connected Route Line Visual */}
                   <View style={{ paddingHorizontal: scale(10), width: '100%' }}>
                     {connectedPoints.map((pt: any, idx: number) => (
@@ -610,7 +610,7 @@ export default function TripStatusScreen() {
         {(() => {
           const isPending = statusLower.includes('pending') || statusLower.includes('dispatched') || statusLower.includes('search');
           const hasOtp = !isPending && (startOtp && startOtp !== 'Pending' && startOtp !== '8240' || statusLower.includes('accept') || statusLower.includes('active'));
-          
+
           return (
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
               <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🔐 TRIP VERIFICATION CODES</Text>
@@ -682,9 +682,9 @@ export default function TripStatusScreen() {
           {(() => {
             const stopsList = Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0
               ? tripCheckpoints.map((cp: any, idx: number) => {
-                  const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `Stop ${idx + 1}`) : String(cp);
-                  return cpName;
-                })
+                const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `Stop ${idx + 1}`) : String(cp);
+                return cpName;
+              })
               : [pickupLocation, dropLocation];
 
             return (
