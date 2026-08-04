@@ -1076,7 +1076,6 @@ export default function PlanRouteScreen() {
               </TouchableOpacity>
 
               <View style={{ height: verticalScale(30) }} />
-            </View>
           </ScrollView>
         </>
       )}
