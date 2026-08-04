@@ -1,3 +1,4 @@
+import { playNotificationChime, stopNotificationChime } from '@src/utils/soundHelper';
 import { initSocketService, emitDriverLocationSocket, joinTripRoom } from '@src/services/socketService';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
@@ -769,10 +770,12 @@ export default function DriverDashboardScreen() {
   useEffect(() => {
     let timer: any;
     if (requestVisible && timerSeconds > 0) {
+      playNotificationChime(false);
       timer = setInterval(() => {
         setTimerSeconds(prev => {
           if (prev <= 1) {
             setTimeout(() => {
+              stopNotificationChime();
               if (incomingRequest && (incomingRequest as any).id) {
                 handledTripIdsRef.current.add(String((incomingRequest as any).id));
               }
@@ -784,8 +787,13 @@ export default function DriverDashboardScreen() {
           return prev - 1;
         });
       }, 1000);
+    } else if (!requestVisible) {
+      stopNotificationChime();
     }
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      stopNotificationChime();
+    };
   }, [requestVisible, timerSeconds, incomingRequest]);
 
   // Ensure Driver Socket.io Connection & Trip Request Event Listeners
@@ -890,7 +898,6 @@ export default function DriverDashboardScreen() {
       socket.on('trip_requested', handleIncomingTripData);
       socket.on('new_driver_request', handleIncomingTripData);
       socket.on('RIDE_REQUESTED', handleIncomingTripData);
-      socket.on('notification:new', handleIncomingTripData);
       socket.on('trip_cancelled', handleTripCancelled);
       socket.on('RIDE_CANCELLED', handleTripCancelled);
     }
@@ -1086,6 +1093,7 @@ export default function DriverDashboardScreen() {
       } catch (e) {}
     }
 
+    stopNotificationChime();
     setRequestVisible(false);
 
     const isPreBooking =
@@ -1143,6 +1151,7 @@ export default function DriverDashboardScreen() {
       await respondDriverRequestApi(tripId, driverId, 'decline');
     }
 
+    stopNotificationChime();
     setRequestVisible(false);
     setIncomingRequest(null);
     setActiveTrip(null);

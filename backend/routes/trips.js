@@ -313,10 +313,10 @@ router.post('/admin-notify', async (req, res) => {
 });
 
 /**
- * GET /api/trips/active-trip/:customerId
- * Check PostgreSQL for any non-completed, non-cancelled trip for rider
+ * GET /api/trips/check-has-trip/:customerId (Alias: /active-trip/:customerId)
+ * Check PostgreSQL for active non-completed, non-cancelled trip for rider
  */
-router.get('/active-trip/:customerId', async (req, res) => {
+router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (req, res) => {
   try {
     const { customerId } = req.params;
     if (!customerId) {
@@ -381,10 +381,10 @@ router.get('/active-trip/:customerId', async (req, res) => {
 });
 
 /**
- * POST /api/trips/:id/cancel
+ * POST /api/trips/cancel-trip/:id (Alias: /:id/cancel, /cancel/:id)
  * Cancel trip, update status strictly to CANCELLED in DB & emit socket event
  */
-router.post(['/:id/cancel', '/cancel/:id'], async (req, res) => {
+router.post(['/cancel-trip/:id', '/:id/cancel', '/cancel/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     const { cancelledBy = 'user', role = 'tourist', reason = 'Cancelled by user' } = req.body || {};
@@ -1382,10 +1382,10 @@ router.post('/:id/decline', async (req, res) => {
 });
 
 /**
- * POST /api/trips
- * Legacy / standard Create trip
+ * POST /api/trips/create-trip (Alias: /, /book)
+ * Create a new trip booking in database
  */
-router.post('/', async (req, res) => {
+router.post(['/create-trip', '/', '/book'], async (req, res) => {
   try {
     const {
       tripType = 'custom_trip',
@@ -1631,10 +1631,10 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * POST /api/trips/:id/accept
+ * POST /api/trips/accept-trip/:id (Alias: /:id/accept)
  * Driver / Guide accepts booking, updates database & sends push notification to Tourist!
  */
-router.post('/:id/accept', async (req, res) => {
+router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
   try {
     const { id } = req.params;
     const { driverId, driverName = 'Verified Partner' } = req.body;
@@ -2176,10 +2176,10 @@ router.post('/:id/verify-otp', async (req, res) => {
 });
 
 /**
- * POST /api/trips/:id/complete
- * Complete trip, update earnings, and notify tourist
+ * POST /api/trips/complete-trip/:id (Alias: /:id/complete)
+ * Complete trip & settle earnings to wallet
  */
-router.post('/:id/complete', async (req, res) => {
+router.post(['/complete-trip/:id', '/:id/complete'], async (req, res) => {
   try {
     const { id } = req.params;
     const { driverId } = req.body;

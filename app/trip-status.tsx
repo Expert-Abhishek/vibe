@@ -375,8 +375,8 @@ export default function TripStatusScreen() {
               }
               DeviceEventEmitter.emit('trip_cancelled', { tripId: tripIdParam });
               sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
-              Alert.alert('Trip Cancelled', isPendingDriver ? 'Your ride request was withdrawn.' : `Trip with Captain ${driverInfo.name} was cancelled.`, [
-                { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
+              Alert.alert('Trip Cancelled', 'Your ride request was cancelled and recorded in your History ledger.', [
+                { text: 'OK', onPress: () => router.replace('/(tabs)/history') }
               ]);
             } catch (e) {
               console.warn('Cancel error:', e);
@@ -645,8 +645,8 @@ export default function TripStatusScreen() {
           )}
         </View>
 
-        {/* Cancel Trip Action Button */}
-        {!statusLower.includes('cancel') && !statusLower.includes('decline') && !statusLower.includes('complete') && (
+        {/* Cancel Trip Action Button (ONLY ALLOWED WHEN PENDING) */}
+        {statusLower.includes('pending') && (
           <TouchableOpacity
             style={[styles.cancelBtn, { backgroundColor: colors.danger }]}
             onPress={handleCancelTrip}

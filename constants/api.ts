@@ -233,7 +233,7 @@ export async function createTripApi(payload: {
   remainingCashBalance?: number;
 }): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/trips`, {
+    const res = await fetch(`${API_BASE_URL}/api/trips/create-trip`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -250,7 +250,7 @@ export async function createTripApi(payload: {
  */
 export async function fetchActiveTripApi(customerId: string): Promise<{ hasActiveTrip: boolean; trip: any }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/trips/active-trip/${customerId}`);
+    const res = await fetch(`${API_BASE_URL}/api/trips/check-has-trip/${customerId}`);
     const data = await res.json();
     if (data.success) {
       return { hasActiveTrip: !!data.hasActiveTrip, trip: data.trip || null };
@@ -720,7 +720,7 @@ export async function bookTripApi(payload: {
   driverId?: string;
 }): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/trips/book`, {
+    const res = await fetch(`${API_BASE_URL}/api/trips/create-trip`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -753,7 +753,7 @@ export async function fetchPendingRequestsApi(role: string = 'driver'): Promise<
  */
 export async function acceptTripApi(tripId: string, driverId: string, driverName?: string): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/accept`, {
+    const res = await fetch(`${API_BASE_URL}/api/trips/accept-trip/${tripId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ driverId, driverName }),
@@ -770,7 +770,7 @@ export async function acceptTripApi(tripId: string, driverId: string, driverName
  */
 export async function cancelTripApi(tripId: string, options: { reason?: string; cancelledBy?: string; role?: string } = {}): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/cancel`, {
+    const res = await fetch(`${API_BASE_URL}/api/trips/cancel-trip/${tripId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -825,7 +825,7 @@ export async function verifyTripEndOtpApi(tripId: string, otp: string): Promise<
  */
 export async function completeTripApi(tripId: string, driverId?: string): Promise<any> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/complete`, {
+    const res = await fetch(`${API_BASE_URL}/api/trips/complete-trip/${tripId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ driverId }),

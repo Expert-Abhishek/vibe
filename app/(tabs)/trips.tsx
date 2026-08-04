@@ -479,7 +479,14 @@ export default function TripsHistoryScreen() {
 
             {/* Trip Title */}
             <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.textPrimary, marginBottom: verticalScale(8) }} numberOfLines={1}>
-              {activeTripObj.title || `${activeTripObj.pickup || 'Pickup'} ➔ ${activeTripObj.drop || 'Destination'}`}
+              {(() => {
+                let rawTitle = activeTripObj.title || `${activeTripObj.pickup || 'Pickup'} ➔ ${activeTripObj.drop || 'Destination'}`;
+                if (rawTitle.includes(' ➔ ')) {
+                  const parts = rawTitle.split(' ➔ ');
+                  if (parts[0] === parts[1]) rawTitle = parts[0];
+                }
+                return rawTitle;
+              })()}
             </Text>
 
             {/* Assigned Partner & Vehicle Info */}
@@ -516,7 +523,7 @@ export default function TripsHistoryScreen() {
               );
             })()}
 
-            {/* Pickup & Destination */}
+            {/* Pickup & Destination / Checkpoints */}
             <View style={styles.locationBlock}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                 <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
@@ -526,8 +533,22 @@ export default function TripsHistoryScreen() {
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(6) }}>
                 <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
-                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                  Drop: <Text style={{ fontWeight: '700' }}>{Array.isArray(activeTripObj.route) && activeTripObj.route.length > 0 ? activeTripObj.route.join(' ➔ ') : (activeTripObj.drop_name || activeTripObj.title || 'Destination')}</Text>
+                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
+                  Drop: <Text style={{ fontWeight: '700' }}>
+                    {(() => {
+                      let rawRoute = activeTripObj.checkpoints || activeTripObj.destinationIds || activeTripObj.route;
+                      let stopsList: string[] = [];
+                      if (Array.isArray(rawRoute)) {
+                        stopsList = rawRoute;
+                      } else if (typeof rawRoute === 'string') {
+                        try { stopsList = JSON.parse(rawRoute); } catch (e) { stopsList = [rawRoute]; }
+                      }
+                      if (stopsList.length > 0) {
+                        return stopsList.join(' ➔ ');
+                      }
+                      return activeTripObj.drop || activeTripObj.drop_name || activeTripObj.title || 'Destination';
+                    })()}
+                  </Text>
                 </Text>
               </View>
             </View>
@@ -555,15 +576,17 @@ export default function TripsHistoryScreen() {
                 <Text style={styles.trackBtnText}>Track Live Ride 🗺️</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.cancelBtnIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#EF4444' }]}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleCancelPress(activeTripObj);
-                }}
-              >
-                <MaterialIcons name="cancel" size={scale(18)} color="#EF4444" />
-              </TouchableOpacity>
+              {String(activeTripObj.status || '').toLowerCase().trim() === 'pending' && (
+                <TouchableOpacity
+                  style={[styles.cancelBtnIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#EF4444' }]}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleCancelPress(activeTripObj);
+                  }}
+                >
+                  <MaterialIcons name="cancel" size={scale(18)} color="#EF4444" />
+                </TouchableOpacity>
+              )}
             </View>
           </TouchableOpacity>
         ) : (
