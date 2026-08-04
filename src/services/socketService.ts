@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL, notifyWalletChanged } from '@/constants/api';
 import { notificationStore } from '../store/notificationStore';
 import { updateTripStatusGlobally } from '@/constants/tripSync';
+import { playNotificationChime } from '../utils/soundHelper';
 
 let socket: Socket | null = null;
 let currentUserId: string | null = null;
@@ -62,6 +63,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       console.log('[SocketService] Received real-time push notification:', data);
       if (data) {
         notificationStore.addNotification(data);
+        playNotificationChime();
         if (data.trip || data.tripId) {
           try {
             DeviceEventEmitter.emit('new_driver_request', data.trip || data);
@@ -83,6 +85,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     socket.on('trip_request', (data: any) => {
       console.log('[SocketService] Received real-time trip request via WebSockets:', data);
       if (data) {
+        playNotificationChime();
         try {
           DeviceEventEmitter.emit('new_driver_request', data);
           DeviceEventEmitter.emit('trip_request', data);
@@ -94,6 +97,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     socket.on('trip_status_updated', (data: any) => {
       console.log('[SocketService] 📢 Received real-time trip_status_updated event:', data);
       if (data) {
+        playNotificationChime();
         try {
           const tripId = String(data.tripId || data.id || '');
           const status = String(data.status || 'Accepted');

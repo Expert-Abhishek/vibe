@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -86,9 +87,9 @@ export default function ForgotPasswordScreen() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.supportButton} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.supportButton} activeOpacity={0.7} onPress={() => Linking.openURL('tel:8088626099')}>
               <Text style={styles.supportText}>
-                Still having trouble? <Text style={styles.supportHighlight}>Contact Support</Text>
+                Still having trouble? <Text style={styles.supportHighlight}>Contact Support (80886 26099)</Text>
               </Text>
             </TouchableOpacity>
           </View>

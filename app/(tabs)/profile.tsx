@@ -23,6 +23,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -571,6 +572,35 @@ export default function ProfileScreen() {
               trackColor={{ false: '#767577', true: colors.amber }}
               thumbColor={appLang === 'kn' ? '#FFFFFF' : '#f4f3f4'}
             />
+          </View>
+        </View>
+
+        {/* HELP & CUSTOMER SUPPORT SECTION */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
+            <MaterialIcons name="headset-mic" size={scale(18)} color={colors.amber} />
+            <Text style={[styles.cardTitle, { color: colors.amber, marginBottom: 0 }]}>Help & Customer Support</Text>
+          </View>
+          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
+            Reach out to our dedicated support team for assistance with bookings, payments, or trips.
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: scale(10) }}>
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1, backgroundColor: colors.amber, marginTop: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(6) }]}
+              onPress={() => Linking.openURL('tel:8088626099')}
+            >
+              <MaterialIcons name="phone" size={scale(16)} color="#101014" />
+              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(12) }]}>Call Support</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.primaryButton, { flex: 1, backgroundColor: colors.surfaceAlt, marginTop: 0, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(6) }]}
+              onPress={() => Linking.openURL('mailto:vibzzpvtltd@gmail.com')}
+            >
+              <MaterialIcons name="email" size={scale(16)} color={colors.amber} />
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(12) }]}>Mail Support</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

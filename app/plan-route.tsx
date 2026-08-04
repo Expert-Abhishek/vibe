@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
 import { adminState } from '@/constants/admin-state';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getSocket } from '@src/services/socketService';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   DeviceEventEmitter,
@@ -29,7 +29,7 @@ interface TourPackage {
   image: string;
 }
 
-import { createTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
+import { createTripApi, deductWalletApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 
 export default function PlanRouteScreen() {
@@ -423,92 +423,101 @@ export default function PlanRouteScreen() {
       return;
     }
 
-    openRazorpayPayment({
+    // Wallet Direct Deduction Payment Flow
+    const session = getUserSessionSync();
+    const currentUserId = session?.id || session?.profile?.user_id || 't1';
+
+    const walletDeductRes = await deductWalletApi({
+      userId: currentUserId,
       amount: paymentAmount,
-      title: selectedPlan.name,
-      customerName: 'Abhishek (Tourist)',
-      onSuccess: async (paymentId: string) => {
-        const session = getUserSessionSync();
-        const currentUserId = session?.id || session?.profile?.user_id;
-        const paymentLabel = isPreBooking
-          ? `UPI Pre-Booking Fees: ₹${paymentAmount} (Bal ₹${remainingBalance})`
-          : `UPI Full Payment: ₹${paymentAmount}`;
-
-        const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
-
-        const planDestIds = Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0 ? selectedPlan.destinationIds : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
-        const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
-
-        // Save trip to real backend DB
-        const createdTrip = await createTripApi({
-          tripType: 'plan',
-          title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-          customerId: currentUserId,
-          customerName: session?.name || 'Abhishek (Tourist)',
-          driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
-          driverId: selectedDriver ? driverId : null,
-          planId: selectedPlan.id,
-          destinationId: primaryDestId || undefined,
-          destinationIds: planDestIds,
-          vehicleCategory: targetCategory,
-          amount: totalPrice,
-          paymentMode: 'UPI',
-          status: 'Confirmed',
-          durationHours: totalHours,
-          extraHours: priceInfo.extraHoursRounded,
-          addonCharge: priceInfo.extraAddonCharge,
-        });
-
-        const realTripId = createdTrip?.data?.id || createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
-
-        const newTripObj = {
-          id: realTripId,
-          tripId: realTripId,
-          type: 'plan' as const,
-          title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-          route: selectedPlan.checkpoints,
-          checkpoints: selectedPlan.checkpoints,
-          driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
-          date: finalDate,
-          time: finalTime,
-          price: totalPrice,
-          amount: totalPrice,
-          paymentMode: paymentLabel,
-          status: 'Pending' as const,
-          passengerCount: bookingPax,
-          otp: createdTrip?.otp || '8240',
-          endOtp: createdTrip?.end_otp || createdTrip?.endOtp || '4321',
-        };
-
-        adminState.userTrips.push(newTripObj as any);
-
-        if (!Array.isArray((adminState as any).pendingDriverRequests)) {
-          (adminState as any).pendingDriverRequests = [];
-        }
-        (adminState as any).pendingDriverRequests.push(newTripObj);
-
-        try {
-          const socket = getSocket();
-          if (socket && socket.connected) {
-            socket.emit('broadcast_trip_request', newTripObj);
-            socket.emit('trip_requested', newTripObj);
-          }
-          DeviceEventEmitter.emit('new_driver_request', { trip: newTripObj });
-        } catch (e) {
-          console.warn('Socket emit error on plan booking:', e);
-        }
-
-        setSelectedPlan(null);
-        setBookingStep('details');
-        router.replace({ pathname: '/trip-status', params: { tripId: realTripId, id: realTripId } });
-      },
-      onCancel: () => {
-        Alert.alert('Payment Cancelled', 'Razorpay payment was cancelled.');
-      },
-      onError: () => {
-        Alert.alert('Payment Error', 'Razorpay Payment Gateway error. Please check connection.');
-      }
+      description: isPreBooking
+        ? `Vibe Wallet Deposit (${prebookPayOption}%) for Tour: ${selectedPlan.name}`
+        : `Vibe Wallet Payment for Tour: ${selectedPlan.name}`,
     });
+
+    if (!walletDeductRes || !walletDeductRes.success) {
+      Alert.alert(
+        '💳 Insufficient Wallet Balance',
+        `Your Vibe Wallet balance is insufficient to pay ₹${paymentAmount}. Please add money to your Vibe Wallet in your Profile.`,
+        [
+          { text: 'Add Money to Wallet', onPress: () => router.push('/(tabs)/profile') },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    const paymentLabel = isPreBooking
+      ? `Wallet Deposit (${prebookPayOption}%): ₹${paymentAmount} (Bal ₹${remainingBalance})`
+      : `Wallet Payment: ₹${paymentAmount}`;
+
+    const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
+
+    const planDestIds = Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0 ? selectedPlan.destinationIds : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
+    const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
+
+    // Save trip to backend DB
+    const createdTrip = await createTripApi({
+      tripType: 'plan',
+      title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+      customerId: currentUserId,
+      customerName: session?.name || 'Abhishek (Tourist)',
+      driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
+      driverId: selectedDriver ? driverId : null,
+      planId: selectedPlan.id,
+      destinationId: primaryDestId || undefined,
+      destinationIds: planDestIds,
+      vehicleCategory: targetCategory,
+      amount: totalPrice,
+      paymentMode: 'Wallet',
+      status: 'Confirmed',
+      durationHours: totalHours,
+      extraHours: priceInfo.extraHoursRounded,
+      addonCharge: priceInfo.extraAddonCharge,
+    });
+
+    const realTripId = createdTrip?.data?.id || createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
+
+    const newTripObj = {
+      id: realTripId,
+      tripId: realTripId,
+      type: 'plan' as const,
+      title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+      route: selectedPlan.checkpoints,
+      checkpoints: selectedPlan.checkpoints,
+      driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
+      date: finalDate,
+      time: finalTime,
+      price: totalPrice,
+      amount: totalPrice,
+      paymentMode: paymentLabel,
+      status: 'Pending' as const,
+      passengerCount: bookingPax,
+      otp: createdTrip?.otp || '8240',
+      endOtp: createdTrip?.end_otp || createdTrip?.endOtp || '4321',
+    };
+
+    adminState.userTrips.push(newTripObj as any);
+
+    if (!Array.isArray((adminState as any).pendingDriverRequests)) {
+      (adminState as any).pendingDriverRequests = [];
+    }
+    (adminState as any).pendingDriverRequests.push(newTripObj);
+
+    try {
+      const socket = getSocket();
+      if (socket && socket.connected) {
+        socket.emit('broadcast_trip_request', newTripObj);
+        socket.emit('trip_requested', newTripObj);
+      }
+      DeviceEventEmitter.emit('new_driver_request', { trip: newTripObj });
+    } catch (e) {
+      console.warn('Socket emit error on plan booking:', e);
+    }
+
+    setSelectedPlan(null);
+    setBookingStep('details');
+    router.replace({ pathname: '/trip-status', params: { tripId: realTripId, id: realTripId } });
   };
 
   return (
@@ -620,10 +629,10 @@ export default function PlanRouteScreen() {
               </Text>
               <View style={{ gap: scale(8) }}>
                 {[
-                  { key: '5_seater', label: '5 Seater (Sedan / Hatchback)', icon: 'directions-car', capacity: '4 Pax + 2 Bags', desc: 'Comfortable standard AC cab' },
-                  { key: '7_seater', label: '7 Seater (SUV / Ertiga)', icon: 'airport-shuttle', capacity: '6 Pax + 4 Bags', desc: 'Spacious for family & extra luggage' },
-                  { key: '4x4', label: '4x4 Off-Road (Thar / Gypsy)', icon: 'terrain', capacity: '4 Pax + Adventure Gear', desc: 'Powerful 4WD for hills & rough terrain' },
-                  { key: 'auto', label: 'Auto Rickshaw (Tuk-Tuk)', icon: 'electric-rickshaw', capacity: '3 Pax Local Sightseeing', desc: 'Budget-friendly open air tour' },
+                  { key: '5_seater', label: '5 Seater', icon: 'directions-car', capacity: '4 Pax + 2 Bags', desc: 'Comfortable standard AC cab' },
+                  { key: '7_seater', label: '7 Seater', icon: 'airport-shuttle', capacity: '6 Pax + 4 Bags', desc: 'Spacious for family & extra luggage' },
+                  { key: '4x4', label: '4x4 Off-Road', icon: 'terrain', capacity: '4 Pax + Adventure Gear', desc: 'Powerful 4WD for hills & rough terrain' },
+                  { key: 'auto', label: 'Auto Rickshaw', icon: 'electric-rickshaw', capacity: '3 Pax Local Sightseeing', desc: 'Budget-friendly open air tour' },
                 ].map((cat) => {
                   const isSelected = bookingVehicle === cat.key || (bookingVehicle === '5seater' && cat.key === '5_seater') || (bookingVehicle === '7seater' && cat.key === '7_seater') || (bookingVehicle === '4x4jeep' && cat.key === '4x4');
                   const catPrice = calculatePackagePrice(selectedPlan, cat.key).computedPrice;
@@ -691,41 +700,62 @@ export default function PlanRouteScreen() {
 
 
 
-            {/* CHECKPOINTS & MEDIA HIGHLIGHTS CARD */}
-            <View style={{ width: '100%' }}>
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(10), padding: scale(12), marginVertical: verticalScale(10) }}>
-                <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', marginBottom: verticalScale(6) }}>CHECKPOINTS ({selectedPlan.checkpoints.length} STOPS)</Text>
-                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), lineHeight: moderateFontScale(20), fontWeight: '500' }}>
-                  {selectedPlan.checkpoints.map(cp => typeof cp === 'string' ? cp : cp.name).join('\n• ')}
-                </Text>
-              </View>
+            {/* CHECKPOINTS VISUAL CARDS & ITINERARY */}
+            <View style={{ width: '100%', marginVertical: verticalScale(10) }}>
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', letterSpacing: 0.5, marginBottom: verticalScale(10) }}>
+                TOUR ITINERARY CHECKPOINTS ({selectedPlan.checkpoints.length} STOPS)
+              </Text>
+              
+              <View style={{ gap: verticalScale(10) }}>
+                {selectedPlan.checkpoints.map((cp: any, index: number) => {
+                  const cpName = typeof cp === 'string' ? cp : (cp.name || cp.title || `Stop ${index + 1}`);
+                  const cpDesc = typeof cp === 'object' ? (cp.description || cp.location || 'Key sightseeing attraction & photo stopover') : 'Featured landmark & sightseeing checkpoint';
+                  const cpImg = typeof cp === 'object' && Array.isArray(cp.images) && cp.images.length > 0
+                    ? cp.images[0]
+                    : (typeof cp === 'object' && cp.image ? cp.image : [
+                        'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=500',
+                        'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=500',
+                        'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=500',
+                        'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?w=500',
+                      ][index % 4]);
 
-              {/* DYNAMIC MEDIA GALLERY */}
-              <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800', marginVertical: verticalScale(8) }}>Itinerary Gallery</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8), justifyContent: 'space-between', marginBottom: verticalScale(14) }}>
-                {(() => {
-                  let extractedImgs: string[] = [];
-                  if (Array.isArray(selectedPlan.checkpoints)) {
-                    selectedPlan.checkpoints.forEach((cp: any) => {
-                      if (typeof cp === 'object' && Array.isArray(cp.images) && cp.images.length > 0) {
-                        extractedImgs.push(...cp.images);
-                      }
-                    });
-                  }
-                  if (selectedPlan.image) extractedImgs.push(selectedPlan.image);
-                  if (extractedImgs.length === 0) {
-                    extractedImgs = [
-                      'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=300',
-                      'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=300',
-                      'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=300',
-                      'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?w=300'
-                    ];
-                  }
-                  return extractedImgs.slice(0, 4).map((imgUrl, i) => (
-                    <Image key={i} source={{ uri: imgUrl }} style={{ width: '48%', height: verticalScale(85), borderRadius: scale(10), backgroundColor: '#212129' }} />
-                  ));
-                })()}
+                  return (
+                    <View
+                      key={index}
+                      style={{
+                        flexDirection: 'row',
+                        backgroundColor: 'rgba(255,255,255,0.03)',
+                        borderRadius: scale(14),
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        overflow: 'hidden',
+                        padding: scale(10),
+                        gap: scale(12),
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Image
+                        source={{ uri: cpImg }}
+                        style={{ width: scale(72), height: scale(72), borderRadius: scale(10), backgroundColor: '#212129' }}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(2) }}>
+                          <View style={{ backgroundColor: colors.amber, paddingHorizontal: scale(6), paddingVertical: verticalScale(2), borderRadius: scale(6) }}>
+                            <Text style={{ color: '#101014', fontSize: moderateFontScale(9), fontWeight: '900' }}>STOP {index + 1}</Text>
+                          </View>
+                        </View>
+                        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800' }} numberOfLines={1}>
+                          {cpName}
+                        </Text>
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: verticalScale(2) }} numberOfLines={2}>
+                          {cpDesc}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
+            </View>
 
               <View style={styles.counterRow}>
                 <Text style={[styles.selectorLabel, { color: colors.textPrimary }]}>Number of Passengers</Text>

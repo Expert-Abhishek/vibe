@@ -531,24 +531,40 @@ export default function TripStatusScreen() {
         })()}
 
         {/* Start OTP & End OTP Share Card */}
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
-          <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🔐 TRIP VERIFICATION CODES</Text>
-          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(10) }}>
-            Share Start OTP with driver to begin ride, and End OTP at destination.
-          </Text>
+        {(() => {
+          const isPending = statusLower.includes('pending') || statusLower.includes('dispatched') || statusLower.includes('search');
+          const hasOtp = !isPending && (startOtp && startOtp !== 'Pending' && startOtp !== '8240' || statusLower.includes('accept') || statusLower.includes('active'));
+          
+          return (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
+              <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🔐 TRIP VERIFICATION CODES</Text>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(10) }}>
+                {isPending ? 'Your Start OTP will be generated automatically as soon as a Captain accepts your ride.' : 'Share Start OTP with driver to begin ride, and End OTP at destination.'}
+              </Text>
 
-          <View style={styles.otpRowGrid}>
-            <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
-              <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
-              <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp}</Text>
-            </View>
+              {isPending ? (
+                <View style={[styles.otpBox, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border, paddingVertical: verticalScale(14) }]}>
+                  <Text style={[styles.otpLabel, { color: colors.textMuted, textAlign: 'center' }]}>START OTP STATUS</Text>
+                  <Text style={[styles.otpValue, { color: colors.amber, fontSize: moderateFontScale(14), textAlign: 'center', letterSpacing: 0 }]}>
+                    ⏳ Generating on Acceptance...
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.otpRowGrid}>
+                  <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
+                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
+                    <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '8240'}</Text>
+                  </View>
 
-            <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
-              <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
-              <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp}</Text>
+                  <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
+                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
+                    <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '4321'}</Text>
+                  </View>
+                </View>
+              )}
             </View>
-          </View>
-        </View>
+          );
+        })()}
 
         {/* Route & Waypoints Card */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>

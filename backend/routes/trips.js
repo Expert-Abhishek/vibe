@@ -1330,7 +1330,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Trip title is required' });
     }
 
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const otpCode = null; // OTP hidden initially during Pending status
     const totalAmount = parseFloat(amount || 0);
     const isPreBooked = bookingType === 'PRE_BOOKED';
     const advanceDepositPaid = isPreBooked ? Math.round(totalAmount * 0.20) : 0;
@@ -1628,18 +1628,21 @@ router.post('/:id/accept', async (req, res) => {
       console.warn('Failed to log platform fee revenue:', pErr.message);
     }
 
+    const generatedStartOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    const generatedEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
     const result = await db.query(
       `UPDATE trips 
-       SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2 
-       WHERE id = $3 OR CAST(id AS VARCHAR) = $3
+       SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
+       WHERE id = $5 OR CAST(id AS VARCHAR) = $5
        RETURNING *`,
-      [driverName, driverId || null, id]
+      [driverName, driverId || null, generatedStartOtp, generatedEndOtp, id]
     );
 
     let trip = result.rows.length > 0 ? result.rows[0] : null;
     if (!trip) {
       const fetchRes = await db.query(`SELECT * FROM trips WHERE id = $1 OR CAST(id AS VARCHAR) = $1`, [id]);
-      trip = fetchRes.rows.length > 0 ? fetchRes.rows[0] : { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId };
+      trip = fetchRes.rows.length > 0 ? fetchRes.rows[0] : { id, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId, otp: generatedStartOtp, end_otp: generatedEndOtp };
     }
 
     emitTripAccepted(trip);
@@ -1652,8 +1655,8 @@ router.post('/:id/accept', async (req, res) => {
         sendExpoPushNotification(
           userRes.rows[0].push_token,
           '🎉 Partner Confirmed Your Booking!',
-          `${driverName} has accepted your trip request! Keep OTP ${trip.otp || '8240'} ready.`,
-          { tripId: trip.id, status: 'Accepted', driverName }
+          `${driverName} has accepted your trip request! Your Start OTP is ${trip.otp}.`,
+          { tripId: trip.id, status: 'Accepted', driverName, otp: trip.otp, endOtp: trip.end_otp }
         );
       }
     }
