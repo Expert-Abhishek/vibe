@@ -430,8 +430,7 @@ export default function RideMatchingScreen() {
     }, 3000);
 
     const handleDeclinedData = (data: any) => {
-      console.log('[RideMatchingScreen] 🛑 Received real-time decline event:', data);
-      setIsDriverTimeout(true);
+      console.log('[RideMatchingScreen] ℹ️ A captain passed this request, re-searching next available captain:', data);
     };
 
     const handleLocationStream = (data: any) => {

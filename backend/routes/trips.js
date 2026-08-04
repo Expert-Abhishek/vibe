@@ -69,6 +69,7 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS destination_ids TEXT[] DEFAULT '{}';
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS destination_id VARCHAR(255);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS plan_id VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS declined_driver_ids TEXT[] DEFAULT '{}';
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS vehicle_category VARCHAR(50) DEFAULT '5_seater';
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
@@ -414,7 +415,9 @@ router.get('/pending-requests', async (req, res) => {
     const result = await db.query(
       `SELECT * FROM trips 
        WHERE LOWER(status) IN ('pending', 'dispatched', 'requested')
-       ORDER BY created_at DESC LIMIT 50`
+         AND ($1::text IS NULL OR NOT ($1::text = ANY(COALESCE(declined_driver_ids, '{}'))))
+       ORDER BY created_at DESC LIMIT 50`,
+      [driverId || null]
     );
 
     const formattedTrips = result.rows.map(t => ({
@@ -1193,16 +1196,26 @@ router.post('/book', async (req, res) => {
  */
 router.get('/pending-requests', async (req, res) => {
   try {
-    const { role = 'driver' } = req.query;
+    const { role = 'driver', driverId } = req.query;
     let result;
 
     if (role === 'guide') {
       result = await db.query(
-        `SELECT * FROM trips WHERE status = 'Pending' AND (trip_type IN ('guide', 'plan_package') OR trip_type = 'custom_trip') ORDER BY created_at DESC LIMIT 5`
+        `SELECT * FROM trips 
+         WHERE status = 'Pending' 
+           AND (trip_type IN ('guide', 'plan_package', 'plan') OR trip_type = 'custom_trip') 
+           AND ($1::text IS NULL OR NOT ($1::text = ANY(COALESCE(declined_driver_ids, '{}'))))
+         ORDER BY created_at DESC LIMIT 10`,
+        [driverId || null]
       );
     } else {
       result = await db.query(
-        `SELECT * FROM trips WHERE status = 'Pending' AND (trip_type = 'cab' OR trip_type = 'custom_trip') ORDER BY created_at DESC LIMIT 5`
+        `SELECT * FROM trips 
+         WHERE status = 'Pending' 
+           AND (trip_type IN ('cab', 'plan') OR trip_type = 'custom_trip') 
+           AND ($1::text IS NULL OR NOT ($1::text = ANY(COALESCE(declined_driver_ids, '{}'))))
+         ORDER BY created_at DESC LIMIT 10`,
+        [driverId || null]
       );
     }
 
@@ -1283,16 +1296,39 @@ router.get('/upcoming/:driverId', async (req, res) => {
 router.post('/:id/decline', async (req, res) => {
   try {
     const { id } = req.params;
+    const { driverId, driverName = 'Captain' } = req.body;
 
     const result = await db.query(
-      `UPDATE trips SET status = 'Declined by Guide' WHERE id = $1 RETURNING *`,
-      [id]
+      `UPDATE trips 
+       SET status = 'Pending',
+           driver_id = NULL,
+           driver_or_guide_name = NULL,
+           declined_driver_ids = ARRAY_APPEND(COALESCE(declined_driver_ids, '{}'), $1::text)
+       WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text
+       RETURNING *`,
+      [String(driverId || 'unknown_driver'), String(id)]
     );
+
+    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Pending' };
+
+    if (trip && trip.customer_id) {
+      try {
+        const io = getIO();
+        if (io) {
+          io.to(`user:${trip.customer_id}`).emit('trip_declined_by_driver', {
+            tripId: trip.id,
+            driverId,
+            driverName,
+            message: `${driverName} declined request. Searching next available Captain...`,
+          });
+        }
+      } catch (e) {}
+    }
 
     res.json({
       success: true,
-      message: 'Trip declined by guide',
-      data: result.rows[0] || { id, status: 'Declined by Guide' },
+      message: 'Trip declined by driver. Remaining in pending pool for other drivers.',
+      data: trip,
     });
   } catch (error) {
     console.error('Error declining trip:', error);
@@ -1683,18 +1719,34 @@ router.post(['/:id/decline', '/:id/reject'], async (req, res) => {
 
     const result = await db.query(
       `UPDATE trips
-       SET status = 'Declined'
-       WHERE id = $1 OR CAST(id AS VARCHAR) = $1
+       SET status = 'Pending',
+           driver_id = NULL,
+           driver_or_guide_name = NULL,
+           declined_driver_ids = ARRAY_APPEND(COALESCE(declined_driver_ids, '{}'), $1::text)
+       WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text
        RETURNING *`,
-      [id]
+      [String(driverId || 'unknown_driver'), String(id)]
     );
 
-    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Declined', driver_or_guide_name: driverName, driver_id: driverId };
-    emitTripStatusUpdated(trip, 'Declined');
+    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: 'Pending' };
+
+    if (trip && trip.customer_id) {
+      try {
+        const io = getIO();
+        if (io) {
+          io.to(`user:${trip.customer_id}`).emit('trip_declined_by_driver', {
+            tripId: trip.id,
+            driverId,
+            driverName,
+            message: `${driverName} declined request. Searching next available Captain...`,
+          });
+        }
+      } catch (e) {}
+    }
 
     res.json({
       success: true,
-      message: 'Trip request declined',
+      message: 'Trip request declined by captain. Remaining in pending pool.',
       data: trip,
     });
   } catch (error) {
@@ -2262,13 +2314,32 @@ router.post('/:id/respond', async (req, res) => {
       return res.json({ success: true, message: 'Ride Completed successfully!' });
     } else {
       let updateRes = await db.query(
-        "UPDATE trips SET status = 'Declined', driver_id = NULL, driver_or_guide_name = NULL WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
-        [String(id)]
+        `UPDATE trips 
+         SET status = 'Pending', 
+             driver_id = NULL, 
+             driver_or_guide_name = NULL,
+             declined_driver_ids = ARRAY_APPEND(COALESCE(declined_driver_ids, '{}'), $1::text)
+         WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text 
+         RETURNING *`,
+        [String(driverId || 'unknown_driver'), String(id)]
       );
       if (updateRes.rows.length > 0) {
-        emitTripStatusUpdated(updateRes.rows[0], 'Declined');
+        const trip = updateRes.rows[0];
+        if (trip && trip.customer_id) {
+          try {
+            const io = getIO();
+            if (io) {
+              io.to(`user:${trip.customer_id}`).emit('trip_declined_by_driver', {
+                tripId: trip.id,
+                driverId,
+                driverName,
+                message: `${driverName || 'Captain'} declined request. Searching next available Captain...`,
+              });
+            }
+          } catch (e) {}
+        }
       }
-      return res.json({ success: true, message: 'Ride Declined' });
+      return res.json({ success: true, message: 'Ride Declined by driver, remaining in pending pool.' });
     }
   } catch (error) {
     console.error('Error responding to trip request:', error);

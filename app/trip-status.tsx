@@ -244,11 +244,15 @@ export default function TripStatusScreen() {
       router.replace('/(tabs)/history');
     };
 
-    const handleDeclined = () => {
-      setTripStatus('Declined');
-      Alert.alert('Trip Declined', 'The driver declined this trip request.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
-      ]);
+    const handleDeclined = (data?: any) => {
+      // Keep searching state when 1 driver declines request
+      setTripStatus('Pending');
+      setDriverInfo((prev: any) => ({
+        ...prev,
+        name: 'Searching Captain...',
+        vehicleNumber: 'Assigning Captain...',
+      }));
+      sendLocalNotification('Searching Captain...', 'A nearby captain passed this request. Re-searching next available Captain.');
     };
 
     const handleCancelled = () => {
@@ -310,6 +314,7 @@ export default function TripStatusScreen() {
       socket.on('trip_completed', handleCompleted);
       socket.on('trip_cancelled', handleCancelled);
       socket.on('trip_stage_update', handleStageUpdate);
+      socket.on('trip_declined_by_driver', handleDeclined);
     }
 
     const sub1 = DeviceEventEmitter.addListener('trip_accepted', handleAccepted);
@@ -319,6 +324,7 @@ export default function TripStatusScreen() {
     const sub5 = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
     const sub6 = DeviceEventEmitter.addListener('driver_location_update', handleLocationStream);
     const sub7 = DeviceEventEmitter.addListener('trip_stage_update', handleStageUpdate);
+    const sub8 = DeviceEventEmitter.addListener('trip_declined_by_driver', handleDeclined);
 
     return () => {
       if (socket) {
@@ -329,6 +335,7 @@ export default function TripStatusScreen() {
         socket.off('trip_completed', handleCompleted);
         socket.off('trip_cancelled', handleCancelled);
         socket.off('trip_stage_update', handleStageUpdate);
+        socket.off('trip_declined_by_driver', handleDeclined);
       }
       sub1.remove();
       sub2.remove();
@@ -337,6 +344,7 @@ export default function TripStatusScreen() {
       sub5.remove();
       sub6.remove();
       sub7.remove();
+      sub8.remove();
     };
   }, [tripIdParam]);
 
