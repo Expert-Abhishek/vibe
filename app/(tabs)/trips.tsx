@@ -518,32 +518,40 @@ export default function TripsHistoryScreen() {
               );
             })()}
 
-            {/* Pickup & Destination / Checkpoints */}
+            {/* Pickup & Drop Points + Intermediate Checkpoints */}
             <View style={styles.locationBlock}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                 <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
                 <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                  Pickup: <Text style={{ fontWeight: '700' }}>{activeTripObj.pickup || activeTripObj.pickup_name || 'Pickup Spot'}</Text>
+                  Pickup: <Text style={{ fontWeight: '700' }}>{activeTripObj.pickupName || activeTripObj.pickup || 'Pickup Spot'}</Text>
                 </Text>
               </View>
+
+              {(() => {
+                let rawRoute = activeTripObj.checkpoints || activeTripObj.destinationIds || activeTripObj.route;
+                let stopsList: string[] = [];
+                if (Array.isArray(rawRoute)) {
+                  stopsList = rawRoute;
+                } else if (typeof rawRoute === 'string') {
+                  try { stopsList = JSON.parse(rawRoute); } catch (e) { stopsList = [rawRoute]; }
+                }
+                if (stopsList.length > 0) {
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(6) }}>
+                      <MaterialIcons name="alt-route" size={scale(16)} color={colors.amber} />
+                      <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
+                        Checkpoints: <Text style={{ fontWeight: '600' }}>{stopsList.join(' ➔ ')}</Text>
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(6) }}>
                 <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
-                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
-                  Drop: <Text style={{ fontWeight: '700' }}>
-                    {(() => {
-                      let rawRoute = activeTripObj.checkpoints || activeTripObj.destinationIds || activeTripObj.route;
-                      let stopsList: string[] = [];
-                      if (Array.isArray(rawRoute)) {
-                        stopsList = rawRoute;
-                      } else if (typeof rawRoute === 'string') {
-                        try { stopsList = JSON.parse(rawRoute); } catch (e) { stopsList = [rawRoute]; }
-                      }
-                      if (stopsList.length > 0) {
-                        return stopsList.join(' ➔ ');
-                      }
-                      return activeTripObj.drop || activeTripObj.drop_name || activeTripObj.title || 'Destination';
-                    })()}
-                  </Text>
+                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
+                  Drop: <Text style={{ fontWeight: '700' }}>{activeTripObj.dropName || activeTripObj.drop || activeTripObj.title || 'Drop Spot'}</Text>
                 </Text>
               </View>
             </View>

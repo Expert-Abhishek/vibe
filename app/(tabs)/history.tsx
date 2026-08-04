@@ -397,19 +397,36 @@ export default function HistoryScreen() {
                   )}
 
                   {/* Full Route Itinerary (Pickup, Checkpoints, Drop) */}
-                  <View style={styles.routeBox}>
-                    <Text style={[styles.routeLabel, { color: colors.textMuted }]}>Full Travel Itinerary:</Text>
-                    <Text style={[styles.routeText, { color: colors.textPrimary }]}>
-                      🟢 <Text style={{ fontWeight: '700' }}>Pickup:</Text> {item.pickupName || 'Pickup Location'}
+                  <View style={[styles.routeBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: scale(10), borderRadius: scale(12), marginVertical: verticalScale(8), gap: verticalScale(6) }]}>
+                    <Text style={{ fontSize: moderateFontScale(10), fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: verticalScale(2) }}>
+                      Full Travel Itinerary
                     </Text>
-                    {item.route && item.route.length > 0 && (
-                      <Text style={[styles.routeText, { color: colors.amber, marginTop: verticalScale(2) }]}>
-                        📍 <Text style={{ fontWeight: '700' }}>Stops:</Text> {item.route.join(' ➔ ')}
+
+                    {/* Pickup Row */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                      <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
+                      <Text style={{ fontSize: moderateFontScale(12), color: colors.textPrimary, flex: 1 }} numberOfLines={1}>
+                        <Text style={{ fontWeight: '800' }}>Pickup: </Text>{item.pickupName || 'Pickup Location'}
                       </Text>
+                    </View>
+
+                    {/* Intermediate Stops Row */}
+                    {item.route && item.route.length > 0 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                        <MaterialIcons name="alt-route" size={scale(16)} color={colors.amber} />
+                        <Text style={{ fontSize: moderateFontScale(11.5), color: colors.amber, flex: 1 }} numberOfLines={2}>
+                          <Text style={{ fontWeight: '800' }}>Stops ({item.route.length}): </Text>{item.route.join(' ➔ ')}
+                        </Text>
+                      </View>
                     )}
-                    <Text style={[styles.routeText, { color: colors.textPrimary, marginTop: verticalScale(2) }]}>
-                      🔴 <Text style={{ fontWeight: '700' }}>Drop:</Text> {item.dropName || 'Destination'}
-                    </Text>
+
+                    {/* Drop Row */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                      <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
+                      <Text style={{ fontSize: moderateFontScale(12), color: colors.textPrimary, flex: 1 }} numberOfLines={1}>
+                        <Text style={{ fontWeight: '800' }}>Drop: </Text>{item.dropName || 'Destination'}
+                      </Text>
+                    </View>
                   </View>
 
                   {/* Driver / Guide details */}

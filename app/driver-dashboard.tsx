@@ -1095,10 +1095,8 @@ export default function DriverDashboardScreen() {
     stopNotificationChime();
     setRequestVisible(false);
 
-    const isPreBooking =
-      (incomingRequest as any).bookingType === 'PRE_BOOKED' ||
-      (incomingRequest as any).bookingType === 'prebook' ||
-      ((incomingRequest as any).scheduledTime && !(incomingRequest as any).scheduledTime.includes('Instant'));
+    const rawBookingType = String((incomingRequest as any)?.bookingType || (incomingRequest as any)?.booking_type || '').toUpperCase();
+    const isPreBooking = rawBookingType === 'PRE_BOOKED' || rawBookingType === 'PREBOOK';
 
     const newScheduleItem = {
       id: tripId || (incomingRequest as any).id,
@@ -1106,7 +1104,7 @@ export default function DriverDashboardScreen() {
       pickupName: incomingRequest.pickup,
       dropName: incomingRequest.drop,
       date: (incomingRequest as any).scheduledTime || 'Today',
-      time: (incomingRequest as any).scheduledTime ? 'Scheduled Time' : 'Immediate',
+      time: isPreBooking ? 'Scheduled Time' : 'Immediate',
       price: incomingRequest.estimatedFare,
       touristName: incomingRequest.touristName,
       driverOrGuideName: driverName,
@@ -1117,9 +1115,8 @@ export default function DriverDashboardScreen() {
       assignedToId: driverId,
     };
 
-    adminState.advanceBookings.unshift(newScheduleItem as any);
-
     if (isPreBooking) {
+      adminState.advanceBookings.unshift(newScheduleItem as any);
       setDriverTrips(prev => [newScheduleItem, ...prev]);
       Alert.alert(
         '📅 Pre-Booking Accepted!',
@@ -1570,19 +1567,19 @@ export default function DriverDashboardScreen() {
                         <Text style={[styles.logTime, { color: colors.amber }]}>
                           Payment: {booking.paymentMode}
                         </Text>
-                        {Array.isArray(booking.checkpoints) && booking.checkpoints.length > 0 && (
-                          <View style={{ marginTop: verticalScale(4) }}>
-                            <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '800' }}>
-                              📍 Tour Stops ({booking.checkpoints.length}):
+                        <View style={{ marginTop: verticalScale(4) }}>
+                          <Text style={{ fontSize: moderateFontScale(11), color: '#10B981', fontWeight: '800' }}>
+                            📍 Pickup: {booking.pickupName || booking.pickup || 'Pickup Spot'}
+                          </Text>
+                          {Array.isArray(booking.checkpoints) && booking.checkpoints.length > 0 && (
+                            <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '600', marginTop: 1 }}>
+                              🗺️ Checkpoints ({booking.checkpoints.length}): {booking.checkpoints.map((c: any) => typeof c === 'string' ? c : (c.name || c)).join(' ➔ ')}
                             </Text>
-                            <Text style={{ fontSize: moderateFontScale(11), color: colors.textPrimary, fontWeight: '600', marginTop: 1 }}>
-                              Stop 1 (Pickup): {typeof booking.checkpoints[0] === 'string' ? booking.checkpoints[0] : (booking.checkpoints[0]?.name || booking.pickup)}
-                            </Text>
-                            <Text style={{ fontSize: moderateFontScale(11), color: colors.textPrimary, fontWeight: '600', marginTop: 1 }}>
-                              Final Drop: {typeof booking.checkpoints[booking.checkpoints.length - 1] === 'string' ? booking.checkpoints[booking.checkpoints.length - 1] : (booking.checkpoints[booking.checkpoints.length - 1]?.name || booking.drop)}
-                            </Text>
-                          </View>
-                        )}
+                          )}
+                          <Text style={{ fontSize: moderateFontScale(11), color: '#EF4444', fontWeight: '800', marginTop: 1 }}>
+                            🏁 Final Drop: {booking.dropName || booking.drop || 'Drop Spot'}
+                          </Text>
+                        </View>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
                         <Text style={styles.logFare}>₹{booking.price}</Text>

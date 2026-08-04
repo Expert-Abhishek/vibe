@@ -264,9 +264,10 @@ export default function TripStatusScreen() {
 
     const handleCancelled = () => {
       setTripStatus('CANCELLED');
-      Alert.alert('Trip Cancelled', 'This trip has been cancelled.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
-      ]);
+      router.replace('/(tabs)/history');
+      setTimeout(() => {
+        Alert.alert('Trip Cancelled', 'This trip has been cancelled.');
+      }, 300);
     };
 
     const handleLocationStream = (data: any) => {
@@ -382,12 +383,13 @@ export default function TripStatusScreen() {
               }
               DeviceEventEmitter.emit('trip_cancelled', { tripId: tripIdParam });
               sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
-              Alert.alert('Trip Cancelled', 'Your ride request was cancelled and recorded in your History ledger.', [
-                { text: 'OK', onPress: () => router.replace('/(tabs)/history') }
-              ]);
+              router.replace('/(tabs)/history');
+              setTimeout(() => {
+                Alert.alert('Trip Cancelled', 'Your ride request was cancelled and recorded in your History ledger.');
+              }, 300);
             } catch (e) {
               console.warn('Cancel error:', e);
-              Alert.alert('Error', 'Failed to cancel trip.');
+              router.replace('/(tabs)/history');
             } finally {
               setCancelling(false);
             }
