@@ -345,6 +345,9 @@ export default function PlanRouteScreen() {
       const currentUserId = session?.id || session?.profile?.user_id;
 
       const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
+      const planDestIds = Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0 ? selectedPlan.destinationIds : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
+      const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
+
       const createdTrip = await createTripApi({
         tripType: 'plan',
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
@@ -353,6 +356,8 @@ export default function PlanRouteScreen() {
         driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
         driverId: selectedDriver ? driverId : null,
         planId: selectedPlan.id,
+        destinationId: primaryDestId || undefined,
+        destinationIds: planDestIds,
         vehicleCategory: targetCategory,
         amount: totalPrice,
         paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
@@ -427,6 +432,9 @@ export default function PlanRouteScreen() {
 
         const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
 
+        const planDestIds = Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0 ? selectedPlan.destinationIds : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
+        const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
+
         // Save trip to real backend DB
         const createdTrip = await createTripApi({
           tripType: 'plan',
@@ -436,6 +444,8 @@ export default function PlanRouteScreen() {
           driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
           driverId: selectedDriver ? driverId : null,
           planId: selectedPlan.id,
+          destinationId: primaryDestId || undefined,
+          destinationIds: planDestIds,
           vehicleCategory: targetCategory,
           amount: totalPrice,
           paymentMode: 'UPI',

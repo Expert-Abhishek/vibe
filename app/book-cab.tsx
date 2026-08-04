@@ -424,6 +424,9 @@ export default function BookCabScreen() {
           });
         }
 
+        const extractedDestinationId = (searchParams.destinationId as string) || (searchParams.destination_id as string) || (searchParams.placeId as string) || (searchParams.id as string) || (drop as any)?.id || null;
+        const destinationIdsArray = extractedDestinationId ? [String(extractedDestinationId)] : (stops.length > 0 ? stops.map((s: any) => s.id || s.name).filter(Boolean) : []);
+
         const bookRes = await bookTripApi({
           tripType: 'cab',
           title: `${pickup.name} ➔ ${drop.name}`,
@@ -435,6 +438,8 @@ export default function BookCabScreen() {
           pickupLng: pickup.longitude || 77.5946,
           dropLat: drop.latitude || 12.2958,
           dropLng: drop.longitude || 76.6394,
+          destinationId: extractedDestinationId || undefined,
+          destinationIds: destinationIdsArray,
           amount: final,
           paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${advanceAmount} (Bal ₹${remainingAmount})`,
           bookingType: 'PRE_BOOKED',
@@ -494,6 +499,9 @@ export default function BookCabScreen() {
 
     const targetDriverId = (searchParams.driverId as string) || (searchParams.selectedDriverId as string) || '';
 
+    const extractedDestinationId = (searchParams.destinationId as string) || (searchParams.destination_id as string) || (searchParams.placeId as string) || (searchParams.id as string) || (drop as any)?.id || null;
+    const destinationIdsArray = extractedDestinationId ? [String(extractedDestinationId)] : (stops.length > 0 ? stops.map((s: any) => s.id || s.name).filter(Boolean) : []);
+
     try {
       const bookRes = await bookTripApi({
         tripType: 'cab',
@@ -506,6 +514,8 @@ export default function BookCabScreen() {
         pickupLng: pickup.longitude || 77.5946,
         dropLat: drop.latitude || 12.2958,
         dropLng: drop.longitude || 76.6394,
+        destinationId: extractedDestinationId || undefined,
+        destinationIds: destinationIdsArray,
         amount: final,
         paymentMode: paymentMethod === 'cash' ? 'Cash' : 'UPI',
         bookingType: 'INSTANT',

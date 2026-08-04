@@ -8,6 +8,7 @@ import {
   StatusBar,
   ActivityIndicator,
   DeviceEventEmitter,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,6 +23,10 @@ interface HistoryRecord {
   id: string;
   type: 'cab' | 'guide' | 'custom_trip' | 'plan';
   title: string;
+  pickupName?: string;
+  dropName?: string;
+  destinationId?: string;
+  destinationIds?: string[];
   route?: string[];
   driverOrGuideName?: string;
   date: string;
@@ -30,6 +35,7 @@ interface HistoryRecord {
   status: 'Completed' | 'Cancelled' | string;
   rating?: number;
   passengerCount?: number;
+  paymentMode?: string;
 }
 
 export default function HistoryScreen() {
@@ -37,6 +43,7 @@ export default function HistoryScreen() {
   const isDark = colorScheme === 'dark';
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'cab' | 'guide' | 'plan'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [dbHistory, setDbHistory] = useState<HistoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -103,13 +110,21 @@ export default function HistoryScreen() {
             const titleStr = item.title || (item.pickupName && item.dropName ? `${item.pickupName} ➔ ${item.dropName}` : (item.pickup ? `${item.pickup} ➔ Destination` : 'Tour Booking'));
             const partnerName = item.driverOrGuideName || item.driverName || item.driver_or_guide_name || undefined;
 
+            const extractedDestIds = Array.isArray(item.destinationIds) && item.destinationIds.length > 0
+              ? item.destinationIds
+              : (Array.isArray(item.destination_ids) && item.destination_ids.length > 0 ? item.destination_ids : undefined);
+
+            const singleDestId = item.destinationId || item.destination_id || (extractedDestIds && extractedDestIds.length > 0 ? extractedDestIds[0] : undefined);
+
             acc.push({
               id: idStr,
               type: (item.type || item.tripType || 'cab') as any,
               title: titleStr,
               pickupName: item.pickupName || item.pickup_name || item.pickup || 'Pickup Point',
               dropName: item.dropName || item.drop_name || item.drop || 'Drop Point',
-              route: Array.isArray(item.destinationIds) && item.destinationIds.length > 0 ? item.destinationIds : (Array.isArray(item.route) ? item.route : (Array.isArray(item.checkpoints) ? item.checkpoints : undefined)),
+              destinationId: singleDestId ? String(singleDestId) : undefined,
+              destinationIds: extractedDestIds ? extractedDestIds.map((d: any) => String(d)) : undefined,
+              route: extractedDestIds && extractedDestIds.length > 0 ? extractedDestIds : (Array.isArray(item.route) ? item.route : (Array.isArray(item.checkpoints) ? item.checkpoints : undefined)),
               driverOrGuideName: partnerName,
               date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (item.date || 'Today'),
               time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (item.time || ''),
@@ -117,6 +132,7 @@ export default function HistoryScreen() {
               status: statusLabel,
               rating: Number(item.rating) || 5,
               passengerCount: item.passengerCount || 1,
+              paymentMode: item.paymentMode || item.payment_mode || undefined,
             });
             return acc;
           }, []);
@@ -232,14 +248,30 @@ export default function HistoryScreen() {
   );
 
   const filteredHistory = fullHistory.filter(item => {
-    if (activeFilter === 'all') return true;
-    if (activeFilter === 'cab') return item.type === 'cab' || item.type === 'custom_trip';
-    return item.type === activeFilter;
+    if (activeFilter !== 'all') {
+      if (activeFilter === 'cab' && (item.type !== 'cab' && item.type !== 'custom_trip')) return false;
+      if (activeFilter !== 'cab' && item.type !== activeFilter) return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const titleMatch = item.title?.toLowerCase().includes(q);
+      const pickupMatch = item.pickupName?.toLowerCase().includes(q);
+      const dropMatch = item.dropName?.toLowerCase().includes(q);
+      const destIdMatch = item.destinationId?.toLowerCase().includes(q) || (item.destinationIds && item.destinationIds.some(d => d.toLowerCase().includes(q)));
+      const partnerMatch = item.driverOrGuideName?.toLowerCase().includes(q);
+      const statusMatch = item.status?.toLowerCase().includes(q);
+      return titleMatch || pickupMatch || dropMatch || destIdMatch || partnerMatch || statusMatch;
+    }
+
+    return true;
   });
 
   const totalSpend = fullHistory
     .filter(h => h.status === 'Completed')
     .reduce((sum, item) => sum + item.price, 0);
+
+  const completedCount = fullHistory.filter(h => h.status === 'Completed').length;
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -283,6 +315,34 @@ export default function HistoryScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
+        {/* Stats Bar */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>COMPLETED TRIPS</Text>
+            <Text style={[styles.statValue, { color: colors.amber }]}>{completedCount}</Text>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.statLabel, { color: colors.textMuted }]}>TOTAL SPENT</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>₹{totalSpend.toLocaleString('en-IN')}</Text>
+          </View>
+        </View>
+
+        {/* Search Input Bar */}
+        <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <MaterialIcons name="search" size={scale(20)} color={colors.textMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.textPrimary }]}
+            placeholder="Search trips, places, drivers, destination ID..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <MaterialIcons name="close" size={scale(18)} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Filter Pills */}
         <View style={styles.filterRow}>
@@ -307,126 +367,151 @@ export default function HistoryScreen() {
           ))}
         </View>
 
-        {/* List of past bookings */}
-        <View style={styles.listContainer}>
-          {filteredHistory.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <MaterialIcons name="history" size={scale(40)} color={colors.textMuted} />
-              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No past records found for this category.</Text>
-            </View>
-          ) : (
-            filteredHistory.map((item, idx) => (
-              <View
-                key={`${item.id || 'hist'}_${idx}`}
-                style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                {/* Header info */}
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardTypeRow}>
-                    <MaterialIcons name={getIcon(item.type)} size={scale(18)} color={colors.amber} />
-                    <Text style={[styles.typeNameText, { color: colors.textMuted }]}>
-                      {getTypeName(item.type)}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor:
-                          item.status === 'Completed'
-                            ? 'rgba(16, 185, 129, 0.15)'
-                            : 'rgba(239, 68, 68, 0.15)',
-                      },
-                    ]}
-                  >
-                    <Text
+        {/* Loading Indicator */}
+        {loading ? (
+          <View style={{ paddingVertical: verticalScale(40), alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={colors.amber} />
+            <Text style={{ color: colors.textMuted, marginTop: verticalScale(10), fontSize: moderateFontScale(12) }}>Loading travel history...</Text>
+          </View>
+        ) : (
+          /* List of past bookings */
+          <View style={styles.listContainer}>
+            {filteredHistory.length === 0 ? (
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <MaterialIcons name="history" size={scale(40)} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                  {searchQuery ? 'No matching trips found.' : 'No past records found for this category.'}
+                </Text>
+              </View>
+            ) : (
+              filteredHistory.map((item, idx) => (
+                <View
+                  key={`${item.id || 'hist'}_${idx}`}
+                  style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  {/* Header info */}
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardTypeRow}>
+                      <MaterialIcons name={getIcon(item.type)} size={scale(18)} color={colors.amber} />
+                      <Text style={[styles.typeNameText, { color: colors.textMuted }]}>
+                        {getTypeName(item.type)}
+                      </Text>
+                    </View>
+                    <View
                       style={[
-                        styles.statusText,
-                        { color: item.status === 'Completed' ? colors.success : colors.danger },
+                        styles.statusBadge,
+                        {
+                          backgroundColor:
+                            item.status === 'Completed'
+                              ? 'rgba(16, 185, 129, 0.15)'
+                              : 'rgba(239, 68, 68, 0.15)',
+                        },
                       ]}
                     >
-                      {item.status}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Title */}
-                <Text style={[styles.titleText, { color: colors.textPrimary }]}>{item.title}</Text>
-
-                {/* Full Route Itinerary (Pickup, Checkpoints, Drop) */}
-                <View style={styles.routeBox}>
-                  <Text style={[styles.routeLabel, { color: colors.textMuted }]}>Full Travel Itinerary:</Text>
-                  <Text style={[styles.routeText, { color: colors.textPrimary }]}>
-                    🟢 <Text style={{ fontWeight: '700' }}>Pickup:</Text> {item.pickupName || 'Pickup Location'}
-                  </Text>
-                  {item.route && item.route.length > 0 && (
-                    <Text style={[styles.routeText, { color: colors.amber, marginTop: verticalScale(2) }]}>
-                      📍 <Text style={{ fontWeight: '700' }}>Stops:</Text> {item.route.join(' ➔ ')}
-                    </Text>
-                  )}
-                  <Text style={[styles.routeText, { color: colors.textPrimary, marginTop: verticalScale(2) }]}>
-                    🔴 <Text style={{ fontWeight: '700' }}>Drop:</Text> {item.dropName || 'Destination'}
-                  </Text>
-                </View>
-
-                {/* Driver / Guide details */}
-                {item.driverOrGuideName && (
-                  <View style={styles.metaRow}>
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
-                      {item.type === 'guide' ? 'Guide: ' : 'Captain: '}
-                      <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>
-                        {item.driverOrGuideName}
+                      <Text
+                        style={[
+                          styles.statusText,
+                          { color: item.status === 'Completed' ? colors.success : colors.danger },
+                        ]}
+                      >
+                        {item.status}
                       </Text>
-                    </Text>
-                  </View>
-                )}
-
-                {/* Passenger count detail */}
-                {item.passengerCount !== undefined && (
-                  <View style={styles.metaRow}>
-                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
-                      Passengers: <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{item.passengerCount}</Text>
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.cardFooter}>
-                  {/* Date & Time */}
-                  <View style={styles.dateTimeCol}>
-                    <Text style={[styles.dateTimeText, { color: colors.textMuted }]}>
-                      {item.date} · {item.time}
-                    </Text>
-                  </View>
-
-                  {/* Price */}
-                  <View style={styles.priceCol}>
-                    <Text style={[styles.priceText, { color: colors.amber }]}>
-                      ₹{item.price.toLocaleString('en-IN')}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Rating if Completed */}
-                {item.status === 'Completed' && (
-                  <View style={styles.ratingRow}>
-                    <Text style={[styles.ratingLabel, { color: colors.textMuted }]}>Your Rating:</Text>
-                    <View style={styles.starsBox}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <MaterialIcons
-                          key={star}
-                          name="star"
-                          size={scale(16)}
-                          color={star <= (item.rating || 5) ? colors.amber : 'rgba(255,255,255,0.15)'}
-                          style={{ marginRight: scale(2) }}
-                        />
-                      ))}
                     </View>
                   </View>
-                )}
-              </View>
-            ))
-          )}
-        </View>
+
+                  {/* Title */}
+                  <Text style={[styles.titleText, { color: colors.textPrimary }]}>{item.title}</Text>
+
+                  {/* Destination ID Tag if present */}
+                  {item.destinationId && (
+                    <View style={styles.destIdRow}>
+                      <MaterialIcons name="place" size={scale(13)} color={colors.amber} />
+                      <Text style={[styles.destIdText, { color: colors.amber }]}>
+                        Destination ID: {item.destinationId}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Full Route Itinerary (Pickup, Checkpoints, Drop) */}
+                  <View style={styles.routeBox}>
+                    <Text style={[styles.routeLabel, { color: colors.textMuted }]}>Full Travel Itinerary:</Text>
+                    <Text style={[styles.routeText, { color: colors.textPrimary }]}>
+                      🟢 <Text style={{ fontWeight: '700' }}>Pickup:</Text> {item.pickupName || 'Pickup Location'}
+                    </Text>
+                    {item.route && item.route.length > 0 && (
+                      <Text style={[styles.routeText, { color: colors.amber, marginTop: verticalScale(2) }]}>
+                        📍 <Text style={{ fontWeight: '700' }}>Stops:</Text> {item.route.join(' ➔ ')}
+                      </Text>
+                    )}
+                    <Text style={[styles.routeText, { color: colors.textPrimary, marginTop: verticalScale(2) }]}>
+                      🔴 <Text style={{ fontWeight: '700' }}>Drop:</Text> {item.dropName || 'Destination'}
+                    </Text>
+                  </View>
+
+                  {/* Driver / Guide details */}
+                  {item.driverOrGuideName && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                        {item.type === 'guide' ? 'Guide: ' : 'Captain: '}
+                        <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>
+                          {item.driverOrGuideName}
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Passenger count & Payment mode */}
+                  <View style={styles.metaRowInline}>
+                    {item.passengerCount !== undefined && (
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                        Pax: <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{item.passengerCount}</Text>
+                      </Text>
+                    )}
+                    {item.paymentMode && (
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                        Payment: <Text style={{ color: colors.amber, fontWeight: '600' }}>{item.paymentMode}</Text>
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    {/* Date & Time */}
+                    <View style={styles.dateTimeCol}>
+                      <Text style={[styles.dateTimeText, { color: colors.textMuted }]}>
+                        {item.date} · {item.time}
+                      </Text>
+                    </View>
+
+                    {/* Price */}
+                    <View style={styles.priceCol}>
+                      <Text style={[styles.priceText, { color: colors.amber }]}>
+                        ₹{item.price.toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Rating if Completed */}
+                  {item.status === 'Completed' && (
+                    <View style={styles.ratingRow}>
+                      <Text style={[styles.ratingLabel, { color: colors.textMuted }]}>Your Rating:</Text>
+                      <View style={styles.starsBox}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <MaterialIcons
+                            key={star}
+                            name="star"
+                            size={scale(16)}
+                            color={star <= (item.rating || 5) ? colors.amber : 'rgba(255,255,255,0.15)'}
+                            style={{ marginRight: scale(2) }}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -460,7 +545,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: scale(12),
-    marginBottom: verticalScale(16),
+    marginBottom: verticalScale(14),
   },
   statCard: {
     flex: 1,
@@ -477,6 +562,21 @@ const styles = StyleSheet.create({
     fontSize: moderateFontScale(20),
     fontWeight: '800',
     marginTop: verticalScale(4),
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: scale(14),
+    borderWidth: 1.2,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    marginBottom: verticalScale(14),
+    gap: scale(8),
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: moderateFontScale(13),
+    padding: 0,
   },
   filterRow: {
     flexDirection: 'row',
@@ -543,7 +643,17 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: moderateFontScale(15),
     fontWeight: '800',
+    marginBottom: verticalScale(6),
+  },
+  destIdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(4),
     marginBottom: verticalScale(8),
+  },
+  destIdText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
   },
   routeBox: {
     backgroundColor: 'rgba(255,255,255,0.03)',
@@ -561,6 +671,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   metaRow: {
+    marginBottom: verticalScale(6),
+  },
+  metaRowInline: {
+    flexDirection: 'row',
+    gap: scale(16),
     marginBottom: verticalScale(6),
   },
   cardFooter: {

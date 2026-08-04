@@ -741,6 +741,9 @@ export default function MakeTripScreen() {
       broadcastNewTripRequest(tripObject);
 
       try {
+        const destId = checkpoints.find((c: any) => c.id || c.destinationId || c.placeId)?.id || checkpoints.find((c: any) => c.id || c.destinationId || c.placeId)?.destinationId || null;
+        const allDestIds = checkpoints.map((c: any) => String(c.id || c.destinationId || c.placeId || c.name)).filter(Boolean);
+
         await createTripApi({
           tripType: 'custom_trip',
           title: `Trip: ${pickupName} → ${dropName}`,
@@ -748,6 +751,8 @@ export default function MakeTripScreen() {
           customerName: customerName,
           driverOrGuideName: driverName,
           driverId: driverId,
+          destinationId: destId || undefined,
+          destinationIds: allDestIds,
           amount: totalPrice,
           paymentMode: `Wallet Deposit (${prebookPayOption}%): ₹${paymentAmount} (Bal ₹${remainingAmount})`,
           status: 'Pending',

@@ -217,6 +217,7 @@ export async function createTripApi(payload: {
   driverOrGuideName?: string;
   planId?: string;
   vehicleCategory?: string;
+  destinationId?: string;
   destinationIds?: string[];
   amount: number;
   paymentMode?: string;
@@ -707,6 +708,8 @@ export async function bookTripApi(payload: {
   pickupLng?: number;
   dropLat?: number;
   dropLng?: number;
+  destinationId?: string;
+  destinationIds?: string[];
   amount?: number;
   paymentMode?: string;
   bookingType?: string;

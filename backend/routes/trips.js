@@ -991,7 +991,14 @@ router.post('/book', async (req, res) => {
       bookingType = 'INSTANT',
       scheduledTime = null,
       vehicleCategory = '5_seater',
+      destinationId = req.body.destinationId || req.body.destination_id || null,
+      destinationIds = req.body.destinationIds || req.body.destination_ids || [],
     } = req.body;
+
+    let targetDestinationIds = Array.isArray(destinationIds) ? [...destinationIds] : [];
+    if (destinationId && !targetDestinationIds.includes(destinationId)) {
+      targetDestinationIds.unshift(destinationId);
+    }
 
     const selectedVehicleCategory = req.body.vehicleCategory || req.body.vehicle_category || vehicleCategory || '5_seater';
 
@@ -1063,14 +1070,15 @@ router.post('/book', async (req, res) => {
       advanceDepositPaid,
       remainingCashBalance,
       selectedVehicleCategory,
+      targetDestinationIds,
     ];
 
     const insertSql = `INSERT INTO trips (
       trip_type, title, customer_id, customer_name, pickup_name, drop_name,
       pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-      status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
+      status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, destination_ids, created_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
      RETURNING *`;
 
     try {
@@ -1302,7 +1310,8 @@ router.post('/', async (req, res) => {
       customerName = 'Tourist Customer',
       driverOrGuideName = 'Assigned Driver',
       planId = null,
-      destinationIds = [],
+      destinationId = req.body.destinationId || req.body.destination_id || null,
+      destinationIds = req.body.destinationIds || req.body.destination_ids || [],
       amount = 0,
       paymentMode = 'UPI',
       status = 'Pending',
