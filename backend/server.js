@@ -48,6 +48,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/destinations', destinationsRoutes);
 app.use('/api/plans', plansRoutes);
 app.use('/api/trips', tripsRoutes);
+app.use('/api/stations', tripsRoutes);
+app.use('/api/v1/stations', tripsRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/notifications', notificationsRoutes);

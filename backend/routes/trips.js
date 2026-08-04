@@ -31,48 +31,82 @@ function sanitizePaymentMode(pm) {
   return 'cash';
 }
 
+let STATION_MAP = {
+  'loc_ksrtc_bus_stand': { id: 'loc_ksrtc_bus_stand', name: 'KSRTC Bus Stand Sakleshpur', address: 'Sakleshpura, Karnataka 573134', latitude: 12.9416, longitude: 75.7790 },
+  'loc_sakleshpur_town': { id: 'loc_sakleshpur_town', name: 'Sakleshpur Town Center', address: 'Main Road, Sakleshpur, Karnataka 573134', latitude: 12.9455178, longitude: 75.7789167 },
+  'loc_azad_road_junction': { id: 'loc_azad_road_junction', name: 'Azad Road Junction (Sakleshpur)', address: 'Azad Road, Sakleshpur, Karnataka 573134', latitude: 12.9403832, longitude: 75.7789866 },
+  'loc_ksrtc_old_bus_stand_ballupet': { id: 'loc_ksrtc_old_bus_stand_ballupet', name: 'KSRTC Old Bus Stand Ballupet', address: 'J.P Nagar, Ballupet, Sakleshpura, Karnataka 573134', latitude: 12.9155, longitude: 75.8456 },
+};
+
+async function reloadStationMap() {
+  try {
+    const res = await db.query('SELECT * FROM stations ORDER BY created_at ASC');
+    if (res.rows && res.rows.length > 0) {
+      res.rows.forEach(st => {
+        STATION_MAP[st.id] = {
+          id: st.id,
+          name: st.name,
+          address: st.address || '',
+          latitude: parseFloat(st.latitude || 0),
+          longitude: parseFloat(st.longitude || 0),
+        };
+      });
+    }
+  } catch (e) {
+    console.warn('reloadStationMap warning:', e.message);
+  }
+}
+
 /**
- * GET /api/trips/preset-locations
- * Official Sakleshpur Pickup & Drop Location presets for user trips
+ * GET /api/trips/preset-locations OR /api/stations
+ * Official Sakleshpur Pickup & Drop Station presets for user trips
  */
-router.get('/preset-locations', (req, res) => {
-  res.json({
-    success: true,
-    data: [
-      {
-        id: 'loc_ksrtc_bus_stand',
-        name: 'KSRTC Bus Stand Sakleshpur',
-        address: 'Sakleshpura, Karnataka 573134',
-        latitude: 12.9416,
-        longitude: 75.7790,
-        icon: 'directions-bus',
-      },
-      {
-        id: 'loc_sakleshpur_town',
-        name: 'Sakleshpur Town Center',
-        address: 'Main Road, Sakleshpur, Karnataka 573134',
-        latitude: 12.9455178,
-        longitude: 75.7789167,
-        icon: 'location-city',
-      },
-      {
-        id: 'loc_azad_road_junction',
-        name: 'Azad Road Junction (Sakleshpur)',
-        address: 'Azad Road, Sakleshpur, Karnataka 573134',
-        latitude: 12.9403832,
-        longitude: 75.7789866,
-        icon: 'traffic',
-      },
-      {
-        id: 'loc_ksrtc_old_bus_stand_ballupet',
-        name: 'KSRTC Old Bus Stand Ballupet',
-        address: 'J.P Nagar, Ballupet, Sakleshpura, Karnataka 573134',
-        latitude: 12.9155,
-        longitude: 75.8456,
-        icon: 'departure-board',
-      },
-    ],
-  });
+router.get(['/preset-locations', '/stations'], async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM stations ORDER BY created_at ASC');
+    const stations = result.rows.map(st => ({
+      id: st.id,
+      stationId: st.id,
+      name: st.name,
+      address: st.address || '',
+      latitude: parseFloat(st.latitude || 0),
+      longitude: parseFloat(st.longitude || 0),
+    }));
+    res.json({ success: true, data: stations.length > 0 ? stations : Object.values(STATION_MAP) });
+  } catch (e) {
+    res.json({ success: true, data: Object.values(STATION_MAP) });
+  }
+});
+
+/**
+ * GET /api/trips/stations/:id
+ * Get single station details by ID
+ */
+router.get('/stations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query('SELECT * FROM stations WHERE id = $1', [id]);
+    if (result.rows.length > 0) {
+      const st = result.rows[0];
+      return res.json({
+        success: true,
+        data: {
+          id: st.id,
+          stationId: st.id,
+          name: st.name,
+          address: st.address || '',
+          latitude: parseFloat(st.latitude || 0),
+          longitude: parseFloat(st.longitude || 0),
+        }
+      });
+    }
+    if (STATION_MAP[id]) {
+      return res.json({ success: true, data: STATION_MAP[id] });
+    }
+    res.status(404).json({ success: false, message: 'Station not found' });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Failed to fetch station' });
+  }
 });
 
 // Auto-migrate trips table columns if missing on production database (deferred execution)
@@ -102,6 +136,41 @@ async function ensureTripsColumnsExist() {
     `);
   } catch (e) {}
 
+  // 1. Create stations table
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS stations (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        latitude NUMERIC(10,6),
+        longitude NUMERIC(10,6),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } catch (e) {
+    console.warn('Create stations table warning:', e.message);
+  }
+
+  // 2. Seed initial Sakleshpur stations into stations table
+  try {
+    await db.query(`
+      INSERT INTO stations (id, name, address, latitude, longitude)
+      VALUES
+        ('loc_ksrtc_bus_stand', 'KSRTC Bus Stand Sakleshpur', 'Sakleshpura, Karnataka 573134', 12.9416, 75.7790),
+        ('loc_sakleshpur_town', 'Sakleshpur Town Center', 'Main Road, Sakleshpur, Karnataka 573134', 12.9455178, 75.7789167),
+        ('loc_azad_road_junction', 'Azad Road Junction (Sakleshpur)', 'Azad Road, Sakleshpur, Karnataka 573134', 12.9403832, 75.7789866),
+        ('loc_ksrtc_old_bus_stand_ballupet', 'KSRTC Old Bus Stand Ballupet', 'J.P Nagar, Ballupet, Sakleshpura, Karnataka 573134', 12.9155, 75.8456)
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        address = EXCLUDED.address,
+        latitude = EXCLUDED.latitude,
+        longitude = EXCLUDED.longitude;
+    `);
+  } catch (e) {
+    console.warn('Seed stations table warning:', e.message);
+  }
+
   try {
     await db.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS has_trip INT DEFAULT 0;
@@ -113,6 +182,9 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS advance_deposit_paid NUMERIC(10,2) DEFAULT 0.00;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS remaining_cash_balance NUMERIC(10,2) DEFAULT 0.00;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_or_guide_name VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_id VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_id VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS station_id VARCHAR(255);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_name VARCHAR(255);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_name VARCHAR(255);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_lat NUMERIC(10,6);
@@ -137,10 +209,86 @@ async function ensureTripsColumnsExist() {
   } catch (e) {
     console.warn('Trips table auto-migration warning:', e.message);
   }
+
+  await reloadStationMap();
 }
 
 // Run migration safely on route module load
 ensureTripsColumnsExist();
+
+function mapTripRecord(t) {
+  if (!t) return null;
+
+  const pickupId = t.pickup_id || t.pickup_station_id || t.station_id || null;
+  const dropId = t.drop_id || t.drop_station_id || null;
+
+  let pickupName = t.pickup_name || '';
+  let dropName = t.drop_name || '';
+
+  if (!pickupName && pickupId && STATION_MAP[pickupId]) {
+    pickupName = STATION_MAP[pickupId].name;
+  }
+  if (!dropName && dropId && STATION_MAP[dropId]) {
+    dropName = STATION_MAP[dropId].name;
+  }
+
+  if (!pickupName) pickupName = 'KSRTC Bus Stand Sakleshpur';
+  if (!dropName) dropName = t.title || 'Sakleshpur Town Center';
+
+  const pickupLat = t.pickup_lat ? parseFloat(t.pickup_lat) : (pickupId && STATION_MAP[pickupId] ? STATION_MAP[pickupId].latitude : 12.9416);
+  const pickupLng = t.pickup_lng ? parseFloat(t.pickup_lng) : (pickupId && STATION_MAP[pickupId] ? STATION_MAP[pickupId].longitude : 75.7790);
+
+  const dropLat = t.drop_lat ? parseFloat(t.drop_lat) : (dropId && STATION_MAP[dropId] ? STATION_MAP[dropId].latitude : 12.9455178);
+  const dropLng = t.drop_lng ? parseFloat(t.drop_lng) : (dropId && STATION_MAP[dropId] ? STATION_MAP[dropId].longitude : 75.7789167);
+
+  return {
+    id: t.id,
+    tripId: t.id,
+    tripType: t.trip_type,
+    type: t.trip_type,
+    title: t.title || `${pickupName} ➔ ${dropName}`,
+    customerId: t.customer_id,
+    customerName: t.customer_name,
+    touristName: t.customer_name,
+    driverId: t.driver_id,
+    assignedToId: t.driver_id,
+    driverOrGuideName: t.driver_or_guide_name || '',
+    planId: t.plan_id,
+    destinationId: t.destination_id || (Array.isArray(t.destination_ids) && t.destination_ids.length > 0 ? t.destination_ids[0] : null),
+    destinationIds: t.destination_ids || [],
+    checkpoints: t.destination_ids || [],
+    pickupId: pickupId,
+    pickup_id: pickupId,
+    stationId: pickupId,
+    station_id: pickupId,
+    pickupName: pickupName,
+    pickup_name: pickupName,
+    pickupLat: pickupLat,
+    pickupLng: pickupLng,
+    dropId: dropId,
+    drop_id: dropId,
+    dropName: dropName,
+    drop_name: dropName,
+    dropLat: dropLat,
+    dropLng: dropLng,
+    amount: parseFloat(t.amount || 0),
+    price: parseFloat(t.amount || 0),
+    paymentMode: t.payment_mode || 'UPI',
+    status: t.status || 'Pending',
+    durationHours: parseFloat(t.duration_hours || 8),
+    extraHours: parseFloat(t.extra_hours || 0),
+    addonCharge: parseFloat(t.addon_charge || 0),
+    rating: t.rating || 5,
+    otp: t.otp || null,
+    endOtp: t.end_otp || t.endOtp || '4321',
+    bookingType: t.booking_type || 'INSTANT',
+    scheduledTime: t.scheduled_time || null,
+    advanceDepositPaid: parseFloat(t.advance_deposit_paid || 0),
+    remainingCashBalance: parseFloat(t.remaining_cash_balance || 0),
+    vehicleCategory: t.vehicle_category || '5_seater',
+    createdAt: t.created_at,
+  };
+}
 
 function getStatusCode(status) {
   if (!status) return 0;
@@ -391,27 +539,7 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
     const t = result.rows[0];
     await setUserHasTrip(customerId, true);
 
-    const activeTripData = {
-      id: t.id,
-      tripId: t.id,
-      customerId: t.customer_id,
-      customerName: t.customer_name,
-      driverId: t.driver_id,
-      driverName: t.driver_or_guide_name || 'Assigned Partner',
-      driver_or_guide_name: t.driver_or_guide_name || 'Assigned Partner',
-      pickup: t.pickup_name || t.title,
-      drop: t.drop_name || t.title,
-      amount: parseFloat(t.amount || 0),
-      status: t.status,
-      bookingType: t.booking_type || 'INSTANT',
-      otp: t.otp || '8240',
-      endOtp: t.end_otp || t.endOtp || '4321',
-      pickupLat: parseFloat(t.pickup_lat || 12.9716),
-      pickupLng: parseFloat(t.pickup_lng || 77.5946),
-      dropLat: parseFloat(t.drop_lat || 12.9716),
-      dropLng: parseFloat(t.drop_lng || 76.6394),
-      createdAt: t.created_at,
-    };
+    const activeTripData = mapTripRecord(t);
 
     res.json({
       success: true,
@@ -1001,27 +1129,7 @@ router.get('/', async (req, res) => {
       'SELECT * FROM trips ORDER BY created_at DESC'
     );
 
-    const trips = result.rows.map(t => ({
-      id: t.id,
-      tripType: t.trip_type,
-      title: t.title,
-      customerId: t.customer_id,
-      customerName: t.customer_name,
-      driverOrGuideName: t.driver_or_guide_name || '',
-      planId: t.plan_id,
-      destinationIds: t.destination_ids || [],
-      amount: parseFloat(t.amount || 0),
-      paymentMode: t.payment_mode || 'UPI',
-      status: t.status || 'Completed',
-      durationHours: parseFloat(t.duration_hours || 8),
-      extraHours: parseFloat(t.extra_hours || 0),
-      addonCharge: parseFloat(t.addon_charge || 0),
-      rating: t.rating || 5,
-      pickupName: t.pickup_name || 'Bengaluru City',
-      dropName: t.drop_name || t.title,
-      otp: t.otp || '8240',
-      createdAt: t.created_at,
-    }));
+    const trips = result.rows.map(mapTripRecord);
 
     res.json({ success: true, data: trips });
   } catch (error) {
@@ -1062,29 +1170,7 @@ router.get('/customer/:customerId', async (req, res) => {
 
     const result = await db.query(queryText, queryParams);
 
-    const trips = result.rows.map(t => ({
-      id: t.id,
-      tripType: t.trip_type,
-      title: t.title || (t.pickup_name && t.drop_name ? `${t.pickup_name} ➔ ${t.drop_name}` : 'Tour Booking'),
-      customerId: t.customer_id,
-      customerName: t.customer_name,
-      driverId: t.driver_id,
-      driverOrGuideName: t.driver_or_guide_name || '',
-      pickupName: t.pickup_name,
-      dropName: t.drop_name,
-      planId: t.plan_id,
-      destinationId: t.destination_id || (Array.isArray(t.destination_ids) && t.destination_ids.length > 0 ? t.destination_ids[0] : null),
-      destinationIds: t.destination_ids || [],
-      checkpoints: t.destination_ids || [],
-      amount: parseFloat(t.amount || 0),
-      paymentMode: t.payment_mode || 'UPI',
-      status: t.status || 'Completed',
-      durationHours: parseFloat(t.duration_hours || 8),
-      extraHours: parseFloat(t.extra_hours || 0),
-      addonCharge: parseFloat(t.addon_charge || 0),
-      rating: t.rating || 5,
-      createdAt: t.created_at,
-    }));
+    const trips = result.rows.map(mapTripRecord);
 
     res.json({ success: true, data: trips });
   } catch (error) {

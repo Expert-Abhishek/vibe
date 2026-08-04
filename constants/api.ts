@@ -205,6 +205,22 @@ export async function fetchPresetLocationsApi(): Promise<any[]> {
 }
 
 /**
+ * Fetch official Pickup & Drop Preset Stations from backend
+ */
+export async function fetchStationsApi(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/stations`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchStationsApi error:', e);
+  }
+  return fetchPresetLocationsApi();
+}
+
+/**
  * Fetch live Tour Package Plans from backend
  */
 export async function fetchPlansApi(): Promise<any[]> {

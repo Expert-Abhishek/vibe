@@ -30,7 +30,7 @@ interface TourPackage {
   destinationId?: string;
 }
 
-import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
+import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi, fetchStationsApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 
@@ -52,6 +52,7 @@ export default function PlanRouteScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('upi');
   const [preBookingPaymentChoice, setPreBookingPaymentChoice] = useState<'advance_20' | 'full_100'>('advance_20');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
+  const [stationList, setStationList] = useState<PresetLocation[]>(PRESET_PICKUP_DROP_LOCATIONS);
   const [selectedPickup, setSelectedPickup] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[0]);
   const [selectedDrop, setSelectedDrop] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[1]);
 
@@ -387,9 +388,11 @@ export default function PlanRouteScreen() {
         planId: selectedPlan.id,
         destinationId: primaryDestId || undefined,
         destinationIds: planDestIds,
+        pickupId: selectedPickup.id,
         pickupName: selectedPickup.name,
         pickupLat: selectedPickup.latitude,
         pickupLng: selectedPickup.longitude,
+        dropId: selectedDrop.id,
         dropName: selectedDrop.name,
         dropLat: selectedDrop.latitude,
         dropLng: selectedDrop.longitude,
@@ -425,10 +428,15 @@ export default function PlanRouteScreen() {
         tripId: realTripId,
         type: 'plan' as const,
         title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
+        pickupId: selectedPickup.id,
+        pickup_id: selectedPickup.id,
+        stationId: selectedPickup.id,
         pickup: selectedPickup.name,
         pickupName: selectedPickup.name,
         pickupLat: selectedPickup.latitude,
         pickupLng: selectedPickup.longitude,
+        dropId: selectedDrop.id,
+        drop_id: selectedDrop.id,
         drop: selectedDrop.name,
         dropName: selectedDrop.name,
         dropLat: selectedDrop.latitude,
@@ -679,9 +687,7 @@ export default function PlanRouteScreen() {
 
             {/* PICKUP & DROP LOCATION SELECTOR FOR TOUR PLAN */}
             <View style={{ marginVertical: verticalScale(10), backgroundColor: colors.surface, padding: scale(14), borderRadius: scale(16), borderWidth: 1, borderColor: colors.border }}>
-              <Text style={{ color: colors.textPrimary, fontWeight: '900', fontSize: moderateFontScale(14), marginBottom: verticalScale(10) }}>
-                📍 Select Pickup & Drop Location
-              </Text>
+
 
               {/* Pickup Location Selector */}
               <View style={{ marginBottom: verticalScale(12) }}>
@@ -689,7 +695,7 @@ export default function PlanRouteScreen() {
                   PICKUP LOCATION
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {PRESET_PICKUP_DROP_LOCATIONS.map((loc) => {
+                  {stationList.map((loc) => {
                     const isSelected = selectedPickup.id === loc.id;
                     return (
                       <TouchableOpacity
@@ -724,7 +730,7 @@ export default function PlanRouteScreen() {
                   DROP LOCATION
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {PRESET_PICKUP_DROP_LOCATIONS.map((loc) => {
+                  {stationList.map((loc) => {
                     const isSelected = selectedDrop.id === loc.id;
                     return (
                       <TouchableOpacity
