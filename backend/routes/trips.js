@@ -1543,6 +1543,10 @@ router.post('/:id/decline', async (req, res) => {
  * POST /api/trips/create-trip (Alias: /, /book)
  * Create a new trip booking in database
  */
+/**
+ * POST /api/trips/create-trip (Alias: /, /book)
+ * Create a new trip booking in database
+ */
 router.post(['/create-trip', '/', '/book'], async (req, res) => {
   try {
     const {
@@ -1560,7 +1564,6 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       durationHours = 8,
       extraHours = 0,
       addonCharge = 0,
-      rating = 5,
       bookingType = 'INSTANT',
       scheduledTime = null,
     } = req.body;
@@ -1592,7 +1595,40 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       }
     }
 
-    const otpCode = null; // OTP hidden initially during Pending status
+    // Pickup & Drop ID / GPS Resolution
+    const rawPickupId = req.body.pickupId || req.body.pickup_id || req.body.stationId || req.body.station_id || null;
+    const rawDropId = req.body.dropId || req.body.drop_id || null;
+
+    let pickupName = req.body.pickupName || req.body.pickup_name || '';
+    let dropName = req.body.dropName || req.body.drop_name || '';
+
+    let pickupLat = (req.body.pickupLat !== undefined && req.body.pickupLat !== null) ? parseFloat(req.body.pickupLat) : ((req.body.pickup_lat !== undefined && req.body.pickup_lat !== null) ? parseFloat(req.body.pickup_lat) : null);
+    let pickupLng = (req.body.pickupLng !== undefined && req.body.pickupLng !== null) ? parseFloat(req.body.pickupLng) : ((req.body.pickup_lng !== undefined && req.body.pickup_lng !== null) ? parseFloat(req.body.pickup_lng) : null);
+
+    let dropLat = (req.body.dropLat !== undefined && req.body.dropLat !== null) ? parseFloat(req.body.dropLat) : ((req.body.drop_lat !== undefined && req.body.drop_lat !== null) ? parseFloat(req.body.drop_lat) : null);
+    let dropLng = (req.body.dropLng !== undefined && req.body.dropLng !== null) ? parseFloat(req.body.dropLng) : ((req.body.drop_lng !== undefined && req.body.drop_lng !== null) ? parseFloat(req.body.drop_lng) : null);
+
+    if (rawPickupId && STATION_MAP[rawPickupId]) {
+      if (!pickupName) pickupName = STATION_MAP[rawPickupId].name;
+      if (pickupLat === null || isNaN(pickupLat)) pickupLat = STATION_MAP[rawPickupId].latitude;
+      if (pickupLng === null || isNaN(pickupLng)) pickupLng = STATION_MAP[rawPickupId].longitude;
+    }
+
+    if (rawDropId && STATION_MAP[rawDropId]) {
+      if (!dropName) dropName = STATION_MAP[rawDropId].name;
+      if (dropLat === null || isNaN(dropLat)) dropLat = STATION_MAP[rawDropId].latitude;
+      if (dropLng === null || isNaN(dropLng)) dropLng = STATION_MAP[rawDropId].longitude;
+    }
+
+    if (!pickupName) pickupName = 'KSRTC Bus Stand Sakleshpur';
+    if (pickupLat === null || isNaN(pickupLat)) pickupLat = 12.9416;
+    if (pickupLng === null || isNaN(pickupLng)) pickupLng = 75.7790;
+
+    if (!dropName) dropName = title.trim() || 'Sakleshpur Town Center';
+    if (dropLat === null || isNaN(dropLat)) dropLat = 12.9455178;
+    if (dropLng === null || isNaN(dropLng)) dropLng = 75.7789167;
+
+    const otpCode = null; // Hidden initially
     const totalAmount = parseFloat(amount || 0);
     const isPreBooked = bookingType === 'PRE_BOOKED';
     const advanceDepositPaid = isPreBooked ? Math.round(totalAmount * 0.20) : 0;
@@ -1636,6 +1672,17 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
     }
 
     const sanitizedPaymentMode = sanitizePaymentMode(paymentMode);
+
+    const insertSql = `INSERT INTO trips (
+      trip_type, title, customer_id, customer_name, driver_or_guide_name,
+      plan_id, destination_ids, amount, payment_mode, status,
+      duration_hours, extra_hours, addon_charge, otp, pickup_name, drop_name,
+      booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category,
+      pickup_id, drop_id, station_id, pickup_lat, pickup_lng, drop_lat, drop_lng
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+     RETURNING *`;
+
     const queryParams = [
       tripType,
       title.trim(),
@@ -1650,84 +1697,69 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       parseFloat(durationHours),
       parseFloat(extraHours),
       parseFloat(addonCharge),
-      parseInt(rating, 10),
       otpCode,
-      req.body.pickupName || req.body.pickup_name || 'KSRTC Bus Stand Sakleshpur',
-      req.body.dropName || req.body.drop_name || title.trim(),
+      pickupName,
+      dropName,
       bookingType,
       scheduledTime ? new Date(scheduledTime) : null,
       advanceDepositPaid,
       remainingCashBalance,
       targetDriverId || null,
       selectedVehicleCategory,
+      rawPickupId,
+      rawDropId,
+      rawPickupId,
+      pickupLat,
+      pickupLng,
+      dropLat,
+      dropLng,
     ];
-
-    const insertSql = `INSERT INTO trips (
-      trip_type, title, customer_id, customer_name, driver_or_guide_name,
-      plan_id, destination_ids, amount, payment_mode, status,
-      duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
-      booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category
-     )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
-     RETURNING *`;
 
     let result;
     try {
       result = await db.query(insertSql, queryParams);
     } catch (dbErr) {
-      console.warn('POST / primary insert failed, attempting safe insert without payment_mode column:', dbErr.message);
-      try {
-        const safeSql = `INSERT INTO trips (
-          trip_type, title, customer_id, customer_name, driver_or_guide_name,
-          plan_id, destination_ids, amount, status,
-          duration_hours, extra_hours, addon_charge, rating, otp, pickup_name, drop_name,
-          booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-         RETURNING *`;
-        const safeParams = [
-          tripType,
-          title.trim(),
-          validCustomerId,
-          customerName.trim(),
-          driverOrGuideName || 'Assigned Driver',
-          validPlanId,
-          Array.isArray(destinationIds) ? destinationIds : [],
-          totalAmount,
-          status || 'Pending',
-          parseFloat(durationHours),
-          parseFloat(extraHours),
-          parseFloat(addonCharge),
-          parseInt(rating, 10),
-          otpCode,
-          req.body.pickupName || 'Bengaluru City Center',
-          req.body.dropName || title.trim(),
-          bookingType,
-          scheduledTime ? new Date(scheduledTime) : null,
-          advanceDepositPaid,
-          remainingCashBalance,
-          targetDriverId || null,
-          selectedVehicleCategory,
-        ];
-        result = await db.query(safeSql, safeParams);
-        if (result.rows[0]?.id) {
-          try {
-            await db.query("UPDATE trips SET payment_mode = $1 WHERE id = $2", [sanitizedPaymentMode, result.rows[0].id]);
-          } catch (uErr) {
-            try {
-              await db.query("UPDATE trips SET payment_mode = $1 WHERE id = $2", [sanitizedPaymentMode.toLowerCase(), result.rows[0].id]);
-            } catch (e2) {}
-          }
-        }
-      } catch (fallbackErr) {
-        console.warn('POST / safe insert failed, running minimal fallback:', fallbackErr.message);
-        result = await db.query(
-          `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           RETURNING *`,
-          [tripType, title.trim(), validCustomerId, customerName.trim(), totalAmount, status || 'Pending', otpCode]
-        );
-      }
+      console.warn('POST / primary insert failed, running safe fallback insert:', dbErr.message);
+      const safeSql = `INSERT INTO trips (
+        trip_type, title, customer_id, customer_name, driver_or_guide_name,
+        plan_id, destination_ids, amount, status,
+        duration_hours, extra_hours, addon_charge, otp, pickup_name, drop_name,
+        booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category,
+        pickup_id, drop_id, station_id, pickup_lat, pickup_lng, drop_lat, drop_lng
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+       RETURNING *`;
+      const safeParams = [
+        tripType,
+        title.trim(),
+        validCustomerId,
+        customerName.trim(),
+        driverOrGuideName || 'Assigned Driver',
+        validPlanId,
+        Array.isArray(destinationIds) ? destinationIds : [],
+        totalAmount,
+        status || 'Pending',
+        parseFloat(durationHours),
+        parseFloat(extraHours),
+        parseFloat(addonCharge),
+        otpCode,
+        pickupName,
+        dropName,
+        bookingType,
+        scheduledTime ? new Date(scheduledTime) : null,
+        advanceDepositPaid,
+        remainingCashBalance,
+        targetDriverId || null,
+        selectedVehicleCategory,
+        rawPickupId,
+        rawDropId,
+        rawPickupId,
+        pickupLat,
+        pickupLng,
+        dropLat,
+        dropLng,
+      ];
+      result = await db.query(safeSql, safeParams);
     }
 
     const t = result.rows[0];
@@ -1739,53 +1771,14 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       t.driverId = targetDriverId;
       t.driver_id = targetDriverId;
     }
-    emitTripRequest(t);
 
-    // Notify drivers / guides via push notifications
-    // Emit socket request strictly ONCE per trip from backend
-    try {
-      emitTripRequest({
-        id: t.id,
-        tripId: t.id,
-        title: t.title,
-        customerName: t.customer_name,
-        pickup: t.pickup_name,
-        drop: t.drop_name,
-        amount: t.amount,
-        tripType: t.trip_type,
-        bookingType: t.booking_type,
-        vehicleCategory: t.vehicle_category,
-        createdAt: t.created_at,
-      });
-    } catch (e) {
-      console.warn('Backend emitTripRequest error:', e);
-    }
+    const mappedTrip = mapTripRecord(t);
+    emitTripRequest(mappedTrip);
 
     res.status(201).json({
       success: true,
       message: 'Trip created successfully',
-      data: {
-        id: t.id,
-        tripType: t.trip_type || req.body.tripType,
-        title: t.title || req.body.title,
-        customerId: t.customer_id || req.body.customerId,
-        customerName: t.customer_name || req.body.customerName,
-        driverOrGuideName: t.driver_or_guide_name || req.body.driverOrGuideName || 'Auto-Assigned Captain',
-        planId: t.plan_id || req.body.planId || null,
-        destinationId: req.body.destinationId || (Array.isArray(t.destination_ids) && t.destination_ids.length > 0 ? t.destination_ids[0] : null),
-        destinationIds: (Array.isArray(t.destination_ids) && t.destination_ids.length > 0) ? t.destination_ids : (req.body.destinationIds || []),
-        amount: parseFloat(t.amount || req.body.amount || 0),
-        paymentMode: t.payment_mode || req.body.paymentMode || 'Cash',
-        status: t.status || req.body.status || 'Pending',
-        durationHours: parseFloat(t.duration_hours || req.body.durationHours || 8),
-        extraHours: parseFloat(t.extra_hours || 0),
-        addonCharge: parseFloat(t.addon_charge || 0),
-        rating: t.rating || 5,
-        otp: t.otp || otpCode,
-        pickupName: t.pickup_name || req.body.pickupName || 'Pickup Point',
-        dropName: t.drop_name || req.body.dropName || req.body.title,
-        createdAt: t.created_at || new Date().toISOString(),
-      },
+      data: mappedTrip,
     });
   } catch (error) {
     console.error('Error creating trip:', error);

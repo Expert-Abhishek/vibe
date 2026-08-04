@@ -274,7 +274,13 @@ export async function createTripApi(payload: {
   destinationIds?: string[];
   amount: number;
   paymentMode?: string;
+  pickupId?: string;
+  dropId?: string;
   status?: string;
+  pickupLat?: number;
+  pickupLng?: number;
+  dropLat?: number;
+  dropLng?: number;
   durationHours?: number;
   extraHours?: number;
   addonCharge?: number;

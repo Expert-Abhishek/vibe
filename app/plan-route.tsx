@@ -30,7 +30,7 @@ interface TourPackage {
   destinationId?: string;
 }
 
-import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi, fetchStationsApi } from '@/constants/api';
+import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 

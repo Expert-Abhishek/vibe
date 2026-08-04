@@ -1,5 +1,3 @@
-import { playNotificationChime, stopNotificationChime } from '@src/utils/soundHelper';
-import { initSocketService, emitDriverLocationSocket, joinTripRoom } from '@src/services/socketService';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import {
@@ -24,14 +22,15 @@ import {
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
-import { useLanguage } from '@/hooks/use-language';
-import { getPendingTripRequestsSync, listenForTripRequests, updateTripStatusGlobally } from '@/constants/tripSync';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { getPendingTripRequestsSync, listenForTripRequests, updateTripStatusGlobally } from '@/constants/tripSync';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
-import { useAppModal } from '@src/context/ModalContext';
+import { useLanguage } from '@/hooks/use-language';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+import { useAppModal } from '@src/context/ModalContext';
 import { rideStateService } from '@src/services/rideStateService';
-import { emitAcceptRideSocket } from '@src/services/socketService';
+import { emitAcceptRideSocket, emitDriverLocationSocket, initSocketService, joinTripRoom } from '@src/services/socketService';
+import { playNotificationChime, stopNotificationChime } from '@src/utils/soundHelper';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -221,7 +220,7 @@ export default function DriverDashboardScreen() {
         const monthName = months[month - 1] || 'Jan';
         return `${day} ${monthName} ${year}${timeStr ? ' at ' + timeStr : ''}`;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return `${dateStr || 'Today'} · ${timeStr || 'Immediate'}`;
   };
@@ -643,13 +642,13 @@ export default function DriverDashboardScreen() {
                 heading: heading || 0,
                 speed: speed || 0,
               });
-              updateDriverLocationApi(driverId, latitude, longitude, true).catch(() => {});
+              updateDriverLocationApi(driverId, latitude, longitude, true).catch(() => { });
             }
           },
           (err) => console.warn('[DriverDashboard] Geolocation watch error:', err),
           { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
         );
-      } catch (e) {}
+      } catch (e) { }
     }
 
     let isMounted = true;
@@ -761,7 +760,7 @@ export default function DriverDashboardScreen() {
       if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
         try {
           navigator.geolocation.clearWatch(watchId);
-        } catch (e) {}
+        } catch (e) { }
       }
     };
   }, [isOnline, activeTrip, requestVisible]);
@@ -1090,7 +1089,7 @@ export default function DriverDashboardScreen() {
           status: 'Accepted',
           ...incomingRequest,
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     stopNotificationChime();
