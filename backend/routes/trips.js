@@ -66,6 +66,9 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id VARCHAR(255);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS vehicle_category VARCHAR(50) DEFAULT '5_seater';
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS destination_ids TEXT[] DEFAULT '{}';
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS destination_id VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS plan_id VARCHAR(255);
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS vehicle_category VARCHAR(50) DEFAULT '5_seater';
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(5,2) DEFAULT 10.00;
@@ -1489,24 +1492,25 @@ router.post('/', async (req, res) => {
       message: 'Trip created successfully',
       data: {
         id: t.id,
-        tripType: t.trip_type,
-        title: t.title,
-        customerId: t.customer_id,
-        customerName: t.customer_name,
-        driverOrGuideName: t.driver_or_guide_name,
-        planId: t.plan_id,
-        destinationIds: t.destination_ids,
-        amount: parseFloat(t.amount),
-        paymentMode: t.payment_mode,
-        status: t.status,
-        durationHours: parseFloat(t.duration_hours),
-        extraHours: parseFloat(t.extra_hours),
-        addonCharge: parseFloat(t.addon_charge),
-        rating: t.rating,
-        otp: t.otp,
-        pickupName: t.pickup_name,
-        dropName: t.drop_name,
-        createdAt: t.created_at,
+        tripType: t.trip_type || req.body.tripType,
+        title: t.title || req.body.title,
+        customerId: t.customer_id || req.body.customerId,
+        customerName: t.customer_name || req.body.customerName,
+        driverOrGuideName: t.driver_or_guide_name || req.body.driverOrGuideName || 'Auto-Assigned Captain',
+        planId: t.plan_id || req.body.planId || null,
+        destinationId: req.body.destinationId || (Array.isArray(t.destination_ids) && t.destination_ids.length > 0 ? t.destination_ids[0] : (targetDestinationIds.length > 0 ? targetDestinationIds[0] : null)),
+        destinationIds: (Array.isArray(t.destination_ids) && t.destination_ids.length > 0) ? t.destination_ids : targetDestinationIds,
+        amount: parseFloat(t.amount || req.body.amount || 0),
+        paymentMode: t.payment_mode || req.body.paymentMode || 'Cash',
+        status: t.status || req.body.status || 'Pending',
+        durationHours: parseFloat(t.duration_hours || req.body.durationHours || 8),
+        extraHours: parseFloat(t.extra_hours || 0),
+        addonCharge: parseFloat(t.addon_charge || 0),
+        rating: t.rating || 5,
+        otp: t.otp || otpCode,
+        pickupName: t.pickup_name || req.body.pickupName || 'Pickup Point',
+        dropName: t.drop_name || req.body.dropName || req.body.title,
+        createdAt: t.created_at || new Date().toISOString(),
       },
     });
   } catch (error) {

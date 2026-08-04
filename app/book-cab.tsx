@@ -558,7 +558,7 @@ export default function BookCabScreen() {
       createdAt: new Date().toISOString(),
     };
 
-    broadcastNewTripRequest(instantTripObject);
+    broadcastNewTripRequest(instantTripObject, true);
     setBookingLoading(false);
 
     router.replace({

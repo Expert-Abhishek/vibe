@@ -738,13 +738,12 @@ export default function MakeTripScreen() {
         });
       }
 
-      broadcastNewTripRequest(tripObject);
-
+      let isServerCreated = false;
       try {
         const destId = checkpoints.find((c: any) => c.id || c.destinationId || c.placeId)?.id || checkpoints.find((c: any) => c.id || c.destinationId || c.placeId)?.destinationId || null;
         const allDestIds = checkpoints.map((c: any) => String(c.id || c.destinationId || c.placeId || c.name)).filter(Boolean);
 
-        await createTripApi({
+        const tripRes = await createTripApi({
           tripType: 'custom_trip',
           title: `Trip: ${pickupName} → ${dropName}`,
           customerId: customerId,
@@ -766,9 +765,20 @@ export default function MakeTripScreen() {
           advanceDepositPaid: paymentAmount,
           remainingCashBalance: remainingAmount,
         });
+
+        if (tripRes?.data?.id || tripRes?.id) {
+          const sId = String(tripRes?.data?.id || tripRes?.id);
+          tripObject.id = sId;
+          (tripObject as any).tripId = sId;
+        }
+        if (tripRes?.success) {
+          isServerCreated = true;
+        }
       } catch (e) {
         console.warn('Postgres DB creation error (using memory fallback):', e);
       }
+
+      broadcastNewTripRequest(tripObject, isServerCreated);
 
       adminState.advanceBookings.unshift(tripObject as any);
 

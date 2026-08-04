@@ -369,7 +369,9 @@ export default function PlanRouteScreen() {
         scheduledTime: calculatedScheduledTime,
       });
 
-      const realTripId = createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
+      const realTripId = createdTrip?.data?.id || createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
+      const realOtp = createdTrip?.data?.otp || createdTrip?.otp || '8240';
+      const realEndOtp = createdTrip?.data?.endOtp || createdTrip?.data?.end_otp || createdTrip?.endOtp || '4321';
 
       const newTripObj = {
         id: realTripId,
@@ -390,8 +392,8 @@ export default function PlanRouteScreen() {
         status: 'Pending' as const,
         paymentMode: paymentLabel,
         passengerCount: bookingPax,
-        otp: createdTrip?.otp || '8240',
-        endOtp: createdTrip?.end_otp || createdTrip?.endOtp || '4321',
+        otp: realOtp,
+        endOtp: realEndOtp,
       };
 
       adminState.advanceBookings.push(newTripObj as any);
@@ -402,15 +404,17 @@ export default function PlanRouteScreen() {
       }
       (adminState as any).pendingDriverRequests.push(newTripObj);
 
-      try {
-        const socket = getSocket();
-        if (socket && socket.connected) {
-          socket.emit('broadcast_trip_request', newTripObj);
-          socket.emit('trip_requested', newTripObj);
+      if (!createdTrip?.success) {
+        try {
+          const socket = getSocket();
+          if (socket && socket.connected) {
+            socket.emit('broadcast_trip_request', newTripObj);
+            socket.emit('trip_requested', newTripObj);
+          }
+          DeviceEventEmitter.emit('new_driver_request', { trip: newTripObj });
+        } catch (e) {
+          console.warn('Socket emit error on plan booking:', e);
         }
-        DeviceEventEmitter.emit('new_driver_request', { trip: newTripObj });
-      } catch (e) {
-        console.warn('Socket emit error on plan booking:', e);
       }
 
       setSelectedPlan(null);
@@ -455,7 +459,7 @@ export default function PlanRouteScreen() {
           addonCharge: priceInfo.extraAddonCharge,
         });
 
-        const realTripId = createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
+        const realTripId = createdTrip?.data?.id || createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
 
         const newTripObj = {
           id: realTripId,

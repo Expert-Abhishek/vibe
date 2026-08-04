@@ -52,7 +52,7 @@ export function updateTripStatusGlobally(tripId: string, status: string, extraDa
   } catch (e) {}
 }
 
-export function broadcastNewTripRequest(tripObject: any) {
+export function broadcastNewTripRequest(tripObject: any, skipSocketEmit: boolean = false) {
   if (!tripObject || !tripObject.id) return;
 
   // 1. In-Memory AdminState Synchronization
@@ -74,7 +74,9 @@ export function broadcastNewTripRequest(tripObject: any) {
   // 2. React Native Local Event & WebSockets Emission
   try {
     DeviceEventEmitter.emit('new_driver_request', tripObject);
-    emitTripRequestSocket(tripObject);
+    if (!skipSocketEmit) {
+      emitTripRequestSocket(tripObject);
+    }
   } catch (e) {}
 
   // 3. Web localStorage & BroadcastChannel (Cross-Tab Real-Time Sync)
