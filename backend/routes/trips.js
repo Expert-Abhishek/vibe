@@ -87,8 +87,6 @@ async function ensureTripsColumnsExist() {
   }
 }
 
-}
-
 // Run migration safely on route module load
 ensureTripsColumnsExist();
 
