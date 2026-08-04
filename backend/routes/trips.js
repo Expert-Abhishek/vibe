@@ -9,7 +9,15 @@ function toValidUuidOrNull(val) {
   if (!val) return null;
   const str = String(val).trim();
   const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-  return UUID_REGEX.test(str) ? str : null;
+  if (UUID_REGEX.test(str)) return str;
+
+  try {
+    const crypto = require('crypto');
+    const hash = crypto.createHash('md5').update(str).digest('hex');
+    return `${hash.substring(0, 8)}-${hash.substring(8, 12)}-4${hash.substring(13, 16)}-a${hash.substring(17, 20)}-${hash.substring(20, 32)}`;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Helper to sanitize payment_mode string to standard PostgreSQL enum values
@@ -990,11 +998,14 @@ router.get('/customer/:customerId', async (req, res) => {
       title: t.title || (t.pickup_name && t.drop_name ? `${t.pickup_name} ➔ ${t.drop_name}` : 'Tour Booking'),
       customerId: t.customer_id,
       customerName: t.customer_name,
+      driverId: t.driver_id,
       driverOrGuideName: t.driver_or_guide_name || '',
       pickupName: t.pickup_name,
       dropName: t.drop_name,
       planId: t.plan_id,
+      destinationId: t.destination_id || (Array.isArray(t.destination_ids) && t.destination_ids.length > 0 ? t.destination_ids[0] : null),
       destinationIds: t.destination_ids || [],
+      checkpoints: t.destination_ids || [],
       amount: parseFloat(t.amount || 0),
       paymentMode: t.payment_mode || 'UPI',
       status: t.status || 'Completed',
@@ -1457,10 +1468,15 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       try {
         const pCheck = await db.query('SELECT id FROM plans WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [validPlanId]);
         if (pCheck.rows.length === 0) {
-          validPlanId = null;
+          await db.query(
+            `INSERT INTO plans (id, name, description, duration_hours)
+             VALUES ($1, $2, 'Tour Plan Package', 8.0)
+             ON CONFLICT (id) DO NOTHING`,
+            [validPlanId, title.trim()]
+          );
         }
       } catch (pErr) {
-        validPlanId = null;
+        console.warn('Auto-plan provisioning warning:', pErr.message);
       }
     }
 
@@ -1735,12 +1751,27 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     const generatedStartOtp = Math.floor(1000 + Math.random() * 9000).toString();
     const generatedEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
+    const validDriverUuid = toValidUuidOrNull(driverId);
+    if (validDriverUuid) {
+      try {
+        const dCheck = await db.query('SELECT id FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [validDriverUuid]);
+        if (dCheck.rows.length === 0) {
+          await db.query(
+            `INSERT INTO users (id, name, role)
+             VALUES ($1, $2, 'driver')
+             ON CONFLICT (id) DO NOTHING`,
+            [validDriverUuid, driverName || 'Verified Partner']
+          );
+        }
+      } catch (e) {}
+    }
+
     const result = await db.query(
       `UPDATE trips 
-       SET status = 'Accepted', driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
-       WHERE id = $5 OR CAST(id AS VARCHAR) = $5
+       SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
+       WHERE id::text = $5::text OR CAST(id AS VARCHAR) = $5::text
        RETURNING *`,
-      [driverName, driverId || null, generatedStartOtp, generatedEndOtp, id]
+      [driverName, validDriverUuid, generatedStartOtp, generatedEndOtp, id]
     );
 
     let trip = result.rows.length > 0 ? result.rows[0] : { ...currentTrip, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId, otp: generatedStartOtp, end_otp: generatedEndOtp };

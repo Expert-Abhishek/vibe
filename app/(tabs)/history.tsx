@@ -1,23 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import { adminState } from '@/constants/admin-state';
+import { fetchCustomerTripsApi, fetchUserTripHistoryApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { getSocket, initSocketService } from '@src/services/socketService';
+import React, { useEffect, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StatusBar,
   ActivityIndicator,
   DeviceEventEmitter,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { adminState } from '@/constants/admin-state';
-import { fetchCustomerTripsApi, fetchTripsApi, fetchUserTripHistoryApi } from '@/constants/api';
-import { getUserSessionSync } from '@/constants/authStore';
-import { initSocketService, getSocket } from '@src/services/socketService';
 
 interface HistoryRecord {
   id: string;
@@ -315,17 +315,7 @@ export default function HistoryScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        {/* Stats Bar */}
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>COMPLETED TRIPS</Text>
-            <Text style={[styles.statValue, { color: colors.amber }]}>{completedCount}</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.statLabel, { color: colors.textMuted }]}>TOTAL SPENT</Text>
-            <Text style={[styles.statValue, { color: colors.textPrimary }]}>₹{totalSpend.toLocaleString('en-IN')}</Text>
-          </View>
-        </View>
+
 
         {/* Search Input Bar */}
         <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
