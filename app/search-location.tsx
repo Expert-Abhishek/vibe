@@ -98,7 +98,7 @@ export default function SearchLocationScreen() {
       if (data.result && data.result.geometry) {
         const { lat, lng } = data.result.geometry.location;
         navigateToBooking({
-          name: data.result.name || description.split(',')[0],
+          name: data.result.name || String(description || 'Location').split(',')[0],
           address: description,
           latitude: lat,
           longitude: lng,
@@ -178,7 +178,7 @@ export default function SearchLocationScreen() {
                 <MaterialIcons name="location-on" size={scale(18)} color={colors.textMuted} style={{ marginRight: scale(10) }} />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.suggestionName, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {item.structured_formatting?.main_text || item.description.split(',')[0]}
+                    {item.structured_formatting?.main_text || String(item.description || 'Location').split(',')[0]}
                   </Text>
                   <Text style={[styles.suggestionSub, { color: colors.textMuted }]} numberOfLines={1}>
                     {item.structured_formatting?.secondary_text || item.description}

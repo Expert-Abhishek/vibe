@@ -390,6 +390,18 @@ export default function PlanRouteScreen() {
         scheduledTime: calculatedScheduledTime,
       });
 
+      if (createdTrip && createdTrip.success === false) {
+        Alert.alert(
+          '⚠️ Active Trip Already Exists',
+          createdTrip.message || 'You already have an active trip in progress. Please complete or cancel your current trip before booking a new one.',
+          [
+            { text: '📍 Track Active Trip', onPress: () => router.push({ pathname: '/trip-status', params: { tripId: createdTrip.activeTrip?.id || createdTrip.tripId } }) },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+
       const realTripId = createdTrip?.data?.id || createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
       const realOtp = createdTrip?.data?.otp || createdTrip?.otp || '8240';
       const realEndOtp = createdTrip?.data?.endOtp || createdTrip?.data?.end_otp || createdTrip?.endOtp || '4321';

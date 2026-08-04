@@ -540,6 +540,18 @@ export default function BookCabScreen() {
         bookingType: 'INSTANT',
         selectedDriverId: targetDriverId ? String(targetDriverId) : undefined,
       });
+      if (bookRes && bookRes.success === false) {
+        setBookingLoading(false);
+        Alert.alert(
+          '⚠️ Active Trip Already Exists',
+          bookRes.message || 'You already have an active trip in progress. Please complete or cancel your current trip before booking a new one.',
+          [
+            { text: '📍 Track Active Trip', onPress: () => router.push({ pathname: '/trip-status', params: { tripId: bookRes.activeTrip?.id || bookRes.tripId } }) },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+        return;
+      }
       if (bookRes?.data?.id || bookRes?.id) {
         serverTripId = String(bookRes?.data?.id || bookRes?.id);
       }

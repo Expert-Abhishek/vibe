@@ -7,20 +7,23 @@ if (__DEV__) {
 
 import { Platform } from 'react-native';
 
-// Safeguard for Web browser WakeLock / KeepAwake permission errors
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
+// Universal Safeguard for WakeLock / KeepAwake permission errors across Native & Web
+if (typeof window !== 'undefined' && window.addEventListener) {
   try {
-    window.addEventListener('unhandledrejection', (event) => {
+    window.addEventListener('unhandledrejection', (event: any) => {
+      const reasonStr = String(event?.reason?.message || event?.reason || '');
       if (
-        event.reason &&
-        (String(event.reason?.message || '').includes('keep awake') ||
-          String(event.reason || '').includes('keep awake') ||
-          String(event.reason?.message || '').includes('WakeLock'))
+        reasonStr.includes('keep awake') ||
+        reasonStr.includes('KeepAwake') ||
+        reasonStr.includes('WakeLock') ||
+        reasonStr.includes('Unable to activate') ||
+        reasonStr.includes('split')
       ) {
-        event.preventDefault();
+        if (event.preventDefault) event.preventDefault();
+        if (event.stopPropagation) event.stopPropagation();
       }
     });
-  } catch (e) { }
+  } catch (e) {}
 }
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';

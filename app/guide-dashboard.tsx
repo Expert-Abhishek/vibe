@@ -962,7 +962,7 @@ export default function GuideDashboardScreen() {
             setDailyTours([
               {
                 id: `tour_${Date.now()}`,
-                title: activeTour.pickup.split(' ')[0] + ' Heritage Tour',
+                title: String(activeTour?.pickup || 'Pickup').split(' ')[0] + ' Heritage Tour',
                 time: 'Just Now',
                 fare: fareEarned,
                 payout: 'Paid to Wallet',

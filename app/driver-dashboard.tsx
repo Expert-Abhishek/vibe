@@ -1103,7 +1103,7 @@ export default function DriverDashboardScreen() {
 
     const newScheduleItem = {
       id: tripId || (incomingRequest as any).id,
-      title: `${(incomingRequest.pickup || 'Pickup').split(' ')[0]} ➔ ${(incomingRequest.drop || 'Drop').split(' ')[0]}`,
+      title: `${String(incomingRequest?.pickup || 'Pickup').split(' ')[0]} ➔ ${String(incomingRequest?.drop || 'Drop').split(' ')[0]}`,
       pickupName: incomingRequest.pickup,
       dropName: incomingRequest.drop,
       date: (incomingRequest as any).scheduledTime || 'Today',
@@ -1247,7 +1247,7 @@ export default function DriverDashboardScreen() {
     setTripsCount(prev => prev + 1);
 
     const summary = {
-      title: `${activeTrip.pickup.split(' ')[0]} ➔ ${activeTrip.drop.split(' ')[0]}`,
+      title: `${String(activeTrip?.pickup || 'Pickup').split(' ')[0]} ➔ ${String(activeTrip?.drop || 'Drop').split(' ')[0]}`,
       pickup: activeTrip.pickup,
       drop: activeTrip.drop,
       fare: fareEarned,

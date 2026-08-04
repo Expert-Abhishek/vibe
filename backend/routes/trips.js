@@ -321,15 +321,6 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
       return res.json({ success: true, hasActiveTrip: false, trip: null });
     }
 
-    const userCheck = await db.query(
-      `SELECT has_trip FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text`,
-      [String(customerId)]
-    );
-
-    if (userCheck.rows.length > 0 && Number(userCheck.rows[0].has_trip) === 0) {
-      return res.json({ success: true, hasActiveTrip: false, trip: null });
-    }
-
     const result = await db.query(
       `SELECT * FROM trips
        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
@@ -346,6 +337,8 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
     }
 
     const t = result.rows[0];
+    await setUserHasTrip(customerId, true);
+
     const activeTripData = {
       id: t.id,
       tripId: t.id,
@@ -353,6 +346,7 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
       customerName: t.customer_name,
       driverId: t.driver_id,
       driverName: t.driver_or_guide_name || 'Assigned Partner',
+      driver_or_guide_name: t.driver_or_guide_name || 'Assigned Partner',
       pickup: t.pickup_name || t.title,
       drop: t.drop_name || t.title,
       amount: parseFloat(t.amount || 0),
@@ -363,7 +357,7 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
       pickupLat: parseFloat(t.pickup_lat || 12.9716),
       pickupLng: parseFloat(t.pickup_lng || 77.5946),
       dropLat: parseFloat(t.drop_lat || 12.9716),
-      dropLng: parseFloat(t.drop_lng || 77.5946),
+      dropLng: parseFloat(t.drop_lng || 76.6394),
       createdAt: t.created_at,
     };
 
@@ -373,8 +367,8 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
       trip: activeTripData,
     });
   } catch (error) {
-    console.error('Error fetching active trip:', error);
-    res.status(500).json({ success: false, hasActiveTrip: false, message: 'Failed to fetch active trip' });
+    console.error('Error checking active trip:', error);
+    res.status(500).json({ success: false, hasActiveTrip: false, trip: null });
   }
 });
 
@@ -2159,7 +2153,7 @@ router.post('/:id/verify-otp', async (req, res) => {
     }
 
     const updateRes = await db.query(
-      "UPDATE trips SET status = 'Active' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
+      "UPDATE trips SET status = 'Active', status_code = 2 WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
       [id]
     );
     const updatedTrip = updateRes.rows[0];
@@ -2174,6 +2168,50 @@ router.post('/:id/verify-otp', async (req, res) => {
 });
 
 /**
+ * POST /api/trips/:id/verify-end-otp
+ * Verify 4-digit End OTP code to complete trip
+ */
+router.post('/:id/verify-end-otp', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { otp } = req.body;
+
+    const tripRes = await db.query('SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [id]);
+    if (tripRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Trip not found' });
+    }
+
+    const trip = tripRes.rows[0];
+    const validEndOtp = trip.end_otp || trip.endOtp || '4321';
+    if (otp && String(otp) !== String(validEndOtp)) {
+      return res.status(400).json({ success: false, message: 'Invalid End OTP code.' });
+    }
+
+    const updateRes = await db.query(
+      "UPDATE trips SET status = 'Completed', status_code = 3 WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
+      [id]
+    );
+    const updatedTrip = updateRes.rows[0];
+    if (updatedTrip && updatedTrip.customer_id) {
+      await setUserHasTrip(updatedTrip.customer_id, false);
+    }
+
+    emitTripStatusUpdated(updatedTrip, 'Completed');
+    try {
+      const io = getIO();
+      if (io && updatedTrip.customer_id) {
+        io.to(`user:${updatedTrip.customer_id}`).emit('trip_completed', updatedTrip);
+      }
+    } catch (e) {}
+
+    res.json({ success: true, message: 'End OTP verified! Trip completed successfully.', data: updatedTrip });
+  } catch (error) {
+    console.error('Error verifying End OTP:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify End OTP' });
+  }
+});
+
+/**
  * POST /api/trips/complete-trip/:id (Alias: /:id/complete)
  * Complete trip & settle earnings to wallet
  */
@@ -2183,7 +2221,7 @@ router.post(['/complete-trip/:id', '/:id/complete'], async (req, res) => {
     const { driverId } = req.body;
 
     const result = await db.query(
-      "UPDATE trips SET status = 'Completed' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
+      "UPDATE trips SET status = 'Completed', status_code = 3 WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
       [id]
     );
 
@@ -2192,6 +2230,9 @@ router.post(['/complete-trip/:id', '/:id/complete'], async (req, res) => {
     }
 
     const trip = result.rows[0];
+    if (trip && trip.customer_id) {
+      await setUserHasTrip(trip.customer_id, false);
+    }
     emitTripStatusUpdated(trip, 'Completed');
     const fare = parseFloat(trip.amount || 0);
 
