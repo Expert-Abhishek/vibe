@@ -116,9 +116,32 @@ export const notificationStore = {
   },
 
   /**
-   * Action triggered when user/driver taps/clicks the notification icon.
-   * Marks all current notifications as read (isRead: true, unreadCount: 0).
-   * Persists updated status locally and syncs via POST /api/v1/notifications/mark-read.
+   * Action triggered when user checks and closes the notifications panel.
+   * Clears notifications locally (resets unreadCount to 0) and deletes them from DB.
+   */
+  async clearAllNotifications(userId?: string, role: string = 'tourist'): Promise<void> {
+    state = {
+      notifications: [],
+      unreadCount: 0,
+    };
+
+    persistStateLocally();
+    notifyListeners();
+
+    try {
+      await fetch(`${API_BASE_URL}/api/v1/notifications/clear`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userId || null, role }),
+      });
+    } catch (e) {
+      console.warn('Failed to clear notifications in backend:', e);
+    }
+  },
+
+  /**
+   * Action triggered when user/driver opens the notification icon.
+   * Marks all current notifications as read (unreadCount: 0).
    */
   async markAllAsRead(userId?: string, role: string = 'driver'): Promise<void> {
     const updatedNotifications = state.notifications.map((n) => ({
@@ -134,7 +157,6 @@ export const notificationStore = {
     persistStateLocally();
     notifyListeners();
 
-    // Sync with backend endpoint
     try {
       await fetch(`${API_BASE_URL}/api/v1/notifications/mark-read`, {
         method: 'POST',

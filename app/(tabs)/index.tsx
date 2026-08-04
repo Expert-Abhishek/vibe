@@ -43,13 +43,14 @@ export default function HomeScreen() {
   // Active Trip Check for Quick Banner (No Forced Redirection)
   const [activeTrip, setActiveTrip] = useState<any>(null);
 
+  const activeTripTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
   React.useEffect(() => {
     const session = getUserSessionSync();
     const userId = session?.id;
     if (!userId) return;
 
     initSocketService(userId, session?.role || 'tourist');
-    const socket = getSocket();
 
     async function checkActiveTrip() {
       try {
@@ -86,30 +87,19 @@ export default function HomeScreen() {
 
     const handleUpdate = () => {
       console.log('[HomeScreen] 🔔 Real-time socket/emitter trip update received. Syncing...');
-      checkActiveTrip();
+      if (activeTripTimerRef.current) clearTimeout(activeTripTimerRef.current);
+      activeTripTimerRef.current = setTimeout(() => {
+        checkActiveTrip();
+      }, 350);
     };
 
-    if (socket) {
-      socket.on('trip_accepted', handleUpdate);
-      socket.on('RIDE_ACCEPTED', handleUpdate);
-      socket.on('trip_status_updated', handleUpdate);
-      socket.on('trip_completed', handleUpdate);
-    }
-
     const subAcc = DeviceEventEmitter.addListener('trip_accepted', handleUpdate);
-    const subRideAcc = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleUpdate);
     const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleUpdate);
     const subComp = DeviceEventEmitter.addListener('trip_completed', handleUpdate);
 
     return () => {
-      if (socket) {
-        socket.off('trip_accepted', handleUpdate);
-        socket.off('RIDE_ACCEPTED', handleUpdate);
-        socket.off('trip_status_updated', handleUpdate);
-        socket.off('trip_completed', handleUpdate);
-      }
+      if (activeTripTimerRef.current) clearTimeout(activeTripTimerRef.current);
       subAcc.remove();
-      subRideAcc.remove();
       subStatus.remove();
       subComp.remove();
     };

@@ -60,6 +60,12 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
     setVisible(true);
   };
 
+  const handleClose = async () => {
+    setVisible(false);
+    const session = getUserSessionSync();
+    await notificationStore.clearAllNotifications(session?.id, role);
+  };
+
   const session = getUserSessionSync();
   const currentUserId = session?.id;
 
@@ -71,17 +77,24 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
         onPress={handleOpen}
       />
 
-      <Modal visible={visible} animationType="slide" transparent>
-        <View style={styles.overlay}>
-          <View style={[styles.drawerContent, { backgroundColor: colors.surface }]}>
+      <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={handleClose}>
+          <TouchableOpacity style={[styles.drawerContent, { backgroundColor: colors.surface }]} activeOpacity={1}>
             <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                 <MaterialIcons name="notifications-active" size={scale(22)} color={colors.amber} />
                 <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Activity & Booking Alerts</Text>
               </View>
-              <TouchableOpacity onPress={() => setVisible(false)} style={styles.closeBtn}>
-                <MaterialIcons name="close" size={scale(22)} color={colors.textMuted} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10) }}>
+                {notifications.length > 0 && (
+                  <TouchableOpacity onPress={handleClose} style={{ paddingHorizontal: scale(8), paddingVertical: verticalScale(4), borderRadius: scale(6), backgroundColor: 'rgba(239, 68, 68, 0.12)' }}>
+                    <Text style={{ color: '#EF4444', fontSize: moderateFontScale(11), fontWeight: '700' }}>Clear All</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+                  <MaterialIcons name="close" size={scale(22)} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView style={{ maxHeight: verticalScale(480) }} showsVerticalScrollIndicator={false}>
@@ -113,8 +126,8 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
                 ))
               )}
             </ScrollView>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </>
   );

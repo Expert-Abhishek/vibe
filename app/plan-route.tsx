@@ -26,9 +26,11 @@ interface TourPackage {
   travelHours: number;
   distanceKm: number;
   image: string;
+  destinationIds?: string[];
+  destinationId?: string;
 }
 
-import { createTripApi, deductWalletApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
+import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 
 export default function PlanRouteScreen() {
@@ -94,6 +96,8 @@ export default function PlanRouteScreen() {
     image: p.checkpoints && p.checkpoints[0]?.images?.[0]
       ? p.checkpoints[0].images[0]
       : 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
+    destinationIds: p.destinationIds || p.destination_ids,
+    destinationId: p.destinationId || p.destination_id,
   }));
 
   useEffect(() => {
@@ -209,7 +213,7 @@ export default function PlanRouteScreen() {
       baseDayRate = (plan as any).price_auto ? Number((plan as any).price_auto) : Math.round(baseP * 0.65);
     }
 
-    const vehicleHourlyRate = selectedDriver?.hourly_addon_rate ? Number(selectedDriver.hourly_addon_rate) : (adminState.vehicleRatesPerHour[vehicle] || 150);
+    const vehicleHourlyRate = selectedDriver?.hourly_addon_rate ? Number(selectedDriver.hourly_addon_rate) : ((adminState.vehicleRatesPerHour as Record<string, number>)[vehicle] || 150);
     const totalTripHours = plan.travelHours + (plan.checkpoints ? plan.checkpoints.length : 2);
 
     const extraHoursRounded = 0;
@@ -323,6 +327,7 @@ export default function PlanRouteScreen() {
     const totalPrice = priceInfo.computedPrice;
     const isPreBooking = !adminState.instantBookingEnabled;
     const is20Percent = isPreBooking && preBookingPaymentChoice === 'advance_20';
+    const prebookPayOption = preBookingPaymentChoice === 'advance_20' ? 20 : 100;
     const paymentAmount = is20Percent ? Math.round(totalPrice * 0.20) : totalPrice;
     const remainingBalance = is20Percent ? totalPrice - paymentAmount : 0;
     const totalHours = priceInfo.totalTripHours;

@@ -65,4 +65,66 @@ router.post('/mark-read', async (req, res) => {
   }
 });
 
+/**
+ * POST & DELETE /api/v1/notifications/clear
+ * Deletes activity notifications from database for the user/role when checked & closed
+ */
+const handleClearNotifications = async (req, res) => {
+  try {
+    const { userId, role = 'tourist' } = req.body || req.query;
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS activity_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID,
+        role VARCHAR(20) DEFAULT 'tourist',
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        trip_id UUID,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    const isValidUuid = userId && UUID_REGEX.test(userId);
+
+    let queryText = '';
+    let queryParams = [];
+
+    if (isValidUuid) {
+      queryText = `
+        DELETE FROM activity_notifications
+        WHERE (user_id = $1 OR user_id IS NULL)
+          AND (role = $2 OR role = 'all')
+      `;
+      queryParams = [userId, role];
+    } else {
+      queryText = `
+        DELETE FROM activity_notifications
+        WHERE (role = $1 OR role = 'all')
+      `;
+      queryParams = [role];
+    }
+
+    const result = await db.query(queryText, queryParams);
+
+    res.json({
+      success: true,
+      message: 'Notifications cleared and deleted from DB successfully',
+      deletedCount: result.rowCount || 0,
+    });
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear notifications',
+      error: error.message,
+    });
+  }
+};
+
+router.post('/clear', handleClearNotifications);
+router.delete('/clear', handleClearNotifications);
+
 module.exports = router;

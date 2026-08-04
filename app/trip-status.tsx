@@ -65,11 +65,11 @@ export default function TripStatusScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [tripStatus, setTripStatus] = useState<string>(initialLocalTrip?.status || 'Accepted');
   const [driverInfo, setDriverInfo] = useState<any>({
-    name: initialLocalTrip?.driverOrGuideName || initialLocalTrip?.driverName || 'Assigned Captain',
-    phone: initialLocalTrip?.driverPhone || '+91 99000 82400',
-    vehicleModel: initialLocalTrip?.vehicleModel || initialLocalTrip?.vehicleType || 'AC 5-Seater / SUV',
-    vehicleNumber: initialLocalTrip?.vehicleNumber || 'KA-03-EX-8240',
-    rating: initialLocalTrip?.rating || 4.9,
+    name: initialLocalTrip?.driverOrGuideName || initialLocalTrip?.driverName || null,
+    phone: initialLocalTrip?.driverPhone || initialLocalTrip?.phone || null,
+    vehicleModel: initialLocalTrip?.vehicleModel || initialLocalTrip?.vehicleType || null,
+    vehicleNumber: initialLocalTrip?.vehicleNumber || null,
+    rating: initialLocalTrip?.rating ? parseFloat(initialLocalTrip.rating) : null,
     latitude: 12.9716,
     longitude: 77.5946,
     heading: 0,

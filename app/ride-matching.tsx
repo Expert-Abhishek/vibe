@@ -83,14 +83,14 @@ export default function RideMatchingScreen() {
   const isNavigatedRef = useRef(false);
   const [liveDriverInfo, setLiveDriverInfo] = useState<any>(null);
 
-  // Live / Server driver information
+  // Live / Server driver information (null by default until matched with a real driver)
   const demoDriver = {
-    name: liveDriverInfo?.name || (tripType === 'guide' ? 'Ramesh Gowda' : (vehicle === 'auto' ? 'Raju Auto' : 'Shubham (Captain)')),
-    rating: liveDriverInfo?.rating ? `${liveDriverInfo.rating} ★` : '4.9 ★',
-    phone: liveDriverInfo?.phone || '+91 99000 82400',
-    vehicleName: liveDriverInfo?.vehicleModel || (tripType === 'guide' ? 'Government Certified Guide' : (vehicle === 'auto' ? 'Bajaj RE Auto' : 'Mahindra Thar 4x4 / Innova')),
-    vehicleNumber: liveDriverInfo?.vehicleNumber || (tripType === 'guide' ? 'GUIDE-ID-8240' : (vehicle === 'auto' ? 'KA-02-AU-9912' : 'KA-03-EX-8240')),
-    otp: (params.otp as string) || '8240',
+    name: liveDriverInfo?.name || null,
+    rating: liveDriverInfo?.rating ? `${liveDriverInfo.rating} ★` : null,
+    phone: liveDriverInfo?.phone || null,
+    vehicleName: liveDriverInfo?.vehicleModel || null,
+    vehicleNumber: liveDriverInfo?.vehicleNumber || null,
+    otp: (params.otp as string) || null,
   };
 
   // Generate route coordinates list connecting pickup -> stops -> drop
@@ -209,59 +209,45 @@ export default function RideMatchingScreen() {
     return () => clearInterval(interval);
   }, [status]);
 
-  // Fetch real matching driver/guide from API & dispatch targeted ride request
+  // Fetch real matching driver/guide from API & dispatch targeted ride request ONLY if user selected a driver
   useEffect(() => {
     async function resolveSpecificDriver() {
       try {
         const selectedDriverId = (params.driverId as string) || (params.selectedDriverId as string) || '';
 
+        if (!selectedDriverId) {
+          console.log('[RideMatching] No selectedDriverId provided by user. Waiting for real driver acceptance via broadcast.');
+          return;
+        }
+
         if (tripType === 'guide') {
           const guides = await fetchGuidesApi();
-          let matched = guides.find((g: any) => g.user_id === selectedDriverId || g.id === selectedDriverId);
-          if (!matched && guides.length > 0) matched = guides[0];
+          let matched = guides.find((g: any) => String(g.user_id || g.id) === String(selectedDriverId));
 
           if (matched) {
             const driverInfo = {
-              id: matched.user_id || matched.id || 'g1',
-              name: matched.name || 'Ramesh Gowda',
-              phone: matched.phone || '+91 99000 82400',
-              vehicleModel: matched.experience_years ? `Certified Tour Guide (${matched.experience_years} yrs exp)` : 'Government Certified Tour Guide',
-              vehicleNumber: matched.languages ? `Lang: ${matched.languages}` : 'GUIDE-ID-8240',
-              rating: matched.rating ? parseFloat(matched.rating) : 4.9,
+              id: matched.user_id || matched.id,
+              name: matched.name || null,
+              phone: matched.phone || null,
+              vehicleModel: matched.experience_years ? `Certified Tour Guide (${matched.experience_years} yrs exp)` : (matched.vehicle_model || null),
+              vehicleNumber: matched.languages ? `Lang: ${matched.languages}` : (matched.vehicle_number || null),
+              rating: matched.rating ? parseFloat(matched.rating) : null,
             };
             setLiveDriverInfo(driverInfo);
             dispatchTargetedRequest(driverInfo.id, driverInfo);
           }
         } else {
           const drivers = await fetchDriversApi();
-          let matched: any = null;
-
-          if (selectedDriverId) {
-            matched = drivers.find((d: any) => d.user_id === selectedDriverId || d.id === selectedDriverId);
-          }
-
-          if (!matched && drivers.length > 0) {
-            // Match driver based on chosen vehicle category
-            const vLower = vehicle.toLowerCase();
-            if (vLower.includes('auto')) {
-              matched = drivers.find((d: any) => (d.vehicle_model || '').toLowerCase().includes('auto') || (d.vehicle_type || '').toLowerCase().includes('auto')) || drivers[0];
-            } else if (vLower.includes('sedan')) {
-              matched = drivers.find((d: any) => (d.vehicle_model || '').toLowerCase().includes('sedan') || (d.vehicle_model || '').toLowerCase().includes('dzire')) || drivers[0];
-            } else if (vLower.includes('7') || vLower.includes('suv') || vLower.includes('thar')) {
-              matched = drivers.find((d: any) => (d.vehicle_model || '').toLowerCase().includes('innova') || (d.vehicle_model || '').toLowerCase().includes('thar') || (d.vehicle_model || '').toLowerCase().includes('suv')) || drivers[0];
-            } else {
-              matched = drivers[0];
-            }
-          }
+          let matched = drivers.find((d: any) => String(d.user_id || d.id) === String(selectedDriverId));
 
           if (matched) {
             const driverInfo = {
-              id: matched.user_id || matched.id || 'd1',
-              name: matched.name || 'Shubham (Captain)',
-              phone: matched.phone || '+91 99000 82400',
-              vehicleModel: matched.vehicle_model || matched.vehicleModel || (vehicle === 'auto' ? 'Bajaj RE Auto' : 'Mahindra Thar 4x4 / Innova'),
-              vehicleNumber: matched.vehicle_number || matched.vehicleNumber || (vehicle === 'auto' ? 'KA-02-AU-9912' : 'KA-03-EX-8240'),
-              rating: matched.rating ? parseFloat(matched.rating) : 4.9,
+              id: matched.user_id || matched.id,
+              name: matched.name || null,
+              phone: matched.phone || null,
+              vehicleModel: matched.vehicle_model || matched.vehicleModel || null,
+              vehicleNumber: matched.vehicle_number || matched.vehicleNumber || null,
+              rating: matched.rating ? parseFloat(matched.rating) : null,
             };
             setLiveDriverInfo(driverInfo);
             dispatchTargetedRequest(driverInfo.id, driverInfo);
@@ -332,14 +318,14 @@ export default function RideMatchingScreen() {
         pollIntervalRef.current = null;
       }
 
-      if (data.driverName || data.driver_or_guide_name) {
+      if (data.driverName || data.driver_or_guide_name || data.driverId || data.driver_id) {
         setLiveDriverInfo({
-          id: data.driverId || data.driver_id || 'd1',
-          name: data.driverName || data.driver_or_guide_name,
-          phone: data.driverPhone || '+91 99000 82400',
-          vehicleModel: data.vehicleModel || data.vehicle_model || 'Innova / Thar 4x4',
-          vehicleNumber: data.vehicleNumber || data.vehicle_number || 'KA-03-EX-8240',
-          rating: 4.9,
+          id: data.driverId || data.driver_id || null,
+          name: data.driverName || data.driver_or_guide_name || null,
+          phone: data.driverPhone || data.phone || null,
+          vehicleModel: data.vehicleModel || data.vehicle_model || data.vehicleType || null,
+          vehicleNumber: data.vehicleNumber || data.vehicle_number || null,
+          rating: data.rating ? parseFloat(data.rating) : null,
         });
       }
 

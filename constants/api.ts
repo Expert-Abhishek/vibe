@@ -245,36 +245,103 @@ export async function createTripApi(payload: {
   }
 }
 
+// Active trip in-flight & short cache maps
+const activeTripInFlightMap = new Map<string, Promise<{ hasActiveTrip: boolean; trip: any }>>();
+const activeTripCache = new Map<string, { data: { hasActiveTrip: boolean; trip: any }; timestamp: number }>();
+
+// Customer trips in-flight & short cache maps
+const customerTripsInFlightMap = new Map<string, Promise<any[]>>();
+const customerTripsCache = new Map<string, { data: any[]; timestamp: number }>();
+
+export function clearTripApiCache(customerId?: string) {
+  if (customerId) {
+    activeTripCache.delete(customerId);
+    customerTripsCache.delete(customerId);
+  } else {
+    activeTripCache.clear();
+    customerTripsCache.clear();
+  }
+}
+
 /**
  * Check backend for active non-completed, non-cancelled trip for customer
  */
-export async function fetchActiveTripApi(customerId: string): Promise<{ hasActiveTrip: boolean; trip: any }> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/trips/check-has-trip/${customerId}`);
-    const data = await res.json();
-    if (data.success) {
-      return { hasActiveTrip: !!data.hasActiveTrip, trip: data.trip || null };
+export async function fetchActiveTripApi(customerId: string, forceRefresh = false): Promise<{ hasActiveTrip: boolean; trip: any }> {
+  if (!customerId) return { hasActiveTrip: false, trip: null };
+
+  const NOW = Date.now();
+  if (!forceRefresh) {
+    const cached = activeTripCache.get(customerId);
+    if (cached && NOW - cached.timestamp < 2000) {
+      return cached.data;
     }
-  } catch (e) {
-    console.warn('fetchActiveTripApi error:', e);
+    const inFlight = activeTripInFlightMap.get(customerId);
+    if (inFlight) {
+      return inFlight;
+    }
   }
-  return { hasActiveTrip: false, trip: null };
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/trips/check-has-trip/${customerId}`);
+      const data = await res.json();
+      if (data.success) {
+        const result = { hasActiveTrip: !!data.hasActiveTrip, trip: data.trip || null };
+        activeTripCache.set(customerId, { data: result, timestamp: Date.now() });
+        return result;
+      }
+    } catch (e) {
+      console.warn('fetchActiveTripApi error:', e);
+    } finally {
+      activeTripInFlightMap.delete(customerId);
+    }
+    const fallback = { hasActiveTrip: false, trip: null };
+    activeTripCache.set(customerId, { data: fallback, timestamp: Date.now() });
+    return fallback;
+  })();
+
+  activeTripInFlightMap.set(customerId, fetchPromise);
+  return fetchPromise;
 }
 
 /**
  * Fetch Customer Trip History from backend
  */
-export async function fetchCustomerTripsApi(customerId: string): Promise<any[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/trips/customer/${customerId}`);
-    const data = await res.json();
-    if (data.success && Array.isArray(data.data)) {
-      return data.data;
+export async function fetchCustomerTripsApi(customerId: string, forceRefresh = false): Promise<any[]> {
+  if (!customerId) return [];
+
+  const NOW = Date.now();
+  if (!forceRefresh) {
+    const cached = customerTripsCache.get(customerId);
+    if (cached && NOW - cached.timestamp < 2000) {
+      return cached.data;
     }
-  } catch (e) {
-    console.warn('fetchCustomerTripsApi error:', e);
+    const inFlight = customerTripsInFlightMap.get(customerId);
+    if (inFlight) {
+      return inFlight;
+    }
   }
-  return [];
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/trips/customer/${customerId}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        customerTripsCache.set(customerId, { data: data.data, timestamp: Date.now() });
+        return data.data;
+      }
+    } catch (e) {
+      console.warn('fetchCustomerTripsApi error:', e);
+    } finally {
+      customerTripsInFlightMap.delete(customerId);
+    }
+    const fallback: any[] = [];
+    customerTripsCache.set(customerId, { data: fallback, timestamp: Date.now() });
+    return fallback;
+  })();
+
+  customerTripsInFlightMap.set(customerId, fetchPromise);
+  return fetchPromise;
 }
 
 /**
@@ -725,7 +792,11 @@ export async function bookTripApi(payload: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    return await res.json();
+    const result = await res.json();
+    if (result && result.success) {
+      clearTripApiCache(payload.customerId);
+    }
+    return result;
   } catch (e) {
     console.warn('bookTripApi error:', e);
     return { success: false, message: 'Booking failed. Check network connection.' };
@@ -758,6 +829,7 @@ export async function acceptTripApi(tripId: string, driverId: string, driverName
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ driverId, driverName }),
     });
+    clearTripApiCache();
     return await res.json();
   } catch (e) {
     console.warn('acceptTripApi error:', e);
@@ -779,6 +851,7 @@ export async function cancelTripApi(tripId: string, options: { reason?: string; 
         role: options.role || 'tourist',
       }),
     });
+    clearTripApiCache();
     return await res.json();
   } catch (e) {
     console.warn('cancelTripApi error:', e);
@@ -868,6 +941,24 @@ export async function fetchNotificationsApi(userId: string, role: string = 'tour
     console.warn('fetchNotificationsApi error:', e);
   }
   return [];
+}
+
+/**
+ * Clear activity notifications for user & role from backend DB
+ */
+export async function clearNotificationsApi(userId?: string, role: string = 'tourist'): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/notifications/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: userId || null, role }),
+    });
+    const json = await res.json();
+    return !!json.success;
+  } catch (e) {
+    console.warn('clearNotificationsApi error:', e);
+    return false;
+  }
 }
 
 /**

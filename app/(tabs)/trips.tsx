@@ -60,9 +60,10 @@ export default function TripsHistoryScreen() {
   const cancelledTripIdsRef = useRef<Set<string>>(new Set());
   const [cancelledIds, setCancelledIds] = useState<string[]>([]);
 
+  const reloadTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     initSocketService(userId, session?.role || 'tourist');
-    const socket = getSocket();
 
     async function loadBackendTrips() {
       try {
@@ -94,6 +95,13 @@ export default function TripsHistoryScreen() {
       }
     }
     loadBackendTrips();
+
+    const triggerDebouncedLoad = () => {
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = setTimeout(() => {
+        loadBackendTrips();
+      }, 350);
+    };
 
     const handleTripUpdate = (data?: any) => {
       console.log('[TripsScreen] 🔔 Real-time socket/emitter trip update received:', data);
@@ -132,34 +140,18 @@ export default function TripsHistoryScreen() {
           }
         });
       }
-      loadBackendTrips();
+      triggerDebouncedLoad();
     };
-
-    if (socket) {
-      socket.on('trip_completed', handleTripUpdate);
-      socket.on('trip_status_updated', handleTripUpdate);
-      socket.on('trip_accepted', handleTripUpdate);
-      socket.on('trip_cancelled', handleTripUpdate);
-      socket.on('RIDE_ACCEPTED', handleTripUpdate);
-    }
 
     const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleTripUpdate);
     const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleTripUpdate);
-    const subRideAcc = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleTripUpdate);
     const subComp = DeviceEventEmitter.addListener('trip_completed', handleTripUpdate);
     const subCancel = DeviceEventEmitter.addListener('trip_cancelled', handleTripUpdate);
 
     return () => {
-      if (socket) {
-        socket.off('trip_completed', handleTripUpdate);
-        socket.off('trip_status_updated', handleTripUpdate);
-        socket.off('trip_accepted', handleTripUpdate);
-        socket.off('trip_cancelled', handleTripUpdate);
-        socket.off('RIDE_ACCEPTED', handleTripUpdate);
-      }
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       subStatus.remove();
       subAccepted.remove();
-      subRideAcc.remove();
       subComp.remove();
       subCancel.remove();
     };
@@ -506,7 +498,7 @@ export default function TripsHistoryScreen() {
                 ? (activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Partner')
                 : 'Searching Captain...';
               const displayVehicleNo = hasAssignedDriver
-                ? (activeTripObj.vehicleNumber || activeTripObj.vehicle_number || 'KA-03-EX-8240')
+                ? (activeTripObj.vehicleNumber || activeTripObj.vehicle_number || '')
                 : 'Assigning Captain...';
 
               return (

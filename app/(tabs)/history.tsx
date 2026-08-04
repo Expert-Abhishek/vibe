@@ -50,9 +50,10 @@ export default function HistoryScreen() {
   const session = getUserSessionSync();
   const userId = session?.id;
 
+  const reloadTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     initSocketService(userId, session?.role || 'tourist');
-    const socket = getSocket();
 
     async function loadRealHistory() {
       setLoading(true);
@@ -97,36 +98,24 @@ export default function HistoryScreen() {
 
             const stLower = String(item.status || '').toLowerCase();
             const cancelledBy = String(item.cancelled_by || item.cancelledBy || '').toLowerCase();
-
-            let statusLabel = 'Completed';
-            if (stLower.includes('cancel') || stLower.includes('decline') || stLower.includes('withdraw')) {
-              if (cancelledBy.includes('driver') || stLower.includes('driver')) {
-                statusLabel = 'Cancelled by Driver';
-              } else {
-                statusLabel = 'Cancelled by You';
-              }
+            let statusLabel = item.status || 'Completed';
+            if (stLower.includes('cancel') || stLower.includes('decline')) {
+              statusLabel = cancelledBy ? `Cancelled by ${cancelledBy}` : 'Cancelled';
+            } else if (stLower.includes('complete') || stLower.includes('finish') || stLower === 'done') {
+              statusLabel = 'Completed';
             }
-
-            const titleStr = item.title || (item.pickupName && item.dropName ? `${item.pickupName} ➔ ${item.dropName}` : (item.pickup ? `${item.pickup} ➔ Destination` : 'Tour Booking'));
-            const partnerName = item.driverOrGuideName || item.driverName || item.driver_or_guide_name || undefined;
-
-            const extractedDestIds = Array.isArray(item.destinationIds) && item.destinationIds.length > 0
-              ? item.destinationIds
-              : (Array.isArray(item.destination_ids) && item.destination_ids.length > 0 ? item.destination_ids : undefined);
-
-            const singleDestId = item.destinationId || item.destination_id || (extractedDestIds && extractedDestIds.length > 0 ? extractedDestIds[0] : undefined);
 
             acc.push({
               id: idStr,
-              type: (item.type || item.tripType || 'cab') as any,
-              title: titleStr,
-              pickupName: item.pickupName || item.pickup_name || item.pickup || 'Pickup Point',
-              dropName: item.dropName || item.drop_name || item.drop || 'Drop Point',
-              destinationId: singleDestId ? String(singleDestId) : undefined,
-              destinationIds: extractedDestIds ? extractedDestIds.map((d: any) => String(d)) : undefined,
-              route: extractedDestIds && extractedDestIds.length > 0 ? extractedDestIds : (Array.isArray(item.route) ? item.route : (Array.isArray(item.checkpoints) ? item.checkpoints : undefined)),
-              driverOrGuideName: partnerName,
-              date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : (item.date || 'Today'),
+              type: (item.bookingType || item.type || 'cab').toLowerCase().includes('guide') ? 'guide' : 'cab',
+              title: item.title || item.pickupName || item.pickup_name || 'Vibe Trip',
+              pickupName: item.pickupName || item.pickup_name || item.pickup,
+              dropName: item.dropName || item.drop_name || item.drop,
+              destinationId: item.destinationId || item.destination_id,
+              destinationIds: item.destinationIds || item.destination_ids,
+              route: Array.isArray(item.route) ? item.route : undefined,
+              driverOrGuideName: item.driverOrGuideName || item.driverName || item.driver_or_guide_name || item.guideName,
+              date: item.createdAt ? new Date(item.createdAt).toLocaleDateString() : (item.date || new Date().toLocaleDateString()),
               time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (item.time || ''),
               price: Number(item.amount || item.price) || 0,
               status: statusLabel,
@@ -149,35 +138,20 @@ export default function HistoryScreen() {
 
     const handleRefresh = () => {
       console.log('[HistoryScreen] 🔔 Real-time socket/emitter trip update received. Refreshing history...');
-      loadRealHistory();
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = setTimeout(() => {
+        loadRealHistory();
+      }, 350);
     };
-
-    if (socket) {
-      socket.on('trip_completed', handleRefresh);
-      socket.on('trip_cancelled', handleRefresh);
-      socket.on('trip_declined', handleRefresh);
-      socket.on('trip_status_updated', handleRefresh);
-      socket.on('RIDE_COMPLETED', handleRefresh);
-      socket.on('RIDE_CANCELLED', handleRefresh);
-    }
 
     const subComp = DeviceEventEmitter.addListener('trip_completed', handleRefresh);
     const subCancel = DeviceEventEmitter.addListener('trip_cancelled', handleRefresh);
-    const subRideComp = DeviceEventEmitter.addListener('RIDE_COMPLETED', handleRefresh);
     const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleRefresh);
 
     return () => {
-      if (socket) {
-        socket.off('trip_completed', handleRefresh);
-        socket.off('trip_cancelled', handleRefresh);
-        socket.off('trip_declined', handleRefresh);
-        socket.off('trip_status_updated', handleRefresh);
-        socket.off('RIDE_COMPLETED', handleRefresh);
-        socket.off('RIDE_CANCELLED', handleRefresh);
-      }
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       subComp.remove();
       subCancel.remove();
-      subRideComp.remove();
       subStatus.remove();
     };
   }, [userId]);
