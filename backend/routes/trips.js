@@ -291,27 +291,18 @@ router.post('/admin-notify', async (req, res) => {
 router.get('/active-trip/:customerId', async (req, res) => {
   try {
     const { customerId } = req.params;
-    const validUuid = toValidUuidOrNull(customerId);
-
-    let result;
-    if (validUuid) {
-      result = await db.query(
-        `SELECT * FROM trips
-         WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
-           AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done')
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [validUuid]
-      );
-    } else {
-      result = await db.query(
-        `SELECT * FROM trips
-         WHERE (customer_id IS NULL OR LOWER(customer_name) LIKE '%tourist%' OR LOWER(status) IN ('pending', 'in_progress', 'active', 'accepted', 'arrived'))
-           AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done')
-         ORDER BY created_at DESC
-         LIMIT 1`
-      );
+    if (!customerId) {
+      return res.json({ success: true, hasActiveTrip: false, trip: null });
     }
+
+    const result = await db.query(
+      `SELECT * FROM trips
+       WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
+         AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [String(customerId)]
+    );
 
     if (result.rows.length === 0) {
       return res.json({ success: true, hasActiveTrip: false, trip: null });
@@ -1366,6 +1357,29 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Trip title is required' });
     }
 
+    if (customerId) {
+      try {
+        const activeCheck = await db.query(
+          `SELECT id, title, status FROM trips
+           WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
+             AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish')
+           LIMIT 1`,
+          [String(customerId)]
+        );
+        if (activeCheck.rows.length > 0) {
+          const activeTrip = activeCheck.rows[0];
+          return res.status(400).json({
+            success: false,
+            message: `You already have an active trip in progress (${activeTrip.title || 'Ongoing Booking'}). Please complete or cancel your current trip before booking a new one.`,
+            hasActiveTrip: true,
+            activeTrip: activeTrip,
+          });
+        }
+      } catch (e) {
+        console.warn('activeCheck error:', e.message);
+      }
+    }
+
     const otpCode = null; // OTP hidden initially during Pending status
     const totalAmount = parseFloat(amount || 0);
     const isPreBooked = bookingType === 'PRE_BOOKED';
@@ -1778,6 +1792,29 @@ router.post('/book', async (req, res) => {
       advanceDepositPaid = 0,
       remainingCashBalance = 2000,
     } = req.body;
+
+    if (customerId) {
+      try {
+        const activeCheck = await db.query(
+          `SELECT id, title, status FROM trips
+           WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
+             AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish')
+           LIMIT 1`,
+          [String(customerId)]
+        );
+        if (activeCheck.rows.length > 0) {
+          const activeTrip = activeCheck.rows[0];
+          return res.status(400).json({
+            success: false,
+            message: `You already have an active trip in progress (${activeTrip.title || 'Ongoing Booking'}). Please complete or cancel your current trip before booking a new one.`,
+            hasActiveTrip: true,
+            activeTrip: activeTrip,
+          });
+        }
+      } catch (e) {
+        console.warn('activeCheck error:', e.message);
+      }
+    }
 
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
     const endOtp = Math.floor(1000 + Math.random() * 9000).toString();

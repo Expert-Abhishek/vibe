@@ -1,4 +1,4 @@
-import { bookTripApi, createTripApi, deductWalletApi, fetchDestinationsApi, submitWalletDeductionRequestApi } from '@/constants/api';
+import { bookTripApi, createTripApi, deductWalletApi, fetchActiveTripApi, fetchDestinationsApi, submitWalletDeductionRequestApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { openRazorpayPayment } from '@/constants/razorpay';
@@ -492,6 +492,25 @@ export default function BookCabScreen() {
     }
 
     // Instant Booking Mode (Cash or UPI)
+    if (customerId) {
+      try {
+        const activeRes = await fetchActiveTripApi(customerId);
+        if (activeRes && activeRes.hasActiveTrip && activeRes.trip) {
+          Alert.alert(
+            '⚠️ Active Trip Already Exists',
+            `You already have an active trip in progress ("${activeRes.trip.title || 'Ongoing Trip'}"). Please complete or cancel your current trip before booking a new one.`,
+            [
+              { text: '📍 Track Active Trip', onPress: () => router.push({ pathname: '/trip-status', params: { tripId: activeRes.trip.id, id: activeRes.trip.id } }) },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+          return;
+        }
+      } catch (e) {
+        console.warn('Pre-flight active trip check error:', e);
+      }
+    }
+
     setBookingLoading(true);
     let serverTripId = `cab_${Date.now()}`;
     const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();

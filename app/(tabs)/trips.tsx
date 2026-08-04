@@ -306,7 +306,9 @@ export default function TripsHistoryScreen() {
     return !completedStatuses.includes(s);
   };
 
-  const activeTripObj = activeTripData || (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || null : null);
+  const activeTripObj = (activeTripData && isNonCompleted(activeTripData.status))
+    ? activeTripData
+    : (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || null : null);
 
   const scheduledTrips = validTrips.filter(t => {
     if (activeTripObj && String(t.id) === String(activeTripObj.id)) return false;

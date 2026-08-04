@@ -297,6 +297,28 @@ export default function PlanRouteScreen() {
   const addTripAndClose = async () => {
     if (!selectedPlan) return;
 
+    const sessionCheck = getUserSessionSync();
+    const currentUserIdCheck = sessionCheck?.id || sessionCheck?.profile?.user_id;
+
+    if (currentUserIdCheck) {
+      try {
+        const activeRes = await fetchActiveTripApi(currentUserIdCheck);
+        if (activeRes && activeRes.hasActiveTrip && activeRes.trip) {
+          Alert.alert(
+            '⚠️ Active Trip Already Exists',
+            `You already have an active trip in progress ("${activeRes.trip.title || 'Ongoing Trip'}"). Please complete or cancel your current trip before booking a new one.`,
+            [
+              { text: '📍 Track Active Trip', onPress: () => router.push({ pathname: '/trip-status', params: { tripId: activeRes.trip.id, id: activeRes.trip.id } }) },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+          return;
+        }
+      } catch (e) {
+        console.warn('Pre-flight active trip check error:', e);
+      }
+    }
+
     const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
     const totalPrice = priceInfo.computedPrice;
     const isPreBooking = !adminState.instantBookingEnabled;
