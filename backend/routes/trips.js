@@ -178,7 +178,7 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS status_code INT DEFAULT 0;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS scheduled_time TIMESTAMP WITH TIME ZONE;
-      ALTER TABLE trips ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'INSTANT';
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS booking_type VARCHAR(50) DEFAULT 'instant';
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS advance_deposit_paid NUMERIC(10,2) DEFAULT 0.00;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS remaining_cash_balance NUMERIC(10,2) DEFAULT 0.00;
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_or_guide_name VARCHAR(255);
@@ -206,11 +206,31 @@ async function ensureTripsColumnsExist() {
       ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_4x4 NUMERIC(10,2) DEFAULT 0.00;
       ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_auto NUMERIC(10,2) DEFAULT 0.00;
     `);
+
+    try {
+      await db.query(`
+        ALTER TABLE trips ALTER COLUMN booking_type DROP DEFAULT;
+        ALTER TABLE trips ALTER COLUMN booking_type TYPE VARCHAR(50) USING booking_type::text;
+        ALTER TABLE trips ALTER COLUMN booking_type SET DEFAULT 'instant';
+      `);
+    } catch (enumErr) {
+      try {
+        await db.query(`ALTER TYPE booking_type_enum ADD VALUE IF NOT EXISTS 'INSTANT'`);
+        await db.query(`ALTER TYPE booking_type_enum ADD VALUE IF NOT EXISTS 'PRE_BOOKED'`);
+      } catch (e2) {}
+    }
   } catch (e) {
     console.warn('Trips table auto-migration warning:', e.message);
   }
 
   await reloadStationMap();
+}
+
+function sanitizeBookingType(bt) {
+  if (!bt) return 'instant';
+  const str = String(bt).toLowerCase().trim();
+  if (str.includes('pre') || str.includes('book')) return 'prebook';
+  return 'instant';
 }
 
 // Run migration safely on route module load
@@ -1630,7 +1650,8 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
 
     const otpCode = null; // Hidden initially
     const totalAmount = parseFloat(amount || 0);
-    const isPreBooked = bookingType === 'PRE_BOOKED';
+    const sanitizedBookingType = sanitizeBookingType(bookingType);
+    const isPreBooked = sanitizedBookingType === 'prebook';
     const advanceDepositPaid = isPreBooked ? Math.round(totalAmount * 0.20) : 0;
     const remainingCashBalance = isPreBooked ? totalAmount - advanceDepositPaid : totalAmount;
 
@@ -1700,7 +1721,7 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       otpCode,
       pickupName,
       dropName,
-      bookingType,
+      sanitizedBookingType,
       scheduledTime ? new Date(scheduledTime) : null,
       advanceDepositPaid,
       remainingCashBalance,
@@ -1745,7 +1766,7 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
         otpCode,
         pickupName,
         dropName,
-        bookingType,
+        sanitizedBookingType,
         scheduledTime ? new Date(scheduledTime) : null,
         advanceDepositPaid,
         remainingCashBalance,
