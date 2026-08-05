@@ -32,6 +32,7 @@ const rides = [
 ];
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [selectedRide, setSelectedRide] = useState<string>('4x4jeep');
   const colorScheme = useColorScheme();

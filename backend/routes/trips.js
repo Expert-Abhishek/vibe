@@ -678,6 +678,83 @@ router.get('/pending-requests', async (req, res) => {
   }
 });
 
+async function resolveDestinationCheckpoints(rawCheckpoints) {
+  if (!rawCheckpoints || !Array.isArray(rawCheckpoints) || rawCheckpoints.length === 0) {
+    return [];
+  }
+  const idsOrNames = rawCheckpoints.map(cp => {
+    if (typeof cp === 'object' && cp !== null) {
+      return String(cp.destination_id || cp.destinationId || cp.id || cp.name || cp.checkpoint_name || '').trim();
+    }
+    return String(cp || '').trim();
+  }).filter(Boolean);
+
+  if (idsOrNames.length === 0) return rawCheckpoints;
+
+  try {
+    const destRes = await db.query(
+      `SELECT id, name, location, description, images, videos, latitude, longitude 
+       FROM destinations 
+       WHERE id::text = ANY($1::text[]) OR name = ANY($1::text[])`,
+      [idsOrNames]
+    );
+
+    const destMap = {};
+    destRes.rows.forEach(d => {
+      destMap[d.id] = d;
+      destMap[d.name] = d;
+      destMap[String(d.id)] = d;
+    });
+
+    return rawCheckpoints.map((cp, idx) => {
+      const lookupKey = typeof cp === 'object' && cp !== null 
+        ? String(cp.destination_id || cp.destinationId || cp.id || cp.name || '').trim() 
+        : String(cp || '').trim();
+
+      const matchedDest = destMap[lookupKey];
+
+      if (matchedDest) {
+        const imagesArr = Array.isArray(matchedDest.images) ? matchedDest.images : [];
+        return {
+          id: matchedDest.id,
+          destination_id: matchedDest.id,
+          destinationId: matchedDest.id,
+          checkpoint_name: matchedDest.name,
+          name: matchedDest.name,
+          location: matchedDest.location || '',
+          description: matchedDest.description || '',
+          images: imagesArr,
+          image: imagesArr[0] || (typeof cp === 'object' ? cp.image : null) || null,
+          latitude: matchedDest.latitude ? parseFloat(matchedDest.latitude) : (typeof cp === 'object' ? parseFloat(cp.latitude || cp.lat || 0) : 0),
+          longitude: matchedDest.longitude ? parseFloat(matchedDest.longitude) : (typeof cp === 'object' ? parseFloat(cp.longitude || cp.lng || 0) : 0),
+          step_order: idx + 1,
+        };
+      }
+
+      if (typeof cp === 'object' && cp !== null) {
+        return {
+          ...cp,
+          id: cp.destination_id || cp.destinationId || cp.id || `dest_${idx}`,
+          destination_id: cp.destination_id || cp.destinationId || cp.id || `dest_${idx}`,
+          name: cp.name || cp.checkpoint_name || `Stop ${idx + 1}`,
+          step_order: idx + 1,
+        };
+      }
+
+      return {
+        id: `dest_${idx}`,
+        destination_id: `dest_${idx}`,
+        name: String(cp),
+        checkpoint_name: String(cp),
+        step_order: idx + 1,
+      };
+    });
+  } catch (e) {
+    console.warn('resolveDestinationCheckpoints error:', e.message);
+    return rawCheckpoints;
+  }
+}
+
 /**
  * GET /api/trips/live-location/:tripId
  * Fetch live driver location and status for Tourist live map tracking
@@ -760,6 +837,9 @@ router.get('/live-location/:tripId', async (req, res) => {
       } catch (e) {}
     }
 
+    const rawCheckpoints = (Array.isArray(trip.destination_ids) && trip.destination_ids.length > 0) ? trip.destination_ids : planData.checkpoints;
+    const resolvedCheckpoints = await resolveDestinationCheckpoints(rawCheckpoints);
+
     res.json({
       success: true,
       data: {
@@ -775,8 +855,8 @@ router.get('/live-location/:tripId', async (req, res) => {
         planName: planData.name,
         durationHours: planData.duration_hours,
         distanceKm: planData.distance_km,
-        checkpoints: Array.isArray(trip.destination_ids) && trip.destination_ids.length > 0 ? trip.destination_ids : planData.checkpoints,
-        trip_checkpoints: Array.isArray(trip.destination_ids) && trip.destination_ids.length > 0 ? trip.destination_ids : planData.checkpoints,
+        checkpoints: resolvedCheckpoints,
+        trip_checkpoints: resolvedCheckpoints,
         otp: trip.otp,
         endOtp: trip.end_otp,
         end_otp: trip.end_otp,

@@ -1,4 +1,6 @@
 import NotificationModal from '@/components/NotificationModal';
+import LanguageSelector from '@/src/components/LanguageSelector';
+import { useTranslation } from 'react-i18next';
 import { adminState } from '@/constants/admin-state';
 import { cancelTripApi, fetchLiveLocationApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
@@ -35,11 +37,12 @@ if (Platform.OS !== 'web') {
     Marker = Maps.Marker;
     Polyline = Maps.Polyline;
   } catch (e) {
-    console.warn('react-native-maps dynamic load error in trip-status:', e);
+    // Silent catch on web / webview fallback
   }
 }
 
 export default function TripStatusScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ tripId?: string; id?: string }>();
   const colorScheme = useColorScheme();
@@ -405,11 +408,11 @@ export default function TripStatusScreen() {
 
   const statusLower = String(tripStatus).toLowerCase();
   const getStatusBadge = () => {
-    if (statusLower.includes('accepted')) return { text: 'PARTNER ASSIGNED & EN ROUTE', bg: '#10B981', color: '#FFFFFF' };
-    if (statusLower.includes('arrived')) return { text: 'DRIVER ARRIVED AT PICKUP', bg: '#F5C518', color: '#101014' };
-    if (statusLower.includes('start') || statusLower.includes('active')) return { text: 'TRIP IN PROGRESS', bg: '#3B82F6', color: '#FFFFFF' };
-    if (statusLower.includes('declined') || statusLower.includes('cancel')) return { text: 'TRIP CANCELLED / DECLINED', bg: '#EF4444', color: '#FFFFFF' };
-    return { text: '⏳ WAITING FOR CAPTAIN TO ACCEPT YOUR RIDE...', bg: '#F5C518', color: '#101014' };
+    if (statusLower.includes('accepted')) return { text: t('partnerAssigned'), bg: '#10B981', color: '#FFFFFF' };
+    if (statusLower.includes('arrived')) return { text: t('driverArrived'), bg: '#F5C518', color: '#101014' };
+    if (statusLower.includes('start') || statusLower.includes('active')) return { text: t('tripInProgress'), bg: '#3B82F6', color: '#FFFFFF' };
+    if (statusLower.includes('declined') || statusLower.includes('cancel')) return { text: t('tripCancelled'), bg: '#EF4444', color: '#FFFFFF' };
+    return { text: t('searchingCaptain'), bg: '#F5C518', color: '#101014' };
   };
 
   const badge = getStatusBadge();
@@ -418,7 +421,7 @@ export default function TripStatusScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.amber} />
-        <Text style={{ color: colors.textMuted, marginTop: 12 }}>Loading trip status...</Text>
+        <Text style={{ color: colors.textMuted, marginTop: 12 }}>{t('loading')}</Text>
       </View>
     );
   }
@@ -432,8 +435,11 @@ export default function TripStatusScreen() {
         <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/home'); } }} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Live Trip Status</Text>
-        <NotificationModal role="tourist" />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('liveStatus')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+          <LanguageSelector compact />
+          <NotificationModal role="tourist" />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: scale(16), paddingBottom: verticalScale(100) }} showsVerticalScrollIndicator={false}>

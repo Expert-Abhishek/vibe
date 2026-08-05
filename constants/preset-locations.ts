@@ -5,39 +5,44 @@ export interface PresetLocation {
   latitude: number;
   longitude: number;
   icon?: string;
+  mapUrl?: string;
 }
 
 export const PRESET_PICKUP_DROP_LOCATIONS: PresetLocation[] = [
   {
     id: 'loc_ksrtc_bus_stand',
-    name: 'KSRTC Bus Stand Sakleshpur',
-    address: 'Sakleshpura, Karnataka 573134',
-    latitude: 12.9416,
-    longitude: 75.7790,
+    name: 'KSRTC BUS STAND Sakaleshpura',
+    address: 'BM Road, Sakaleshpura, Karnataka 573134',
+    latitude: 12.9723,
+    longitude: 75.7865,
     icon: 'directions-bus',
+    mapUrl: 'https://maps.app.goo.gl/AvFm6pUXd3XCMGF29?g_st=aw',
   },
   {
-    id: 'loc_sakleshpur_town',
-    name: 'Sakleshpur Town Center',
-    address: 'Main Road, Sakleshpur, Karnataka 573134',
-    latitude: 12.9455178,
-    longitude: 75.7789167,
+    id: 'loc_sakaleshpura_main_city',
+    name: 'Sakaleshpura Main City',
+    address: 'Main City Market, Sakaleshpura, Karnataka 573134',
+    latitude: 12.9730,
+    longitude: 75.7845,
     icon: 'location-city',
+    mapUrl: 'https://maps.app.goo.gl/SBpmas6PU2kUhqP47?g_st=aw',
   },
   {
-    id: 'loc_azad_road_junction',
-    name: 'Azad Road Junction (Sakleshpur)',
-    address: 'Azad Road, Sakleshpur, Karnataka 573134',
-    latitude: 12.9403832,
-    longitude: 75.7789866,
-    icon: 'traffic',
+    id: 'loc_sakaleshpura_city',
+    name: 'Sakaleshpura City',
+    address: 'Town Circle, Sakaleshpura, Karnataka 573134',
+    latitude: 12.9700,
+    longitude: 75.7820,
+    icon: 'storefront',
+    mapUrl: 'https://maps.app.goo.gl/LKC4JmKfPjvgPaHh7?g_st=aw',
   },
   {
-    id: 'loc_ksrtc_old_bus_stand_ballupet',
-    name: 'KSRTC Old Bus Stand Ballupet',
-    address: 'J.P Nagar, Ballupet, Sakleshpura, Karnataka 573134',
-    latitude: 12.9155,
-    longitude: 75.8456,
-    icon: 'departure-board',
+    id: 'loc_railway_station_sakaleshpura',
+    name: 'Railway Station Sakaleshpura',
+    address: 'Railway Station Road, Sakaleshpura, Karnataka 573134',
+    latitude: 12.9740,
+    longitude: 75.7890,
+    icon: 'train',
+    mapUrl: 'https://maps.app.goo.gl/SYeGVrG5qoXi4niN8?g_st=aw',
   },
 ];
