@@ -69,10 +69,14 @@ router.get('/', async (req, res) => {
       checkpointsByPlan[row.plan_id].push({
         planDestinationId: row.plan_checkpoint_id,
         destinationId: row.destination_id,
+        destination_id: row.destination_id,
+        id: row.destination_id,
         name: row.destination_name,
+        checkpoint_name: row.destination_name,
         location: row.destination_location || '',
         description: row.destination_description || '',
         images: imgs,
+        image: imgs[0] || null,
         videos: vids,
         latitude: row.destination_latitude ? parseFloat(row.destination_latitude) : 15.335000,
         longitude: row.destination_longitude ? parseFloat(row.destination_longitude) : 76.460000,
@@ -90,6 +94,9 @@ router.get('/', async (req, res) => {
       const p4x4 = parseFloat(p.price_4x4 || 0) || Math.round(basePrice * 1.60);
       const pAuto = parseFloat(p.price_auto || 0) || Math.round(basePrice * 0.65);
 
+      const planCps = checkpointsByPlan[p.id] || [];
+      const planDestIds = planCps.map(cp => cp.destinationId).filter(Boolean);
+
       return {
         id: p.id,
         name: p.name,
@@ -102,7 +109,9 @@ router.get('/', async (req, res) => {
         price_4x4: p4x4,
         price_auto: pAuto,
         isActive: p.is_active,
-        checkpoints: checkpointsByPlan[p.id] || [],
+        checkpoints: planCps,
+        destination_ids: planDestIds,
+        destinationIds: planDestIds,
         createdAt: p.created_at,
         updatedAt: p.updated_at
       };

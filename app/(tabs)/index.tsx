@@ -1,17 +1,16 @@
 import NotificationModal from '@/components/NotificationModal';
-import LanguageSelector from '@/src/components/LanguageSelector';
-import { useTranslation } from 'react-i18next';
 import { adminState } from '@/constants/admin-state';
 import { fetchActiveTripApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { initSocketService, getSocket } from '@src/services/socketService';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import { MaterialIcons } from '@expo/vector-icons';
+import { initSocketService } from '@src/services/socketService';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  Alert,
   Animated,
   DeviceEventEmitter,
   Image,
@@ -264,7 +263,6 @@ export default function HomeScreen() {
               </View>
               <View style={styles.halfCardTextCol}>
                 <Text style={styles.halfCardTitle}>{t('hireGuide')}</Text>
-                <Text style={styles.halfCardSubtitle}>{t('hireGuideSub')}</Text>
               </View>
             </ImageBackground>
           </TouchableOpacity>
@@ -283,7 +281,6 @@ export default function HomeScreen() {
               <View style={styles.overlay} />
               <View style={styles.halfCardTextCol}>
                 <Text style={styles.halfCardTitle}>{t('customTrip')}</Text>
-                <Text style={styles.halfCardSubtitle}>{t('customTripSub')}</Text>
               </View>
             </ImageBackground>
           </TouchableOpacity>

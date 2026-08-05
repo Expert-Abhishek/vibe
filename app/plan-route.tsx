@@ -19,10 +19,25 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+export interface CheckpointObj {
+  id?: string;
+  destination_id?: string;
+  destinationId?: string;
+  name: string;
+  checkpoint_name?: string;
+  location?: string;
+  description?: string;
+  images?: string[];
+  image?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 interface TourPackage {
   id: string;
   name: string;
   checkpoints: string[];
+  checkpointObjs?: CheckpointObj[];
   travelHours: number;
   distanceKm: number;
   image: string;
@@ -88,21 +103,58 @@ export default function PlanRouteScreen() {
   const vehicleTypeParam = params.vehicleType as '5seater' | '7seater' | '4x4jeep' | 'auto';
   const carNameParam = params.carName as string;
 
-  const displayPackagePlans: (TourPackage & { price?: number })[] = livePlans.map((p, idx) => ({
-    id: p.id || `p_${idx}`,
-    name: p.name,
-    checkpoints: Array.isArray(p.checkpoints)
-      ? p.checkpoints.map((cp: any) => typeof cp === 'string' ? cp : (cp.name || 'Tourist Place'))
-      : ['Tourist Place'],
-    travelHours: parseFloat(p.duration) || 8,
-    distanceKm: parseFloat(p.km) || 150,
-    price: parseFloat(p.price) || 4999,
-    image: p.checkpoints && p.checkpoints[0]?.images?.[0]
-      ? p.checkpoints[0].images[0]
-      : 'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600',
-    destinationIds: p.destinationIds || p.destination_ids,
-    destinationId: p.destinationId || p.destination_id,
-  }));
+  const displayPackagePlans: (TourPackage & { price?: number })[] = livePlans.map((p, idx) => {
+    const rawCheckpoints = Array.isArray(p.checkpoints) ? p.checkpoints : [];
+
+    const checkpointObjs: CheckpointObj[] = rawCheckpoints.map((cp: any) => {
+      if (typeof cp === 'object' && cp !== null) {
+        const destId = cp.destinationId || cp.destination_id || cp.id || cp.name;
+        const imgs = Array.isArray(cp.images) ? cp.images : (cp.image ? [cp.image] : []);
+        return {
+          id: destId,
+          destination_id: destId,
+          destinationId: destId,
+          name: cp.name || cp.checkpoint_name || cp.title || 'Tourist Place',
+          checkpoint_name: cp.name || cp.checkpoint_name || cp.title || 'Tourist Place',
+          location: cp.location || '',
+          description: cp.description || '',
+          images: imgs,
+          image: imgs[0] || cp.image || null,
+          latitude: cp.latitude,
+          longitude: cp.longitude,
+        };
+      }
+      return {
+        id: String(cp),
+        destination_id: String(cp),
+        destinationId: String(cp),
+        name: String(cp),
+        checkpoint_name: String(cp),
+      };
+    });
+
+    const checkpointNames = checkpointObjs.map((cp) => cp.name);
+    const destIds = checkpointObjs.map((cp) => cp.destinationId).filter(Boolean);
+
+    const firstImg =
+      checkpointObjs.find((cp) => cp.image || (cp.images && cp.images.length > 0))?.image ||
+      checkpointObjs.find((cp) => cp.images && cp.images.length > 0)?.images?.[0] ||
+      p.image ||
+      'https://images.unsplash.com/photo-1600100397608-f010e42ec9ab?auto=format&fit=crop&q=80&w=600';
+
+    return {
+      id: p.id || `p_${idx}`,
+      name: p.name,
+      checkpoints: checkpointNames,
+      checkpointObjs: checkpointObjs,
+      travelHours: parseFloat(p.duration) || 8,
+      distanceKm: parseFloat(p.km) || 150,
+      price: parseFloat(p.price) || 4999,
+      image: firstImg,
+      destinationIds: destIds.length > 0 ? destIds : (p.destinationIds || p.destination_ids || []),
+      destinationId: destIds[0] || p.destinationId || p.destination_id,
+    };
+  });
 
   useEffect(() => {
     async function loadBackendData() {
@@ -266,8 +318,8 @@ export default function PlanRouteScreen() {
       p.checkpoints.some((cp) => cp.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-
   const openBookingPopup = (plan: TourPackage) => {
+
     setSelectedPlan(plan);
     setBookingPax(1);
     setBookingVehicle('5seater');
@@ -375,7 +427,9 @@ export default function PlanRouteScreen() {
       const currentUserId = session?.id || session?.profile?.user_id;
 
       const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
-      const planDestIds = Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0 ? selectedPlan.destinationIds : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
+      const planDestIds = (Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0)
+        ? selectedPlan.destinationIds
+        : (Array.isArray(selectedPlan.checkpointObjs) ? selectedPlan.checkpointObjs.map((c: any) => c.destinationId || c.destination_id || c.id).filter(Boolean) : []);
       const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
 
       const createdTrip = await createTripApi({
@@ -441,8 +495,10 @@ export default function PlanRouteScreen() {
         dropName: selectedDrop.name,
         dropLat: selectedDrop.latitude,
         dropLng: selectedDrop.longitude,
-        route: selectedPlan.checkpoints,
-        checkpoints: selectedPlan.checkpoints,
+        route: (selectedPlan.checkpointObjs && selectedPlan.checkpointObjs.length > 0) ? selectedPlan.checkpointObjs : selectedPlan.checkpoints,
+        checkpoints: (selectedPlan.checkpointObjs && selectedPlan.checkpointObjs.length > 0) ? selectedPlan.checkpointObjs : selectedPlan.checkpoints,
+        destination_ids: planDestIds,
+        destinationIds: planDestIds,
         date: finalDate,
         time: finalTime,
         price: totalPrice,
@@ -516,7 +572,9 @@ export default function PlanRouteScreen() {
 
     const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
 
-    const planDestIds = Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0 ? selectedPlan.destinationIds : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
+    const planDestIds = (Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0)
+      ? selectedPlan.destinationIds
+      : (Array.isArray(selectedPlan.checkpointObjs) ? selectedPlan.checkpointObjs.map((c: any) => c.destinationId || c.destination_id || c.id).filter(Boolean) : []);
     const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
 
     // Save trip to backend DB
@@ -546,8 +604,10 @@ export default function PlanRouteScreen() {
       tripId: realTripId,
       type: 'plan' as const,
       title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
-      route: selectedPlan.checkpoints,
-      checkpoints: selectedPlan.checkpoints,
+      route: (selectedPlan.checkpointObjs && selectedPlan.checkpointObjs.length > 0) ? selectedPlan.checkpointObjs : selectedPlan.checkpoints,
+      checkpoints: (selectedPlan.checkpointObjs && selectedPlan.checkpointObjs.length > 0) ? selectedPlan.checkpointObjs : selectedPlan.checkpoints,
+      destination_ids: planDestIds,
+      destinationIds: planDestIds,
       driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
       date: finalDate,
       time: finalTime,
@@ -630,6 +690,7 @@ export default function PlanRouteScreen() {
                 </View>
               ) : (
                 filteredPackages.map((plan) => {
+
                   const checkpointsCount = plan.checkpoints.length;
                   const totalHours = plan.travelHours + checkpointsCount;
 
@@ -844,9 +905,11 @@ export default function PlanRouteScreen() {
                 TOUR ITINERARY CHECKPOINTS ({selectedPlan.checkpoints.length} STOPS)
               </Text>
 
+
+
               <View style={{ gap: verticalScale(10) }}>
-                {selectedPlan.checkpoints.map((cp: any, index: number) => {
-                  const cpName = typeof cp === 'string' ? cp : (cp.name || cp.title || `Stop ${index + 1}`);
+                {((selectedPlan.checkpointObjs && selectedPlan.checkpointObjs.length > 0) ? selectedPlan.checkpointObjs : selectedPlan.checkpoints).map((cp: any, index: number) => {
+                  const cpName = typeof cp === 'string' ? cp : (cp.name || cp.checkpoint_name || cp.title || `Stop ${index + 1}`);
                   const cpDesc = typeof cp === 'object' ? (cp.description || cp.location || 'Key sightseeing attraction & photo stopover') : 'Featured landmark & sightseeing checkpoint';
                   const cpImg = typeof cp === 'object' && Array.isArray(cp.images) && cp.images.length > 0
                     ? cp.images[0]
