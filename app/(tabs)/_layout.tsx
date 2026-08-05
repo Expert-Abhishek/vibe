@@ -58,7 +58,10 @@ function TabIconButton({ routeName, isFocused, activeColor, inactiveColor }: any
   );
 }
 
+import { useTranslation } from 'react-i18next';
+
 function CustomTabBar({ state, descriptors, navigation }: any) {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = {
@@ -66,6 +69,14 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     border: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
     inactive: isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(16, 16, 20, 0.5)',
     active: '#F5C518',
+  };
+
+  const getTabLabel = (name: string, fallbackTitle: string) => {
+    if (name === 'index') return t('home');
+    if (name === 'trips') return t('trips');
+    if (name === 'history') return t('history');
+    if (name === 'profile') return t('profile');
+    return fallbackTitle;
   };
 
   const visibleRoutes = state.routes.filter((route: any) => {
@@ -126,7 +137,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           }
         };
 
-        const label = options.title !== undefined ? options.title : route.name;
+        const label = getTabLabel(route.name, options.title !== undefined ? options.title : route.name);
 
         return (
           <TouchableOpacity

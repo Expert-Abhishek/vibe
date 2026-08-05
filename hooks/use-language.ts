@@ -17,12 +17,17 @@ try {
   // Ignore fallback
 }
 
+import i18n from '@/src/i18n';
+
 export function getAppLanguage(): AppLanguage {
   return currentLanguage;
 }
 
 export function setAppLanguage(lang: AppLanguage) {
   currentLanguage = lang;
+  if (i18n && i18n.changeLanguage) {
+    i18n.changeLanguage(lang);
+  }
   listeners.forEach((l) => l(lang));
 
   // Sync to session and backend database asynchronously

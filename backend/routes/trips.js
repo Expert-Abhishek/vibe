@@ -704,25 +704,38 @@ router.get('/live-location/:tripId', async (req, res) => {
     };
 
     if (trip.driver_id) {
-      const dpRes = await db.query(
-        `SELECT dp.*, u.name, u.phone 
-         FROM driver_profiles dp 
-         JOIN users u ON u.id = dp.user_id 
-         WHERE dp.user_id::text = $1::text OR dp.id::text = $1::text`,
-        [trip.driver_id]
-      );
-      if (dpRes.rows.length > 0) {
-        const dp = dpRes.rows[0];
-        driverData = {
-          name: dp.name || driverData.name,
-          phone: dp.phone || driverData.phone,
-          vehicleModel: dp.vehicle_model || driverData.vehicleModel,
-          vehicleNumber: dp.vehicle_number || driverData.vehicleNumber,
-          rating: parseFloat(dp.rating || 4.9),
-          latitude: parseFloat(dp.latitude || driverData.latitude),
-          longitude: parseFloat(dp.longitude || driverData.longitude),
-          heading: parseFloat(dp.heading || 0),
-        };
+      try {
+        const dpRes = await db.query(
+          `SELECT dp.*, u.name, u.phone 
+           FROM driver_profiles dp 
+           LEFT JOIN users u ON u.id::text = dp.user_id::text 
+           WHERE dp.user_id::text = $1::text OR dp.id::text = $1::text OR u.id::text = $1::text`,
+          [String(trip.driver_id).trim()]
+        );
+        if (dpRes.rows.length > 0) {
+          const dp = dpRes.rows[0];
+          driverData = {
+            name: dp.name || trip.driver_or_guide_name || driverData.name,
+            phone: dp.phone || driverData.phone,
+            vehicleModel: dp.vehicle_model || driverData.vehicleModel,
+            vehicleNumber: dp.vehicle_number || driverData.vehicleNumber,
+            rating: parseFloat(dp.rating || 4.9),
+            latitude: parseFloat(dp.latitude || driverData.latitude),
+            longitude: parseFloat(dp.longitude || driverData.longitude),
+            heading: parseFloat(dp.heading || 0),
+          };
+        } else {
+          const uRes = await db.query(
+            `SELECT name, phone FROM users WHERE id::text = $1::text`,
+            [String(trip.driver_id).trim()]
+          );
+          if (uRes.rows.length > 0) {
+            driverData.name = uRes.rows[0].name || trip.driver_or_guide_name || driverData.name;
+            driverData.phone = uRes.rows[0].phone || driverData.phone;
+          }
+        }
+      } catch (e) {
+        console.warn('live-location driver fetch warning:', e.message);
       }
     }
 
@@ -754,6 +767,11 @@ router.get('/live-location/:tripId', async (req, res) => {
         id: trip.id,
         tripId: trip.id,
         status: trip.status,
+        driver_id: trip.driver_id,
+        driverId: trip.driver_id,
+        driverName: trip.driver_or_guide_name || driverData.name,
+        driver_name: trip.driver_or_guide_name || driverData.name,
+        driver_or_guide_name: trip.driver_or_guide_name || driverData.name,
         planName: planData.name,
         durationHours: planData.duration_hours,
         distanceKm: planData.distance_km,
@@ -1935,21 +1953,24 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       } catch (e) {}
     }
 
+    const effectiveDriverId = String(driverId).trim();
     const result = await db.query(
       `UPDATE trips 
        SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
        WHERE id::text = $5::text OR CAST(id AS VARCHAR) = $5::text
        RETURNING *`,
-      [driverName, validDriverUuid, generatedStartOtp, generatedEndOtp, id]
+      [driverName, effectiveDriverId, generatedStartOtp, generatedEndOtp, id]
     );
 
-    let trip = result.rows.length > 0 ? result.rows[0] : { ...currentTrip, status: 'Accepted', driver_or_guide_name: driverName, driver_id: driverId, otp: generatedStartOtp, end_otp: generatedEndOtp };
+    let trip = result.rows.length > 0 ? result.rows[0] : { ...currentTrip, status: 'Accepted', driver_or_guide_name: driverName, driver_id: effectiveDriverId, otp: generatedStartOtp, end_otp: generatedEndOtp };
 
     const acceptedPayload = {
       ...trip,
       id: trip.id,
       tripId: trip.id,
       status: 'Accepted',
+      driver_id: effectiveDriverId,
+      driverId: effectiveDriverId,
       driverName: driverName,
       driver_or_guide_name: driverName,
       driverPhone: driverPhone,

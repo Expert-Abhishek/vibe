@@ -1,425 +1,425 @@
 import NotificationModal from '@/components/NotificationModal';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import { adminState } from '@/constants/admin-state';
-import { cancelTripApi, fetchActiveTripApi, fetchCustomerTripsApi, submitWalletDeductionRequestApi } from '@/constants/api';
+import { cancelTripApi, fetchLiveLocationApi, fetchActiveTripApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
+import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
-import { getSocket, initSocketService } from '@src/services/socketService';
-import { useRouter } from 'expo-router';
+import { getSocket, initSocketService, joinTripRoom } from '@src/services/socketService';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   DeviceEventEmitter,
-  Modal,
+  Linking,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export interface TripItem {
-  id: string;
-  type: 'cab' | 'guide' | 'custom_trip' | 'plan' | 'auto';
-  vehicleType?: string;
-  title: string;
-  route?: string[];
-  driverOrGuideName?: string;
-  date: string;
-  time: string;
-  price: number;
-  paymentMode?: string;
-  status: string;
-  passengerCount?: number;
-  advanceDepositPaid?: number;
-  remainingCashBalance?: number;
-  otp?: string;
-  endOtp?: string;
-  pickup?: string;
-  createdAt?: string;
-  bookingType?: 'INSTANT' | 'PRE_BOOKED';
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+
+if (Platform.OS !== 'web') {
+  try {
+    const Maps = require('react-native-maps');
+    MapView = Maps.default;
+    Marker = Maps.Marker;
+    Polyline = Maps.Polyline;
+  } catch (e) {
+    console.warn('react-native-maps dynamic load error in trips tab:', e);
+  }
 }
 
+import { useTranslation } from 'react-i18next';
+
 export default function TripsHistoryScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
+  const params = useLocalSearchParams<{ tripId?: string; id?: string }>();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [activeFilter, setActiveFilter] = useState<'all' | 'cab' | 'guide'>('all');
-  const [cancelTrigger, setCancelTrigger] = useState(0);
-  const [backendTrips, setBackendTrips] = useState<any[]>([]);
-  const [hasActiveTripState, setHasActiveTripState] = useState<boolean | null>(null);
-  const [activeTripData, setActiveTripData] = useState<any>(null);
-  const [selectedItineraryTrip, setSelectedItineraryTrip] = useState<TripItem | null>(null);
+  const tripIdParam = (params.tripId as string) || (params.id as string) || '';
+  const mapRef = React.useRef<any>(null);
 
-  const session = getUserSessionSync();
-  const userId = session?.id;
-  const cancelledTripIdsRef = useRef<Set<string>>(new Set());
-  const [cancelledIds, setCancelledIds] = useState<string[]>([]);
+  // Local memory trip fallback lookup
+  const initialLocalTrip = React.useMemo(() => {
+    const tid = String(tripIdParam || '').toLowerCase().trim();
+    const all = [
+      ...(adminState.userTrips || []),
+      ...((adminState as any).pendingDriverRequests || []),
+      ...(adminState.customTripRequests || []),
+      ...(adminState.advanceBookings || []),
+    ].filter(Boolean);
 
-  const reloadTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    initSocketService(userId, session?.role || 'tourist');
-
-    async function loadBackendTrips() {
-      try {
-        if (!userId) {
-          setBackendTrips([]);
-          setHasActiveTripState(false);
-          setActiveTripData(null);
-          return;
-        }
-        const activeRes = await fetchActiveTripApi(userId);
-        setHasActiveTripState(activeRes.hasActiveTrip);
-        if (activeRes.hasActiveTrip && activeRes.trip) {
-          setActiveTripData(activeRes.trip);
-        } else {
-          setActiveTripData(null);
-        }
-
-        const data = await fetchCustomerTripsApi(userId);
-        if (Array.isArray(data) && data.length > 0) {
-          const filtered = data.filter((bt: any) => bt && (!bt.customerId || String(bt.customerId) === String(userId)));
-          setBackendTrips(filtered);
-        } else {
-          setBackendTrips([]);
-        }
-      } catch (e) {
-        console.warn('loadBackendTrips error:', e);
-        setBackendTrips([]);
-        setActiveTripData(null);
-      }
+    if (tid) {
+      return all.find((t: any) => t && (String(t.id).toLowerCase().trim() === tid || String(t.tripId || '').toLowerCase().trim() === tid)) || all[0] || null;
     }
-    loadBackendTrips();
+    return all[0] || null;
+  }, [tripIdParam]);
 
-    const triggerDebouncedLoad = () => {
-      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-      reloadTimerRef.current = setTimeout(() => {
-        loadBackendTrips();
-      }, 350);
-    };
-
-    const handleTripUpdate = (data?: any) => {
-      console.log('[TripsScreen] 🔔 Real-time socket/emitter trip update received:', data);
-      if (data) {
-        const tripId = String(data.tripId || data.id || '');
-        const rawSt = String(data.status || 'accepted').toLowerCase().trim();
-        const isComp = rawSt.includes('complete') || rawSt.includes('finish') || rawSt.includes('cancel') || rawSt.includes('decline') || rawSt === 'done';
-        const newStatus = isComp ? (rawSt.includes('cancel') || rawSt.includes('decline') ? 'Cancelled' : 'Completed') : String(data.status || 'Accepted');
-        const driverName = data.driverName || data.driver_or_guide_name || data.driverDetails?.name;
-
-        if (isComp) {
-          setActiveTripData(null);
-          setHasActiveTripState(false);
-        } else {
-          setActiveTripData((prev: any) => ({
-            ...(prev || {}),
-            ...data,
-            id: tripId || prev?.id,
-            status: newStatus,
-            driverName: driverName || prev?.driverName || prev?.driverOrGuideName || 'Assigned Captain',
-            driverOrGuideName: driverName || prev?.driverName || prev?.driverOrGuideName || 'Assigned Captain',
-          }));
-          setHasActiveTripState(true);
-        }
-
-        adminState.userTrips.forEach(t => {
-          if (t && (String(t.id) === tripId || (tripId && String(t.id).includes(tripId)))) {
-            t.status = newStatus;
-            if (driverName) t.driverOrGuideName = driverName;
-          }
-        });
-        adminState.advanceBookings.forEach(b => {
-          if (b && (String(b.id) === tripId || (tripId && String(b.id).includes(tripId)))) {
-            b.status = newStatus as any;
-            if (driverName) b.driverOrGuideName = driverName;
-          }
-        });
-      }
-      triggerDebouncedLoad();
-    };
-
-    const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleTripUpdate);
-    const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleTripUpdate);
-    const subComp = DeviceEventEmitter.addListener('trip_completed', handleTripUpdate);
-    const subCancel = DeviceEventEmitter.addListener('trip_cancelled', handleTripUpdate);
-
-    return () => {
-      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-      subStatus.remove();
-      subAccepted.remove();
-      subComp.remove();
-      subCancel.remove();
-    };
-  }, [cancelTrigger, userId]);
-
-  const colors = {
-    background: isDark ? '#101014' : '#FAF8F5',
-    surface: isDark ? '#1E1E24' : '#FFFFFF',
-    surfaceCard: isDark ? '#16161B' : '#FFFFFF',
-    textPrimary: isDark ? '#ffffff' : '#1E293B',
-    textMuted: isDark ? 'rgba(255,255,255,0.45)' : '#64748B',
-    border: isDark ? 'rgba(255, 255, 255, 0.05)' : '#E2DCD0',
-    amber: isDark ? '#F5C518' : '#D97706',
-    success: '#10B981',
-    danger: '#EF4444',
-  };
-
-  const safeBackendTrips = Array.isArray(backendTrips) ? backendTrips : [];
-  const safeAdvanceBookings = Array.isArray(adminState.advanceBookings) ? adminState.advanceBookings : [];
-  const safeUserTrips = Array.isArray(adminState.userTrips) ? adminState.userTrips : [];
-
-  // Convert backend database trips
-  const mappedDbTrips: TripItem[] = safeBackendTrips
-    .filter(Boolean)
-    .map((bt: any, idx: number) => ({
-      id: String(bt.id || `db_trip_${idx}`),
-      type: (bt.tripType || bt.trip_type || 'cab') as any,
-      vehicleType: 'Verified Partner',
-      title: String(bt.title || 'Tour Booking'),
-      route: Array.isArray(bt.destinationIds) ? bt.destinationIds : (bt.pickup_name && bt.drop_name ? [bt.pickup_name, bt.drop_name] : []),
-      driverOrGuideName: String(bt.driverOrGuideName || bt.driver_or_guide_name || 'Assigned Partner'),
-      date: bt.createdAt ? new Date(bt.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Today',
-      time: bt.createdAt ? new Date(bt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
-      price: Number(bt.amount) || 0,
-      paymentMode: String(bt.paymentMode || bt.payment_mode || 'Cash'),
-      status: String(bt.status || '').toLowerCase().includes('cancel') ? 'Cancelled' : String(bt.status || 'Scheduled'),
-      passengerCount: 1,
-      otp: bt.otp,
-      endOtp: bt.end_otp || bt.endOtp,
-      pickup: bt.pickup_name || bt.pickupName || bt.title || 'Pickup Spot',
-      createdAt: bt.createdAt,
-      bookingType: bt.booking_type || bt.bookingType || 'INSTANT',
-    }));
-
-  // Convert advanceBookings
-  const mappedAdvance: TripItem[] = safeAdvanceBookings
-    .filter(b => b && (userId ? (String(b.assignedToId) === String(userId) || (b.touristName && String(b.touristName).includes(session?.name || ''))) : false))
-    .map((b: any) => ({
-      id: String(b.id),
-      type: b.type === 'guide' ? 'guide' : 'cab',
-      title: String(b.title || 'Advance Booking'),
-      route: Array.isArray(b.route) ? b.route : [],
-      driverOrGuideName: String(b.driverOrGuideName || 'Captain'),
-      date: `${b.date || 'Upcoming'}`,
-      time: String(b.time || ''),
-      price: Number(b.price) || 0,
-      paymentMode: String(b.paymentMode || 'Cash'),
-      status: String(b.status || 'Pre-Booked'),
-      passengerCount: 1,
-      otp: b.otp,
-      endOtp: b.endOtp,
-      pickup: b.pickup || b.title || 'Pickup Spot',
-      bookingType: 'PRE_BOOKED',
-    }));
-
-  const filteredUserTrips: TripItem[] = safeUserTrips
-    .filter(t => t && (!userId || !t.customerId || String(t.customerId) === String(userId)))
-    .map((t: any) => {
-      const parsedType = String(t.type || t.trip_type || 'cab');
-      return {
-        id: String(t.id),
-        type: (parsedType === 'guide' ? 'guide' : 'cab') as any,
-        vehicleType: t.vehicleType,
-        title: String(t.title || 'Cab Booking'),
-        route: Array.isArray(t.route) ? t.route : [],
-        driverOrGuideName: String(t.driverOrGuideName || (parsedType === 'guide' ? 'Local Guide' : 'Assigned Captain')),
-        date: String(t.date || 'Today'),
-        time: String(t.time || 'Immediate'),
-        price: Number(t.price) || 0,
-        paymentMode: String(t.paymentMode || 'Wallet'),
-        status: String(t.status || 'Pending'),
-        passengerCount: t.passengerCount,
-        advanceDepositPaid: t.advanceDepositPaid,
-        remainingCashBalance: t.remainingCashBalance,
-        otp: t.otp,
-        endOtp: t.endOtp,
-        pickup: t.pickupName || t.pickup || t.title || 'Pickup Spot',
-        bookingType: t.bookingType || 'INSTANT',
-      };
-    });
-
-  const safePendingRequests = Array.isArray((adminState as any).pendingDriverRequests)
-    ? (adminState as any).pendingDriverRequests
-    : [];
-
-  const mappedPendingReqs: TripItem[] = safePendingRequests
-    .filter((t: any) => t && (!userId || !t.customerId || String(t.customerId) === String(userId)))
-    .map((t: any) => ({
-      id: String(t.id || t.tripId),
-      type: (t.tripType || t.type || 'cab') as any,
-      vehicleType: t.vehicleType,
-      title: String(t.title || `${t.pickup || 'Pickup'} ➔ ${t.drop || 'Drop'}`),
-      route: Array.isArray(t.checkpoints) ? t.checkpoints : (Array.isArray(t.route) ? t.route : []),
-      driverOrGuideName: String(t.driverOrGuideName || t.driverName || 'Assigned Captain'),
-      date: String(t.date || 'Today'),
-      time: String(t.time || 'Immediate'),
-      price: Number(t.price || t.estimatedFare) || 0,
-      paymentMode: String(t.paymentMode || 'Wallet'),
-      status: String(t.status || 'Pending'),
-      passengerCount: t.passengerCount,
-      otp: t.otp,
-      endOtp: t.endOtp,
-      pickup: t.pickup || t.pickupName || t.title || 'Pickup Spot',
-      bookingType: t.bookingType || 'INSTANT',
-    }));
-
-  const rawAllTrips = [...mappedDbTrips, ...mappedAdvance, ...filteredUserTrips, ...mappedPendingReqs].filter(Boolean);
-
-  // Deduplicate and prefer Accepted/in_progress over Pending
-  const validTrips = rawAllTrips
-    .reduce((acc: TripItem[], current) => {
-      if (!current || !current.id) return acc;
-      const existingIdx = acc.findIndex(t => String(t.id) === String(current.id));
-      if (existingIdx === -1) {
-        acc.push(current);
-      } else {
-        const existingSt = String(acc[existingIdx].status || '').toLowerCase();
-        const currentSt = String(current.status || '').toLowerCase();
-        if (existingSt === 'pending' && currentSt !== 'pending') {
-          acc[existingIdx] = current;
-        }
-      }
-      return acc;
-    }, [])
-    .filter((t) => {
-      if (!t) return false;
-      const tid = String(t.id);
-      if (cancelledTripIdsRef.current.has(tid) || cancelledIds.includes(tid)) return false;
-      const st = String(t.status || '').toLowerCase();
-      return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
-    });
-
-  const isNonCompleted = (st?: string) => {
-    if (!st) return false;
-    const s = String(st).toLowerCase().trim();
-    const completedStatuses = ['completed', 'finish', 'finished', 'cancelled', 'declined', 'done'];
-    return !completedStatuses.includes(s);
-  };
-
-  const activeTripObj = (activeTripData && isNonCompleted(activeTripData.status))
-    ? activeTripData
-    : (validTrips.length > 0 ? validTrips.find(t => isNonCompleted(t.status)) || null : null);
-
-  const scheduledTrips = validTrips.filter(t => {
-    if (activeTripObj && String(t.id) === String(activeTripObj.id)) return false;
-    return true;
-  }).filter(t => {
-    if (activeFilter === 'all') return true;
-    if (activeFilter === 'cab') return t.type === 'cab' || t.type === 'custom_trip' || t.type === 'plan';
-    if (activeFilter === 'guide') return t.type === 'guide';
-    return true;
+  const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+  const [effectiveTripId, setEffectiveTripId] = useState<string>(tripIdParam || initialLocalTrip?.id || initialLocalTrip?.tripId || '');
+  const [tripStatus, setTripStatus] = useState<string>(initialLocalTrip?.status || 'Accepted');
+  const [driverInfo, setDriverInfo] = useState<any>({
+    name: initialLocalTrip?.driverOrGuideName || initialLocalTrip?.driverName || null,
+    phone: initialLocalTrip?.driverPhone || initialLocalTrip?.phone || null,
+    vehicleModel: initialLocalTrip?.vehicleModel || initialLocalTrip?.vehicleType || null,
+    vehicleNumber: initialLocalTrip?.vehicleNumber || null,
+    rating: initialLocalTrip?.rating ? parseFloat(initialLocalTrip.rating) : null,
+    latitude: 12.9716,
+    longitude: 77.5946,
+    heading: 0,
   });
 
-  const calculateCancellationFine = (trip: any): { feeAmount: number; feePercent: number; reasonText: string } => {
-    if (!trip) return { feeAmount: 0, feePercent: 0, reasonText: 'No cancellation fee' };
-    const isGuide = trip.type === 'guide' || String(trip.title || '').toLowerCase().includes('guide');
-    const price = Number(trip.price || trip.amount || 0);
+  const [pickupLocation, setPickupLocation] = useState(initialLocalTrip?.pickupName || initialLocalTrip?.pickup || 'Pickup Spot');
+  const [dropLocation, setDropLocation] = useState(initialLocalTrip?.dropName || initialLocalTrip?.drop || 'Destination');
+  const [pickupLat, setPickupLat] = useState<number>(initialLocalTrip?.pickupLat || 12.9716);
+  const [pickupLng, setPickupLng] = useState<number>(initialLocalTrip?.pickupLng || 77.5946);
+  const [dropLat, setDropLat] = useState<number>(initialLocalTrip?.dropLat || 12.2958);
+  const [dropLng, setDropLng] = useState<number>(initialLocalTrip?.dropLng || 76.6394);
+  const [fareAmount, setFareAmount] = useState(initialLocalTrip?.price || initialLocalTrip?.amount || 1200);
+  const [paymentMode, setPaymentMode] = useState(initialLocalTrip?.paymentMode || 'Wallet');
+  const [advanceDepositPaid, setAdvanceDepositPaid] = useState<number>(initialLocalTrip?.advanceDepositPaid || 0);
+  const [remainingCashBalance, setRemainingCashBalance] = useState<number>(initialLocalTrip?.remainingCashBalance || (initialLocalTrip?.price || initialLocalTrip?.amount || 1200));
+  const [tripCheckpoints, setTripCheckpoints] = useState<any[]>(initialLocalTrip?.checkpoints || initialLocalTrip?.route || []);
+  const [startOtp, setStartOtp] = useState(initialLocalTrip?.otp || '8240');
+  const [endOtp, setEndOtp] = useState(initialLocalTrip?.endOtp || '4321');
+  const [planName, setPlanName] = useState<string>(initialLocalTrip?.title || 'Tour Plan Package');
+  const [durationHours, setDurationHours] = useState<number>(initialLocalTrip?.durationHours || 8);
+  const [distanceKm, setDistanceKm] = useState<number>(initialLocalTrip?.distanceKm || 120);
 
-    if (isGuide) {
-      return { feeAmount: 100, feePercent: 0, reasonText: 'Flat ₹100 Guide Cancellation Fine' };
-    }
-
-    const todayStr = new Date().toISOString().split('T')[0];
-    const bookingDateStr = trip.bookingDate || (trip.createdAt ? new Date(trip.createdAt).toISOString().split('T')[0] : todayStr);
-
-    if (todayStr === bookingDateStr) {
-      return { feeAmount: 0, feePercent: 0, reasonText: 'Same-Day Booking Cancellation (₹0 Fine)' };
-    }
-
-    const cancellationDate = new Date(todayStr);
-    const tripStartDate = new Date(trip.date || todayStr);
-    const diffMs = tripStartDate.getTime() - cancellationDate.getTime();
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays <= 0) {
-      const fee = Math.round(price * 0.20);
-      return { feeAmount: fee, feePercent: 20, reasonText: `Same-Day Start Cancellation (20% Fee = ₹${fee})` };
-    }
-    if (diffDays === 1) {
-      const fee = Math.round(price * 0.10);
-      return { feeAmount: fee, feePercent: 10, reasonText: `1 Day Prior Cancellation (10% Fee = ₹${fee})` };
-    }
-
-    return { feeAmount: 0, feePercent: 0, reasonText: 'Advance Cancellation (₹0 Fine)' };
+  const colors = {
+    bg: isDark ? '#101014' : '#F5F5F7',
+    surface: isDark ? '#1E1E24' : '#FFFFFF',
+    textPrimary: isDark ? '#FFFFFF' : '#101010',
+    textMuted: isDark ? 'rgba(255,255,255,0.6)' : '#666666',
+    border: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+    amber: '#F5C518',
+    success: '#10B981',
+    danger: '#EF4444',
+    blue: '#3B82F6',
   };
 
-  const handleCancelPress = (trip: any) => {
-    if (!trip) return;
-    const stLower = String(trip.status || '').toLowerCase().trim();
-    if (stLower.includes('complete') || stLower.includes('finish') || stLower === 'done') {
-      Alert.alert('Action Not Allowed', 'This trip has already been completed by the captain and cannot be cancelled.');
-      return;
+  // Check active trip on mount if tripIdParam is missing
+  useEffect(() => {
+    async function checkActiveTrip() {
+      const session = getUserSessionSync();
+      const uId = session?.id;
+      if (!tripIdParam && uId) {
+        try {
+          const res = await fetchActiveTripApi(uId);
+          if (res && res.hasActiveTrip && res.trip) {
+            const tid = String(res.trip.id || res.trip.tripId || '');
+            if (tid) setEffectiveTripId(tid);
+          }
+        } catch (e) {}
+      }
     }
-    const { feeAmount, reasonText } = calculateCancellationFine(trip);
+    checkActiveTrip();
+  }, [tripIdParam]);
+
+  // Poll live location & trip status from DB
+  useEffect(() => {
+    async function loadStatus() {
+      const targetId = tripIdParam || effectiveTripId;
+      try {
+        const res = await fetchLiveLocationApi(targetId);
+        if (res && res.success && res.data) {
+          const statusStr = String(res.data.status || '');
+          const statusLower = statusStr.toLowerCase();
+          setTripStatus(statusStr);
+
+          if (res.data.driver) setDriverInfo((prev: any) => ({ ...prev, ...res.data.driver }));
+          if (res.data.pickup_name || res.data.pickupName || res.data.pickup) {
+            setPickupLocation(res.data.pickup_name || res.data.pickupName || res.data.pickup);
+          }
+          if (res.data.drop_name || res.data.dropName || res.data.drop) {
+            setDropLocation(res.data.drop_name || res.data.dropName || res.data.drop);
+          }
+          if (res.data.pickup_lat || res.data.pickupLat) setPickupLat(parseFloat(res.data.pickup_lat || res.data.pickupLat));
+          if (res.data.pickup_lng || res.data.pickupLng) setPickupLng(parseFloat(res.data.pickup_lng || res.data.pickupLng));
+          if (res.data.drop_lat || res.data.dropLat) setDropLat(parseFloat(res.data.drop_lat || res.data.dropLat));
+          if (res.data.drop_lng || res.data.dropLng) setDropLng(parseFloat(res.data.drop_lng || res.data.dropLng));
+
+          const totalAmt = parseFloat(res.data.amount || res.data.price || 0);
+          if (totalAmt > 0) setFareAmount(totalAmt);
+          if (res.data.payment_mode || res.data.paymentMode) setPaymentMode(res.data.payment_mode || res.data.paymentMode);
+
+          const advPaid = parseFloat(res.data.advance_deposit_paid || res.data.advanceDepositPaid || 0);
+          setAdvanceDepositPaid(advPaid);
+          const remBal = parseFloat(res.data.remaining_cash_balance || res.data.remainingCashBalance || (totalAmt > 0 ? totalAmt - advPaid : 0));
+          setRemainingCashBalance(remBal);
+
+          if (res.data.trip_checkpoints || res.data.checkpoints || res.data.destination_ids || res.data.route) {
+            const rawCps = res.data.trip_checkpoints || res.data.checkpoints || res.data.destination_ids || res.data.route;
+            let parsed: any[] = Array.isArray(rawCps) ? rawCps : [];
+            if (typeof rawCps === 'string') {
+              try { parsed = JSON.parse(rawCps); } catch (e) { parsed = [rawCps]; }
+            }
+            if (parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
+              parsed.sort((a, b) => (a.step_order || a.stepOrder || 0) - (b.step_order || b.stepOrder || 0));
+            }
+            setTripCheckpoints(parsed);
+          }
+
+          if (res.data.planName || res.data.title) setPlanName(res.data.planName || res.data.title);
+          if (res.data.durationHours || res.data.duration_hours) setDurationHours(parseFloat(res.data.durationHours || res.data.duration_hours || 8));
+          if (res.data.distanceKm || res.data.distance_km) setDistanceKm(parseFloat(res.data.distanceKm || res.data.distance_km || 120));
+
+          // Direct API OTP bindings
+          if (res.data.otp) setStartOtp(String(res.data.otp));
+          if (res.data.end_otp || res.data.endOtp) setEndOtp(String(res.data.end_otp || res.data.endOtp));
+
+          // Transition away if completed or cancelled on poll
+          if (statusLower.includes('completed') || statusLower.includes('finish') || statusLower === 'done') {
+            sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
+            Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
+              { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
+            ]);
+            router.replace('/(tabs)/history');
+            return;
+          }
+          if (statusLower.includes('cancelled') || statusLower.includes('declined')) {
+            Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
+              { text: 'OK', onPress: () => router.replace('/(tabs)/history') }
+            ]);
+            router.replace('/(tabs)/history');
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('loadStatus error:', e);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadStatus();
+    const interval = setInterval(loadStatus, 3000);
+    return () => clearInterval(interval);
+  }, [tripIdParam, effectiveTripId]);
+
+  // Dynamic Map Bounds Camera Fit
+  useEffect(() => {
+    if (mapRef.current && mapRef.current.fitToCoordinates && driverInfo.latitude && pickupLat && dropLat) {
+      try {
+        mapRef.current.fitToCoordinates(
+          [
+            { latitude: driverInfo.latitude, longitude: driverInfo.longitude },
+            { latitude: pickupLat, longitude: pickupLng },
+            { latitude: dropLat, longitude: dropLng },
+          ],
+          {
+            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            animated: true,
+          }
+        );
+      } catch (e) { }
+    }
+  }, [driverInfo.latitude, driverInfo.longitude, pickupLat, pickupLng, dropLat, dropLng]);
+
+  // Socket & DeviceEventEmitter listeners
+  const hasShownAcceptedAlertRef = useRef(false);
+
+  useEffect(() => {
+    const session = getUserSessionSync();
+    initSocketService(session?.id, session?.role || 'tourist');
+
+    const targetId = tripIdParam || effectiveTripId;
+    if (targetId) {
+      joinTripRoom(targetId, 'tourist', session?.id);
+    }
+
+    const socket = getSocket();
+
+    const handleAccepted = (data: any) => {
+      if (data) {
+        setTripStatus('Accepted');
+        const dName = data.driverName || data.driver_or_guide_name || 'Captain';
+        if (data.driverName || data.driver_or_guide_name) {
+          setDriverInfo((prev: any) => ({
+            ...prev,
+            name: dName,
+            phone: data.driverPhone || prev.phone,
+            vehicleModel: data.vehicleModel || prev.vehicleModel,
+            vehicleNumber: data.vehicleNumber || prev.vehicleNumber,
+          }));
+        }
+        if (!hasShownAcceptedAlertRef.current) {
+          hasShownAcceptedAlertRef.current = true;
+          sendLocalNotification('🎉 Captain Accepted Ride!', `${dName} has accepted your trip request.`);
+          Alert.alert(
+            '🎉 Ride Accepted by Captain!',
+            `Captain ${dName} has accepted your tour booking!\n\nYou can view all your trip details and live status on My Trips.`,
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    };
+
+    const handleCompleted = (data: any) => {
+      setTripStatus('Completed');
+      sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
+      Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibe.', [
+        { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
+      ]);
+      router.replace('/(tabs)/history');
+    };
+
+    const handleDeclined = (data?: any) => {
+      setTripStatus('Pending');
+      setDriverInfo((prev: any) => ({
+        ...prev,
+        name: 'Searching Captain...',
+        vehicleNumber: 'Assigning Captain...',
+      }));
+      sendLocalNotification('Searching Captain...', 'A nearby captain passed this request. Re-searching next available Captain.');
+    };
+
+    const handleCancelled = () => {
+      setTripStatus('CANCELLED');
+      router.replace('/(tabs)/history');
+      setTimeout(() => {
+        Alert.alert('Trip Cancelled', 'This trip has been cancelled.');
+      }, 300);
+    };
+
+    const handleLocationStream = (data: any) => {
+      if (data && (data.latitude || data.lat)) {
+        const newLat = parseFloat(data.latitude || data.lat);
+        const newLng = parseFloat(data.longitude || data.lng);
+        const newHeading = data.heading ? parseFloat(data.heading) : 0;
+
+        setDriverInfo((prev: any) => ({
+          ...prev,
+          latitude: newLat,
+          longitude: newLng,
+          heading: newHeading,
+        }));
+
+        if (mapRef.current && mapRef.current.animateToRegion) {
+          try {
+            mapRef.current.animateToRegion({
+              latitude: newLat,
+              longitude: newLng,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }, 1000);
+          } catch (e) { }
+        }
+      }
+    };
+
+    const handleStageUpdate = (data: any) => {
+      if (!data) return;
+      const st = String(data.stage || data.status || '').toLowerCase();
+      setTripStatus(st);
+      if (data.driverName || data.driver_or_guide_name) {
+        setDriverInfo((prev: any) => ({
+          ...prev,
+          name: data.driverName || data.driver_or_guide_name,
+          phone: data.driverPhone || prev.phone,
+          vehicleModel: data.vehicleModel || prev.vehicleModel,
+          vehicleNumber: data.vehicleNumber || prev.vehicleNumber,
+        }));
+      }
+      if (st === 'completed' || st === 'done') {
+        handleCompleted(data);
+      }
+    };
+
+    if (socket) {
+      socket.on('trip_accepted', handleAccepted);
+      socket.on('trip_status_updated', handleStageUpdate);
+      socket.on('driver_location_stream', handleLocationStream);
+      socket.on('driver_location_update', handleLocationStream);
+      socket.on('trip_completed', handleCompleted);
+      socket.on('trip_cancelled', handleCancelled);
+      socket.on('trip_stage_update', handleStageUpdate);
+      socket.on('trip_declined_by_driver', handleDeclined);
+    }
+
+    const sub1 = DeviceEventEmitter.addListener('trip_accepted', handleAccepted);
+    const sub2 = DeviceEventEmitter.addListener('trip_declined', handleDeclined);
+    const sub3 = DeviceEventEmitter.addListener('trip_cancelled', handleCancelled);
+    const sub4 = DeviceEventEmitter.addListener('trip_completed', handleCompleted);
+    const sub5 = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
+    const sub6 = DeviceEventEmitter.addListener('driver_location_update', handleLocationStream);
+    const sub7 = DeviceEventEmitter.addListener('trip_stage_update', handleStageUpdate);
+    const sub8 = DeviceEventEmitter.addListener('trip_declined_by_driver', handleDeclined);
+
+    return () => {
+      if (socket) {
+        socket.off('trip_accepted', handleAccepted);
+        socket.off('trip_status_updated', handleStageUpdate);
+        socket.off('driver_location_stream', handleLocationStream);
+        socket.off('driver_location_update', handleLocationStream);
+        socket.off('trip_completed', handleCompleted);
+        socket.off('trip_cancelled', handleCancelled);
+        socket.off('trip_stage_update', handleStageUpdate);
+        socket.off('trip_declined_by_driver', handleDeclined);
+      }
+      sub1.remove();
+      sub2.remove();
+      sub3.remove();
+      sub4.remove();
+      sub5.remove();
+      sub6.remove();
+      sub7.remove();
+      sub8.remove();
+    };
+  }, [tripIdParam, effectiveTripId]);
+
+  const handleCancelTrip = () => {
+    const targetId = tripIdParam || effectiveTripId;
+    const dNameLower = String(driverInfo?.name || '').toLowerCase();
+    const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || dNameLower.includes('search') || dNameLower.includes('auto') || !driverInfo?.name;
+
+    const alertTitle = isPendingDriver ? 'Withdraw Ride Request?' : `Cancel Booking with Captain ${driverInfo.name}?`;
+    const alertBody = isPendingDriver
+      ? 'Are you sure you want to withdraw this booking request from nearby searching captains?'
+      : `Are you sure you want to cancel this trip with Captain ${driverInfo.name}?`;
 
     Alert.alert(
-      'Cancel Booking?',
-      `Are you sure you want to cancel this booking?\n\n📌 Trip: ${trip.title}\n💰 Cancellation Policy: ${reasonText}${feeAmount > 0 ? `\n\n⚠️ ₹${feeAmount} cancellation fee will be deducted.` : ''}`,
+      alertTitle,
+      alertBody,
       [
         { text: 'Keep Booking', style: 'cancel' },
         {
-          text: 'Confirm Cancel',
+          text: isPendingDriver ? 'Yes, Withdraw' : 'Yes, Cancel Trip',
           style: 'destructive',
           onPress: async () => {
+            setCancelling(true);
+            const session = getUserSessionSync();
             try {
-              const tid = String(trip.id);
-              cancelledTripIdsRef.current.add(tid);
-              setCancelledIds(prev => [...prev, tid]);
-
-              await cancelTripApi(tid, { reason: 'Cancelled by user', cancelledBy: 'user', role: 'user' });
-
-              if (feeAmount > 0) {
-                try {
-                  await submitWalletDeductionRequestApi({
-                    userId: userId || 'customer',
-                    amount: feeAmount,
-                    description: `Cancellation Fee for Trip #${tid}`,
-                  });
-                } catch (e) {
-                  console.warn('Wallet deduction error:', e);
-                }
-              }
-
-              setHasActiveTripState(false);
-              setActiveTripData(null);
-
-              const userTripIdx = adminState.userTrips.findIndex(t => String(t.id) === tid);
-              if (userTripIdx !== -1) {
-                adminState.userTrips[userTripIdx] = {
-                  ...adminState.userTrips[userTripIdx],
-                  status: 'Cancelled by User',
-                };
-              } else {
-                adminState.userTrips.push({
-                  id: tid,
-                  tripId: tid,
-                  title: trip.title,
-                  price: trip.price,
-                  amount: trip.price,
-                  date: trip.date || 'Today',
-                  time: trip.time || '',
-                  status: 'Cancelled by User',
-                } as any);
-              }
-              adminState.advanceBookings = adminState.advanceBookings.filter(b => String(b.id) !== tid);
-
+              await cancelTripApi(targetId, { cancelledBy: 'tourist', role: 'tourist' });
               const socket = getSocket();
               if (socket && socket.connected) {
-                socket.emit('trip_cancelled', { tripId: tid, userId: userId, cancelledBy: 'tourist' });
+                socket.emit('trip_cancelled', { tripId: targetId, userId: session?.id, cancelledBy: 'tourist' });
               }
-              DeviceEventEmitter.emit('trip_cancelled', { tripId: tid });
-              DeviceEventEmitter.emit('trip_status_updated', { tripId: tid, status: 'Cancelled' });
-
-              Alert.alert('Booking Cancelled', 'Your booking has been cancelled and recorded in your History ledger.');
-              setCancelTrigger(prev => prev + 1);
+              DeviceEventEmitter.emit('trip_cancelled', { tripId: targetId });
+              sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
+              router.replace('/(tabs)/history');
+              setTimeout(() => {
+                Alert.alert('Trip Cancelled', 'Your ride request was cancelled and recorded in your History ledger.');
+              }, 300);
             } catch (e) {
               console.warn('Cancel error:', e);
-              Alert.alert('Booking Cancelled', 'Your booking has been cancelled.');
+              router.replace('/(tabs)/history');
+            } finally {
+              setCancelling(false);
             }
           },
         },
@@ -427,401 +427,399 @@ export default function TripsHistoryScreen() {
     );
   };
 
+  const statusLower = String(tripStatus).toLowerCase();
+  const getStatusBadge = () => {
+    if (statusLower.includes('accepted')) return { text: t('partnerAssigned'), bg: '#10B981', color: '#FFFFFF' };
+    if (statusLower.includes('arrived')) return { text: t('driverArrived'), bg: '#F5C518', color: '#101014' };
+    if (statusLower.includes('start') || statusLower.includes('active')) return { text: t('tripInProgress'), bg: '#3B82F6', color: '#FFFFFF' };
+    if (statusLower.includes('declined') || statusLower.includes('cancel')) return { text: t('tripCancelled'), bg: '#EF4444', color: '#FFFFFF' };
+    return { text: t('searchingCaptain'), bg: '#F5C518', color: '#101014' };
+  };
+
+  const badge = getStatusBadge();
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.amber} />
+        <Text style={{ color: colors.textMuted, marginTop: 12 }}>{t('loading')}</Text>
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Trips</Text>
-          <Text style={[styles.headerSub, { color: colors.textMuted }]}>Manage active rides & trip status</Text>
+      <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/home'); } }} style={styles.backBtn}>
+          <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('liveStatus')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+          <LanguageSelector compact />
+          <NotificationModal role="tourist" />
         </View>
-        <NotificationModal role="tourist" />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-        {/* 1. TOP SECTION: RECTANGULAR LIVE ACTIVE TRIP CARD (Clickable anywhere -> Trip Status) */}
-        {activeTripObj ? (
-          <TouchableOpacity
-            activeOpacity={0.92}
-            style={[styles.activeCard, { backgroundColor: isDark ? '#1C1C24' : '#FFFFFF', borderColor: colors.amber }]}
-            onPress={() => router.push({ pathname: '/trip-status', params: { tripId: activeTripObj.id } })}
-          >
-            {/* Live Indicator Bar */}
-            {(() => {
-              const stLower = String(activeTripObj.status || '').toLowerCase();
-              const isAcceptedOrProgress = stLower.includes('accepted') || stLower.includes('en_route') || stLower.includes('progress') || stLower.includes('active') || stLower.includes('start');
-              const tagTitle = isAcceptedOrProgress ? 'LIVE RIDE IN PROGRESS' : 'SEARCHING FOR CAPTAIN ⏳';
-              const tagColor = isAcceptedOrProgress ? '#10B981' : colors.amber;
-              const bgAlpha = isAcceptedOrProgress ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 197, 24, 0.15)';
-
-              return (
-                <View style={styles.liveBadgeRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-                    <View style={[styles.pulsingDot, { backgroundColor: tagColor }]} />
-                    <Text style={[styles.activeTagText, { color: tagColor }]}>{tagTitle}</Text>
-                  </View>
-                  <View style={[styles.typeBadge, { backgroundColor: bgAlpha }]}>
-                    <Text style={[styles.typeBadgeText, { color: tagColor }]}>
-                      {String(activeTripObj.status || 'Pending').toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })()}
-
-            {/* Trip Title */}
-            <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.textPrimary, marginBottom: verticalScale(8) }} numberOfLines={1}>
-              {(() => {
-                let rawTitle = activeTripObj.title || `${activeTripObj.pickup || 'Pickup'} ➔ ${activeTripObj.drop || 'Destination'}`;
-                if (rawTitle.includes(' ➔ ')) {
-                  const parts = rawTitle.split(' ➔ ');
-                  if (parts[0] === parts[1]) rawTitle = parts[0];
-                }
-                return rawTitle;
-              })()}
-            </Text>
-
-            {/* Assigned Partner & Vehicle Info */}
-            {(() => {
-              const hasAssignedDriver = Boolean(
-                activeTripObj.driver_id ||
-                activeTripObj.driverId ||
-                activeTripObj.assignedToId ||
-                (activeTripObj.driverOrGuideName &&
-                  !activeTripObj.driverOrGuideName.toLowerCase().includes('search') &&
-                  !activeTripObj.driverOrGuideName.toLowerCase().includes('auto'))
-              );
-              const displayCaptain = hasAssignedDriver
-                ? (activeTripObj.driverOrGuideName || activeTripObj.driverName || activeTripObj.driver_or_guide_name || 'Assigned Partner')
-                : 'Searching Captain...';
-              const displayVehicleNo = hasAssignedDriver
-                ? (activeTripObj.vehicleNumber || activeTripObj.vehicle_number || '')
-                : 'Assigning Captain...';
-
-              return (
-                <View style={styles.partnerInfoRow}>
-                  <View style={styles.avatarCircle}>
-                    <FontAwesome5 name="user-tie" size={scale(16)} color={colors.amber} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: scale(10) }}>
-                    <Text style={[styles.partnerName, { color: colors.textPrimary }]}>
-                      Captain: {displayCaptain}
-                    </Text>
-                    <Text style={[styles.partnerVehicle, { color: colors.textMuted }]}>
-                      {activeTripObj.vehicleModel || 'Verified Cab'} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{displayVehicleNo}</Text>
-                    </Text>
-                  </View>
-                </View>
-              );
-            })()}
-
-            {/* Pickup & Drop Points + Intermediate Checkpoints */}
-            <View style={styles.locationBlock}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-                <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
-                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                  Pickup: <Text style={{ fontWeight: '700' }}>{activeTripObj.pickupName || activeTripObj.pickup || 'Pickup Spot'}</Text>
-                </Text>
-              </View>
-
-              {(() => {
-                let rawRoute = activeTripObj.checkpoints || activeTripObj.destinationIds || activeTripObj.route;
-                let stopsList: string[] = [];
-                if (Array.isArray(rawRoute)) {
-                  stopsList = rawRoute;
-                } else if (typeof rawRoute === 'string') {
-                  try { stopsList = JSON.parse(rawRoute); } catch (e) { stopsList = [rawRoute]; }
-                }
-                if (stopsList.length > 0) {
-                  return (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(6) }}>
-                      <MaterialIcons name="alt-route" size={scale(16)} color={colors.amber} />
-                      <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={2}>
-                        Checkpoints: <Text style={{ fontWeight: '600' }}>{stopsList.join(' ➔ ')}</Text>
-                      </Text>
-                    </View>
-                  );
-                }
-                return null;
-              })()}
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: verticalScale(6) }}>
-                <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
-                <Text style={[styles.locVal, { color: colors.textPrimary }]} numberOfLines={1}>
-                  Drop: <Text style={{ fontWeight: '700' }}>{activeTripObj.dropName || activeTripObj.drop || activeTripObj.title || 'Drop Spot'}</Text>
-                </Text>
-              </View>
-            </View>
-
-            {/* OTP BOX (ONLY FOR LIVE ACTIVE RIDE) */}
-            <View style={[styles.otpBox, { backgroundColor: isDark ? '#111827' : '#F9FAFB', borderColor: colors.border }]}>
-              <View style={styles.otpColumn}>
-                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
-                <Text style={[styles.otpValue, { color: '#10B981' }]}>{activeTripObj.otp || '8240'}</Text>
-              </View>
-              <View style={{ width: 1, height: '80%', backgroundColor: colors.border }} />
-              <View style={styles.otpColumn}>
-                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
-                <Text style={[styles.otpValue, { color: '#3B82F6' }]}>{activeTripObj.endOtp || '4321'}</Text>
-              </View>
-            </View>
-
-            {/* PRIMARY ACTION BUTTON: TRACK LIVE RIDE */}
-            <View style={{ flexDirection: 'row', gap: scale(8), marginTop: verticalScale(12) }}>
-              <TouchableOpacity
-                style={[styles.trackBtn, { backgroundColor: colors.amber, flex: 1 }]}
-                onPress={() => router.push({ pathname: '/trip-status', params: { tripId: activeTripObj.id } })}
-              >
-                <MaterialIcons name="navigation" size={scale(18)} color="#101014" />
-                <Text style={styles.trackBtnText}>Track Live Ride 🗺️</Text>
-              </TouchableOpacity>
-
-              {String(activeTripObj.status || '').toLowerCase().trim() === 'pending' && (
-                <TouchableOpacity
-                  style={[styles.cancelBtnIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#EF4444' }]}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleCancelPress(activeTripObj);
-                  }}
-                >
-                  <MaterialIcons name="cancel" size={scale(18)} color="#EF4444" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: verticalScale(20) }]}>
-            <MaterialIcons name="local-taxi" size={scale(36)} color={colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Active Ride in Progress</Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-              Book a cab or guide to start your journey!
-            </Text>
-          </View>
-        )}
-
-        {/* 2. SECOND SECTION: SCHEDULED TOURS & RIDES (COMMENTED OUT FOR NOW AS REQUESTED)
-        <View style={{ marginBottom: verticalScale(14) }}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: verticalScale(10) }]}>
-            Scheduled Tours & Rides
-          </Text>
-
-          <View style={[styles.fullWidthFilterRow, { backgroundColor: isDark ? '#1C1C24' : '#F1EFEA', borderColor: colors.border }]}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.fullWidthPill, activeFilter === 'all' && styles.fullWidthPillActive]}
-              onPress={() => setActiveFilter('all')}
-            >
-              <Text style={[styles.fullWidthPillText, { color: activeFilter === 'all' ? '#101014' : colors.textPrimary }]}>
-                All Bookings
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.fullWidthPill, activeFilter === 'cab' && styles.fullWidthPillActive]}
-              onPress={() => setActiveFilter('cab')}
-            >
-              <Text style={[styles.fullWidthPillText, { color: activeFilter === 'cab' ? '#101014' : colors.textPrimary }]}>
-                Cabs & Plans
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.fullWidthPill, activeFilter === 'guide' && styles.fullWidthPillActive]}
-              onPress={() => setActiveFilter('guide')}
-            >
-              <Text style={[styles.fullWidthPillText, { color: activeFilter === 'guide' ? '#101014' : colors.textPrimary }]}>
-                Guides Booked
-              </Text>
-            </TouchableOpacity>
-          </View>
+      <ScrollView contentContainerStyle={{ padding: scale(16), paddingBottom: verticalScale(130) }} showsVerticalScrollIndicator={false}>
+        {/* Status Header Badge */}
+        <View style={[styles.statusBanner, { backgroundColor: badge.bg }]}>
+          <MaterialIcons name="navigation" size={scale(18)} color={badge.color} style={{ marginRight: scale(6) }} />
+          <Text style={[styles.statusBannerText, { color: badge.color }]}>{badge.text}</Text>
         </View>
 
-        {scheduledTrips.length === 0 ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MaterialIcons name="event-available" size={scale(36)} color={colors.textMuted} />
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Active or Upcoming Bookings</Text>
-            <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-              Explore our custom packages & book your next destination!
-            </Text>
-          </View>
-        ) : (
-          scheduledTrips.map((trip, idx) => {
-            const isGuide = trip.type === 'guide';
-            const price = Number(trip.price || 0);
-            const advancePaid = trip.advanceDepositPaid || Math.round(price * 0.20);
-            const balanceDue = price - advancePaid;
+        {/* Live Map Visual */}
+        <View style={[styles.mapFrame, { borderColor: colors.border }]}>
+          {(() => {
+            const connectedPoints = [
+              { latitude: driverInfo.latitude || pickupLat || 12.9716, longitude: driverInfo.longitude || pickupLng || 77.5946, label: `Driver: ${driverInfo.name}` },
+              { latitude: pickupLat || 12.9716, longitude: pickupLng || 77.5946, label: `Pickup: ${pickupLocation}` },
+              ...(Array.isArray(tripCheckpoints)
+                ? tripCheckpoints
+                  .filter((cp: any) => cp && (cp.latitude || cp.lat) && (cp.longitude || cp.lng))
+                  .map((cp: any, idx: number) => ({
+                    latitude: parseFloat(cp.latitude || cp.lat),
+                    longitude: parseFloat(cp.longitude || cp.lng),
+                    label: typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp),
+                  }))
+                : []),
+              { latitude: dropLat || 12.2958, longitude: dropLng || 76.6394, label: `Destination: ${dropLocation}` },
+            ].filter((pt: any) => !isNaN(pt.latitude) && !isNaN(pt.longitude));
+
+            if (Platform.OS === 'web' || !MapView) {
+              return (
+                <View style={styles.webMapPlaceholder}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(8) }}>
+                    <MaterialIcons name="map" size={scale(24)} color={colors.amber} />
+                    <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(14) }}>
+                      Live Connected GPS Route
+                    </Text>
+                  </View>
+
+                  <View style={{ paddingHorizontal: scale(10), width: '100%' }}>
+                    {connectedPoints.map((pt: any, idx: number) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ alignItems: 'center', width: scale(24) }}>
+                          <View
+                            style={{
+                              width: scale(12),
+                              height: scale(12),
+                              borderRadius: scale(6),
+                              backgroundColor: idx === 0 ? colors.amber : idx === connectedPoints.length - 1 ? '#EF4444' : '#10B981',
+                              borderWidth: 2,
+                              borderColor: '#FFFFFF',
+                            }}
+                          />
+                          {idx < connectedPoints.length - 1 && (
+                            <View style={{ width: 2, height: verticalScale(20), backgroundColor: colors.amber }} />
+                          )}
+                        </View>
+                        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12), fontWeight: '600', marginLeft: scale(8) }} numberOfLines={1}>
+                          {pt.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            }
 
             return (
-              <View
-                key={`${trip.id}_${idx}`}
-                style={[styles.scheduledCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              <MapView
+                ref={mapRef}
+                provider="google"
+                style={StyleSheet.absoluteFillObject}
+                initialRegion={{
+                  latitude: driverInfo.latitude || pickupLat || 12.9716,
+                  longitude: driverInfo.longitude || pickupLng || 77.5946,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }}
               >
-                <View style={styles.schedHeaderRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.schedTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {trip.title}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4), marginTop: verticalScale(2) }}>
-                      <MaterialIcons name="schedule" size={scale(14)} color={colors.amber} />
-                      <Text style={[styles.schedDateText, { color: colors.amber }]}>
-                        {trip.date} · {trip.time}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
+                <Marker
+                  coordinate={{ latitude: driverInfo.latitude || 12.9716, longitude: driverInfo.longitude || 77.5946 }}
+                  title={`Driver: ${driverInfo.name}`}
+                  description={driverInfo.vehicleModel}
+                  pinColor={colors.amber}
+                  rotation={driverInfo.heading || 0}
+                  flat={true}
+                />
 
-                {isGuide ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), marginTop: verticalScale(8), paddingHorizontal: scale(12), paddingVertical: verticalScale(8), backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: scale(8) }}>
-                    <View style={{ width: scale(40), height: scale(40), borderRadius: scale(20), backgroundColor: colors.amber, justifyContent: 'center', alignItems: 'center' }}>
-                      <MaterialIcons name="person" size={scale(22)} color="#101014" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>{trip.driverOrGuideName || 'Certified Heritage Guide'}</Text>
-                      <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '600' }}>Area & Expertise: Mysuru Heritage & Culture</Text>
-                      <Text style={{ fontSize: moderateFontScale(10), color: colors.textMuted }}>Languages: English, Kannada, Hindi</Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={[styles.schedRouteBox, { borderTopColor: colors.border }]}>
-                    <Text style={[styles.locVal, { color: colors.textMuted }]} numberOfLines={2}>
-                      📍 {trip.pickup || 'Pickup'} ➔ {Array.isArray(trip.route) && trip.route.length > 0 ? trip.route.join(' ➔ ') : 'Tour Destination'}
-                    </Text>
-                    <Text style={{ fontSize: moderateFontScale(11), color: colors.amber, fontWeight: '600', marginTop: verticalScale(4) }}>
-                      🛣️ Distance & Route: ~35.0 km · {Array.isArray(trip.route) ? trip.route.length : 2} Checkpoints
-                    </Text>
-                  </View>
+                <Marker
+                  coordinate={{ latitude: pickupLat, longitude: pickupLng }}
+                  title="Pickup Spot"
+                  description={pickupLocation}
+                  pinColor="#10B981"
+                />
+
+                {Array.isArray(tripCheckpoints) &&
+                  tripCheckpoints.map((cp: any, idx: number) => {
+                    const cpLat = parseFloat(cp.latitude || cp.lat);
+                    const cpLng = parseFloat(cp.longitude || cp.lng);
+                    if (isNaN(cpLat) || isNaN(cpLng)) return null;
+                    const cpName = typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp);
+                    return (
+                      <Marker
+                        key={idx}
+                        coordinate={{ latitude: cpLat, longitude: cpLng }}
+                        title={`Stop #${idx + 1}`}
+                        description={cpName}
+                        pinColor="#3B82F6"
+                      />
+                    );
+                  })}
+
+                <Marker
+                  coordinate={{ latitude: dropLat, longitude: dropLng }}
+                  title="Destination"
+                  description={dropLocation}
+                  pinColor="#EF4444"
+                />
+
+                {Polyline && connectedPoints.length >= 2 && (
+                  <Polyline
+                    coordinates={connectedPoints}
+                    strokeColor="#F5C518"
+                    strokeWidth={4}
+                  />
                 )}
+              </MapView>
+            );
+          })()}
+        </View>
 
-                <View style={[styles.financeRow, { borderTopColor: colors.border }]}>
-                  <View>
-                    <Text style={[styles.finLabel, { color: colors.textMuted }]}>Total Fare</Text>
-                    <Text style={[styles.finVal, { color: colors.textPrimary }]}>₹{price}</Text>
-                  </View>
-                  <View>
-                    <Text style={[styles.finLabel, { color: colors.textMuted }]}>Deposit Paid</Text>
-                    <Text style={[styles.finVal, { color: '#10B981' }]}>₹{advancePaid}</Text>
-                  </View>
-                  <View>
-                    <Text style={[styles.finLabel, { color: colors.textMuted }]}>Balance Due</Text>
-                    <Text style={[styles.finVal, { color: colors.amber }]}>₹{balanceDue}</Text>
+        {/* Driver Details Card */}
+        {(() => {
+          const dNameLower = String(driverInfo?.name || '').toLowerCase();
+          const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || dNameLower.includes('search') || dNameLower.includes('auto') || !driverInfo?.name;
+          const captainTitle = isPendingDriver ? 'Searching Captain...' : (driverInfo?.name || 'Searching Captain...');
+          const vehicleNumberDisplay = isPendingDriver ? 'Assigning Captain...' : (driverInfo?.vehicleNumber || 'Assigning Captain...');
+
+          return (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>
+                {isPendingDriver ? 'SEARCHING NEARBY CAPTAINS' : 'ASSIGNED CAPTAIN'}
+              </Text>
+              <View style={styles.driverInfoRow}>
+                <View style={styles.avatarCircle}>
+                  <FontAwesome5 name="user-tie" size={scale(22)} color="#101014" />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.driverName, { color: colors.textPrimary }]}>{captainTitle}</Text>
+                  <Text style={[styles.driverVehicle, { color: colors.textMuted }]}>
+                    {driverInfo.vehicleModel} • <Text style={{ color: colors.amber, fontWeight: '700' }}>{vehicleNumberDisplay}</Text>
+                  </Text>
+                  <View style={styles.ratingRow}>
+                    <MaterialIcons name="verified" size={scale(14)} color={colors.amber} />
+                    <Text style={[styles.ratingText, { color: colors.textPrimary }]}>
+                      {isPendingDriver ? 'Targeted Category Captains' : 'Verified Partner'}
+                    </Text>
                   </View>
                 </View>
 
-                <View style={styles.schedActionsRow}>
+                {!isPendingDriver && (
                   <TouchableOpacity
-                    style={[styles.schedActionBtn, { backgroundColor: colors.surfaceCard, borderColor: colors.border, borderWidth: 1 }]}
-                    onPress={() => setSelectedItineraryTrip(trip)}
+                    style={styles.callBtn}
+                    onPress={() => Linking.openURL(`tel:${driverInfo.phone || '+919900082400'}`)}
                   >
-                    <Text style={[styles.schedActionText, { color: colors.textPrimary }]}>View Itinerary</Text>
+                    <MaterialIcons name="call" size={scale(18)} color="#FFFFFF" />
                   </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          );
+        })()}
 
-                  <TouchableOpacity
-                    style={[styles.schedActionBtn, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#EF4444', borderWidth: 1 }]}
-                    onPress={() => handleCancelPress(trip)}
-                  >
-                    <Text style={[styles.schedActionText, { color: '#EF4444' }]}>Cancel Booking</Text>
-                  </TouchableOpacity>
+        {/* Start OTP & End OTP Share Card */}
+        {(() => {
+          const isPending = statusLower.includes('pending') || statusLower.includes('dispatched') || statusLower.includes('search');
+
+          return (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
+              <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🔐 TRIP VERIFICATION CODES</Text>
+              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(10) }}>
+                {isPending ? 'Your Start OTP will be generated automatically as soon as a Captain accepts your ride.' : 'Share Start OTP with driver to begin ride, and End OTP at destination.'}
+              </Text>
+
+              {isPending ? (
+                <View style={[styles.otpBox, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border, paddingVertical: verticalScale(14) }]}>
+                  <Text style={[styles.otpLabel, { color: colors.textMuted, textAlign: 'center' }]}>START OTP STATUS</Text>
+                  <Text style={[styles.otpValue, { color: colors.amber, fontSize: moderateFontScale(14), textAlign: 'center', letterSpacing: 0 }]}>
+                    ⏳ Generating on Acceptance...
+                  </Text>
                 </View>
+              ) : (
+                <View style={styles.otpRowGrid}>
+                  <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
+                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
+                    <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '8240'}</Text>
+                  </View>
+
+                  <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
+                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
+                    <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '4321'}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          );
+        })()}
+
+        {/* Package Plan Details & Waypoints Card */}
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1 }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(10) }}>
+            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🗺️ TOUR PACKAGE & ITINERARY</Text>
+            <View style={{ backgroundColor: 'rgba(245, 197, 24, 0.15)', paddingHorizontal: scale(8), paddingVertical: verticalScale(2), borderRadius: scale(12) }}>
+              <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>
+                {durationHours} HOURS TOUR
+              </Text>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: moderateFontScale(15), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(8) }}>
+            {planName}
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: scale(12), marginBottom: verticalScale(14), paddingBottom: verticalScale(10), borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+              <MaterialIcons name="schedule" size={scale(14)} color={colors.amber} />
+              <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted, fontWeight: '600' }}>
+                Duration: <Text style={{ color: colors.textPrimary }}>{durationHours} Hours</Text>
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+              <MaterialIcons name="directions-car" size={scale(14)} color={colors.success} />
+              <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted, fontWeight: '600' }}>
+                Est. Distance: <Text style={{ color: colors.textPrimary }}>{distanceKm} KM</Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* Checkpoint Nodes Timeline (Pickup -> Stop 1 to Stop N -> Final Drop) */}
+          <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(10), letterSpacing: 0.5 }}>
+            📍 TOUR ITINERARY STOPS ({Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 ? tripCheckpoints.length : 0} STOPS)
+          </Text>
+
+          {(() => {
+            const checkpointsList = Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0
+              ? tripCheckpoints.map((cp: any, idx: number) => {
+                const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `Stop ${idx + 1}`) : String(cp);
+                return {
+                  title: `STOP ${idx + 1}`,
+                  name: cpName,
+                  color: colors.amber,
+                  note: null,
+                };
+              })
+              : [];
+
+            const fullTimeline = [
+              {
+                title: 'PICKUP POINT',
+                name: pickupLocation || 'Pickup Point',
+                color: colors.success,
+                note: '* Driver will pick tourist up from Pickup Point',
+              },
+              ...checkpointsList,
+              {
+                title: 'FINAL DROP POINT',
+                name: dropLocation || 'Drop Destination',
+                color: colors.danger,
+                note: '* Final tour destination drop point',
+              },
+            ];
+
+            return (
+              <View style={{ paddingLeft: scale(4) }}>
+                {fullTimeline.map((item: any, idx: number) => {
+                  const isLast = idx === fullTimeline.length - 1;
+
+                  return (
+                    <View key={idx} style={{ flexDirection: 'row', marginBottom: isLast ? 0 : verticalScale(14) }}>
+                      <View style={{ alignItems: 'center', width: scale(22) }}>
+                        <View
+                          style={{
+                            width: scale(14),
+                            height: scale(14),
+                            borderRadius: scale(7),
+                            backgroundColor: item.color,
+                            borderWidth: 2,
+                            borderColor: '#FFFFFF',
+                          }}
+                        />
+                        {!isLast && (
+                          <View style={{ width: 2, height: verticalScale(28), backgroundColor: colors.border, marginTop: verticalScale(2) }} />
+                        )}
+                      </View>
+
+                      <View style={{ flex: 1, marginLeft: scale(10) }}>
+                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '800', color: item.color, letterSpacing: 0.5 }}>
+                          {item.title}
+                        </Text>
+                        <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary, marginTop: verticalScale(2) }}>
+                          {item.name}
+                        </Text>
+                        {item.note && (
+                          <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: verticalScale(1) }}>
+                            {item.note}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             );
-          })
-        )}
-        */}
+          })()}
 
-      </ScrollView>
+          {/* Payment Breakdown */}
+          <View style={[styles.fareRow, { borderTopColor: colors.border, marginTop: verticalScale(14) }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Payment Mode</Text>
+              <Text style={[styles.paymentModeText, { color: colors.textPrimary }]}>{paymentMode}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Total Fare</Text>
+              <Text style={[styles.fareVal, { color: colors.amber }]}>₹{fareAmount.toLocaleString('en-IN')}</Text>
+            </View>
+          </View>
 
-      {/* ITINERARY MODAL OVERLAY */}
-      <Modal
-        visible={selectedItineraryTrip !== null}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setSelectedItineraryTrip(null)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
-          {selectedItineraryTrip && (
-            <View style={{ backgroundColor: colors.surface, borderTopLeftRadius: scale(24), borderTopRightRadius: scale(24), padding: scale(20), maxHeight: '85%', borderWidth: 1, borderColor: colors.border }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(14) }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-                  <MaterialIcons name="map" size={scale(22)} color={colors.amber} />
-                  <Text style={{ fontSize: moderateFontScale(16), fontWeight: '900', color: colors.textPrimary }}>Trip Itinerary Details</Text>
-                </View>
-                <TouchableOpacity onPress={() => setSelectedItineraryTrip(null)} style={{ padding: scale(4) }}>
-                  <MaterialIcons name="close" size={scale(22)} color={colors.textMuted} />
-                </TouchableOpacity>
+          {advanceDepositPaid > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(8), paddingTop: verticalScale(8), borderTopWidth: 1, borderTopColor: colors.border }}>
+              <View>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.success }}>Advance Deposit Paid</Text>
+                <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.success }}>₹{advanceDepositPaid.toLocaleString('en-IN')}</Text>
               </View>
-
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: verticalScale(12) }}>
-                {/* Header Info */}
-                <View style={{ backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.amber }}>
-                  <Text style={{ fontSize: moderateFontScale(16), fontWeight: '800', color: colors.textPrimary }}>{selectedItineraryTrip.title}</Text>
-                  <Text style={{ fontSize: moderateFontScale(12), color: colors.amber, fontWeight: '700', marginTop: verticalScale(4) }}>
-                    📅 {selectedItineraryTrip.date} at {selectedItineraryTrip.time}
-                  </Text>
-                  <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: 2 }}>Booking ID: #{selectedItineraryTrip.id}</Text>
-                </View>
-
-                {/* Partner Details */}
-                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9F9FB', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: colors.textMuted, marginBottom: verticalScale(6) }}>ASSIGNED PARTNER</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10) }}>
-                    <View style={{ width: scale(36), height: scale(36), borderRadius: scale(18), backgroundColor: colors.amber, justifyContent: 'center', alignItems: 'center' }}>
-                      <MaterialIcons name="person" size={scale(20)} color="#101014" />
-                    </View>
-                    <View>
-                      <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>{selectedItineraryTrip.driverOrGuideName || 'Assigned Partner'}</Text>
-                      <Text style={{ fontSize: moderateFontScale(11), color: colors.amber }}>{selectedItineraryTrip.type === 'guide' ? 'Certified Heritage Guide' : 'Verified Captain'}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Checkpoints & Route */}
-                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9F9FB', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: colors.textMuted, marginBottom: verticalScale(8) }}>ROUTE CHECKPOINTS</Text>
-                  {Array.isArray(selectedItineraryTrip.route) && selectedItineraryTrip.route.length > 0 ? (
-                    selectedItineraryTrip.route.map((cp, idx) => (
-                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginVertical: verticalScale(3) }}>
-                        <View style={{ width: scale(8), height: scale(8), borderRadius: scale(4), backgroundColor: colors.amber }} />
-                        <Text style={{ fontSize: moderateFontScale(12), fontWeight: '600', color: colors.textPrimary }}>Stop {idx + 1}: {cp}</Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textPrimary }}>📍 {selectedItineraryTrip.pickup || 'Pickup Location'} ➔ 🏁 {selectedItineraryTrip.title}</Text>
-                  )}
-                </View>
-
-                {/* Fare & Payment Breakdown */}
-                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F9F9FB', padding: scale(14), borderRadius: scale(14), borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ fontSize: moderateFontScale(11), fontWeight: '800', color: colors.textMuted, marginBottom: verticalScale(8) }}>PAYMENT DETAILS</Text>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(4) }}>
-                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted }}>Total Fare</Text>
-                    <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.amber }}>₹{selectedItineraryTrip.price}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(4) }}>
-                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted }}>Payment Method</Text>
-                    <Text style={{ fontSize: moderateFontScale(12), fontWeight: '700', color: colors.textPrimary }}>{selectedItineraryTrip.paymentMode || 'Wallet'}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted }}>Booking Status</Text>
-                    <Text style={{ fontSize: moderateFontScale(12), fontWeight: '700', color: '#10B981' }}>{selectedItineraryTrip.status}</Text>
-                  </View>
-                </View>
-              </ScrollView>
-
-              <TouchableOpacity
-                style={{ backgroundColor: colors.amber, borderRadius: scale(14), paddingVertical: verticalScale(12), alignItems: 'center', marginTop: verticalScale(14) }}
-                onPress={() => setSelectedItineraryTrip(null)}
-              >
-                <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(14) }}>Done</Text>
-              </TouchableOpacity>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>Remaining Cash Balance</Text>
+                <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>₹{remainingCashBalance.toLocaleString('en-IN')}</Text>
+              </View>
             </View>
           )}
         </View>
-      </Modal>
+
+        {/* Cancel Trip Action Button (ONLY ALLOWED WHEN PENDING) */}
+        {statusLower.includes('pending') && (
+          <TouchableOpacity
+            style={[styles.cancelBtn, { backgroundColor: colors.danger }]}
+            onPress={handleCancelTrip}
+            disabled={cancelling}
+          >
+            {cancelling ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <MaterialIcons name="cancel" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
+                <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -830,247 +828,181 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: scale(16),
     paddingVertical: verticalScale(12),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     borderBottomWidth: 1,
   },
+  backBtn: {
+    padding: scale(4),
+  },
   headerTitle: {
-    fontSize: moderateFontScale(20),
-    fontWeight: '800',
+    fontSize: moderateFontScale(16),
+    fontWeight: '900',
   },
-  headerSub: {
-    fontSize: moderateFontScale(11),
-    marginTop: verticalScale(2),
-  },
-  scrollContent: {
-    padding: scale(16),
-    paddingBottom: verticalScale(40),
-  },
-  activeCard: {
-    padding: scale(14),
-    borderRadius: scale(16),
-    borderWidth: 1.5,
-    marginBottom: verticalScale(20),
-  },
-  liveBadgeRow: {
+  statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(12),
+    justifyContent: 'center',
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(14),
+    borderRadius: scale(10),
+    marginBottom: verticalScale(14),
   },
-  pulsingDot: {
-    width: scale(8),
-    height: scale(8),
-    borderRadius: scale(4),
-    backgroundColor: '#10B981',
-  },
-  activeTagText: {
-    fontSize: moderateFontScale(11),
+  statusBannerText: {
     fontWeight: '900',
+    fontSize: moderateFontScale(12),
     letterSpacing: 0.5,
   },
-  typeBadge: {
-    paddingHorizontal: scale(8),
-    paddingVertical: verticalScale(3),
-    borderRadius: scale(6),
+  mapFrame: {
+    height: verticalScale(180),
+    borderRadius: scale(14),
+    overflow: 'hidden',
+    borderWidth: 1,
+    marginBottom: verticalScale(14),
   },
-  typeBadgeText: {
+  webMapPlaceholder: {
+    flex: 1,
+    backgroundColor: 'rgba(245, 197, 24, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: scale(16),
+  },
+  card: {
+    padding: scale(14),
+    borderRadius: scale(14),
+    borderWidth: 1,
+    marginBottom: verticalScale(14),
+  },
+  cardHeaderTitle: {
     fontSize: moderateFontScale(10),
-    fontWeight: '800',
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    marginBottom: verticalScale(10),
   },
-  partnerInfoRow: {
+  driverInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: verticalScale(12),
+    gap: scale(12),
   },
   avatarCircle: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(18),
-    backgroundColor: 'rgba(245, 197, 24, 0.12)',
+    width: scale(48),
+    height: scale(48),
+    borderRadius: scale(24),
+    backgroundColor: '#F5C518',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  partnerName: {
-    fontSize: moderateFontScale(14),
-    fontWeight: '800',
+  driverName: {
+    fontSize: moderateFontScale(15),
+    fontWeight: '900',
   },
-  partnerVehicle: {
-    fontSize: moderateFontScale(11),
-    marginTop: verticalScale(2),
-  },
-  locationBlock: {
-    marginBottom: verticalScale(12),
-  },
-  locVal: {
+  driverVehicle: {
     fontSize: moderateFontScale(12),
-    fontWeight: '600',
-    flex: 1,
+    marginTop: 2,
   },
-  otpBox: {
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: verticalScale(10),
-    paddingHorizontal: scale(12),
-    borderRadius: scale(12),
-    borderWidth: 1,
-    marginBottom: verticalScale(6),
+    marginTop: 4,
+    gap: 4,
   },
-  otpColumn: {
+  ratingText: {
+    fontSize: moderateFontScale(11),
+    fontWeight: '700',
+  },
+  callBtn: {
+    width: scale(40),
+    height: scale(40),
+    borderRadius: scale(20),
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpRowGrid: {
+    flexDirection: 'row',
+    gap: scale(10),
+  },
+  otpBox: {
+    flex: 1,
+    padding: scale(12),
+    borderRadius: scale(10),
+    borderWidth: 1,
     alignItems: 'center',
   },
   otpLabel: {
     fontSize: moderateFontScale(9),
     fontWeight: '800',
-    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   otpValue: {
-    fontSize: moderateFontScale(16),
+    fontSize: moderateFontScale(22),
     fontWeight: '900',
-    marginTop: verticalScale(2),
+    letterSpacing: 2,
   },
-  trackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: scale(6),
-    paddingVertical: verticalScale(12),
-    borderRadius: scale(12),
-  },
-  trackBtnText: {
-    color: '#101014',
-    fontSize: moderateFontScale(13),
-    fontWeight: '900',
-  },
-  cancelBtnIcon: {
-    width: scale(44),
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: scale(12),
-    borderWidth: 1,
-  },
-  noActiveBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(8),
-    padding: scale(12),
-    borderRadius: scale(12),
-    borderWidth: 1,
-    marginBottom: verticalScale(20),
-  },
-  noActiveText: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '600',
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(12),
-  },
-  sectionTitle: {
-    fontSize: moderateFontScale(15),
-    fontWeight: '800',
-  },
-  fullWidthFilterRow: {
-    flexDirection: 'row',
-    width: '100%',
-    borderRadius: scale(14),
-    padding: scale(4),
-    borderWidth: 1,
-  },
-  fullWidthPill: {
-    flex: 1,
-    paddingVertical: verticalScale(10),
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: scale(10),
-  },
-  fullWidthPillActive: {
-    backgroundColor: '#F5C518',
-  },
-  fullWidthPillText: {
-    fontSize: moderateFontScale(11),
-    fontWeight: '800',
-  },
-  emptyCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: scale(24),
-    borderRadius: scale(16),
-    borderWidth: 1,
-    marginVertical: verticalScale(10),
-  },
-  emptyTitle: {
-    fontSize: moderateFontScale(14),
-    fontWeight: '800',
-    marginTop: verticalScale(8),
-  },
-  emptySub: {
-    fontSize: moderateFontScale(11),
-    textAlign: 'center',
-    marginTop: verticalScale(4),
-  },
-  scheduledCard: {
-    padding: scale(14),
-    borderRadius: scale(16),
-    borderWidth: 1,
-    marginBottom: verticalScale(14),
-  },
-  schedHeaderRow: {
+  routeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: verticalScale(10),
+    gap: scale(10),
   },
-  schedTitle: {
-    fontSize: moderateFontScale(14),
-    fontWeight: '800',
+  dot: {
+    width: scale(10),
+    height: scale(10),
+    borderRadius: scale(5),
+    marginTop: verticalScale(4),
   },
-  schedDateText: {
-    fontSize: moderateFontScale(11),
-    fontWeight: '700',
-  },
-  schedRouteBox: {
-    borderTopWidth: 1,
-    paddingTop: verticalScale(8),
-    marginBottom: verticalScale(10),
-  },
-  financeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    paddingTop: verticalScale(8),
-    marginBottom: verticalScale(12),
-  },
-  finLabel: {
+  routeTypeLabel: {
     fontSize: moderateFontScale(9),
+    fontWeight: '900',
+  },
+  routeAddressText: {
+    fontSize: moderateFontScale(13),
     fontWeight: '700',
-    textTransform: 'uppercase',
+    marginTop: 2,
   },
-  finVal: {
-    fontSize: moderateFontScale(12),
-    fontWeight: '800',
-    marginTop: verticalScale(2),
+  routeDividerLine: {
+    width: 2,
+    height: verticalScale(16),
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginLeft: scale(4),
+    marginVertical: verticalScale(4),
   },
-  schedActionsRow: {
+  fareRow: {
     flexDirection: 'row',
-    gap: scale(8),
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: verticalScale(14),
+    paddingTop: verticalScale(10),
+    borderTopWidth: 1,
   },
-  schedActionBtn: {
-    flex: 1,
-    paddingVertical: verticalScale(8),
-    borderRadius: scale(10),
+  fareLabel: {
+    fontSize: moderateFontScale(11),
+  },
+  fareVal: {
+    fontSize: moderateFontScale(18),
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  paymentModeText: {
+    fontSize: moderateFontScale(13),
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  cancelBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: verticalScale(14),
+    borderRadius: scale(12),
+    marginTop: verticalScale(6),
+    marginBottom: verticalScale(24),
   },
-  schedActionText: {
-    fontSize: moderateFontScale(11),
-    fontWeight: '800',
+  cancelBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: moderateFontScale(14),
   },
 });

@@ -1,4 +1,6 @@
 import NotificationModal from '@/components/NotificationModal';
+import LanguageSelector from '@/src/components/LanguageSelector';
+import { useTranslation } from 'react-i18next';
 import { adminState } from '@/constants/admin-state';
 import { fetchActiveTripApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
@@ -142,8 +144,11 @@ export default function HomeScreen() {
             <Text style={[styles.brandName, { color: colors.textPrimary }]}>Vibzz</Text>
           </View>
 
-          {/* Activity Bell Notification Icon */}
-          <NotificationModal role="tourist" />
+          {/* Activity Bell Notification & Language Selector */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+            <LanguageSelector compact />
+            <NotificationModal role="tourist" />
+          </View>
         </View>
 
         {/* ACTIVE TRIP QUICK BANNER (Non-intrusive, user can tap to track) */}
@@ -184,7 +189,7 @@ export default function HomeScreen() {
           >
             <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
             <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginLeft: scale(6), flex: 1 }} numberOfLines={1}>
-              Where to? Search location...
+              {t('searchPlaceholder')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -257,8 +262,8 @@ export default function HomeScreen() {
                 <MaterialIcons name="explore" size={scale(18)} color="#F5C518" />
               </View>
               <View style={styles.halfCardTextCol}>
-                <Text style={styles.halfCardTitle}>Need a Guide</Text>
-                <Text style={styles.halfCardSubtitle}>Local experts</Text>
+                <Text style={styles.halfCardTitle}>{t('hireGuide')}</Text>
+                <Text style={styles.halfCardSubtitle}>{t('hireGuideSub')}</Text>
               </View>
             </ImageBackground>
           </TouchableOpacity>
@@ -276,8 +281,8 @@ export default function HomeScreen() {
             >
               <View style={styles.overlay} />
               <View style={styles.halfCardTextCol}>
-                <Text style={styles.halfCardTitle}>Custom Trip</Text>
-                <Text style={styles.halfCardSubtitle}>Plan Itinerary</Text>
+                <Text style={styles.halfCardTitle}>{t('customTrip')}</Text>
+                <Text style={styles.halfCardSubtitle}>{t('customTripSub')}</Text>
               </View>
             </ImageBackground>
           </TouchableOpacity>

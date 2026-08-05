@@ -51,14 +51,17 @@ export default function TripStatusScreen() {
   // Local memory trip fallback lookup
   const initialLocalTrip = React.useMemo(() => {
     const tid = String(tripIdParam || '').toLowerCase().trim();
-    if (!tid) return null;
     const all = [
       ...(adminState.userTrips || []),
       ...((adminState as any).pendingDriverRequests || []),
       ...(adminState.customTripRequests || []),
       ...(adminState.advanceBookings || []),
-    ];
-    return all.find((t: any) => t && (String(t.id).toLowerCase().trim() === tid || String(t.tripId || '').toLowerCase().trim() === tid)) || null;
+    ].filter(Boolean);
+
+    if (tid) {
+      return all.find((t: any) => t && (String(t.id).toLowerCase().trim() === tid || String(t.tripId || '').toLowerCase().trim() === tid)) || all[0] || null;
+    }
+    return all[0] || null;
   }, [tripIdParam]);
 
   const [loading, setLoading] = useState(true);
@@ -357,7 +360,8 @@ export default function TripStatusScreen() {
   }, [tripIdParam]);
 
   const handleCancelTrip = () => {
-    const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || driverInfo.name.toLowerCase().includes('search') || driverInfo.name.toLowerCase().includes('auto');
+    const dNameLower = String(driverInfo?.name || '').toLowerCase();
+    const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || dNameLower.includes('search') || dNameLower.includes('auto') || !driverInfo?.name;
 
     const alertTitle = isPendingDriver ? 'Withdraw Ride Request?' : `Cancel Booking with Captain ${driverInfo.name}?`;
     const alertBody = isPendingDriver
@@ -425,14 +429,14 @@ export default function TripStatusScreen() {
 
       {/* Header */}
       <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.replace('/(tabs)/trips')} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/home'); } }} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Live Trip Status</Text>
         <NotificationModal role="tourist" />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: scale(16), paddingBottom: verticalScale(30) }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: scale(16), paddingBottom: verticalScale(100) }} showsVerticalScrollIndicator={false}>
         {/* Status Header Badge */}
         <View style={[styles.statusBanner, { backgroundColor: badge.bg }]}>
           <MaterialIcons name="navigation" size={scale(18)} color={badge.color} style={{ marginRight: scale(6) }} />
@@ -568,9 +572,10 @@ export default function TripStatusScreen() {
 
         {/* Driver Details Card */}
         {(() => {
-          const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || driverInfo.name.toLowerCase().includes('search') || driverInfo.name.toLowerCase().includes('auto');
-          const captainTitle = isPendingDriver ? 'Searching Captain...' : driverInfo.name;
-          const vehicleNumberDisplay = isPendingDriver ? 'Assigning Captain...' : (driverInfo.vehicleNumber || 'Assigning Captain...');
+          const dNameLower = String(driverInfo?.name || '').toLowerCase();
+          const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || dNameLower.includes('search') || dNameLower.includes('auto') || !driverInfo?.name;
+          const captainTitle = isPendingDriver ? 'Searching Captain...' : (driverInfo?.name || 'Searching Captain...');
+          const vehicleNumberDisplay = isPendingDriver ? 'Assigning Captain...' : (driverInfo?.vehicleNumber || 'Assigning Captain...');
 
           return (
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -676,29 +681,47 @@ export default function TripStatusScreen() {
             </View>
           </View>
 
-          {/* Checkpoint Nodes Timeline (Stop 1 to Final Drop) */}
+          {/* Checkpoint Nodes Timeline (Pickup -> Stop 1 to Stop N -> Final Drop) */}
           <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(10), letterSpacing: 0.5 }}>
-            📍 TOUR ITINERARY STOPS ({Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 ? tripCheckpoints.length : 2} STOPS)
+            📍 TOUR ITINERARY STOPS ({Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 ? tripCheckpoints.length : 0} STOPS)
           </Text>
 
           {(() => {
-            const stopsList = Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0
+            const checkpointsList = Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0
               ? tripCheckpoints.map((cp: any, idx: number) => {
                 const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `Stop ${idx + 1}`) : String(cp);
-                return cpName;
+                return {
+                  title: `STOP ${idx + 1}`,
+                  name: cpName,
+                  color: colors.amber,
+                  note: null,
+                };
               })
-              : [pickupLocation, dropLocation];
+              : [];
+
+            const fullTimeline = [
+              {
+                title: 'PICKUP POINT',
+                name: pickupLocation || 'Pickup Point',
+                color: colors.success,
+                note: '* Driver will pick tourist up from Pickup Point',
+              },
+              ...checkpointsList,
+              {
+                title: 'FINAL DROP POINT',
+                name: dropLocation || 'Drop Destination',
+                color: colors.danger,
+                note: '* Final tour destination drop point',
+              },
+            ];
 
             return (
               <View style={{ paddingLeft: scale(4) }}>
-                {stopsList.map((stopName: string, idx: number) => {
-                  const isFirst = idx === 0;
-                  const isLast = idx === stopsList.length - 1;
-                  const tagTitle = isFirst ? 'STOP 1 (PICKUP POINT)' : isLast ? `STOP ${idx + 1} (FINAL DROP)` : `STOP ${idx + 1} (WAYPOINT)`;
-                  const tagColor = isFirst ? colors.success : isLast ? colors.danger : colors.amber;
+                {fullTimeline.map((item: any, idx: number) => {
+                  const isLast = idx === fullTimeline.length - 1;
 
                   return (
-                    <View key={idx} style={{ flexDirection: 'row', marginBottom: idx === stopsList.length - 1 ? 0 : verticalScale(14) }}>
+                    <View key={idx} style={{ flexDirection: 'row', marginBottom: isLast ? 0 : verticalScale(14) }}>
                       {/* Timeline Dot & Line */}
                       <View style={{ alignItems: 'center', width: scale(22) }}>
                         <View
@@ -706,7 +729,7 @@ export default function TripStatusScreen() {
                             width: scale(14),
                             height: scale(14),
                             borderRadius: scale(7),
-                            backgroundColor: tagColor,
+                            backgroundColor: item.color,
                             borderWidth: 2,
                             borderColor: '#FFFFFF',
                           }}
@@ -718,20 +741,15 @@ export default function TripStatusScreen() {
 
                       {/* Stop Address Details */}
                       <View style={{ flex: 1, marginLeft: scale(10) }}>
-                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '800', color: tagColor, letterSpacing: 0.5 }}>
-                          {tagTitle}
+                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '800', color: item.color, letterSpacing: 0.5 }}>
+                          {item.title}
                         </Text>
                         <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary, marginTop: verticalScale(2) }}>
-                          {stopName}
+                          {item.name}
                         </Text>
-                        {isFirst && (
+                        {item.note && (
                           <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: verticalScale(1) }}>
-                            * Driver will pick tourist up from Stop 1
-                          </Text>
-                        )}
-                        {isLast && (
-                          <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted, marginTop: verticalScale(1) }}>
-                            * Final tour destination drop point
+                            {item.note}
                           </Text>
                         )}
                       </View>

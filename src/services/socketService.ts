@@ -63,7 +63,6 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
       console.log('[SocketService] Received real-time push notification:', data);
       if (data) {
         notificationStore.addNotification(data);
-        playNotificationChime(false);
       }
     });
 
@@ -91,7 +90,6 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     socket.on('trip_status_updated', (data: any) => {
       console.log('[SocketService] 📢 Received real-time trip_status_updated event:', data);
       if (data) {
-        playNotificationChime();
         try {
           const tripId = String(data.tripId || data.id || '');
           const status = String(data.status || 'Accepted');

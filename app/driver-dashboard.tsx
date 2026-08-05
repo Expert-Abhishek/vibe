@@ -1,4 +1,5 @@
 import NotificationModal from '@/components/NotificationModal';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import { adminState } from '@/constants/admin-state';
 import {
   acceptTripApi,
@@ -1053,7 +1054,7 @@ export default function DriverDashboardScreen() {
   const handleAcceptRequest = async () => {
     if (!incomingRequest) return;
     const session = getUserSessionSync();
-    const driverId = session?.id || 'd1';
+    const driverId = String(session?.id || (session as any)?.driverId || (session as any)?.user?.id || 'd1').trim();
     const tripId = (incomingRequest as any).tripId || (incomingRequest as any).id;
 
     if (tripId) {
@@ -1372,8 +1373,11 @@ export default function DriverDashboardScreen() {
           </Text>
         </View>
 
-        {/* Bell Notification Icon */}
-        <NotificationModal role="driver" />
+        {/* Bell Notification & Language Selector */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+          <LanguageSelector compact />
+          <NotificationModal role="driver" />
+        </View>
       </View>
 
       {/* Low Wallet Balance Warning Banner */}

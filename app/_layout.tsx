@@ -39,6 +39,7 @@ import { getExpoPushToken } from '@/constants/notifications';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ModalProvider } from '@src/context/ModalContext';
 import { initSocketService } from '@src/services/socketService';
+import '@src/i18n';
 
 export const unstable_settings = {
   anchor: '(tabs)',
