@@ -50,9 +50,9 @@ export default function TripsHistoryScreen() {
     ].filter(Boolean);
 
     if (tid) {
-      return all.find((t: any) => t && (String(t.id).toLowerCase().trim() === tid || String(t.tripId || '').toLowerCase().trim() === tid)) || all[0] || null;
+      return all.find((t: any) => t && (String(t.id).toLowerCase().trim() === tid || String(t.tripId || '').toLowerCase().trim() === tid)) || null;
     }
-    return all[0] || null;
+    return null;
   }, [tripIdParam]);
 
   const [loading, setLoading] = useState(true);

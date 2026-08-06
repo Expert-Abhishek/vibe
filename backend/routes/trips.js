@@ -781,10 +781,10 @@ router.get('/live-location/:tripId', async (req, res) => {
 
     const trip = tripRes.rows[0];
     let driverData = {
-      name: trip.driver_or_guide_name || 'Captain',
-      phone: '+91 99000 82400',
+      name: trip.driver_id ? (trip.driver_or_guide_name || 'Captain') : null,
+      phone: trip.driver_id ? '+91 99000 82400' : null,
       vehicleModel: 'AC 5-Seater / SUV',
-      vehicleNumber: 'KA-03-EX-8240',
+      vehicleNumber: trip.driver_id ? 'KA-03-EX-8240' : 'Assigning Captain...',
       latitude: parseFloat(trip.pickup_lat || 12.9716),
       longitude: parseFloat(trip.pickup_lng || 77.5946),
       heading: 0,

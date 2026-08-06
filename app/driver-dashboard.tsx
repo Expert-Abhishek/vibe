@@ -1123,10 +1123,19 @@ export default function DriverDashboardScreen() {
       return;
     }
 
-    const acceptedObj = { ...incomingRequest };
+    const acceptedObj = {
+      ...incomingRequest,
+      pickup: (incomingRequest as any)?.pickup || (incomingRequest as any)?.pickupName || 'Pickup Location',
+      drop: (incomingRequest as any)?.drop || (incomingRequest as any)?.dropName || 'Destination',
+      estimatedFare: (incomingRequest as any)?.estimatedFare || (incomingRequest as any)?.amount || (incomingRequest as any)?.price || 0,
+      touristName: (incomingRequest as any)?.touristName || (incomingRequest as any)?.customerName || 'Tourist Client',
+      otp: (incomingRequest as any)?.otp || '8240',
+      endOtp: (incomingRequest as any)?.endOtp || '4321',
+    };
     setActiveTrip(acceptedObj);
     setAcceptedTripDetails(acceptedObj);
     setTripPhase('pickup');
+    setRequestVisible(false);
     setIncomingRequest(null);
     setDriverTrips(prev => [newScheduleItem, ...prev]);
     setAcceptedModalVisible(true);
@@ -1508,7 +1517,7 @@ export default function DriverDashboardScreen() {
               if (adminState && Array.isArray(adminState.advanceBookings)) {
                 adminState.advanceBookings.forEach(b => {
                   if (b && b.status !== 'Cancelled') {
-                    const pickupName = b.pickup || b.title || 'Pickup Spot';
+                    const pickupName = (b as any).pickup || (b as any).pickupName || b.title || 'Pickup Spot';
                     const dropName = Array.isArray(b.route) && b.route.length > 0 ? b.route[b.route.length - 1] : b.title;
                     allBookingsMap.set(b.id, {
                       id: String(b.id),

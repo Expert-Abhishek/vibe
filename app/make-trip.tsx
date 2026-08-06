@@ -800,7 +800,9 @@ export default function MakeTripScreen() {
         paymentMode: paymentLabel,
         bookingType: 'INSTANT',
         scheduledTime: calculatedScheduledTime,
-      });
+        checkpoints: checkpoints.map(c => c.name || (c as any).checkpoint_name || (c as any).destinationId || c),
+        destinationIds: checkpoints.map(c => String((c as any).destinationId || (c as any).id || c.name)).filter(Boolean),
+      } as any);
 
       if (bookRes && (bookRes.success || bookRes.data)) {
         serverTripId = bookRes.data?.id || bookRes.id || tripReqId;
