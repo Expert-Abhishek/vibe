@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "my-awesome-app",
+    "name": "Vibzz",
     "slug": "my-awesome-app",
     "version": "1.0.0",
     "jsEngine": "hermes",
@@ -11,7 +11,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.abhittac.myawesomeapp",
+      "bundleIdentifier": "com.Vibzz.tourism",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +25,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.abhittac.myawesomeapp"
+      "package": "com.Vibzz.tourism"
     },
     "web": {
       "output": "static",
