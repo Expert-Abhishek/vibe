@@ -576,14 +576,6 @@ function DriverDetailModal({
                 {driver.licenseNumber || 'Not provided'}
               </span>
             </div>
-
-            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Rating</span>
-              <span className="text-xs font-bold text-yellow-400 mt-1 flex items-center">
-                <Star className="w-3 h-3 fill-yellow-400 mr-1" />
-                {driver.rating} / 5.0
-              </span>
-            </div>
           </div>
 
 

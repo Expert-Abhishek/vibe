@@ -33,7 +33,6 @@ interface HistoryRecord {
   time: string;
   price: number;
   status: 'Completed' | 'Cancelled' | string;
-  rating?: number;
   passengerCount?: number;
   paymentMode?: string;
 }
@@ -470,24 +469,6 @@ export default function HistoryScreen() {
                       </Text>
                     </View>
                   </View>
-
-                  {/* Rating if Completed */}
-                  {item.status === 'Completed' && (
-                    <View style={styles.ratingRow}>
-                      <Text style={[styles.ratingLabel, { color: colors.textMuted }]}>Your Rating:</Text>
-                      <View style={styles.starsBox}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <MaterialIcons
-                            key={star}
-                            name="star"
-                            size={scale(16)}
-                            color={star <= (item.rating || 5) ? colors.amber : 'rgba(255,255,255,0.15)'}
-                            style={{ marginRight: scale(2) }}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  )}
                 </View>
               ))
             )}

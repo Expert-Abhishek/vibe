@@ -52,7 +52,6 @@ export interface Driver {
   vehicleNumber: string;
   licenseNumber: string;
   status: KYCStatus;
-  rating: number;
   walletBalance: number;
   dateRegistered: string;
   dailyRate?: number;
@@ -72,14 +71,12 @@ export interface Guide {
   licenseId: string;
   bio: string;
   status: KYCStatus;
-  rating: number;
   walletBalance: number;
   dateRegistered: string;
   dailyRate?: number;
   platformFee?: number;
   documents: {
     photo: string | null;
-    licenseCert: string | null;
     idProof: string | null;
   };
 }

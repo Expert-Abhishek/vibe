@@ -9,19 +9,45 @@ import {
   Linking,
   Platform,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
+import { sendResetOtpApi } from '@/constants/api';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [phoneNumber, setPhoneNumber] = useState('202-555-0123');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSendOtp = () => {
-    // Navigate to Verify OTP screen
-    router.push('/(auth)/verify-otp');
+  const handleSendOtp = async () => {
+    const cleanPhone = phoneNumber.trim();
+    if (!cleanPhone) {
+      Alert.alert('Phone Number Required', 'Please enter your registered 10-digit mobile number.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await sendResetOtpApi(cleanPhone);
+      setLoading(false);
+
+      if (res && res.success) {
+        Alert.alert('OTP Sent 🚀', res.message || 'A 6-digit OTP code has been sent to your mobile number via Fast2SMS.');
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: { phone: res.phone || cleanPhone },
+        });
+      } else {
+        Alert.alert('OTP Request Failed', res?.message || 'Could not send OTP. Please check phone number.');
+      }
+    } catch (err: any) {
+      setLoading(false);
+      Alert.alert('Error', err?.message || 'Server connection error. Please try again.');
+    }
   };
 
   return (
@@ -47,7 +73,7 @@ export default function ForgotPasswordScreen() {
           <View style={styles.content}>
             <Text style={styles.title}>Reset your access</Text>
             <Text style={styles.subtitle}>
-              {"Enter your registered phone number to receive a verification code. We'll help you get back on the road in no time."}
+              {"Enter your registered mobile number to receive a verification code. We'll send a 6-digit OTP to reset your password via SMS."}
             </Text>
 
             {/* INPUT FIELD */}
@@ -60,13 +86,14 @@ export default function ForgotPasswordScreen() {
                   color="rgba(255, 255, 255, 0.7)"
                   style={styles.inputIcon}
                 />
-                <Text style={styles.prefix}>+1</Text>
+                <Text style={styles.prefix}>+91</Text>
                 <View style={styles.separator} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Phone Number"
+                  placeholder="Enter 10-digit mobile number"
                   placeholderTextColor="rgba(255, 255, 255, 0.3)"
                   keyboardType="phone-pad"
+                  maxLength={10}
                   value={phoneNumber}
                   onChangeText={setPhoneNumber}
                 />
@@ -77,14 +104,19 @@ export default function ForgotPasswordScreen() {
           {/* FOOTER ACTIONS */}
           <View style={styles.footer}>
             <TouchableOpacity
-              style={styles.sendButton}
+              style={[styles.sendButton, loading ? styles.sendButtonDisabled : null]}
               onPress={handleSendOtp}
+              disabled={loading}
               activeOpacity={0.9}
             >
-              <View style={styles.buttonRow}>
-                <Text style={styles.sendButtonText}>Send OTP</Text>
-                <MaterialIcons name="send" size={scale(18)} color="#101010" />
-              </View>
+              {loading ? (
+                <ActivityIndicator color="#101010" size="small" />
+              ) : (
+                <View style={styles.buttonRow}>
+                  <Text style={styles.sendButtonText}>Send OTP Code</Text>
+                  <MaterialIcons name="send" size={scale(18)} color="#101010" />
+                </View>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.supportButton} activeOpacity={0.7} onPress={() => Linking.openURL('tel:8088626099')}>
@@ -203,6 +235,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 4,
+  },
+  sendButtonDisabled: {
+    backgroundColor: 'rgba(245, 197, 24, 0.5)',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   buttonRow: {
     flexDirection: 'row',

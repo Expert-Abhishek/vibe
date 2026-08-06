@@ -9,17 +9,26 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
+import { sendResetOtpApi, verifyResetOtpApi } from '@/constants/api';
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ phone?: string }>();
+  const phone = (params.phone as string) || '';
+
   const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [focused, setFocused] = useState(false);
-  const [timer, setTimer] = useState(57); // Start at 57 seconds like the screenshot
+  const [timer, setTimer] = useState(59);
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   // Countdown timer for resending code
@@ -31,9 +40,44 @@ export default function VerifyOtpScreen() {
     return () => clearInterval(interval);
   }, [timer]);
 
-  const handleVerify = () => {
-    // Simulated login success - route to main app tabs
-    router.replace('/(tabs)');
+  const handleVerify = async () => {
+    if (code.length < 6) {
+      Alert.alert('Incomplete OTP', 'Please enter all 6 digits of the OTP code received via SMS.');
+      return;
+    }
+
+    if (!newPassword || newPassword.trim().length < 4) {
+      Alert.alert('New Password Required', 'Please enter a new password (min 4 characters).');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await verifyResetOtpApi({
+        phone: phone || '8088626099',
+        otp: code,
+        newPassword: newPassword.trim(),
+      });
+      setLoading(false);
+
+      if (res && res.success) {
+        Alert.alert(
+          '🎉 Password Reset Success!',
+          res.message || 'Your password has been reset successfully! You can now log in with your new password.',
+          [
+            {
+              text: 'Go to Sign In',
+              onPress: () => router.replace('/(auth)/sign-in'),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Verification Failed', res?.message || 'Invalid or expired OTP code.');
+      }
+    } catch (err: any) {
+      setLoading(false);
+      Alert.alert('Error', err?.message || 'Server connection error. Please try again.');
+    }
   };
 
   const handlePressOtp = () => {
@@ -46,9 +90,24 @@ export default function VerifyOtpScreen() {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const handleResend = () => {
-    if (timer === 0) {
-      setTimer(59);
+  const handleResend = async () => {
+    if (timer > 0) return;
+    if (!phone) {
+      Alert.alert('Phone Required', 'Phone number missing. Please go back and re-enter phone number.');
+      return;
+    }
+
+    try {
+      const res = await sendResetOtpApi(phone);
+      if (res && res.success) {
+        Alert.alert('OTP Resent 🚀', res.message || 'A new 6-digit OTP code has been sent to your phone number.');
+        setTimer(59);
+        setCode('');
+      } else {
+        Alert.alert('Resend Failed', res?.message || 'Failed to resend OTP.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Server connection error.');
     }
   };
 
@@ -68,7 +127,7 @@ export default function VerifyOtpScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <MaterialIcons name="arrow-back" size={scale(24)} color="#F5C518" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Verify OTP</Text>
+            <Text style={styles.headerTitle}>Verify OTP & Reset Password</Text>
           </View>
 
           {/* MAIN CONTENT */}
@@ -85,7 +144,7 @@ export default function VerifyOtpScreen() {
             <Text style={styles.title}>Secure Access</Text>
             <Text style={styles.subtitle}>
               Enter the 6-digit code sent to{' '}
-              <Text style={styles.phoneHighlight}>+1 (555) 000-0000</Text>.
+              <Text style={styles.phoneHighlight}>+91 {phone || 'your mobile'}</Text>.
             </Text>
 
             {/* OTP CODE INPUTS */}
@@ -125,6 +184,36 @@ export default function VerifyOtpScreen() {
               onBlur={() => setFocused(false)}
               caretHidden
             />
+
+            {/* NEW PASSWORD INPUT FIELD */}
+            <View style={{ width: '100%', marginTop: verticalScale(24) }}>
+              <Text style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: moderateFontScale(13), fontWeight: '600', marginBottom: verticalScale(8) }}>
+                Enter New Password
+              </Text>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.12)',
+                borderRadius: scale(20),
+                paddingHorizontal: scale(16),
+                height: verticalScale(50),
+              }}>
+                <MaterialIcons name="lock-outline" size={scale(20)} color="rgba(255, 255, 255, 0.7)" style={{ marginRight: scale(10) }} />
+                <TextInput
+                  style={{ flex: 1, color: '#ffffff', fontSize: moderateFontScale(15), height: '100%', fontWeight: '500' }}
+                  placeholder="New Password (min 4 characters)"
+                  placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                  secureTextEntry={!showPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: scale(4) }}>
+                  <MaterialIcons name={showPassword ? 'visibility' : 'visibility-off'} size={scale(20)} color="rgba(255, 255, 255, 0.6)" />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
 
           {/* FOOTER ACTIONS */}
@@ -132,16 +221,20 @@ export default function VerifyOtpScreen() {
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                code.length < 6 ? styles.verifyButtonDisabled : null,
+                code.length < 6 || !newPassword || loading ? styles.verifyButtonDisabled : null,
               ]}
               onPress={handleVerify}
-              disabled={code.length < 6}
+              disabled={code.length < 6 || !newPassword || loading}
               activeOpacity={0.9}
             >
-              <View style={styles.buttonRow}>
-                <Text style={styles.verifyButtonText}>Verify & Login</Text>
-                <MaterialIcons name="arrow-forward" size={scale(18)} color="#101010" />
-              </View>
+              {loading ? (
+                <ActivityIndicator color="#101010" size="small" />
+              ) : (
+                <View style={styles.buttonRow}>
+                  <Text style={styles.verifyButtonText}>Verify & Reset Password</Text>
+                  <MaterialIcons name="arrow-forward" size={scale(18)} color="#101010" />
+                </View>
+              )}
             </TouchableOpacity>
 
             <View style={styles.resendContainer}>

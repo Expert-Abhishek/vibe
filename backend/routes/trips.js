@@ -774,7 +774,6 @@ router.get('/live-location/:tripId', async (req, res) => {
       phone: '+91 99000 82400',
       vehicleModel: 'AC 5-Seater / SUV',
       vehicleNumber: 'KA-03-EX-8240',
-      rating: 4.9,
       latitude: parseFloat(trip.pickup_lat || 12.9716),
       longitude: parseFloat(trip.pickup_lng || 77.5946),
       heading: 0,
@@ -796,7 +795,6 @@ router.get('/live-location/:tripId', async (req, res) => {
             phone: dp.phone || driverData.phone,
             vehicleModel: dp.vehicle_model || driverData.vehicleModel,
             vehicleNumber: dp.vehicle_number || driverData.vehicleNumber,
-            rating: parseFloat(dp.rating || 4.9),
             latitude: parseFloat(dp.latitude || driverData.latitude),
             longitude: parseFloat(dp.longitude || driverData.longitude),
             heading: parseFloat(dp.heading || 0),
@@ -1940,11 +1938,10 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     let driverPhone = '+91 99000 82400';
     let vehicleModel = 'AC Cab 5-Seater';
     let vehicleNumber = 'KA-03-EX-8240';
-    let rating = 4.9;
 
     try {
       const pRes = await db.query(
-        `SELECT u.phone, u.name, d.vehicle_model, d.vehicle_number, d.rating 
+        `SELECT u.phone, u.name, d.vehicle_model, d.vehicle_number 
          FROM users u 
          LEFT JOIN driver_profiles d ON u.id = d.user_id 
          WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text`,
@@ -1954,7 +1951,6 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
         driverPhone = pRes.rows[0].phone || driverPhone;
         vehicleModel = pRes.rows[0].vehicle_model || vehicleModel;
         vehicleNumber = pRes.rows[0].vehicle_number || vehicleNumber;
-        rating = parseFloat(pRes.rows[0].rating || 4.9);
         if (!driverName || driverName === 'Verified Partner') {
           driverName = pRes.rows[0].name || driverName;
         }
@@ -2054,7 +2050,6 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       driverName: driverName,
       driver_or_guide_name: driverName,
       driverPhone: driverPhone,
-      driverRating: rating,
       vehicleModel: vehicleModel,
       vehicleNumber: vehicleNumber,
       otp: generatedStartOtp,
@@ -3059,7 +3054,6 @@ router.get('/user-history/:customerId', async (req, res) => {
         status: statusLabel,
         rawStatus: t.status,
         paymentMode: t.payment_mode || 'Wallet',
-        rating: t.rating || 5,
         passengerCount: 1,
       };
     });

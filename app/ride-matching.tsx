@@ -73,7 +73,6 @@ export default function RideMatchingScreen() {
   // Live / Server driver information (null by default until matched with a real driver)
   const demoDriver = {
     name: liveDriverInfo?.name || null,
-    rating: liveDriverInfo?.rating ? `${liveDriverInfo.rating} ★` : null,
     phone: liveDriverInfo?.phone || null,
     vehicleName: liveDriverInfo?.vehicleModel || null,
     vehicleNumber: liveDriverInfo?.vehicleNumber || null,
@@ -218,7 +217,6 @@ export default function RideMatchingScreen() {
               phone: matched.phone || null,
               vehicleModel: matched.experience_years ? `Certified Tour Guide (${matched.experience_years} yrs exp)` : (matched.vehicle_model || null),
               vehicleNumber: matched.languages ? `Lang: ${matched.languages}` : (matched.vehicle_number || null),
-              rating: matched.rating ? parseFloat(matched.rating) : null,
             };
             setLiveDriverInfo(driverInfo);
             dispatchTargetedRequest(driverInfo.id, driverInfo);
@@ -234,7 +232,6 @@ export default function RideMatchingScreen() {
               phone: matched.phone || null,
               vehicleModel: matched.vehicle_model || matched.vehicleModel || null,
               vehicleNumber: matched.vehicle_number || matched.vehicleNumber || null,
-              rating: matched.rating ? parseFloat(matched.rating) : null,
             };
             setLiveDriverInfo(driverInfo);
             dispatchTargetedRequest(driverInfo.id, driverInfo);
@@ -312,7 +309,6 @@ export default function RideMatchingScreen() {
           phone: data.driverPhone || data.phone || null,
           vehicleModel: data.vehicleModel || data.vehicle_model || data.vehicleType || null,
           vehicleNumber: data.vehicleNumber || data.vehicle_number || null,
-          rating: data.rating ? parseFloat(data.rating) : null,
         });
       }
 

@@ -62,7 +62,6 @@ export default function TripStatusScreen() {
     phone: initialLocalTrip?.driverPhone || initialLocalTrip?.phone || null,
     vehicleModel: initialLocalTrip?.vehicleModel || initialLocalTrip?.vehicleType || null,
     vehicleNumber: initialLocalTrip?.vehicleNumber || null,
-    rating: initialLocalTrip?.rating ? parseFloat(initialLocalTrip.rating) : null,
     latitude: 12.9716,
     longitude: 77.5946,
     heading: 0,

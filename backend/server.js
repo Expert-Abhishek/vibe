@@ -303,7 +303,6 @@ async function initTablesOnBoot() {
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS upi_id VARCHAR(100);
 
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS photo_url TEXT;
-      ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS license_cert_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS id_proof_url TEXT;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS daily_rate NUMERIC(10,2) DEFAULT 2000.00;
       ALTER TABLE guide_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);

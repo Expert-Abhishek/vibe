@@ -86,7 +86,6 @@ export async function fetchDriversApi(): Promise<Driver[]> {
         vehicleNumber: d.vehicle_number || 'N/A',
         licenseNumber: d.license_number || 'N/A',
         status: d.status || 'Pending KYC',
-        rating: Number(d.rating) || 5.0,
         walletBalance: Number(d.wallet_balance) || 0,
         dateRegistered: d.created_at ? new Date(d.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         dailyRate: Number(d.daily_rate) || 2500,
@@ -128,14 +127,12 @@ export async function fetchGuidesApi(): Promise<Guide[]> {
         licenseId: g.license_id || 'N/A',
         bio: g.bio || 'Tour guide profile',
         status: g.status || 'Pending KYC',
-        rating: Number(g.rating) || 5.0,
         walletBalance: Number(g.wallet_balance) || 0,
         dateRegistered: g.created_at ? new Date(g.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         dailyRate: Number(g.daily_rate) || 2000,
         platformFee: g.platform_fee !== undefined ? Number(g.platform_fee) : 10,
         documents: {
           photo: g.photo_url || null,
-          licenseCert: g.license_cert_url || null,
           idProof: g.id_proof_url || null,
         }
       }));

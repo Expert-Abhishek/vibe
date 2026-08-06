@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS driver_profiles (
     license_number VARCHAR(50),
     alternate_phone VARCHAR(15),
     is_active BOOLEAN DEFAULT FALSE,
-    rating NUMERIC(3,2) DEFAULT 5.0,
     wallet_balance NUMERIC(10,2) DEFAULT 0.00,
     daily_rate NUMERIC(10,2) DEFAULT 2500.00,
     hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00,
@@ -69,12 +68,10 @@ CREATE TABLE IF NOT EXISTS guide_profiles (
     license_id VARCHAR(50),       -- e.g. Certification / License ID
     alternate_phone VARCHAR(15),
     bio TEXT,
-    rating NUMERIC(3,2) DEFAULT 5.0,
     is_active BOOLEAN DEFAULT FALSE,
     wallet_balance NUMERIC(10,2) DEFAULT 0.00,
     daily_rate NUMERIC(10,2) DEFAULT 2000.00,
     photo_url TEXT,
-    license_cert_url TEXT,
     id_proof_url TEXT,
     upi_id VARCHAR(100),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

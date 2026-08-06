@@ -1400,11 +1400,6 @@ export default function GuideDashboardScreen() {
                 <MaterialIcons name="translate" size={scale(14)} color={colors.textMuted} />
                 <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(11), fontWeight: '700' }}>EN / HI / KN</Text>
               </View>
-
-              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: scale(10), paddingVertical: verticalScale(4), borderRadius: scale(8), borderWidth: 1, borderColor: '#10B981', flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
-                <MaterialIcons name="star" size={scale(14)} color="#10B981" />
-                <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '700' }}>4.9 ★ Rating</Text>
-              </View>
             </View>
 
             {/* Toggle Edit Mode Button */}

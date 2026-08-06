@@ -29,6 +29,13 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle PostgreSQL client:', err);
 });
 
+// Warm up DB pool immediately on start to prevent first-login connection timeouts
+pool.query('SELECT 1').then(() => {
+  console.log('✅ PostgreSQL Database pool warmed up successfully.');
+}).catch((err) => {
+  console.warn('⚠️ Initial PostgreSQL warm-up query warning:', err.message);
+});
+
 module.exports = {
   query: (text, params) => pool.query(text, params),
   pool,

@@ -37,7 +37,6 @@ interface Guide {
   name: string;
   city: string;
   experience: number;
-  rating: number;
   languages: string[];
   specialty: string;
   description: string;
@@ -113,7 +112,6 @@ export default function GuidesScreen() {
             name: g.name || 'Certified Local Guide',
             city: g.city || 'Hampi',
             experience: Number(g.experience) || 5,
-            rating: Number(g.rating) || 5.0,
             languages: Array.isArray(g.languages) ? g.languages : ['Kannada', 'English', 'Hindi'],
             specialty: g.expertise || 'Heritage & Cultural Tours',
             description: g.bio || 'Government certified tourist guide with extensive local history knowledge.',

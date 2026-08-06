@@ -92,7 +92,8 @@ export default function DriverDashboardScreen() {
   const [kmDriven, setKmDriven] = useState(0);
   const [tripsCount, setTripsCount] = useState(0);
   const [earningsToday, setEarningsToday] = useState(0);
-  const [earningsBalance, setEarningsBalance] = useState(0);
+  const [earningsBalance, setEarningsBalance] = useState(1000);
+  const [isWalletLoaded, setIsWalletLoaded] = useState(false);
 
   // Settings & Toggles
   const [selectedVehicle, setSelectedVehicle] = useState<'innova' | 'swift'>('innova');
@@ -174,6 +175,7 @@ export default function DriverDashboardScreen() {
       if (data.balance !== undefined) setEarningsBalance(data.balance);
       if (data.transactions) setWalletTransactions(data.transactions);
     }
+    setIsWalletLoaded(true);
 
     const adminRes = await fetchAdminPaymentSettingsApi();
     if (adminRes && adminRes.success && adminRes.data) {
@@ -1015,7 +1017,11 @@ export default function DriverDashboardScreen() {
     };
 
     loadDriverData();
-    const unsubscribeWallet = subscribeWalletChange(loadDriverData);
+    loadWalletData();
+    const unsubscribeWallet = subscribeWalletChange(() => {
+      loadDriverData();
+      loadWalletData();
+    });
     return () => {
       unsubscribeWallet();
     };
@@ -1368,8 +1374,8 @@ export default function DriverDashboardScreen() {
         </View>
       </View>
 
-      {/* Low Wallet Balance Warning Banner */}
-      {earningsBalance < 50 && (
+      {/* Low Wallet Balance Warning Banner (Only displayed after balance is loaded and if balance < ₹50) */}
+      {isWalletLoaded && earningsBalance < 50 && (
         <View style={{
           backgroundColor: 'rgba(245, 197, 24, 0.12)',
           borderWidth: 1,

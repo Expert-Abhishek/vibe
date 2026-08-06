@@ -1,6 +1,9 @@
 'use client';
 
-import { deleteUserApi, fetchGuidesApi, updateGuideRateApi, updateUserStatusApi, adjustWalletBalanceApi } from '@/lib/api';
+import { PreviewableImage } from '@/components/ImagePreviewModal';
+import UserTripHistorySection from '@/components/UserTripHistorySection';
+import UserWalletHistorySection from '@/components/UserWalletHistorySection';
+import { adjustWalletBalanceApi, deleteUserApi, fetchGuidesApi, updateGuideRateApi, updateUserStatusApi } from '@/lib/api';
 import { Guide, KYCStatus } from '@/lib/types';
 import {
   CheckCircle,
@@ -12,13 +15,9 @@ import {
   Star,
   Trash2,
   X,
-  XCircle,
-  Star as StarIcon,
+  XCircle
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import UserWalletHistorySection from '@/components/UserWalletHistorySection';
-import UserTripHistorySection from '@/components/UserTripHistorySection';
-import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -166,12 +165,12 @@ export default function GuidesPage() {
                   <td className="py-4 px-6">
                     <span
                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold ${guide.status === 'Active'
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-                          : guide.status === 'Pending KYC'
-                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse'
-                            : guide.status === 'KYC Declined'
-                              ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-                              : 'bg-gray-500/10 text-gray-400 border border-gray-500/30'
+                        ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+                        : guide.status === 'Pending KYC'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse'
+                          : guide.status === 'KYC Declined'
+                            ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                            : 'bg-gray-500/10 text-gray-400 border border-gray-500/30'
                         }`}
                     >
                       {guide.status === 'Active' ? (
@@ -354,10 +353,10 @@ function GuideDetailModal({
                 <h2 className="text-lg font-bold text-white">{guide.name}</h2>
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${guide.status === 'Active'
-                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                      : guide.status === 'Pending KYC'
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : guide.status === 'Pending KYC'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
                     }`}
                 >
                   {guide.status}
@@ -532,15 +531,8 @@ function GuideDetailModal({
             </div>
 
             <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
-              <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Rating</span>
-              <span className="text-xs font-bold text-yellow-400 mt-1 block flex items-center">
-                <Star className="w-3 h-3 fill-yellow-400 mr-1" />
-                {guide.rating} / 5.0
-              </span>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-dark-hover/60 border border-dark-border/80">
               <span className="text-[10px] text-dark-textMuted uppercase font-bold block">Wallet Balance</span>
+
               <span className="text-xs font-bold text-white mt-1 block">
                 ₹{guide.walletBalance.toLocaleString('en-IN')}
               </span>
@@ -554,17 +546,17 @@ function GuideDetailModal({
               <span>Guide Verification Documents & ID Proof</span>
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {Object.entries(guide.documents).map(([key, url]) => (
                 <div key={key} className="p-3 rounded-xl bg-dark-hover/40 border border-dark-border flex flex-col items-center">
                   <span className="text-[10px] font-bold text-dark-textMuted uppercase mb-2">
-                    {key === 'photo' ? '👤 Profile Photo' : key === 'licenseCert' ? '📜 Tourism License Cert' : '🆔 Aadhar / ID Proof'}
+                    {key === 'photo' ? '👤 Profile Photo' : '🆔 Aadhar / ID Proof'}
                   </span>
                   {isValidImageUrl(url) ? (
                     <PreviewableImage
                       src={url!}
                       alt={key}
-                      title={`${guide.name} - ${key === 'photo' ? 'Profile Photo' : key === 'licenseCert' ? 'Tourism License Cert' : 'Aadhar / ID Proof'}`}
+                      title={`${guide.name} - ${key === 'photo' ? 'Profile Photo' : 'Aadhar / ID Proof'}`}
                       className="w-full h-36 object-cover rounded-lg border border-dark-border"
                       wrapperClassName="w-full"
                     />
@@ -587,8 +579,8 @@ function GuideDetailModal({
             <button
               onClick={() => onUpdateStatus(guide.id, 'Active')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold ${guide.status === 'Active'
-                  ? 'bg-green-500 text-black'
-                  : 'bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black'
+                ? 'bg-green-500 text-black'
+                : 'bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-black'
                 } transition-colors`}
             >
               Approve / Set Active
@@ -596,8 +588,8 @@ function GuideDetailModal({
             <button
               onClick={() => onUpdateStatus(guide.id, 'KYC Declined')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold ${guide.status === 'KYC Declined'
-                  ? 'bg-red-500 text-white'
-                  : 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
+                ? 'bg-red-500 text-white'
+                : 'bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white'
                 } transition-colors`}
             >
               Decline KYC
@@ -605,8 +597,8 @@ function GuideDetailModal({
             <button
               onClick={() => onUpdateStatus(guide.id, 'Inactive')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold ${guide.status === 'Inactive'
-                  ? 'bg-gray-600 text-white'
-                  : 'bg-dark-hover text-gray-400 hover:text-white'
+                ? 'bg-gray-600 text-white'
+                : 'bg-dark-hover text-gray-400 hover:text-white'
                 } transition-colors`}
             >
               Deactivate

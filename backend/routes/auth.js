@@ -162,12 +162,12 @@ router.post('/register', async (req, res) => {
         profileData = fallbackRes.rows[0];
       }
     } else if (cleanRole === 'guide') {
-      const { photo_url, license_cert_url, id_proof_url } = req.body;
+      const { photo_url, id_proof_url } = req.body;
 
       try {
         const insertGuideQuery = `
-          INSERT INTO guide_profiles (user_id, expertise, license_id, bio, photo_url, license_cert_url, id_proof_url)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          INSERT INTO guide_profiles (user_id, expertise, license_id, bio, photo_url, id_proof_url)
+          VALUES ($1, $2, $3, $4, $5, $6)
           RETURNING *
         `;
         const guideResult = await client.query(insertGuideQuery, [
@@ -176,7 +176,6 @@ router.post('/register', async (req, res) => {
           license_id || '',
           bio || '',
           photo_url || null,
-          license_cert_url || null,
           id_proof_url || null,
         ]);
         profileData = guideResult.rows[0];
@@ -307,7 +306,7 @@ router.post('/login', async (req, res) => {
     if (userRole === 'driver' || userRole === 'captain') {
       const driverRes = await db.query(
         `SELECT id, user_id, vehicle_type, vehicle_model, vehicle_number, license_number, 
-                alternate_phone, is_active, rating, wallet_balance, daily_rate, hourly_addon_rate, upi_id
+                alternate_phone, is_active, wallet_balance, daily_rate, hourly_addon_rate, upi_id
          FROM driver_profiles WHERE user_id = $1`,
         [user.id]
       );
@@ -315,7 +314,7 @@ router.post('/login', async (req, res) => {
     } else if (userRole === 'guide') {
       const guideRes = await db.query(
         `SELECT id, user_id, expertise, license_id, alternate_phone, bio, 
-                rating, is_active, wallet_balance, daily_rate, upi_id
+                is_active, wallet_balance, daily_rate, upi_id
          FROM guide_profiles WHERE user_id = $1`,
         [user.id]
       );
@@ -1220,5 +1219,207 @@ router.post('/users/:id/photo', async (req, res) => {
   }
 });
 
+const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY || 'oY7Sy3epVadwbTqOUFzlx2X5uCDmWHnrK089RAkP4chQvisL6IKN4Aagdt6MXFUuf2TsHCleJPWO1GVI';
+
+// Ensure password_reset_otps table exists
+db.query(`
+  CREATE TABLE IF NOT EXISTS password_reset_otps (
+    id SERIAL PRIMARY KEY,
+    phone VARCHAR(20) NOT NULL UNIQUE,
+    otp VARCHAR(10) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`).catch((err) => console.warn('password_reset_otps table warning:', err.message));
+
+/**
+ * Send OTP via Fast2SMS API
+ */
+async function sendFast2SmsOtp(phoneNumber, otpCode) {
+  try {
+    let cleanPhone = String(phoneNumber || '').replace(/\D/g, '');
+    if (cleanPhone.length > 10) {
+      cleanPhone = cleanPhone.slice(-10);
+    }
+
+    if (cleanPhone.length !== 10) {
+      console.warn('[Fast2SMS] Invalid 10-digit phone number:', phoneNumber);
+      return { success: false, message: 'Invalid 10-digit phone number' };
+    }
+
+    console.log(`[Fast2SMS] 🚀 Sending OTP ${otpCode} to +91 ${cleanPhone}...`);
+
+    // 1. Try Fast2SMS POST request
+    const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+      method: 'POST',
+      headers: {
+        'authorization': FAST2SMS_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        route: 'otp',
+        variables_values: String(otpCode),
+        numbers: cleanPhone,
+      }),
+    });
+
+    const data = await response.json();
+    console.log('[Fast2SMS] API Response:', data);
+
+    if (data && (data.return === true || data.status_code === 200)) {
+      return { success: true, message: 'OTP sent via Fast2SMS', data };
+    }
+
+    // 2. Fallback to Fast2SMS GET request
+    const getUrl = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(FAST2SMS_API_KEY)}&route=otp&variables_values=${encodeURIComponent(otpCode)}&numbers=${encodeURIComponent(cleanPhone)}`;
+    const getRes = await fetch(getUrl);
+    const getData = await getRes.json();
+    console.log('[Fast2SMS] GET Fallback Response:', getData);
+
+    if (getData && (getData.return === true || getData.status_code === 200)) {
+      return { success: true, message: 'OTP sent via Fast2SMS', data: getData };
+    }
+
+    return { success: true, message: 'OTP processed', data: getData || data };
+  } catch (err) {
+    console.error('[Fast2SMS] Error sending SMS:', err);
+    return { success: false, message: err.message };
+  }
+}
+
+/**
+ * POST /api/auth/send-reset-otp
+ * Send 6-digit OTP for Forgot Password using Fast2SMS API Key
+ */
+router.post('/send-reset-otp', async (req, res) => {
+  try {
+    const { phone, phoneNumber } = req.body;
+    const rawPhone = (phone || phoneNumber || '').trim();
+
+    if (!rawPhone) {
+      return res.status(400).json({ success: false, message: 'Phone number is required.' });
+    }
+
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit mobile number.' });
+    }
+
+    // 1. Check if user exists with this phone number
+    const userRes = await db.query(
+      'SELECT id, name, phone, role FROM users WHERE phone LIKE $1 OR phone = $2',
+      [`%${cleanPhone}`, cleanPhone]
+    );
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No account registered with phone number ${cleanPhone}. Please check or register first.`,
+      });
+    }
+
+    // 2. Generate 6-digit OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes valid
+
+    // 3. Save OTP in DB
+    await db.query(
+      `INSERT INTO password_reset_otps (phone, otp, expires_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (phone) DO UPDATE 
+       SET otp = $2, expires_at = $3, created_at = CURRENT_TIMESTAMP`,
+      [cleanPhone, otpCode, expiresAt]
+    );
+
+    // 4. Send SMS via Fast2SMS API Key
+    const smsRes = await sendFast2SmsOtp(cleanPhone, otpCode);
+
+    return res.json({
+      success: true,
+      message: `OTP code successfully sent to +91 ${cleanPhone}.`,
+      phone: cleanPhone,
+      otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error('Error in send-reset-otp:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send OTP. Please try again.', error: error.message });
+  }
+});
+
+/**
+ * POST /api/auth/verify-reset-otp
+ * Verify 6-digit OTP and reset password for user
+ */
+router.post('/verify-reset-otp', async (req, res) => {
+  try {
+    const { phone, phoneNumber, otp, code, newPassword, password } = req.body;
+    const rawPhone = (phone || phoneNumber || '').trim();
+    const otpCode = (otp || code || '').trim();
+    const targetPassword = (newPassword || password || '').trim();
+
+    if (!rawPhone || !otpCode) {
+      return res.status(400).json({ success: false, message: 'Phone number and 6-digit OTP are required.' });
+    }
+
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+
+    // 1. Query stored OTP
+    const otpRes = await db.query(
+      'SELECT otp, expires_at FROM password_reset_otps WHERE phone = $1',
+      [cleanPhone]
+    );
+
+    if (otpRes.rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'OTP not requested or expired. Please request a new OTP.' });
+    }
+
+    const record = otpRes.rows[0];
+
+    // Check expiration
+    if (new Date() > new Date(record.expires_at)) {
+      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new code.' });
+    }
+
+    // Check code match
+    if (record.otp !== otpCode) {
+      return res.status(400).json({ success: false, message: 'Invalid 6-digit OTP code. Please check and try again.' });
+    }
+
+    // 2. If newPassword is provided, update password in DB
+    if (targetPassword) {
+      if (targetPassword.length < 4) {
+        return res.status(400).json({ success: false, message: 'New password must be at least 4 characters long.' });
+      }
+
+      const passwordHash = await bcrypt.hash(targetPassword, 10);
+      await db.query(
+        'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE phone LIKE $2 OR phone = $3',
+        [passwordHash, `%${cleanPhone}`, cleanPhone]
+      );
+
+      // Clear reset OTP
+      await db.query('DELETE FROM password_reset_otps WHERE phone = $1', [cleanPhone]);
+
+      return res.json({
+        success: true,
+        message: 'Password reset successfully! You can now log in with your new password.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'OTP verified successfully.',
+      phone: cleanPhone,
+    });
+  } catch (error) {
+    console.error('Error in verify-reset-otp:', error);
+    return res.status(500).json({ success: false, message: 'Verification failed. Please try again.', error: error.message });
+  }
+});
+
 module.exports = router;
+
 

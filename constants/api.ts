@@ -35,7 +35,6 @@ export interface RegisterPayload {
   expertise?: string;
   license_id?: string;
   bio?: string;
-  license_cert_url?: string;
   id_proof_url?: string;
 }
 
@@ -464,9 +463,9 @@ export async function fetchGuidesApi(): Promise<any[]> {
 /**
  * Login user (Tourist, Driver, Guide) via phone/email & password
  */
-export async function loginUserApi(payload: { identifier: string; password: string }): Promise<any> {
+export async function loginUserApi(payload: { identifier: string; password: string }, attempt = 1): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -479,11 +478,51 @@ export async function loginUserApi(payload: { identifier: string; password: stri
     return await res.json();
   } catch (e: any) {
     clearTimeout(timeoutId);
-    console.warn('loginUserApi error:', e);
+    console.warn(`loginUserApi error (attempt ${attempt}):`, e);
+
+    if (attempt < 2 && (e?.name === 'AbortError' || e?.message?.includes('fetch') || e?.message?.includes('network'))) {
+      console.log('🔄 Retrying login request after cold start handshake...');
+      return loginUserApi(payload, attempt + 1);
+    }
+
     if (e?.name === 'AbortError') {
       return { success: false, message: 'Login request timed out. Please check network connection and try again.' };
     }
     return { success: false, message: e?.message || 'Server connection error. Please try again.' };
+  }
+}
+
+/**
+ * Send Forgot Password Reset OTP via Fast2SMS API
+ */
+export async function sendResetOtpApi(phone: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/send-reset-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('sendResetOtpApi error:', e);
+    return { success: false, message: e?.message || 'Failed to send OTP. Please check server connection.' };
+  }
+}
+
+/**
+ * Verify Reset OTP & Update Password
+ */
+export async function verifyResetOtpApi(payload: { phone: string; otp: string; newPassword?: string }): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/verify-reset-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('verifyResetOtpApi error:', e);
+    return { success: false, message: e?.message || 'Failed to verify OTP. Please try again.' };
   }
 }
 
