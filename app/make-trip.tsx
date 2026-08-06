@@ -726,7 +726,7 @@ export default function MakeTripScreen() {
 
       let isServerCreated = false;
       try {
-        const destId = checkpoints.find((c: any) => c.id || c.destinationId || c.placeId)?.id || checkpoints.find((c: any) => c.id || c.destinationId || c.placeId)?.destinationId || null;
+        const destId = checkpoints.find((c: any) => c.id || c.destinationId || c.placeId)?.id || (checkpoints.find((c: any) => c.id || c.destinationId || c.placeId) as any)?.destinationId || null;
         const allDestIds = checkpoints.map((c: any) => String(c.id || c.destinationId || c.placeId || c.name)).filter(Boolean);
 
         const tripRes = await createTripApi({
@@ -813,10 +813,16 @@ export default function MakeTripScreen() {
       console.warn('Postgres DB creation error (using memory fallback):', e);
     }
 
+    const checkpointPlaceNames = checkpoints.map(c => (typeof c === 'string' ? c : (c.name || (c as any).checkpoint_name || 'Checkpoint'))).filter(Boolean);
+    const destinationIdArray = checkpoints.map(c => (typeof c === 'object' && c !== null ? String((c as any).destinationId || (c as any).destination_id || (c as any).id || c.name) : String(c))).filter(Boolean);
+
     const instantTripObject = {
       id: serverTripId,
       tripId: serverTripId,
-      checkpoints: checkpoints.map(c => ({ name: c.name, latitude: c.latitude, longitude: c.longitude })),
+      checkpoints: checkpointPlaceNames,
+      destination_ids: destinationIdArray,
+      destinationIds: destinationIdArray,
+      route: checkpointPlaceNames,
       pickup: pickupName,
       pickupName: pickupName,
       drop: dropName,

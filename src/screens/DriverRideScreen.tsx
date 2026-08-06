@@ -28,11 +28,33 @@ interface DriverRideScreenProps {
   pickupAddress?: string;
   dropAddress?: string;
   fareAmount?: number;
-  bookingType?: BookingType;
+  bookingType?: 'INSTANT' | 'PRE_BOOKED' | string;
   scheduledTime?: string | Date;
   checkpoints?: string[];
   onBack?: () => void;
   style?: StyleProp<ViewStyle>;
+}
+
+function CashCollectionModal({ visible, bookingType, totalFare, advanceDepositPaid, remainingCashBalance, onConfirmCollection, onClose }: any) {
+  if (!visible) return null;
+  return (
+    <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <View style={{ backgroundColor: '#1E1E24', borderRadius: 16, padding: 20, width: '100%', alignItems: 'center' }}>
+        <Text style={{ color: '#F5C518', fontSize: 18, fontWeight: '800', marginBottom: 12 }}>💵 Cash Collection</Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 14, marginBottom: 6 }}>Total Fare: ₹{totalFare}</Text>
+        {bookingType === 'PRE_BOOKED' && (
+          <Text style={{ color: '#10B981', fontSize: 12, marginBottom: 6 }}>Advance Deposit Paid: ₹{advanceDepositPaid}</Text>
+        )}
+        <Text style={{ color: '#F5C518', fontSize: 16, fontWeight: '800', marginVertical: 10 }}>Collect Cash: ₹{remainingCashBalance}</Text>
+        <TouchableOpacity style={{ backgroundColor: '#10B981', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10, marginTop: 10, width: '100%', alignItems: 'center' }} onPress={onConfirmCollection}>
+          <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Confirm Payment Collected</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{ marginTop: 10 }} onPress={onClose}>
+          <Text style={{ color: '#999999', fontSize: 12 }}>Close</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 export default function DriverRideScreen({
@@ -50,7 +72,7 @@ export default function DriverRideScreen({
 }: DriverRideScreenProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { showModal } = useAppModal();
+  const showModal = (opts: any) => {};
   const [cashModalVisible, setCashModalVisible] = useState(false);
 
   const currentRideStatus = useRideState(tripId);

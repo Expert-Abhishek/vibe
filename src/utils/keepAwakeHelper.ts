@@ -1,16 +1,27 @@
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+let activateKeepAwakeAsync: any;
+let deactivateKeepAwake: any;
+
+try {
+  const keepAwake = require('expo-keep-awake');
+  activateKeepAwakeAsync = keepAwake.activateKeepAwakeAsync;
+  deactivateKeepAwake = keepAwake.deactivateKeepAwake;
+} catch (e) {}
 
 export async function safeActivateKeepAwake(tag?: string) {
   try {
-    await activateKeepAwakeAsync(tag);
+    if (activateKeepAwakeAsync) {
+      await activateKeepAwakeAsync(tag);
+    }
   } catch (e) {
-    // Quietly catch keep awake rejection (e.g. WakeLock permission missing or OS restriction)
+    // Quietly catch keep awake rejection
   }
 }
 
 export async function safeDeactivateKeepAwake(tag?: string) {
   try {
-    await deactivateKeepAwake(tag);
+    if (deactivateKeepAwake) {
+      await deactivateKeepAwake(tag);
+    }
   } catch (e) {
     // Quietly catch deactivate keep awake rejection
   }

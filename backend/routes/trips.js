@@ -276,7 +276,12 @@ function mapTripRecord(t) {
     planId: t.plan_id,
     destinationId: t.destination_id || (Array.isArray(t.destination_ids) && t.destination_ids.length > 0 ? t.destination_ids[0] : null),
     destinationIds: t.destination_ids || [],
-    checkpoints: t.destination_ids || [],
+    destination_ids: t.destination_ids || [],
+    checkpoints: (Array.isArray(t.checkpoints) && t.checkpoints.length > 0)
+      ? t.checkpoints.map(cp => typeof cp === 'object' && cp !== null ? (cp.name || cp.checkpoint_name || cp.title || 'Checkpoint') : String(cp))
+      : ((Array.isArray(t.destination_ids) && t.destination_ids.length > 0)
+        ? t.destination_ids.map(cp => typeof cp === 'object' && cp !== null ? (cp.name || cp.checkpoint_name || cp.title || 'Checkpoint') : String(cp))
+        : []),
     pickupId: pickupId,
     pickup_id: pickupId,
     stationId: pickupId,
@@ -1909,6 +1914,17 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
     }
 
     const mappedTrip = mapTripRecord(t);
+    const rawCheckpoints = (Array.isArray(req.body.checkpoints) && req.body.checkpoints.length > 0)
+      ? req.body.checkpoints
+      : ((Array.isArray(t.destination_ids) && t.destination_ids.length > 0) ? t.destination_ids : []);
+    const resolvedCheckpoints = await resolveDestinationCheckpoints(rawCheckpoints);
+    const checkpointNames = resolvedCheckpoints.map(cp => (typeof cp === 'object' && cp !== null ? (cp.name || cp.checkpoint_name || cp.title || 'Checkpoint') : String(cp)));
+
+    mappedTrip.destination_ids = t.destination_ids || req.body.destinationIds || [];
+    mappedTrip.destinationIds = t.destination_ids || req.body.destinationIds || [];
+    mappedTrip.checkpoints = checkpointNames.length > 0 ? checkpointNames : (Array.isArray(req.body.checkpoints) ? req.body.checkpoints : (t.destination_ids || []));
+    mappedTrip.trip_checkpoints = resolvedCheckpoints;
+
     emitTripRequest(mappedTrip);
 
     res.status(201).json({

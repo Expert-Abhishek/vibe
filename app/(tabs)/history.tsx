@@ -139,7 +139,7 @@ export default function HistoryScreen() {
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       reloadTimerRef.current = setTimeout(() => {
         loadRealHistory();
-      }, 350);
+      }, 350) as any;
     };
 
     const subComp = DeviceEventEmitter.addListener('trip_completed', handleRefresh);

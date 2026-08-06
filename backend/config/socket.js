@@ -225,6 +225,16 @@ function emitTripRequest(tripObject) {
       parseFloat(tripObject.dropLng || tripObject.drop_lng)
     );
 
+  const rawCps = tripObject.checkpoints || tripObject.route || [];
+  const parsedCps = Array.isArray(rawCps)
+    ? rawCps.map(c => typeof c === 'object' && c !== null ? (c.name || c.checkpoint_name || c.title || c.location || String(c)) : String(c)).filter(Boolean)
+    : [];
+
+  const rawDestIds = tripObject.destination_ids || tripObject.destinationIds || [];
+  const parsedDestIds = Array.isArray(rawDestIds)
+    ? rawDestIds.map(d => typeof d === 'object' && d !== null ? String(d.id || d.destination_id || d.destinationId || d.name) : String(d)).filter(Boolean)
+    : [];
+
   const normalizedTrip = {
     ...tripObject,
     id: tripObject.id || tripObject.tripId,
@@ -234,6 +244,9 @@ function emitTripRequest(tripObject) {
     vehicle_category: vehicleCategory || '5_seater',
     distanceKm: computedDistance,
     distance_km: computedDistance,
+    destination_ids: parsedDestIds.length > 0 ? parsedDestIds : (tripObject.destination_ids || tripObject.destinationIds || []),
+    destinationIds: parsedDestIds.length > 0 ? parsedDestIds : (tripObject.destinationIds || tripObject.destination_ids || []),
+    checkpoints: parsedCps.length > 0 ? parsedCps : (tripObject.checkpoints || []),
     status: 'Pending',
     createdAt: tripObject.createdAt || new Date().toISOString(),
   };

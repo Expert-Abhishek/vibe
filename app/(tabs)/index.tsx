@@ -72,7 +72,7 @@ export default function HomeScreen() {
           if (localActive) {
             activeObj = {
               id: localActive.id,
-              pickup: localActive.title || localActive.pickup || 'Pickup Spot',
+              pickup: localActive.title || (localActive as any).pickup || (localActive as any).pickupName || 'Pickup Spot',
               drop_name: Array.isArray(localActive.route) && localActive.route.length > 0 ? localActive.route[localActive.route.length - 1] : 'Destination',
               driverName: localActive.driverOrGuideName || 'Assigned Partner',
               status: localActive.status,
@@ -92,7 +92,7 @@ export default function HomeScreen() {
       if (activeTripTimerRef.current) clearTimeout(activeTripTimerRef.current);
       activeTripTimerRef.current = setTimeout(() => {
         checkActiveTrip();
-      }, 350);
+      }, 350) as any;
     };
 
     const subAcc = DeviceEventEmitter.addListener('trip_accepted', handleUpdate);

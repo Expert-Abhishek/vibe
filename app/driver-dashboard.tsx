@@ -1482,10 +1482,21 @@ export default function DriverDashboardScreen() {
                   if (!t) return;
                   const pickupName = t.pickup || t.pickupName || t.pickup_name || t.title || 'Pickup Spot';
                   const dropName = t.drop || t.dropName || t.drop_name || t.title || 'Destination';
-                  const rawCheckpoints = t.checkpoints || t.destination_ids || t.destinationIds || t.route;
-                  const parsedCheckpoints = typeof rawCheckpoints === 'string'
-                    ? JSON.parse(rawCheckpoints)
-                    : (Array.isArray(rawCheckpoints) ? rawCheckpoints : [pickupName, dropName]);
+                  const rawCheckpoints = t.checkpoints || t.destination_checkpoints || t.route || t.destination_ids;
+                  let parsedCheckpoints: string[] = [];
+                  if (typeof rawCheckpoints === 'string') {
+                    try {
+                      const p = JSON.parse(rawCheckpoints);
+                      parsedCheckpoints = Array.isArray(p) ? p.map((c: any) => typeof c === 'object' && c !== null ? (c.name || c.checkpoint_name || String(c)) : String(c)) : [rawCheckpoints];
+                    } catch (e) {
+                      parsedCheckpoints = [rawCheckpoints];
+                    }
+                  } else if (Array.isArray(rawCheckpoints)) {
+                    parsedCheckpoints = rawCheckpoints.map((c: any) => typeof c === 'object' && c !== null ? (c.name || c.checkpoint_name || String(c)) : String(c));
+                  }
+                  if (parsedCheckpoints.length === 0) {
+                    parsedCheckpoints = [pickupName, dropName];
+                  }
 
                   allBookingsMap.set(t.id, {
                     id: String(t.id),
@@ -1533,14 +1544,14 @@ export default function DriverDashboardScreen() {
                       checkpoints: Array.isArray(b.route) ? b.route : [pickupName, dropName],
                       date: b.date || 'Upcoming',
                       time: b.time || '10:00 AM',
-                      price: parseFloat(b.price || 0),
+                      price: parseFloat(String(b.price || 0)),
                       touristName: b.touristName || 'Tourist Client',
                       driverOrGuideName: b.driverOrGuideName || '',
                       status: b.status || 'Pending',
                       paymentMode: b.paymentMode || 'Cash',
                       assignedToId: b.assignedToId,
-                      otp: b.otp || '8240',
-                      endOtp: b.endOtp || '4321',
+                      otp: (b as any).otp || '8240',
+                      endOtp: (b as any).endOtp || (b as any).end_otp || '4321',
                     });
                   }
                 });
@@ -1689,13 +1700,13 @@ export default function DriverDashboardScreen() {
                   >
                     {tripPhase === 'pickup' ? (
                       <Marker
-                        coordinate={{ latitude: activeTrip.pickupLat, longitude: activeTrip.pickupLng }}
+                        coordinate={{ latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 }}
                         title="Pickup Location"
                         pinColor={colors.amber}
                       />
                     ) : (
                       <Marker
-                        coordinate={{ latitude: activeTrip.dropLat, longitude: activeTrip.dropLng }}
+                        coordinate={{ latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }}
                         title="Dropoff Location"
                         pinColor="#ef4444"
                       />
