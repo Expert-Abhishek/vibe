@@ -298,7 +298,7 @@ function emitTripRequest(tripObject) {
  */
 // File: backend/config/socket.js
 
-function emitTripAccepted(tripObject) {
+async function emitTripAccepted(tripObject) {
   if (!io || !tripObject) return;
 
   // Normalize IDs & Extract Customer ID properly as clean strings
@@ -306,15 +306,47 @@ function emitTripAccepted(tripObject) {
   const customerId = String(tripObject.customer_id || tripObject.customerId || '');
   const driverId = String(tripObject.driver_id || tripObject.driverId || '');
 
+  let driverName = tripObject.driverName || tripObject.driver_or_guide_name || null;
+  let driverPhone = tripObject.driverPhone || tripObject.phone || null;
+  let vehicleModel = tripObject.vehicleModel || tripObject.vehicle_model || null;
+  let vehicleNumber = tripObject.vehicleNumber || tripObject.vehicle_number || null;
+
+  if (driverId && driverId !== 'null' && driverId !== 'undefined') {
+    try {
+      const db = require('./db');
+      const dRes = await db.query(
+        `SELECT u.phone, u.name, d.vehicle_model, d.vehicle_number 
+         FROM users u 
+         LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text 
+         WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text`,
+        [driverId]
+      );
+      if (dRes.rows && dRes.rows.length > 0) {
+        const dRow = dRes.rows[0];
+        if (dRow.name) driverName = dRow.name;
+        if (dRow.phone) driverPhone = dRow.phone;
+        if (dRow.vehicle_model) vehicleModel = dRow.vehicle_model;
+        if (dRow.vehicle_number) vehicleNumber = dRow.vehicle_number;
+      }
+    } catch (e) {
+      console.warn('[SOCKET] Could not query driver details for emitTripAccepted:', e.message);
+    }
+  }
+
   const acceptancePayload = {
+    ...tripObject,
+    id: tripId,
     tripId: tripId,
     customerId: customerId,
+    customer_id: customerId,
     driverId: driverId,
+    driver_id: driverId,
     status: 'Accepted',
-    driverName: tripObject.driverName || tripObject.driver_or_guide_name || 'Driver Partner',
-    driverPhone: tripObject.driverPhone || '+91 99000 82400',
-    vehicleModel: tripObject.vehicleModel || tripObject.vehicle_model || '5 Seater Cab',
-    vehicleNumber: tripObject.vehicleNumber || tripObject.vehicle_number || 'HR-51-AB-1234',
+    driverName: driverName || 'Driver Partner',
+    driver_or_guide_name: driverName || 'Driver Partner',
+    driverPhone: driverPhone || '+91 9810235511',
+    vehicleModel: vehicleModel || 'Standard Cab',
+    vehicleNumber: vehicleNumber || 'KA-03-EX-8240',
     otp: tripObject.otp || '8240',
     endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
   };

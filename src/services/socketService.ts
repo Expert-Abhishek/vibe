@@ -1,8 +1,8 @@
+import { API_BASE_URL, notifyWalletChanged } from '@/constants/api';
+import { updateTripStatusGlobally } from '@/constants/tripSync';
 import { DeviceEventEmitter } from 'react-native';
 import { io, Socket } from 'socket.io-client';
-import { API_BASE_URL, notifyWalletChanged } from '@/constants/api';
 import { notificationStore } from '../store/notificationStore';
-import { updateTripStatusGlobally } from '@/constants/tripSync';
 import { playNotificationChime } from '../utils/soundHelper';
 
 let socket: Socket | null = null;
@@ -82,7 +82,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         try {
           DeviceEventEmitter.emit('new_driver_request', data);
           DeviceEventEmitter.emit('trip_request', data);
-        } catch (e) {}
+        } catch (e) { }
       }
     });
     // 4. Real-time trip status events (accepted, completed, cancelled, declined)
@@ -110,7 +110,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
             DeviceEventEmitter.emit('trip_cancelled', data);
             DeviceEventEmitter.emit('RIDE_CANCELLED', data);
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -122,7 +122,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
           DeviceEventEmitter.emit('trip_completed', data);
           DeviceEventEmitter.emit('RIDE_COMPLETED', data);
           DeviceEventEmitter.emit('trip_status_updated', { ...data, status: 'Completed' });
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -134,7 +134,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
           DeviceEventEmitter.emit('trip_cancelled', data);
           DeviceEventEmitter.emit('RIDE_CANCELLED', data);
           DeviceEventEmitter.emit('trip_status_updated', { ...data, status: 'CANCELLED' });
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -152,7 +152,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
             DeviceEventEmitter.emit('trip_accepted', data);
             DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -164,7 +164,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
           DeviceEventEmitter.emit('trip_accepted', data);
           DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
           DeviceEventEmitter.emit('trip_status_updated', { ...data, status: 'accepted' });
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -175,7 +175,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         try {
           DeviceEventEmitter.emit('trip_accepted', data);
           DeviceEventEmitter.emit('RIDE_ACCEPTED', data);
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -186,7 +186,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         try {
           DeviceEventEmitter.emit('trip_declined', data);
           DeviceEventEmitter.emit('RIDE_DECLINED', data);
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -197,7 +197,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         try {
           DeviceEventEmitter.emit('trip_declined', data);
           DeviceEventEmitter.emit('RIDE_DECLINED', data);
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -208,7 +208,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         try {
           DeviceEventEmitter.emit('driver_location_stream', data);
           DeviceEventEmitter.emit('driver_location_update', data);
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -218,7 +218,7 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
         try {
           DeviceEventEmitter.emit('driver_location_stream', data);
           DeviceEventEmitter.emit('driver_location_update', data);
-        } catch (e) {}
+        } catch (e) { }
       }
     });
 
@@ -296,7 +296,7 @@ export function joinUserRoom(userId?: string, role: string = 'tourist', vehicleC
 export function emitAcceptRideSocket(tripData: any) {
   if (socket && socket.connected) {
     socket.emit('accept_ride', tripData);
-    console.log('[SocketService] Emitted accept_ride over WebSockets:', tripData?.id || tripData?.tripId);
+    console.log('[SocketService] Emitted accept_ride over WebSockets:', tripData);
   }
 }
 
