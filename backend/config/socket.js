@@ -301,16 +301,54 @@ function emitTripRequest(tripObject) {
 async function emitTripAccepted(tripObject) {
   if (!io || !tripObject) return;
 
-  // Normalize IDs & Extract Customer ID properly as clean strings
-  const tripId = String(tripObject.id || tripObject.tripId || '');
-  const customerId = String(tripObject.customer_id || tripObject.customerId || '');
-  const driverId = String(tripObject.driver_id || tripObject.driverId || '');
+  const tripId = String(tripObject.id || tripObject.tripId || '').trim();
+  let customerId = String(tripObject.customer_id || tripObject.customerId || '').trim();
+  let driverId = String(tripObject.driver_id || tripObject.driverId || '').trim();
 
   let driverName = tripObject.driverName || tripObject.driver_or_guide_name || null;
   let driverPhone = tripObject.driverPhone || tripObject.phone || null;
   let vehicleModel = tripObject.vehicleModel || tripObject.vehicle_model || null;
   let vehicleNumber = tripObject.vehicleNumber || tripObject.vehicle_number || null;
 
+  // 1. Fetch trip record from PostgreSQL & UPDATE trips table with driver_id if missing or outdated!
+  if (tripId && tripId !== 'null' && tripId !== 'undefined') {
+    try {
+      const db = require('./db');
+      const tRes = await db.query(
+        `SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text`,
+        [tripId]
+      );
+      if (tRes.rows && tRes.rows.length > 0) {
+        const tRow = tRes.rows[0];
+
+        // Resolve missing customerId from database
+        if ((!customerId || customerId === 'null' || customerId === 'undefined') && tRow.customer_id) {
+          customerId = String(tRow.customer_id).trim();
+        }
+
+        // Sync driver_id into trips table in PostgreSQL if not updated yet!
+        if (driverId && driverId !== 'null' && driverId !== 'undefined') {
+          if (!tRow.driver_id || String(tRow.driver_id).trim() !== driverId || tRow.status !== 'Accepted') {
+            await db.query(
+              `UPDATE trips 
+               SET status = 'Accepted', status_code = 1, driver_id = $1, driver_or_guide_name = $2 
+               WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text`,
+              [driverId, driverName || tRow.driver_or_guide_name || 'Driver Partner', tripId]
+            );
+            console.log(`[SOCKET DB SYNC] 🟢 Updated trips table for trip ${tripId}: driver_id = ${driverId}`);
+          }
+        } else if (tRow.driver_id) {
+          driverId = String(tRow.driver_id).trim();
+        }
+
+        if (tRow.driver_or_guide_name) driverName = driverName || tRow.driver_or_guide_name;
+      }
+    } catch (dbErr) {
+      console.warn('[SOCKET DB SYNC WARN]:', dbErr.message);
+    }
+  }
+
+  // 2. Fetch driver profile details from users and driver_profiles table
   if (driverId && driverId !== 'null' && driverId !== 'undefined') {
     try {
       const db = require('./db');
@@ -344,9 +382,9 @@ async function emitTripAccepted(tripObject) {
     status: 'Accepted',
     driverName: driverName || 'Driver Partner',
     driver_or_guide_name: driverName || 'Driver Partner',
-    driverPhone: driverPhone || '+91 9810235511',
-    vehicleModel: vehicleModel || 'Standard Cab',
-    vehicleNumber: vehicleNumber || 'KA-03-EX-8240',
+    driverPhone: driverPhone || '',
+    vehicleModel: vehicleModel || 'Cab',
+    vehicleNumber: vehicleNumber || '',
     otp: tripObject.otp || '8240',
     endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
   };

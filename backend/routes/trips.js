@@ -784,12 +784,11 @@ router.get('/live-location/:tripId', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
 
-    const trip = tripRes.rows[0];
     let driverData = {
-      name: trip.driver_id ? (trip.driver_or_guide_name || 'Captain') : null,
-      phone: trip.driver_id ? '+91 99000 82400' : null,
-      vehicleModel: 'AC 5-Seater / SUV',
-      vehicleNumber: trip.driver_id ? 'KA-03-EX-8240' : 'Assigning Captain...',
+      name: trip.driver_id ? (trip.driver_or_guide_name || 'Driver Partner') : null,
+      phone: null,
+      vehicleModel: null,
+      vehicleNumber: trip.driver_id ? null : 'Assigning Captain...',
       latitude: parseFloat(trip.pickup_lat || 12.9716),
       longitude: parseFloat(trip.pickup_lng || 77.5946),
       heading: 0,
@@ -798,32 +797,23 @@ router.get('/live-location/:tripId', async (req, res) => {
     if (trip.driver_id) {
       try {
         const dpRes = await db.query(
-          `SELECT dp.*, u.name, u.phone 
-           FROM driver_profiles dp 
-           LEFT JOIN users u ON u.id::text = dp.user_id::text 
-           WHERE dp.user_id::text = $1::text OR dp.id::text = $1::text OR u.id::text = $1::text`,
+          `SELECT u.name, u.phone, d.vehicle_model, d.vehicle_number, d.latitude, d.longitude, d.heading 
+           FROM users u 
+           LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text 
+           WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text OR d.id::text = $1::text`,
           [String(trip.driver_id).trim()]
         );
         if (dpRes.rows.length > 0) {
           const dp = dpRes.rows[0];
           driverData = {
-            name: dp.name || trip.driver_or_guide_name || driverData.name,
+            name: dp.name || trip.driver_or_guide_name || driverData.name || 'Driver Partner',
             phone: dp.phone || driverData.phone,
-            vehicleModel: dp.vehicle_model || driverData.vehicleModel,
-            vehicleNumber: dp.vehicle_number || driverData.vehicleNumber,
+            vehicleModel: dp.vehicle_model || driverData.vehicleModel || 'Cab',
+            vehicleNumber: dp.vehicle_number || driverData.vehicleNumber || '',
             latitude: parseFloat(dp.latitude || driverData.latitude),
             longitude: parseFloat(dp.longitude || driverData.longitude),
             heading: parseFloat(dp.heading || 0),
           };
-        } else {
-          const uRes = await db.query(
-            `SELECT name, phone FROM users WHERE id::text = $1::text`,
-            [String(trip.driver_id).trim()]
-          );
-          if (uRes.rows.length > 0) {
-            driverData.name = uRes.rows[0].name || trip.driver_or_guide_name || driverData.name;
-            driverData.phone = uRes.rows[0].phone || driverData.phone;
-          }
         }
       } catch (e) {
         console.warn('live-location driver fetch warning:', e.message);

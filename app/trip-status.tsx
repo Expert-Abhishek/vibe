@@ -109,7 +109,18 @@ export default function TripStatusScreen() {
           const statusLower = statusStr.toLowerCase();
           setTripStatus(statusStr);
 
-          if (res.data.driver) setDriverInfo((prev: any) => ({ ...prev, ...res.data.driver }));
+          if (res.data.driver) {
+            setDriverInfo((prev: any) => ({
+              ...prev,
+              name: res.data.driver.name || prev.name,
+              phone: res.data.driver.phone || prev.phone,
+              vehicleModel: res.data.driver.vehicleModel || prev.vehicleModel,
+              vehicleNumber: (res.data.driver.vehicleNumber && res.data.driver.vehicleNumber !== 'Assigning Captain...') ? res.data.driver.vehicleNumber : prev.vehicleNumber,
+              latitude: res.data.driver.latitude || prev.latitude,
+              longitude: res.data.driver.longitude || prev.longitude,
+              heading: res.data.driver.heading || prev.heading,
+            }));
+          }
           if (res.data.pickup_name || res.data.pickupName || res.data.pickup) {
             setPickupLocation(res.data.pickup_name || res.data.pickupName || res.data.pickup);
           }
