@@ -10,7 +10,7 @@ import {
     rejectDeductionRequestApi,
     rejectTopupRequestApi,
     rejectWithdrawalApi
-} from '@src/admin-panel/src/lib/api';
+} from '@/admin-panel/src/lib/api';
 import {
     AlertCircle,
     ArrowDownLeft,
