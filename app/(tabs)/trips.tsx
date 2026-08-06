@@ -122,7 +122,10 @@ export default function TripsHistoryScreen() {
   useEffect(() => {
     async function loadStatus() {
       if (hasHandledTerminalStateRef.current) return;
-      if (!effectiveTripId && !tripIdParam) return;
+      if (!effectiveTripId && !tripIdParam) {
+        setLoading(false);
+        return;
+      }
       try {
         const res = await fetchLiveLocationApi(effectiveTripId || tripIdParam);
         if (res && res.success && res.data) {
@@ -434,6 +437,33 @@ export default function TripsHistoryScreen() {
         <ActivityIndicator size="large" color={colors.amber} />
         <Text style={{ color: colors.textMuted, marginTop: 12 }}>{t('loading')}</Text>
       </View>
+    );
+  }
+
+  if (!effectiveTripId && !tripIdParam && !initialLocalTrip) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center', padding: scale(20) }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <MaterialIcons name="directions-car" size={scale(64)} color={colors.amber} style={{ marginBottom: 16 }} />
+        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(22), fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+          No Active Trip
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
+          You don't have any ongoing or scheduled trip right now. Book a new trip or view your ride history.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.amber, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
+          onPress={() => router.navigate('/(tabs)')}
+        >
+          <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>Book a New Trip</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, width: '100%', alignItems: 'center' }}
+          onPress={() => router.navigate('/(tabs)/history')}
+        >
+          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>View Trip History</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     );
   }
 

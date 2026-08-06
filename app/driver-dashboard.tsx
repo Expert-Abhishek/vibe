@@ -1,7 +1,7 @@
 import NotificationModal from '@/components/NotificationModal';
-import LanguageSelector from '@/src/components/LanguageSelector';
 import { adminState } from '@/constants/admin-state';
 import {
+  API_BASE_URL,
   acceptTripApi,
   fetchAdminPaymentSettingsApi,
   fetchDriverAdvanceSchedulesApi,
@@ -27,10 +27,11 @@ import { moderateFontScale, scale, verticalScale } from '@/constants/responsive'
 import { getPendingTripRequestsSync, listenForTripRequests, updateTripStatusGlobally } from '@/constants/tripSync';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { useLanguage } from '@/hooks/use-language';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useAppModal } from '@src/context/ModalContext';
 import { rideStateService } from '@src/services/rideStateService';
-import { emitAcceptRideSocket, emitDriverLocationSocket, initSocketService, joinTripRoom } from '@src/services/socketService';
+import { emitAcceptRideSocket, emitDriverLocationSocket, getSocket, initSocketService } from '@src/services/socketService';
 import { playNotificationChime, stopNotificationChime } from '@src/utils/soundHelper';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -42,6 +43,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -59,6 +61,7 @@ import MapView, { Marker } from '@/components/react-native-maps';
 
 interface ActiveRequest {
   touristName: string;
+  touristPhone?: string;
   pickup: string;
   pickupLat?: number;
   pickupLng?: number;
@@ -850,7 +853,7 @@ export default function DriverDashboardScreen() {
 
       // Listen for targeted and broadcast trip requests
       const handleIncomingTripData = (tripData: any) => {
-        if (!tripData) return;
+        if (!isOnline || !tripData) return;
         const payload = tripData.trip || tripData;
         const incomingTripId = String(payload.id || payload.tripId || payload.id);
 
@@ -861,8 +864,11 @@ export default function DriverDashboardScreen() {
             id: incomingTripId,
             tripId: incomingTripId,
             touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
+            touristPhone: payload.customerPhone || payload.customer_phone || payload.phone || payload.driverPhone,
             pickup: payload.pickupName || payload.pickup || 'Pickup Point',
             drop: payload.dropName || payload.drop || payload.title || 'Drop Location',
+            distanceKm: parseFloat(payload.distanceKm || payload.distance_km || payload.distance || 35.0),
+            durationMins: parseFloat(payload.durationMins || payload.duration_mins || (payload.durationHours ? payload.durationHours * 60 : 45)),
             estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || 0),
             checkpoints: payload.checkpoints || payload.stops || [],
             scheduledTime: payload.scheduledTime,
@@ -893,6 +899,7 @@ export default function DriverDashboardScreen() {
     }
 
     const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
+      if (!isOnline) return;
       console.log('[DriverDashboard] 🔔 DeviceEventEmitter new_driver_request:', data);
       if (data) {
         const payload = data.trip || data;
@@ -902,8 +909,11 @@ export default function DriverDashboardScreen() {
             id: incId,
             tripId: incId,
             touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
+            touristPhone: payload.customerPhone || payload.customer_phone || payload.phone || payload.driverPhone,
             pickup: payload.pickupName || payload.pickup || 'Pickup Point',
             drop: payload.dropName || payload.drop || payload.title || 'Drop Location',
+            distanceKm: parseFloat(payload.distanceKm || payload.distance_km || payload.distance || 35.0),
+            durationMins: parseFloat(payload.durationMins || payload.duration_mins || (payload.durationHours ? payload.durationHours * 60 : 45)),
             estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || 0),
             checkpoints: payload.checkpoints || payload.stops || [],
             scheduledTime: payload.scheduledTime,
@@ -919,8 +929,13 @@ export default function DriverDashboardScreen() {
 
     // Fallback sync listener
     const unsubRequests = listenForTripRequests((tripData) => {
+      if (!isOnline) return;
       if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
-        setIncomingRequest({ ...tripData });
+        setIncomingRequest({
+          ...tripData,
+          distanceKm: parseFloat((tripData as any).distanceKm || (tripData as any).distance_km || 35.0),
+          durationMins: parseFloat((tripData as any).durationMins || (tripData as any).duration_mins || 45),
+        });
         setTimerSeconds(45);
         setRequestVisible(true);
       }
@@ -1162,40 +1177,40 @@ export default function DriverDashboardScreen() {
 
   const handleVerifyOtp = async () => {
     if (!activeTrip) return;
-    const expectedOtp = String((activeTrip as any).otp || '8240').trim();
+    const expectedOtp = String((activeTrip as any).otp || (activeTrip as any).startOtp || '').trim();
     const entered = String(enteredOtp).trim();
     const tripId = String((activeTrip as any).tripId || (activeTrip as any).id || '');
 
-    if (entered === expectedOtp || entered === '8240') {
-      setOtpVisible(false);
-      setEnteredOtp('');
-      setTripPhase('trip');
-      if (tripId) {
-        updateTripStatusGlobally(tripId, 'IN_PROGRESS', { status: 'IN_PROGRESS', driverName: driverDisplayName });
-      }
-      sendLocalNotification('🚀 Ride Started!', `OTP Verified. Navigation started towards ${activeTrip.drop}.`);
-      showSuccess('Verification Success!', 'OTP code matched. Ride started.');
+    if (!entered) {
+      showError('OTP Required', 'Please enter the 4-digit Start OTP from the Tourist.');
       return;
     }
 
-    if (tripId) {
+    let isMatch = expectedOtp !== '' && entered === expectedOtp;
+    if (!isMatch && tripId) {
       try {
         const res = await verifyTripOtpApi(String(tripId), entered);
         if (res && res.success) {
-          setOtpVisible(false);
-          setEnteredOtp('');
-          setTripPhase('trip');
-          updateTripStatusGlobally(tripId, 'IN_PROGRESS', { status: 'IN_PROGRESS', driverName: driverDisplayName });
-          sendLocalNotification('🚀 Ride Started!', `OTP Verified. Navigation started towards ${activeTrip.drop}.`);
-          showSuccess('Verification Success!', 'OTP code matched. Ride started.');
-          return;
+          isMatch = true;
         }
       } catch (e) {
         console.warn('verifyTripOtpApi error:', e);
       }
     }
 
-    showError('Invalid OTP', 'The code did not match. Please check 4-digit OTP shown on Tourist app.');
+    if (isMatch) {
+      setOtpVisible(false);
+      setEnteredOtp('');
+      setTripPhase('trip');
+      if (tripId) {
+        updateTripStatusGlobally(tripId, 'IN_PROGRESS', { status: 'IN_PROGRESS', driverName: driverDisplayName });
+      }
+      sendLocalNotification('🚀 Ride Started!', `OTP Verified. Navigation started towards ${activeTrip.drop || 'destination'}.`);
+      showSuccess('Verification Success!', 'OTP code matched. Ride started.');
+      return;
+    }
+
+    showError('Invalid OTP', 'The code did not match. Please enter the correct 4-digit OTP shown on Tourist app.');
   };
 
   const handleEndTrip = () => {
@@ -1204,17 +1219,38 @@ export default function DriverDashboardScreen() {
     setEndOtpVisible(true);
   };
 
-  const handleVerifyEndOtp = () => {
+  const handleVerifyEndOtp = async () => {
     if (!activeTrip) return;
-    const expectedEndOtp = String((activeTrip as any)?.endOtp || '4321').trim();
+    const expectedEndOtp = String((activeTrip as any)?.endOtp || (activeTrip as any)?.end_otp || '').trim();
     const entered = String(enteredEndOtp).trim();
+    const tripId = String((activeTrip as any).tripId || (activeTrip as any).id || '');
 
-    if (entered === expectedEndOtp || entered === '4321' || entered.length === 4) {
+    if (!entered) {
+      showError('End OTP Required', 'Please enter the 4-digit End OTP from the Tourist.');
+      return;
+    }
+
+    let isMatch = expectedEndOtp !== '' && entered === expectedEndOtp;
+    if (!isMatch && tripId) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/verify-end-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ otp: entered }),
+        });
+        const data = await res.json();
+        if (data && data.success) {
+          isMatch = true;
+        }
+      } catch (e) { }
+    }
+
+    if (isMatch) {
       setEndOtpVisible(false);
       setEnteredEndOtp('');
       setConfirmEndModalVisible(true);
     } else {
-      showError('Invalid End OTP', 'Please check the 4-digit End OTP on Tourist app (Default: 4321).');
+      showError('Invalid End OTP', 'The End OTP does not match. Please enter the 4-digit End OTP shown on Tourist app.');
     }
   };
 
@@ -1440,6 +1476,11 @@ export default function DriverDashboardScreen() {
                 value={isOnline}
                 onValueChange={(val) => {
                   setIsOnline(val);
+                  const socket = getSocket();
+                  if (socket && socket.connected) {
+                    const session = getUserSessionSync();
+                    socket.emit('toggle_duty', { userId: session?.id, isOnline: val });
+                  }
                   if (!val) {
                     setIncomingRequest(null);
                     setRequestVisible(false);
@@ -1471,7 +1512,7 @@ export default function DriverDashboardScreen() {
           </View>
 
           {/* Pending Instant Ride Requests card */}
-          <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
+          {/* <View style={[styles.vehicleStatusCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginTop: verticalScale(14) }]}>
             <Text style={[styles.sectionTitle, { color: colors.amber }]}>Pending Instant Ride Requests</Text>
             {(() => {
               const allBookingsMap = new Map();
@@ -1587,6 +1628,9 @@ export default function DriverDashboardScreen() {
                         <Text style={[styles.logTime, { color: colors.amber }]}>
                           Payment: {booking.paymentMode}
                         </Text>
+                        <Text style={[styles.logTime, { color: colors.textPrimary, fontWeight: '700', marginTop: verticalScale(2) }]}>
+                          📏 Est. Distance: {booking.distanceKm || 35} km  ·  ⏱️ Est. Time: {booking.durationMins || 45} mins
+                        </Text>
                         <View style={{ marginTop: verticalScale(4) }}>
                           <Text style={{ fontSize: moderateFontScale(11), color: '#10B981', fontWeight: '800' }}>
                             📍 Pickup: {booking.pickupName || booking.pickup || 'Pickup Spot'}
@@ -1664,7 +1708,7 @@ export default function DriverDashboardScreen() {
                 );
               });
             })()}
-          </View>
+          </View> */}
 
         </ScrollView>
       )}
@@ -1726,6 +1770,16 @@ export default function DriverDashboardScreen() {
                       Cab Trip · Est Payout: ₹{activeTrip.estimatedFare}
                     </Text>
                   </View>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#10B981', paddingVertical: scale(6), paddingHorizontal: scale(12), borderRadius: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(4) }}
+                    onPress={() => {
+                      const ph = (activeTrip as any)?.touristPhone || (activeTrip as any)?.phone || (activeTrip as any)?.customerPhone || '+91 9650830901';
+                      Linking.openURL(`tel:${ph}`);
+                    }}
+                  >
+                    <MaterialIcons name="phone" size={scale(16)} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(12) }}>Call User</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {tripPhase === 'pickup' ? (
@@ -2313,7 +2367,7 @@ export default function DriverDashboardScreen() {
                         <View style={styles.fareCell}>
                           <Text style={[styles.popupLabel, { color: colors.textMuted }]}>Distance / Time</Text>
                           <Text style={[styles.payoutTextHighlight, { color: colors.textPrimary }]}>
-                            {incomingRequest.distanceKm} km ({incomingRequest.durationMins} mins)
+                            {incomingRequest.distanceKm || (incomingRequest as any).distance_km || 35} km ({incomingRequest.durationMins || (incomingRequest as any).duration_mins || 45} mins)
                           </Text>
                         </View>
                         <View style={[styles.vertDivider, { backgroundColor: colors.border }]} />

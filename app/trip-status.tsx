@@ -266,7 +266,7 @@ export default function TripStatusScreen() {
       hasHandledTerminalStateRef.current = true;
       setTripStatus('CANCELLED');
       Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
-        { text: 'OK', onPress: () => router.navigate('/(tabs)/history') }
+        { text: 'OK', onPress: () => router.replace('/(tabs)/history') }
       ]);
     };
 
@@ -374,6 +374,8 @@ export default function TripStatusScreen() {
           text: isPendingDriver ? 'Yes, Withdraw' : 'Yes, Cancel Trip',
           style: 'destructive',
           onPress: async () => {
+            if (hasHandledTerminalStateRef.current) return;
+            hasHandledTerminalStateRef.current = true;
             setCancelling(true);
             const session = getUserSessionSync();
             try {
@@ -384,13 +386,10 @@ export default function TripStatusScreen() {
               }
               DeviceEventEmitter.emit('trip_cancelled', { tripId: tripIdParam });
               sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
-              router.navigate('/(tabs)/history');
-              setTimeout(() => {
-                Alert.alert('Trip Cancelled', 'Your ride request was cancelled and recorded in your History ledger.');
-              }, 300);
+              router.replace('/(tabs)/history');
             } catch (e) {
               console.warn('Cancel error:', e);
-              router.navigate('/(tabs)/history');
+              router.replace('/(tabs)/history');
             } finally {
               setCancelling(false);
             }
@@ -417,6 +416,33 @@ export default function TripStatusScreen() {
         <ActivityIndicator size="large" color={colors.amber} />
         <Text style={{ color: colors.textMuted, marginTop: 12 }}>{t('loading')}</Text>
       </View>
+    );
+  }
+
+  if (!tripIdParam && !initialLocalTrip) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center', padding: scale(20) }]} edges={['top']}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <MaterialIcons name="directions-car" size={scale(64)} color={colors.amber} style={{ marginBottom: 16 }} />
+        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(22), fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+          No Active Trip Found
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
+          We couldn't find an active trip associated with this link. You can book a new trip or view your history.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.amber, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
+          onPress={() => router.navigate('/(tabs)')}
+        >
+          <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>Book a New Trip</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, width: '100%', alignItems: 'center' }}
+          onPress={() => router.navigate('/(tabs)/history')}
+        >
+          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>View Trip History</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     );
   }
 

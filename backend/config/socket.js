@@ -45,12 +45,12 @@ function initSocket(server) {
         console.log(`[Socket.io] ✅ SUCCESS: Socket ${socket.id} joined trip room [${roomName}]`);
       }
 
-      if (role) {
-        const roleRoom = `role:${role}`;
-        socket.join(roleRoom);
-        console.log(`[Socket.io] Socket ${socket.id} joined role room [${roleRoom}]`);
-      } else {
+      if (role === 'driver' || role === 'guide' || !role) {
         socket.join('role:driver');
+        if (data?.isOnline !== false) {
+          socket.join('role:driver_online');
+          console.log(`[Socket.io] Socket ${socket.id} joined [role:driver_online]`);
+        }
       }
 
       if (cat) {
@@ -58,6 +58,20 @@ function initSocket(server) {
         socket.join(`role:${normCat}`);
         socket.join(`role:${cat}`);
         console.log(`[Socket.io] Socket ${socket.id} joined targeted category rooms [role:${normCat}] & [role:${cat}]`);
+      }
+    });
+
+    // Toggle duty status handler
+    socket.on('toggle_duty', (data) => {
+      const { userId, isOnline } = data || {};
+      if (isOnline) {
+        socket.join('role:driver_online');
+        socket.join('role:driver');
+        console.log(`[Socket.io] Driver ${userId || socket.id} TOGGLED DUTY ON (joined role:driver_online)`);
+      } else {
+        socket.leave('role:driver_online');
+        socket.leave('role:driver');
+        console.log(`[Socket.io] Driver ${userId || socket.id} TOGGLED DUTY OFF (left role:driver_online)`);
       }
     });
 
@@ -283,13 +297,8 @@ function emitTripRequest(tripObject) {
     // TARGETED CATEGORY ROOM DISPATCH (e.g. role:5_seater, role:7_seater, role:4x4, role:auto)
     emitRequestToRoom(`role:${normalizedCat}`);
     emitRequestToRoom(`role:${vehicleCategory}`);
-    emitRequestToRoom('role:driver');
-    
-    // Global socket broadcast fallback
-    io.emit('trip_request', normalizedTrip);
-    io.emit('trip_requested', normalizedTrip);
-    io.emit('new_driver_request', normalizedTrip);
-    console.log(`🎯 [CATEGORY DISPATCH] Emitted trip ${normalizedTrip.id} to rooms [role:${normalizedCat}] & [role:driver]`);
+    emitRequestToRoom('role:driver_online');
+    console.log(`🎯 [CATEGORY DISPATCH] Emitted trip ${normalizedTrip.id} to rooms [role:${normalizedCat}] & [role:driver_online]`);
   }
 }
 
