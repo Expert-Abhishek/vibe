@@ -14,7 +14,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { registerUser } from '@/constants/api';
+import { registerUser, sendRegisterOtpApi } from '@/constants/api';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
 // ---- Design tokens --------------------------------------------------------
@@ -35,6 +35,8 @@ export default function RiderRegister() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
 
+  const [step, setStep] = useState<'details' | 'otp'>('details');
+  const [otp, setOtp] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -44,7 +46,7 @@ export default function RiderRegister() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
-  const [errors, setErrors] = useState<{ name?: string; phone?: string; password?: string; api?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; phone?: string; password?: string; otp?: string; api?: string }>({});
 
   const scrollToInput = (yOffset: number) => {
     setTimeout(() => {
@@ -60,30 +62,37 @@ export default function RiderRegister() {
     }
   };
 
-  const handleSubmit = async () => {
-    const nextErrors: { name?: string; phone?: string; password?: string } = {};
-
+  const handleSendOtp = async () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const nextErrors: Record<string, string> = {};
 
-    if (!name.trim()) {
-      nextErrors.name = 'Enter your name';
-    }
-
-    if (!cleanPhone) {
-      nextErrors.phone = 'Enter phone number';
-    } else if (cleanPhone.length !== 10) {
-      nextErrors.phone = 'Phone number must be exactly 10 digits';
-    }
-
-    if (!password) {
-      nextErrors.password = 'Enter a password';
-    } else if (password.length < 6) {
-      nextErrors.password = 'Password must be at least 6 characters';
-    }
+    if (!name.trim()) nextErrors.name = 'Enter full name';
+    if (!cleanPhone || cleanPhone.length !== 10) nextErrors.phone = 'Phone number must be 10 digits';
+    if (!password || password.length < 6) nextErrors.password = 'Password must be at least 6 characters';
 
     setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
 
-    if (Object.keys(nextErrors).length > 0) {
+    setLoading(true);
+    const sendRes = await sendRegisterOtpApi(cleanPhone);
+    setLoading(false);
+
+    if (sendRes.success) {
+      setStep('otp');
+      showToast(`Registration OTP sent to +91 ${cleanPhone}`, 'success');
+    } else {
+      const msg = sendRes.message || 'Failed to send OTP code.';
+      setErrors({ api: msg });
+      showToast(msg, 'error');
+    }
+  };
+
+  const handleVerifyAndRegister = async () => {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanOtp = otp.trim();
+
+    if (!cleanOtp || cleanOtp.length < 4) {
+      setErrors({ otp: 'Enter 6-digit OTP code' });
       return;
     }
 
@@ -95,6 +104,7 @@ export default function RiderRegister() {
         phone: cleanPhone,
         password: password,
         role: 'tourist',
+        otp: cleanOtp,
       });
 
       setLoading(false);
@@ -105,7 +115,7 @@ export default function RiderRegister() {
           router.replace('/(auth)/sign-in');
         }, 1500);
       } else {
-        const errorMsg = res.message || 'Registration failed. Please try again.';
+        const errorMsg = res.message || 'Registration failed. Invalid OTP code.';
         setErrors({ api: errorMsg });
         showToast(errorMsg, 'error');
       }
@@ -159,105 +169,163 @@ export default function RiderRegister() {
             </View>
           </View>
 
-          {/* Boarding-pass style card holding the profile fields */}
-          <View style={styles.passCard}>
-            <View style={styles.passNotchLeft} />
-            <View style={styles.passNotchRight} />
+          {step === 'otp' ? (
+            <View style={styles.passCard}>
+              <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(14) }}>
+                <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>Edit Details / Change Phone</Text>
+              </TouchableOpacity>
 
-            {/* Full Name */}
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Full name</Text>
-              <View style={styles.requiredDot} />
-            </View>
-            <TextInput
-              style={[styles.input, errors.name && styles.inputError]}
-              placeholder="As it appears on your ID"
-              placeholderTextColor={colors.textFaint}
-              value={name}
-              onChangeText={(t) => {
-                setName(t);
-                if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
-              }}
-              onFocus={() => scrollToInput(120)}
-            />
-            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+              <Text style={[styles.title, { fontSize: moderateFontScale(22) }]}>Enter Verification OTP 🔐</Text>
+              <Text style={[styles.subtitle, { marginBottom: verticalScale(16) }]}>
+                We sent a 6-digit verification code to <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {phone}</Text>
+              </Text>
 
-            <View style={styles.passDivider} />
-
-            {/* Phone Number */}
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Phone number (10 digits)</Text>
-              <View style={styles.requiredDot} />
-            </View>
-            <TextInput
-              style={[styles.input, errors.phone && styles.inputError]}
-              placeholder="9876543210"
-              keyboardType="phone-pad"
-              maxLength={10}
-              placeholderTextColor={colors.textFaint}
-              value={phone}
-              onChangeText={(t) => {
-                const cleaned = t.replace(/[^0-9]/g, '');
-                setPhone(cleaned);
-                if (errors.phone) setErrors(prev => ({ ...prev, phone: undefined }));
-              }}
-              onFocus={() => scrollToInput(200)}
-            />
-            {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
-
-            <View style={styles.passDivider} />
-
-            {/* Password */}
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.requiredDot} />
-            </View>
-            <View style={[styles.passwordWrapper, errors.password && styles.inputError]}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>6-Digit OTP Code</Text>
+                <View style={styles.requiredDot} />
+              </View>
               <TextInput
-                style={styles.passwordInput}
-                placeholder="Min. 6 characters"
-                secureTextEntry={!showPassword}
+                style={[styles.input, { letterSpacing: 8, fontSize: moderateFontScale(22), textAlign: 'center', fontWeight: '900', color: colors.amber }]}
+                placeholder="6-Digit OTP"
                 placeholderTextColor={colors.textFaint}
-                value={password}
+                value={otp}
                 onChangeText={(t) => {
-                  setPassword(t);
-                  if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
+                  setOtp(t.replace(/[^0-9]/g, ''));
+                  if (errors.otp) setErrors(prev => ({ ...prev, otp: undefined }));
                 }}
-                onFocus={() => scrollToInput(280)}
+                keyboardType="number-pad"
+                maxLength={6}
               />
+              {errors.otp && <Text style={styles.errorText}>{errors.otp}</Text>}
+              {errors.api && <Text style={[styles.errorText, { marginTop: verticalScale(10), textAlign: 'center' }]}>{errors.api}</Text>}
+
+              <View style={[styles.buttonRow, { marginTop: verticalScale(20) }]}>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('details')} disabled={loading}>
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                  onPress={handleVerifyAndRegister}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.ink} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Verify & Complete</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
               <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={{ padding: scale(8) }}
-                activeOpacity={0.7}
+                style={{ marginTop: verticalScale(16), alignItems: 'center' }}
+                onPress={handleSendOtp}
+                disabled={loading}
               >
-                <MaterialIcons
-                  name={showPassword ? 'visibility' : 'visibility-off'}
-                  size={scale(20)}
-                  color={colors.textMuted}
-                />
+                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>Resend OTP via SMS</Text>
               </TouchableOpacity>
             </View>
-            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+          ) : (
+            <>
+              {/* Boarding-pass style card holding the profile fields */}
+              <View style={styles.passCard}>
+                <View style={styles.passNotchLeft} />
+                <View style={styles.passNotchRight} />
 
-            {errors.api && <Text style={[styles.errorText, { marginTop: verticalScale(10), textAlign: 'center' }]}>{errors.api}</Text>}
-          </View>
+                {/* Full Name */}
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Full name</Text>
+                  <View style={styles.requiredDot} />
+                </View>
+                <TextInput
+                  style={[styles.input, errors.name && styles.inputError]}
+                  placeholder="As it appears on your ID"
+                  placeholderTextColor={colors.textFaint}
+                  value={name}
+                  onChangeText={(t) => {
+                    setName(t);
+                    if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
+                  }}
+                  onFocus={() => scrollToInput(120)}
+                />
+                {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()} disabled={loading}>
-              <Text style={styles.secondaryButtonText}>Back</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.primaryButton, loading && styles.buttonDisabled]}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={colors.ink} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Get started</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+                <View style={styles.passDivider} />
+
+                {/* Phone Number */}
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Phone number (10 digits)</Text>
+                  <View style={styles.requiredDot} />
+                </View>
+                <TextInput
+                  style={[styles.input, errors.phone && styles.inputError]}
+                  placeholder="e.g. 9876543210"
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  placeholderTextColor={colors.textFaint}
+                  value={phone}
+                  onChangeText={(t) => {
+                    setPhone(t.replace(/[^0-9]/g, ''));
+                    if (errors.phone) setErrors(prev => ({ ...prev, phone: undefined }));
+                  }}
+                  onFocus={() => scrollToInput(180)}
+                />
+                {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+
+                <View style={styles.passDivider} />
+
+                {/* Password */}
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Password</Text>
+                  <View style={styles.requiredDot} />
+                </View>
+                <View style={[styles.passwordWrapper, errors.password && styles.inputError]}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="Min 6 characters"
+                    placeholderTextColor={colors.textFaint}
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={(t) => {
+                      setPassword(t);
+                      if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
+                    }}
+                    onFocus={() => scrollToInput(240)}
+                  />
+                  <TouchableOpacity
+                    style={{ padding: scale(8) }}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <MaterialIcons
+                      name={showPassword ? 'visibility' : 'visibility-off'}
+                      size={scale(20)}
+                      color={colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+
+                {errors.api && <Text style={[styles.errorText, { marginTop: verticalScale(10), textAlign: 'center' }]}>{errors.api}</Text>}
+              </View>
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()} disabled={loading}>
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                  onPress={handleSendOtp}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.ink} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Send OTP ➔</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
 
         </ScrollView>
       </KeyboardAvoidingView>

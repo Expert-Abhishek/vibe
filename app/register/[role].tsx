@@ -14,12 +14,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { registerUser } from '@/constants/api';
+import { registerUser, sendRegisterOtpApi } from '@/constants/api';
 
 export default function RegisterScreen() {
   const { role } = useLocalSearchParams<{ role: 'rider' | 'driver' | 'guide' }>();
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
+
+  const [step, setStep] = useState<'details' | 'otp'>('details');
+  const [otp, setOtp] = useState('');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -57,7 +60,7 @@ export default function RegisterScreen() {
     return 'Sign Up';
   };
 
-  const handleRegister = async () => {
+  const handleSendOtp = async () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
 
@@ -79,6 +82,28 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
+    const sendRes = await sendRegisterOtpApi(cleanPhone);
+    setLoading(false);
+
+    if (sendRes.success) {
+      setStep('otp');
+      showToast(`Registration OTP sent to +91 ${cleanPhone}`);
+    } else {
+      Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code.');
+    }
+  };
+
+  const handleVerifyAndRegister = async () => {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
+    const cleanOtp = otp.trim();
+
+    if (!cleanOtp || cleanOtp.length < 4) {
+      Alert.alert('Required', 'Please enter the 6-digit OTP code sent to your phone.');
+      return;
+    }
+
+    setLoading(true);
 
     const mappedRole = role === 'rider' ? 'tourist' : role === 'guide' ? 'guide' : 'driver';
 
@@ -89,6 +114,7 @@ export default function RegisterScreen() {
       email: email.trim() || undefined,
       password: password,
       role: mappedRole,
+      otp: cleanOtp,
       vehicle_type: role === 'driver' ? vehicleType : undefined,
       vehicle_model: role === 'driver' ? (vehicleModel.trim() || 'Standard Cab') : undefined,
       vehicle_number: role === 'driver' ? vehicleNumber : undefined,
@@ -127,154 +153,197 @@ export default function RegisterScreen() {
           </View>
         )}
 
-        <View style={styles.container}>
-          <Text style={styles.title}>{getTitle()}</Text>
-          <Text style={styles.subtitle}>Please fill the details to continue</Text>
+        {step === 'otp' ? (
+          <View style={styles.container}>
+            <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <MaterialIcons name="arrow-back" size={22} color="#0d1b3e" />
+              <Text style={{ color: '#0d1b3e', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Phone</Text>
+            </TouchableOpacity>
 
-          {/* Inputs */}
-          <TextInput
-            style={styles.input}
-            placeholder="Full Name"
-            placeholderTextColor="#aaa"
-            value={name}
-            onChangeText={setName}
-            onFocus={() => scrollToInput(50)}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Email Address (Optional)"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholderTextColor="#aaa"
-            value={email}
-            onChangeText={setEmail}
-            onFocus={() => scrollToInput(110)}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Phone Number (10 digits)"
-            keyboardType="phone-pad"
-            maxLength={10}
-            placeholderTextColor="#aaa"
-            value={phone}
-            onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
-            onFocus={() => scrollToInput(170)}
-          />
-          {(role === 'driver' || role === 'guide') && (
+            <Text style={styles.title}>Enter OTP Code 🔐</Text>
+            <Text style={[styles.subtitle, { marginBottom: 20 }]}>
+              We sent a 6-digit verification code to <Text style={{ fontWeight: '800', color: '#0d1b3e' }}>+91 {phone}</Text>
+            </Text>
+
+            <TextInput
+              style={[styles.input, { letterSpacing: 8, fontSize: 22, textAlign: 'center', fontWeight: '900', color: '#0d1b3e', paddingVertical: 14 }]}
+              placeholder="6-Digit OTP Code"
+              placeholderTextColor="#aaa"
+              value={otp}
+              onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              maxLength={6}
+            />
+
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleVerifyAndRegister}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Verify OTP & Complete Registration</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ marginTop: 20, alignItems: 'center' }}
+              onPress={handleSendOtp}
+              disabled={loading}
+            >
+              <Text style={{ color: '#0d1b3e', fontWeight: '700', fontSize: 14 }}>Resend OTP via SMS</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.container}>
+            <Text style={styles.title}>{getTitle()}</Text>
+            <Text style={styles.subtitle}>Please fill the details to continue</Text>
+
+            {/* Inputs */}
             <TextInput
               style={styles.input}
-              placeholder="Alternate Phone Number (10 digits) *"
+              placeholder="Full Name"
+              placeholderTextColor="#aaa"
+              value={name}
+              onChangeText={setName}
+              onFocus={() => scrollToInput(50)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email Address (Optional)"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholderTextColor="#aaa"
+              value={email}
+              onChangeText={setEmail}
+              onFocus={() => scrollToInput(110)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Phone Number (10 digits)"
               keyboardType="phone-pad"
               maxLength={10}
               placeholderTextColor="#aaa"
-              value={altPhone}
-              onChangeText={(t) => setAltPhone(t.replace(/[^0-9]/g, ''))}
-              onFocus={() => scrollToInput(230)}
+              value={phone}
+              onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
+              onFocus={() => scrollToInput(170)}
             />
-          )}
-
-          {/* Password Input with Eye Icon */}
-          <View style={styles.passwordWrapper}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Password (min 6 chars)"
-              secureTextEntry={!showPassword}
-              placeholderTextColor="#aaa"
-              value={password}
-              onChangeText={setPassword}
-              onFocus={() => scrollToInput(290)}
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeBtn}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name={showPassword ? 'visibility' : 'visibility-off'}
-                size={22}
-                color="#666"
+            {(role === 'driver' || role === 'guide') && (
+              <TextInput
+                style={styles.input}
+                placeholder="Alternate Phone Number (10 digits) *"
+                keyboardType="phone-pad"
+                maxLength={10}
+                placeholderTextColor="#aaa"
+                value={altPhone}
+                onChangeText={(t) => setAltPhone(t.replace(/[^0-9]/g, ''))}
+                onFocus={() => scrollToInput(230)}
               />
+            )}
+
+            {/* Password Input with Eye Icon */}
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Password (min 6 chars)"
+                secureTextEntry={!showPassword}
+                placeholderTextColor="#aaa"
+                value={password}
+                onChangeText={setPassword}
+                onFocus={() => scrollToInput(290)}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeBtn}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name={showPassword ? 'visibility' : 'visibility-off'}
+                  size={22}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Conditional Role Inputs */}
+            {role === 'driver' && (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0d1b3e', marginBottom: 8 }}>
+                  Vehicle Category / Type *
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                  {[
+                    { id: '5seater', label: '5 Seater' },
+                    { id: '7seater', label: '7 Seater' },
+                    { id: '4x4jeep', label: '4x4 Jeep' },
+                    { id: 'auto', label: 'Auto' },
+                  ].map((cat) => (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: vehicleType === cat.id ? '#0d1b3e' : '#e0e0e0',
+                        backgroundColor: vehicleType === cat.id ? '#0d1b3e' : '#f5f5f5',
+                      }}
+                      onPress={() => setVehicleType(cat.id)}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: '700',
+                          color: vehicleType === cat.id ? '#ffffff' : '#444444',
+                        }}
+                      >
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Vehicle Model (e.g. Swift Dzire, Innova, Thar)"
+                  placeholderTextColor="#aaa"
+                  value={vehicleModel}
+                  onChangeText={setVehicleModel}
+                  onFocus={() => scrollToInput(360)}
+                />
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Vehicle Number (e.g. KA-03-MY-7788)"
+                  placeholderTextColor="#aaa"
+                  value={vehicleNumber}
+                  onChangeText={setVehicleNumber}
+                  autoCapitalize="characters"
+                  onFocus={() => scrollToInput(420)}
+                />
+              </View>
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSendOtp}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Send OTP & Register ➔</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Back Button */}
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton} disabled={loading}>
+              <Text style={styles.backText}>Go Back</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Conditional Role Inputs */}
-
-          {role === 'driver' && (
-            <View style={{ marginBottom: 16 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#0d1b3e', marginBottom: 8 }}>
-                Vehicle Category / Type *
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                {[
-                  { id: '5seater', label: '5 Seater' },
-                  { id: '7seater', label: '7 Seater' },
-                  { id: '4x4jeep', label: '4x4 Jeep' },
-                  { id: 'auto', label: 'Auto' },
-                ].map((cat) => (
-                  <TouchableOpacity
-                    key={cat.id}
-                    style={{
-                      paddingHorizontal: 14,
-                      paddingVertical: 10,
-                      borderRadius: 10,
-                      borderWidth: 1.5,
-                      borderColor: vehicleType === cat.id ? '#0d1b3e' : '#e0e0e0',
-                      backgroundColor: vehicleType === cat.id ? '#0d1b3e' : '#f5f5f5',
-                    }}
-                    onPress={() => setVehicleType(cat.id)}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: '700',
-                        color: vehicleType === cat.id ? '#ffffff' : '#444444',
-                      }}
-                    >
-                      {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TextInput
-                style={styles.input}
-                placeholder="Vehicle Model (e.g. Swift Dzire, Innova, Thar)"
-                placeholderTextColor="#aaa"
-                value={vehicleModel}
-                onChangeText={setVehicleModel}
-                onFocus={() => scrollToInput(360)}
-              />
-
-              <TextInput
-                style={styles.input}
-                placeholder="Vehicle Number (e.g. KA-03-MY-7788)"
-                placeholderTextColor="#aaa"
-                value={vehicleNumber}
-                onChangeText={setVehicleNumber}
-                autoCapitalize="characters"
-                onFocus={() => scrollToInput(420)}
-              />
-            </View>
-          )}
-
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Register</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Back Button */}
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} disabled={loading}>
-            <Text style={styles.backText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );

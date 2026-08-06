@@ -15,6 +15,7 @@ export interface RegisterPayload {
   alternate_phone?: string;
   email?: string;
   password?: string;
+  otp?: string;
 
   role: 'tourist' | 'driver' | 'guide';
   // Driver fields
@@ -271,6 +272,7 @@ export async function createTripApi(payload: {
   vehicleCategory?: string;
   destinationId?: string;
   destinationIds?: string[];
+  checkpoints?: any;
   amount: number;
   paymentMode?: string;
   pickupId?: string;
@@ -1286,5 +1288,39 @@ export async function deductWalletApi(payload: { userId: string; amount: number;
   } catch (e) {
     console.warn('deductWalletApi error:', e);
     return { success: false, message: 'Wallet deduction failed. Check server connection.' };
+  }
+}
+
+/**
+ * Send 6-digit OTP code via Fast2SMS for User Registration
+ */
+export async function sendRegisterOtpApi(phone: string): Promise<{ success: boolean; message?: string; phone?: string; otpDebug?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/send-register-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('sendRegisterOtpApi error:', e);
+    return { success: false, message: 'Failed to send OTP. Check network connection.' };
+  }
+}
+
+/**
+ * Verify 6-digit OTP code for User Registration
+ */
+export async function verifyRegisterOtpApi(phone: string, otp: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/verify-register-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, otp }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('verifyRegisterOtpApi error:', e);
+    return { success: false, message: 'Failed to verify OTP. Check network connection.' };
   }
 }

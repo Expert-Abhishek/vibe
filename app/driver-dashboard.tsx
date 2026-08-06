@@ -2157,7 +2157,7 @@ export default function DriverDashboardScreen() {
       {(() => {
         const requestCheckpoints: string[] = (() => {
           if (!incomingRequest) return [];
-          const raw = (incomingRequest as any).checkpoints || (incomingRequest as any).stops || (incomingRequest as any).route || (incomingRequest as any).destinations || [];
+          const raw = (incomingRequest as any).checkpoints || (incomingRequest as any).destination_checkpoints || (incomingRequest as any).stops || (incomingRequest as any).route || (incomingRequest as any).destinations || (incomingRequest as any).destination_ids || (incomingRequest as any).destinationIds || [];
           if (Array.isArray(raw)) {
             return raw
               .map((item: any) => {

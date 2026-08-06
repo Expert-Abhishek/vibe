@@ -65,8 +65,19 @@ router.post('/register', async (req, res) => {
     }
 
     const cleanRole = ['tourist', 'driver', 'guide'].includes(role) ? role : 'tourist';
-    const cleanPhone = phone.trim();
+    let cleanPhone = phone.trim().replace(/\D/g, '');
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
     const cleanEmail = email ? email.trim().toLowerCase() : null;
+
+    // Optional OTP verification check if provided
+    const otpCode = (req.body.otp || req.body.code || '').trim();
+    if (otpCode) {
+      const otpCheck = await db.query('SELECT otp, expires_at FROM registration_otps WHERE phone = $1', [cleanPhone]);
+      if (otpCheck.rows.length === 0 || otpCheck.rows[0].otp !== otpCode || new Date() > new Date(otpCheck.rows[0].expires_at)) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired registration OTP code.' });
+      }
+      await db.query('DELETE FROM registration_otps WHERE phone = $1', [cleanPhone]);
+    }
 
     // 2. Check if user already exists
     const existingUser = await db.query(
@@ -1416,6 +1427,125 @@ router.post('/verify-reset-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in verify-reset-otp:', error);
+    return res.status(500).json({ success: false, message: 'Verification failed. Please try again.', error: error.message });
+  }
+});
+
+// Auto-create registration_otps DB table
+db.query(`
+  CREATE TABLE IF NOT EXISTS registration_otps (
+    id SERIAL PRIMARY KEY,
+    phone VARCHAR(20) NOT NULL UNIQUE,
+    otp VARCHAR(10) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  );
+`).catch((err) => console.warn('registration_otps table init warning:', err.message));
+
+/**
+ * POST /api/auth/send-register-otp
+ * Send 6-digit OTP via Fast2SMS for User Registration
+ */
+router.post('/send-register-otp', async (req, res) => {
+  try {
+    const { phone, phoneNumber } = req.body;
+    const rawPhone = (phone || phoneNumber || '').trim();
+
+    if (!rawPhone) {
+      return res.status(400).json({ success: false, message: 'Phone number is required.' });
+    }
+
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit mobile number.' });
+    }
+
+    // 1. Check if user already exists
+    const userRes = await db.query(
+      'SELECT id FROM users WHERE phone LIKE $1 OR phone = $2',
+      [`%${cleanPhone}`, cleanPhone]
+    );
+
+    if (userRes.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: `Phone number +91 ${cleanPhone} is already registered. Please sign in instead.`,
+      });
+    }
+
+    // 2. Generate 6-digit OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes valid
+
+    // 3. Save OTP in DB
+    await db.query(
+      `INSERT INTO registration_otps (phone, otp, expires_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (phone) DO UPDATE 
+       SET otp = $2, expires_at = $3, created_at = CURRENT_TIMESTAMP`,
+      [cleanPhone, otpCode, expiresAt]
+    );
+
+    // 4. Send SMS via Fast2SMS API Key
+    await sendFast2SmsOtp(cleanPhone, otpCode);
+
+    return res.json({
+      success: true,
+      message: `Registration OTP code successfully sent to +91 ${cleanPhone}.`,
+      phone: cleanPhone,
+      otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error('Error in send-register-otp:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send registration OTP. Please try again.', error: error.message });
+  }
+});
+
+/**
+ * POST /api/auth/verify-register-otp
+ * Verify 6-digit OTP for User Registration
+ */
+router.post('/verify-register-otp', async (req, res) => {
+  try {
+    const { phone, phoneNumber, otp, code } = req.body;
+    const rawPhone = (phone || phoneNumber || '').trim();
+    const otpCode = (otp || code || '').trim();
+
+    if (!rawPhone || !otpCode) {
+      return res.status(400).json({ success: false, message: 'Phone number and 6-digit OTP are required.' });
+    }
+
+    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+
+    const otpRes = await db.query(
+      'SELECT otp, expires_at FROM registration_otps WHERE phone = $1',
+      [cleanPhone]
+    );
+
+    if (otpRes.rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'OTP not requested or expired. Please request a new OTP.' });
+    }
+
+    const record = otpRes.rows[0];
+
+    if (new Date() > new Date(record.expires_at)) {
+      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new code.' });
+    }
+
+    if (record.otp !== otpCode) {
+      return res.status(400).json({ success: false, message: 'Invalid 6-digit OTP code. Please check and try again.' });
+    }
+
+    return res.json({
+      success: true,
+      message: 'OTP verified successfully.',
+      phone: cleanPhone,
+    });
+  } catch (error) {
+    console.error('Error in verify-register-otp:', error);
     return res.status(500).json({ success: false, message: 'Verification failed. Please try again.', error: error.message });
   }
 });

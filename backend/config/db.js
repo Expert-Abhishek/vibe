@@ -11,7 +11,7 @@ if (connectionString) {
   const isLocalHost = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
   poolConfig = {
     connectionString,
-    ssl: isLocalHost || process.env.DISABLE_DB_SSL === 'true' ? false : { rejectUnauthorized: false },
+    ssl: (isLocalHost && process.env.DISABLE_DB_SSL === 'true') ? false : { rejectUnauthorized: false },
   };
 } else {
   poolConfig = {

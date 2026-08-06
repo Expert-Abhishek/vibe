@@ -427,9 +427,13 @@ export default function PlanRouteScreen() {
       const currentUserId = session?.id || session?.profile?.user_id;
 
       const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
+      const planCheckpoints = (Array.isArray(selectedPlan.checkpointObjs) && selectedPlan.checkpointObjs.length > 0)
+        ? selectedPlan.checkpointObjs.map((c: any) => c.name || c.checkpoint_name || c)
+        : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
+
       const planDestIds = (Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0)
         ? selectedPlan.destinationIds
-        : (Array.isArray(selectedPlan.checkpointObjs) ? selectedPlan.checkpointObjs.map((c: any) => c.destinationId || c.destination_id || c.id).filter(Boolean) : []);
+        : (Array.isArray(selectedPlan.checkpointObjs) ? selectedPlan.checkpointObjs.map((c: any) => c.destinationId || c.destination_id || c.id || c.name).filter(Boolean) : planCheckpoints);
       const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
 
       const createdTrip = await createTripApi({
@@ -437,11 +441,12 @@ export default function PlanRouteScreen() {
         title: `${selectedPlan.name}`,
         customerId: currentUserId,
         customerName: session?.name || 'Abhishek (Tourist)',
-        driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
+        driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
         driverId: selectedDriver ? driverId : null,
         planId: selectedPlan.id,
         destinationId: primaryDestId || undefined,
         destinationIds: planDestIds,
+        checkpoints: planCheckpoints,
         pickupId: selectedPickup.id,
         pickupName: selectedPickup.name,
         pickupLat: selectedPickup.latitude,
@@ -572,9 +577,13 @@ export default function PlanRouteScreen() {
 
     const targetCategory = selectedDriver?.vehicle_category || bookingVehicle || '5_seater';
 
+    const planCheckpoints = (Array.isArray(selectedPlan.checkpointObjs) && selectedPlan.checkpointObjs.length > 0)
+      ? selectedPlan.checkpointObjs.map((c: any) => c.name || c.checkpoint_name || c)
+      : (Array.isArray(selectedPlan.checkpoints) ? selectedPlan.checkpoints : []);
+
     const planDestIds = (Array.isArray(selectedPlan.destinationIds) && selectedPlan.destinationIds.length > 0)
       ? selectedPlan.destinationIds
-      : (Array.isArray(selectedPlan.checkpointObjs) ? selectedPlan.checkpointObjs.map((c: any) => c.destinationId || c.destination_id || c.id).filter(Boolean) : []);
+      : (Array.isArray(selectedPlan.checkpointObjs) ? selectedPlan.checkpointObjs.map((c: any) => c.destinationId || c.destination_id || c.id || c.name).filter(Boolean) : planCheckpoints);
     const primaryDestId = selectedPlan.destinationId || (planDestIds.length > 0 ? planDestIds[0] : null);
 
     // Save trip to backend DB
@@ -583,15 +592,16 @@ export default function PlanRouteScreen() {
       title: `${selectedPlan.name} (${Math.round(totalHours)} Hours)`,
       customerId: currentUserId,
       customerName: session?.name || 'Abhishek (Tourist)',
-      driverOrGuideName: selectedDriver ? driverName : 'Auto-Assigned Captain',
+      driverOrGuideName: selectedDriver ? driverName : 'Searching Captain...',
       driverId: selectedDriver ? driverId : null,
       planId: selectedPlan.id,
       destinationId: primaryDestId || undefined,
       destinationIds: planDestIds,
+      checkpoints: planCheckpoints,
       vehicleCategory: targetCategory,
       amount: totalPrice,
       paymentMode: 'Wallet',
-      status: 'Confirmed',
+      status: 'Pending',
       durationHours: totalHours,
       extraHours: priceInfo.extraHoursRounded,
       addonCharge: priceInfo.extraAddonCharge,

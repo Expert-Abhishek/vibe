@@ -1203,7 +1203,7 @@ router.post('/:id/arrive', async (req, res) => {
     const { id } = req.params;
     const { driverName = 'Captain' } = req.body;
 
-    const tripRes = await db.query('SELECT * FROM trips WHERE id = $1', [id]);
+    const tripRes = await db.query('SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [id]);
     if (tripRes.rows.length > 0) {
       const trip = tripRes.rows[0];
       const guardCheck = canDriverStartTrip(trip.scheduled_time, trip.booking_type);
@@ -1218,7 +1218,7 @@ router.post('/:id/arrive', async (req, res) => {
     }
 
     const result = await db.query(
-      "UPDATE trips SET status = 'Arrived' WHERE id = $1 RETURNING *",
+      "UPDATE trips SET status = 'Arrived' WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",
       [id]
     );
 
@@ -1958,11 +1958,13 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     let vehicleModel = 'AC Cab 5-Seater';
     let vehicleNumber = 'KA-03-EX-8240';
 
+    const validDriverUuid = toValidUuidOrNull(driverId) || driverId;
+
     try {
       const pRes = await db.query(
         `SELECT u.phone, u.name, d.vehicle_model, d.vehicle_number 
          FROM users u 
-         LEFT JOIN driver_profiles d ON u.id = d.user_id 
+         LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text 
          WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text`,
         [driverId]
       );
@@ -1979,16 +1981,20 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     // 3. Fetch wallet balance and platform fee for driver or guide
     let dRes = { rows: [] };
     try {
-      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text", [driverId]);
     } catch (e) {
-      dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      try {
+        dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id::text = $1::text", [driverId]);
+      } catch (e2) {}
     }
 
     let gRes = { rows: [] };
     try {
-      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id::text = $1::text", [driverId]);
     } catch (e) {
-      gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id = $1 OR CAST(user_id AS VARCHAR) = $1", [driverId]);
+      try {
+        gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id::text = $1::text", [driverId]);
+      } catch (e2) {}
     }
 
     let walletBalance = 0;
@@ -2011,29 +2017,29 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     // Calculate platform fee based on % of trip amount (min ₹10)
     const platformFee = Math.max(10, Math.round((tripAmount * feePercent) / 100));
 
-    // Deduct platform fee from profile
-    if (isDriver) {
-      await db.query(`
-        INSERT INTO driver_profiles (user_id, wallet_balance) VALUES ($1, -$2)
-        ON CONFLICT (user_id) DO UPDATE SET wallet_balance = driver_profiles.wallet_balance - $2
-      `, [driverId, platformFee]);
-    } else {
-      await db.query(`
-        INSERT INTO guide_profiles (user_id, wallet_balance) VALUES ($1, -$2)
-        ON CONFLICT (user_id) DO UPDATE SET wallet_balance = guide_profiles.wallet_balance - $2
-      `, [driverId, platformFee]);
-    }
+    // Safely attempt platform fee deduction from profile
+    try {
+      if (isDriver) {
+        await db.query(`
+          UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $2 WHERE user_id::text = $1::text
+        `, [driverId, platformFee]);
+      } else {
+        await db.query(`
+          UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $2 WHERE user_id::text = $1::text
+        `, [driverId, platformFee]);
+      }
 
-    // Log transaction
-    await db.query(
-      "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
-      [driverId, 'debit', platformFee, `Platform Fee (${feePercent}%) for Booking #${id}`]
-    );
+      await db.query(
+        "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
+        [driverId, 'debit', platformFee, `Platform Fee (${feePercent}%) for Booking #${id}`]
+      );
+    } catch (feeErr) {
+      console.warn('Platform fee deduction warning:', feeErr.message);
+    }
 
     const generatedStartOtp = Math.floor(1000 + Math.random() * 9000).toString();
     const generatedEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-    const validDriverUuid = toValidUuidOrNull(driverId);
     if (validDriverUuid) {
       try {
         const dCheck = await db.query('SELECT id FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [validDriverUuid]);
@@ -2081,14 +2087,18 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
 
     // Notify tourist
     if (trip.customer_id) {
-      const userRes = await db.query('SELECT push_token FROM users WHERE id = $1', [trip.customer_id]);
-      if (userRes.rows.length > 0 && userRes.rows[0].push_token) {
-        sendExpoPushNotification(
-          userRes.rows[0].push_token,
-          '🎉 Partner Confirmed Your Booking!',
-          `${driverName} has accepted your trip request! Your Start OTP is ${generatedStartOtp}.`,
-          { tripId: trip.id, status: 'Accepted', driverName, otp: generatedStartOtp, endOtp: generatedEndOtp }
-        );
+      try {
+        const userRes = await db.query('SELECT push_token FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [trip.customer_id]);
+        if (userRes.rows.length > 0 && userRes.rows[0].push_token) {
+          sendExpoPushNotification(
+            userRes.rows[0].push_token,
+            '🎉 Partner Confirmed Your Booking!',
+            `${driverName} has accepted your trip request! Your Start OTP is ${generatedStartOtp}.`,
+            { tripId: trip.id, status: 'Accepted', driverName, otp: generatedStartOtp, endOtp: generatedEndOtp }
+          );
+        }
+      } catch (pushErr) {
+        console.warn('Push notification error on accept:', pushErr.message);
       }
     }
 
