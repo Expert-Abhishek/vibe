@@ -30,19 +30,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Dynamically import react-native-maps to prevent crashes on web
-let MapView: any = null;
-let Marker: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-  } catch (e) {
-    console.warn('react-native-maps could not be loaded dynamically in guides:', e);
-  }
-}
+import MapView, { Marker } from '@/components/react-native-maps';
 
 interface Guide {
   id: string;

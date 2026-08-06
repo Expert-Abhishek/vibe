@@ -1218,7 +1218,7 @@ export default function PlanRouteScreen() {
 
                   <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
 
-                  <View style={{
+                  {/* <View style={{
                     backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
                     borderWidth: 1.5,
                     borderColor: colors.amber,
@@ -1250,7 +1250,7 @@ export default function PlanRouteScreen() {
                         <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>₹{computedPrice}</Text>
                       </View>
                     )}
-                  </View>
+                  </View> */}
                 </>
               );
             })()}
@@ -1264,7 +1264,6 @@ export default function PlanRouteScreen() {
               disabled={!selectedPlan}
               onPress={handleConfirmBooking}
             >
-              <MaterialIcons name={paymentMethod === 'cash' ? "currency-rupee" : "payment"} size={scale(20)} color="#101014" />
               <Text style={styles.confirmBtnText}>
                 {paymentMethod === 'cash'
                   ? (!adminState.instantBookingEnabled
@@ -1272,7 +1271,7 @@ export default function PlanRouteScreen() {
                     : `Total Fare ₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice}`)
                   : (!adminState.instantBookingEnabled
                     ? `Pay Pre-Booking Fees (₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
-                    : `Pay Total Fare (₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)}
+                    : `Pay  Total Fare (₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)}
               </Text>
             </TouchableOpacity>
 

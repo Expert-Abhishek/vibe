@@ -23,21 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from '@/constants/admin-state';
 import { broadcastNewTripRequest } from '@/constants/tripSync';
 
-// Dynamically require maps for web safety
-let MapView: any = null;
-let Marker: any = null;
-let Polyline: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-    Polyline = Maps.Polyline;
-  } catch (e) {
-    console.warn('react-native-maps could not be loaded dynamically in book-cab:', e);
-  }
-}
+import MapView, { Marker, Polyline } from '@/components/react-native-maps';
 
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
@@ -482,7 +468,7 @@ export default function BookCabScreen() {
         Alert.alert(
           '🎉 Pre-Booking Confirmed!',
           `Automatic Wallet Payment Successful!\nDeposit Amount: ₹${advanceAmount} (${prebookPayOption}% Deposit)\nRemaining Balance: ₹${remainingAmount} (Payable on trip day)\nDate: ${advanceDate} at ${advanceTime}`,
-          [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
+          [{ text: 'View Trips', onPress: () => router.navigate('/(tabs)/trips') }]
         );
       } catch (err) {
         console.error('handleBookCab advance error:', err);

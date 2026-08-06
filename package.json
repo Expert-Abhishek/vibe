@@ -10,9 +10,6 @@
     "web": "expo start --web",
     "lint": "expo lint"
   },
-  "browser": {
-    "react-native-maps": "./components/react-native-maps.web.js"
-  },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/bottom-tabs": "^7.4.0",

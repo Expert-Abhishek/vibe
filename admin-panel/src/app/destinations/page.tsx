@@ -27,6 +27,7 @@ import {
   initialDestinations
 } from '@/lib/api';
 import LocationSearchMap from '@/components/LocationSearchMap';
+import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 
 const PRESET_LOCATIONS = [
@@ -279,12 +280,14 @@ export default function DestinationsPage() {
               >
                 {/* Image Cover & Badges */}
                 <div className="relative h-48 w-full bg-dark-hover overflow-hidden group">
-                  <img
+                  <PreviewableImage
                     src={coverImage}
                     alt={dest.name}
+                    title={`${dest.name} - Destination Cover Photo`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    wrapperClassName="w-full h-full"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/30 pointer-events-none" />
 
                   {/* Location Badge */}
                   <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-lg border border-white/10 flex items-center space-x-1">
@@ -352,12 +355,12 @@ export default function DestinationsPage() {
                     {/* Image Thumbnails */}
                     <div className="flex items-center space-x-1">
                       {dest.images && dest.images.slice(0, 3).map((img, idx) => (
-                        <img
+                        <PreviewableImage
                           key={idx}
                           src={img}
                           alt="thumb"
-                          onClick={() => setActiveMediaPreview({ type: 'image', url: img, title: dest.name })}
-                          className="w-7 h-7 rounded-md object-cover border border-dark-border cursor-pointer hover:scale-110 transition-transform"
+                          title={`${dest.name} - Photo #${idx + 1}`}
+                          className="w-7 h-7 rounded-md object-cover border border-dark-border"
                         />
                       ))}
                       {dest.videos && dest.videos.length > 0 && (
@@ -537,7 +540,12 @@ export default function DestinationsPage() {
             </div>
             <div className="p-2 bg-black flex items-center justify-center min-h-[350px]">
               {activeMediaPreview.type === 'image' ? (
-                <img src={activeMediaPreview.url} alt="preview" className="max-h-[500px] w-auto object-contain rounded-lg" />
+                <PreviewableImage
+                  src={activeMediaPreview.url}
+                  alt="preview"
+                  title={activeMediaPreview.title || 'Destination Image'}
+                  className="max-h-[500px] w-auto object-contain rounded-lg"
+                />
               ) : activeMediaPreview.type === 'video' ? (
                 <video src={activeMediaPreview.url} controls autoPlay className="max-h-[500px] w-full rounded-lg" />
               ) : (

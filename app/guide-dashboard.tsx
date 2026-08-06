@@ -50,21 +50,7 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Dynamically require maps for web safety
-let MapView: any = null;
-let Marker: any = null;
-let Circle: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-    Circle = Maps.Circle;
-  } catch (e) {
-    console.warn('react-native-maps could not be loaded dynamically in guide-dashboard:', e);
-  }
-}
+import MapView, { Marker, Circle } from '@/components/react-native-maps';
 
 interface TourSpot {
   name: string;

@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from 'react';
 import UserWalletHistorySection from '@/components/UserWalletHistorySection';
 import UserTripHistorySection from '@/components/UserTripHistorySection';
+import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -130,9 +131,10 @@ export default function GuidesPage() {
                   <td className="py-4 px-6">
                     <div className="flex items-center space-x-3">
                       {isValidImageUrl(guide.documents?.photo) ? (
-                        <img
+                        <PreviewableImage
                           src={guide.documents.photo!}
                           alt={guide.name}
+                          title={`${guide.name} - Profile Photo`}
                           className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500/40 shadow-sm"
                         />
                       ) : (
@@ -335,9 +337,10 @@ function GuideDetailModal({
         <div className="p-6 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-10">
           <div className="flex items-center space-x-4">
             {isValidImageUrl(guide.documents?.photo) ? (
-              <img
+              <PreviewableImage
                 src={guide.documents.photo!}
                 alt={guide.name}
+                title={`${guide.name} - Profile Photo`}
                 className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-500 shadow-lg"
               />
             ) : (
@@ -558,7 +561,13 @@ function GuideDetailModal({
                     {key === 'photo' ? '👤 Profile Photo' : key === 'licenseCert' ? '📜 Tourism License Cert' : '🆔 Aadhar / ID Proof'}
                   </span>
                   {isValidImageUrl(url) ? (
-                    <img src={url!} alt={key} className="w-full h-36 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
+                    <PreviewableImage
+                      src={url!}
+                      alt={key}
+                      title={`${guide.name} - ${key === 'photo' ? 'Profile Photo' : key === 'licenseCert' ? 'Tourism License Cert' : 'Aadhar / ID Proof'}`}
+                      className="w-full h-36 object-cover rounded-lg border border-dark-border"
+                      wrapperClassName="w-full"
+                    />
                   ) : (
                     <div className="w-full h-36 bg-dark-hover rounded-lg border border-dashed border-dark-border flex flex-col items-center justify-center text-xs text-dark-textMuted p-2 text-center">
                       <span>Not Uploaded / Invalid Path</span>

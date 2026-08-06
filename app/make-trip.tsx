@@ -28,21 +28,7 @@ import { sendLocalNotification } from '@/constants/notifications';
 
 
 
-// Dynamically require react-native-maps to prevent compilation or runtime crashes on Web
-let MapView: any = null;
-let Marker: any = null;
-let Polyline: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-    Polyline = Maps.Polyline;
-  } catch (e) {
-    console.warn('react-native-maps could not be loaded dynamically:', e);
-  }
-}
+import MapView, { Marker, Polyline } from '@/components/react-native-maps';
 
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
@@ -790,7 +776,7 @@ export default function MakeTripScreen() {
       Alert.alert(
         '🎉 Pre-Booking Confirmed!',
         `Automatic Tourist Wallet Payment Successful!\nDeposit Amount: ₹${paymentAmount} (${prebookPayOption}% Deposit)\nRemaining Balance: ₹${remainingAmount}\nDriver: ${driverName}\nDate: ${finalDate} at ${finalTime}`,
-        [{ text: 'View Trips', onPress: () => router.replace('/(tabs)/trips') }]
+        [{ text: 'View Trips', onPress: () => router.navigate('/(tabs)/trips') }]
       );
       return;
     }

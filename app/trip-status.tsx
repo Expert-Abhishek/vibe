@@ -26,20 +26,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-let MapView: any = null;
-let Marker: any = null;
-let Polyline: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-    Polyline = Maps.Polyline;
-  } catch (e) {
-    // Silent catch on web / webview fallback
-  }
-}
+import MapView, { Marker, Polyline } from '@/components/react-native-maps';
 
 export default function TripStatusScreen() {
   const { t } = useTranslation();
@@ -165,16 +152,16 @@ export default function TripStatusScreen() {
           if (statusLower.includes('completed') || statusLower.includes('finish') || statusLower.includes('done')) {
             sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
             Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
-              { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
+              { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
             ]);
-            router.replace('/(tabs)/history');
+            router.navigate('/(tabs)/history');
             return;
           }
           if (statusLower.includes('cancelled') || statusLower.includes('declined')) {
             Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
-              { text: 'OK', onPress: () => router.replace('/(tabs)/trips') }
+              { text: 'OK', onPress: () => router.navigate('/(tabs)/trips') }
             ]);
-            router.replace('/(tabs)/trips');
+            router.navigate('/(tabs)/trips');
             return;
           }
         }
@@ -241,7 +228,7 @@ export default function TripStatusScreen() {
           Alert.alert(
             '🎉 Ride Accepted by Captain!',
             `Captain ${dName} has accepted your tour booking!\n\nYou can view all your trip details and live status on My Trips.`,
-            [{ text: 'View My Trips', onPress: () => router.replace('/(tabs)/trips') }]
+            [{ text: 'View My Trips', onPress: () => router.navigate('/(tabs)/trips') }]
           );
         }
       }
@@ -252,9 +239,9 @@ export default function TripStatusScreen() {
       setTripStatus('Completed');
       sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
       Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibe.', [
-        { text: 'View History', onPress: () => router.replace('/(tabs)/history') }
+        { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
       ]);
-      router.replace('/(tabs)/history');
+      router.navigate('/(tabs)/history');
     };
 
     const handleDeclined = (data?: any) => {
@@ -270,7 +257,7 @@ export default function TripStatusScreen() {
 
     const handleCancelled = () => {
       setTripStatus('CANCELLED');
-      router.replace('/(tabs)/history');
+      router.navigate('/(tabs)/history');
       setTimeout(() => {
         Alert.alert('Trip Cancelled', 'This trip has been cancelled.');
       }, 300);
@@ -390,13 +377,13 @@ export default function TripStatusScreen() {
               }
               DeviceEventEmitter.emit('trip_cancelled', { tripId: tripIdParam });
               sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
-              router.replace('/(tabs)/history');
+              router.navigate('/(tabs)/history');
               setTimeout(() => {
                 Alert.alert('Trip Cancelled', 'Your ride request was cancelled and recorded in your History ledger.');
               }, 300);
             } catch (e) {
               console.warn('Cancel error:', e);
-              router.replace('/(tabs)/history');
+              router.navigate('/(tabs)/history');
             } finally {
               setCancelling(false);
             }
@@ -432,7 +419,7 @@ export default function TripStatusScreen() {
 
       {/* Header */}
       <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/home'); } }} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.navigate('/(tabs)'); } }} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('liveStatus')}</Text>

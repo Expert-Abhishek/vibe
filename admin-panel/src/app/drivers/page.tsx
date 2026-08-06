@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from 'react';
 import UserWalletHistorySection from '@/components/UserWalletHistorySection';
 import UserTripHistorySection from '@/components/UserTripHistorySection';
+import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 function isValidImageUrl(url?: string | null): boolean {
   if (!url) return false;
@@ -141,9 +142,10 @@ export default function DriversPage() {
                   <td className="py-4 px-6">
                     <div className="flex items-center space-x-3">
                       {isValidImageUrl(driver.docs?.photo) ? (
-                        <img
+                        <PreviewableImage
                           src={driver.docs!.photo!}
                           alt={driver.name}
+                          title={`${driver.name} - Profile Photo`}
                           className="w-10 h-10 rounded-full object-cover border-2 border-brand-500/40 shadow-sm"
                         />
                       ) : (
@@ -352,9 +354,10 @@ function DriverDetailModal({
         <div className="p-6 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-10">
           <div className="flex items-center space-x-4">
             {isValidImageUrl(driver.docs?.photo) ? (
-              <img
+              <PreviewableImage
                 src={driver.docs.photo!}
                 alt={driver.name}
+                title={`${driver.name} - Driver Photo`}
                 className="w-14 h-14 rounded-2xl object-cover border-2 border-brand-500 shadow-lg"
               />
             ) : (
@@ -598,7 +601,13 @@ function DriverDetailModal({
                     {key === 'photo' ? '👤 Profile Photo' : key === 'rc' ? '📄 RC Copy' : key === 'dl' ? '🪪 Driving License' : key === 'insurance' ? '📑 Insurance' : '🆔 Aadhar Card'}
                   </span>
                   {isValidImageUrl(url) ? (
-                    <img src={url!} alt={key} className="w-full h-32 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
+                    <PreviewableImage
+                      src={url!}
+                      alt={key}
+                      title={`${driver.name} - ${key === 'photo' ? 'Profile Photo' : key === 'rc' ? 'RC Copy' : key === 'dl' ? 'Driving License' : key === 'insurance' ? 'Insurance' : 'Aadhar Card'}`}
+                      className="w-full h-32 object-cover rounded-lg border border-dark-border"
+                      wrapperClassName="w-full"
+                    />
                   ) : (
                     <div className="w-full h-32 bg-dark-hover rounded-lg border border-dashed border-dark-border flex flex-col items-center justify-center text-xs text-dark-textMuted p-2 text-center">
                       <span>Not Attached</span>
@@ -623,7 +632,13 @@ function DriverDetailModal({
                     {angle} View
                   </span>
                   {isValidImageUrl(url) ? (
-                    <img src={url!} alt={angle} className="w-full h-32 object-cover rounded-lg border border-dark-border hover:scale-105 transition-transform" />
+                    <PreviewableImage
+                      src={url!}
+                      alt={angle}
+                      title={`${driver.name} - Vehicle ${angle} View`}
+                      className="w-full h-32 object-cover rounded-lg border border-dark-border"
+                      wrapperClassName="w-full"
+                    />
                   ) : (
                     <div className="w-full h-32 bg-dark-hover rounded-lg border border-dashed border-dark-border flex flex-col items-center justify-center text-xs text-dark-textMuted p-2 text-center">
                       <span>No Photo</span>

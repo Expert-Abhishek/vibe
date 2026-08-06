@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { QrCode, Upload, CheckCircle, AlertTriangle, RefreshCw, Eye } from 'lucide-react';
 import { fetchPaymentSettingsApi, updatePaymentSettingsApi, PaymentSettings } from '@/lib/api';
+import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 export default function PaymentSettingsPage() {
   const [upiId, setUpiId] = useState('');
@@ -184,10 +185,12 @@ export default function PaymentSettingsPage() {
             
             <div className="bg-white p-3 rounded-xl shadow-inner mb-4 flex items-center justify-center w-40 h-40 border border-gray-200">
               {qrCodeUrl ? (
-                <img
+                <PreviewableImage
                   src={qrCodeUrl}
                   alt="UPI QR Code Preview"
+                  title="Payment UPI QR Code - Edit Preview"
                   className="w-full h-full object-contain"
+                  wrapperClassName="w-full h-full"
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center text-gray-400">
@@ -211,10 +214,12 @@ export default function PaymentSettingsPage() {
               </h2>
               
               <div className="bg-white p-3 rounded-xl shadow-inner mb-3 flex items-center justify-center w-36 h-36 border border-gray-200">
-                <img
+                <PreviewableImage
                   src={currentSettings.qr_code_url}
                   alt="Live QR Code"
+                  title="Live App Payment QR Code"
                   className="w-full h-full object-contain"
+                  wrapperClassName="w-full h-full"
                 />
               </div>
 

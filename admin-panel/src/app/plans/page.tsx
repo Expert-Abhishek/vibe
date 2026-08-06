@@ -39,6 +39,8 @@ import {
   initialPlans,
   initialDestinations
 } from '@/lib/api';
+import LocationSearchMap from '@/components/LocationSearchMap';
+import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -508,10 +510,12 @@ export default function PlansPage() {
                         <div className="flex items-center space-x-2.5 min-w-0">
                           {/* Image thumbnail from Destination Master */}
                           {cp.images && cp.images.length > 0 ? (
-                            <img
+                            <PreviewableImage
                               src={cp.images[0]}
                               alt={cp.name}
-                              className="w-8 h-8 rounded-lg object-cover border border-dark-border flex-shrink-0"
+                              title={`${cp.name} - Checkpoint Image`}
+                              className="w-8 h-8 rounded-lg object-cover border border-dark-border"
+                              wrapperClassName="flex-shrink-0"
                             />
                           ) : (
                             <div className="w-8 h-8 rounded-lg bg-dark-card border border-dark-border flex items-center justify-center text-[10px] font-bold text-brand-500">
@@ -969,10 +973,12 @@ export default function PlansPage() {
                     >
                       <div className="flex items-center space-x-3 min-w-0">
                         {cp.images && cp.images.length > 0 ? (
-                          <img
+                          <PreviewableImage
                             src={cp.images[0]}
                             alt={cp.name}
-                            className="w-10 h-10 rounded-lg object-cover border border-dark-border flex-shrink-0"
+                            title={`${cp.name} - Checkpoint Image`}
+                            className="w-10 h-10 rounded-lg object-cover border border-dark-border"
+                            wrapperClassName="flex-shrink-0"
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-dark-card border border-dark-border flex items-center justify-center text-[10px] font-bold text-brand-500 flex-shrink-0">

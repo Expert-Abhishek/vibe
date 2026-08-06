@@ -22,20 +22,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-let MapView: any = null;
-let Marker: any = null;
-let Polyline: any = null;
-
-if (Platform.OS !== 'web') {
-  try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-    Polyline = Maps.Polyline;
-  } catch (e) {
-    console.warn('react-native-maps could not be loaded dynamically in ride-matching:', e);
-  }
-}
+import MapView, { Marker, Polyline } from '@/components/react-native-maps';
 
 interface Coordinate {
   latitude: number;
@@ -825,7 +812,7 @@ export default function RideMatchingScreen() {
                 style={{ width: '100%', height: verticalScale(46), borderRadius: scale(14), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center' }}
                 onPress={() => {
                   setCompletedModalVisible(false);
-                  router.replace('/(tabs)/trips');
+                  router.navigate('/(tabs)/trips');
                 }}
               >
                 <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(13) }}>

@@ -28,8 +28,9 @@ import {
   approveDeductionRequestApi,
   rejectDeductionRequestApi,
   adjustWalletBalanceApi,
-  UnifiedTransaction
+  UnifiedTransaction,
 } from '@/lib/api';
+import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 function TransactionsContent() {
   const searchParams = useSearchParams();
@@ -513,10 +514,12 @@ function TransactionsContent() {
                   <span className="text-xs font-bold text-gray-300 block">Payment Proof Screenshot:</span>
                   <div className="w-full h-72 rounded-xl overflow-hidden border border-dark-border bg-dark-bg flex items-center justify-center">
                     {selectedTx.screenshot_url ? (
-                      <img
+                      <PreviewableImage
                         src={selectedTx.screenshot_url}
                         alt="Top-up proof"
+                        title={`Topup Payment Proof Screenshot - ₹${selectedTx.amount}`}
                         className="w-full h-full object-contain"
+                        wrapperClassName="w-full h-full"
                       />
                     ) : (
                       <div className="flex flex-col items-center text-dark-textMuted text-xs">
@@ -552,7 +555,13 @@ function TransactionsContent() {
                     <div className="space-y-1">
                       <span className="text-xs font-bold text-gray-300 block">Attached Receipt / Screenshot:</span>
                       <div className="w-full h-48 rounded-xl overflow-hidden border border-dark-border bg-dark-bg flex items-center justify-center">
-                        <img src={selectedTx.screenshot_url} alt="Deduction receipt" className="w-full h-full object-contain" />
+                        <PreviewableImage
+                          src={selectedTx.screenshot_url}
+                          alt="Deduction receipt"
+                          title={`Deduction Attached Receipt - Txn #${selectedTx.id}`}
+                          className="w-full h-full object-contain"
+                          wrapperClassName="w-full h-full"
+                        />
                       </div>
                     </div>
                   )}
