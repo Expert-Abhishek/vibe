@@ -1075,13 +1075,15 @@ export default function DriverDashboardScreen() {
       }
 
       try {
-        // 2. Emit socket event
+        const custId = (incomingRequest as any)?.customerId || (incomingRequest as any)?.customer_id || (incomingRequest as any)?.userId;
         emitAcceptRideSocket({
           tripId,
           id: tripId,
           driverId,
           driverName: session?.name || driverName,
           status: 'Accepted',
+          customerId: custId,
+          customer_id: custId,
           ...incomingRequest,
         });
       } catch (e) { }
@@ -2151,7 +2153,7 @@ export default function DriverDashboardScreen() {
             return raw
               .map((item: any) => {
                 if (typeof item === 'string') return item.trim();
-                if (item && typeof item === 'object') return item.name || item.title || item.location || 'Checkpoint';
+                if (item && typeof item === 'object') return item.checkpoint_name || item.name || item.title || item.location || 'Checkpoint';
                 return null;
               })
               .filter((item: string | null): item is string => Boolean(item && item.length > 0));

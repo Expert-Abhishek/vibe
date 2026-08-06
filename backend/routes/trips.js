@@ -646,26 +646,37 @@ router.get('/pending-requests', async (req, res) => {
       [driverId || null]
     );
 
-    const formattedTrips = result.rows.map(t => ({
-      id: t.id,
-      tripId: t.id,
-      title: t.title,
-      customerName: t.customer_name || 'Tourist Client',
-      touristName: t.customer_name || 'Tourist Client',
-      pickup: t.pickup_name || 'Pickup Location',
-      drop: t.drop_name || t.title || 'Drop Location',
-      amount: parseFloat(t.amount || 0),
-      estimatedFare: parseFloat(t.amount || 0),
-      price: parseFloat(t.amount || 0),
-      vehicleCategory: t.vehicle_category || '5_seater',
-      vehicle_category: t.vehicle_category || '5_seater',
-      status: t.status,
-      bookingType: t.booking_type || 'INSTANT',
-      otp: t.otp || '8240',
-      endOtp: t.end_otp || '4321',
-      checkpoints: t.destination_ids || [],
-      scheduledTime: t.scheduled_time,
-      createdAt: t.created_at,
+    const formattedTrips = await Promise.all(result.rows.map(async (t) => {
+      const rawCps = (Array.isArray(t.destination_ids) && t.destination_ids.length > 0) ? t.destination_ids : (t.checkpoints || []);
+      const resolvedCps = await resolveDestinationCheckpoints(rawCps);
+      const checkpointNames = resolvedCps.map(cp => (typeof cp === 'object' && cp !== null ? (cp.name || cp.checkpoint_name || cp.title || 'Checkpoint') : String(cp)));
+
+      return {
+        id: t.id,
+        tripId: t.id,
+        title: t.title,
+        customerName: t.customer_name || 'Tourist Client',
+        touristName: t.customer_name || 'Tourist Client',
+        customerId: t.customer_id,
+        customer_id: t.customer_id,
+        pickup: t.pickup_name || 'Pickup Location',
+        pickupName: t.pickup_name || 'Pickup Location',
+        drop: t.drop_name || t.title || 'Drop Location',
+        dropName: t.drop_name || t.title || 'Drop Location',
+        amount: parseFloat(t.amount || 0),
+        estimatedFare: parseFloat(t.amount || 0),
+        price: parseFloat(t.amount || 0),
+        vehicleCategory: t.vehicle_category || '5_seater',
+        vehicle_category: t.vehicle_category || '5_seater',
+        status: t.status,
+        bookingType: t.booking_type || 'INSTANT',
+        otp: t.otp || '8240',
+        endOtp: t.end_otp || '4321',
+        checkpoints: checkpointNames,
+        trip_checkpoints: resolvedCps,
+        scheduledTime: t.scheduled_time,
+        createdAt: t.created_at,
+      };
     }));
 
     res.json({
@@ -1461,7 +1472,15 @@ router.post('/book', async (req, res) => {
     const newTrip = result.rows[0];
     newTrip.vehicleCategory = selectedVehicleCategory;
     newTrip.vehicle_category = selectedVehicleCategory;
-    newTrip.checkpoints = Array.isArray(req.body.checkpoints) ? req.body.checkpoints : (Array.isArray(req.body.route) ? req.body.route : []);
+
+    const rawCheckpoints = Array.isArray(req.body.checkpoints) ? req.body.checkpoints : (Array.isArray(req.body.route) ? req.body.route : (newTrip.destination_ids || []));
+    const resolvedCheckpoints = await resolveDestinationCheckpoints(rawCheckpoints);
+    const checkpointNames = resolvedCheckpoints.map(cp => (typeof cp === 'object' && cp !== null ? (cp.name || cp.checkpoint_name || cp.title || 'Checkpoint') : String(cp)));
+
+    newTrip.checkpoints = checkpointNames;
+    newTrip.trip_checkpoints = resolvedCheckpoints;
+    newTrip.customerId = validCustomerId;
+    newTrip.customer_id = validCustomerId;
     emitTripRequest(newTrip);
 
     // Query all driver / guide tokens to send push notification!

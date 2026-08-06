@@ -118,7 +118,6 @@ export default function HistoryScreen() {
               time: item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (item.time || ''),
               price: Number(item.amount || item.price) || 0,
               status: statusLabel,
-              rating: Number(item.rating) || 5,
               passengerCount: item.passengerCount || 1,
               paymentMode: item.paymentMode || item.payment_mode || undefined,
             });
@@ -194,7 +193,6 @@ export default function HistoryScreen() {
         time: t.time,
         price: t.price,
         status: statusLabel,
-        rating: t.rating || 5,
         passengerCount: t.passengerCount,
       };
     });

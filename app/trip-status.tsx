@@ -96,9 +96,12 @@ export default function TripStatusScreen() {
     blue: '#3B82F6',
   };
 
+  const hasHandledTerminalStateRef = useRef(false);
+
   // Poll live location & trip status from DB
   useEffect(() => {
     async function loadStatus() {
+      if (hasHandledTerminalStateRef.current) return;
       try {
         const res = await fetchLiveLocationApi(tripIdParam);
         if (res && res.success && res.data) {
@@ -149,18 +152,18 @@ export default function TripStatusScreen() {
 
           // Transition away if completed or cancelled on poll
           if (statusLower.includes('completed') || statusLower.includes('finish') || statusLower.includes('done')) {
+            hasHandledTerminalStateRef.current = true;
             sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
             Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
               { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
             ]);
-            router.navigate('/(tabs)/history');
             return;
           }
           if (statusLower.includes('cancelled') || statusLower.includes('declined')) {
+            hasHandledTerminalStateRef.current = true;
             Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
-              { text: 'OK', onPress: () => router.navigate('/(tabs)/trips') }
+              { text: 'OK', onPress: () => router.navigate('/(tabs)/history') }
             ]);
-            router.navigate('/(tabs)/trips');
             return;
           }
         }
@@ -209,38 +212,31 @@ export default function TripStatusScreen() {
     const socket = getSocket();
 
     const handleAccepted = (data: any) => {
+      console.log('[TripStatusScreen] 🟢 Received real-time trip_accepted event:', data);
       if (data) {
         setTripStatus('Accepted');
-        const dName = data.driverName || data.driver_or_guide_name || 'Captain';
-        if (data.driverName || data.driver_or_guide_name) {
-          setDriverInfo((prev: any) => ({
-            ...prev,
-            name: dName,
-            phone: data.driverPhone || prev.phone,
-            vehicleModel: data.vehicleModel || prev.vehicleModel,
-            vehicleNumber: data.vehicleNumber || prev.vehicleNumber,
-          }));
-        }
-        if (!hasShownAcceptedAlertRef.current) {
-          hasShownAcceptedAlertRef.current = true;
-          sendLocalNotification('🎉 Captain Accepted Ride!', `${dName} has accepted your trip request.`);
-          Alert.alert(
-            '🎉 Ride Accepted by Captain!',
-            `Captain ${dName} has accepted your tour booking!\n\nYou can view all your trip details and live status on My Trips.`,
-            [{ text: 'View My Trips', onPress: () => router.navigate('/(tabs)/trips') }]
-          );
-        }
+        setDriverInfo((prev: any) => ({
+          ...prev,
+          name: data.driverName || data.driver_or_guide_name || data.name || prev.name,
+          phone: data.driverPhone || data.phone || prev.phone,
+          vehicleModel: data.vehicleModel || data.vehicle_model || prev.vehicleModel,
+          vehicleNumber: data.vehicleNumber || data.vehicle_number || prev.vehicleNumber,
+        }));
+        if (data.otp) setStartOtp(String(data.otp));
+        if (data.endOtp || data.end_otp) setEndOtp(String(data.endOtp || data.end_otp));
+        sendLocalNotification('Driver Assigned!', `${data.driverName || 'Captain'} has accepted your booking.`);
       }
     };
 
     const handleCompleted = (data: any) => {
+      if (hasHandledTerminalStateRef.current) return;
+      hasHandledTerminalStateRef.current = true;
       console.log('[TripStatusScreen] 🏁 Active trip completed:', data);
       setTripStatus('Completed');
       sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
       Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibe.', [
         { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
       ]);
-      router.navigate('/(tabs)/history');
     };
 
     const handleDeclined = (data?: any) => {
@@ -255,11 +251,12 @@ export default function TripStatusScreen() {
     };
 
     const handleCancelled = () => {
+      if (hasHandledTerminalStateRef.current) return;
+      hasHandledTerminalStateRef.current = true;
       setTripStatus('CANCELLED');
-      router.navigate('/(tabs)/history');
-      setTimeout(() => {
-        Alert.alert('Trip Cancelled', 'This trip has been cancelled.');
-      }, 300);
+      Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
+        { text: 'OK', onPress: () => router.navigate('/(tabs)/history') }
+      ]);
     };
 
     const handleLocationStream = (data: any) => {

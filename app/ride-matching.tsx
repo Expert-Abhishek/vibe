@@ -471,7 +471,6 @@ export default function RideMatchingScreen() {
       price: price,
       paymentMode: paymentMode,
       status: 'Completed',
-      rating: 5.0,
       passengerCount: passengerCount,
     };
 

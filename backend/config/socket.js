@@ -328,7 +328,11 @@ function emitTripAccepted(tripObject) {
     console.log(`[SOCKET] Broadcasted trip_accepted to room trip:${tripId}`);
   }
 
-  // 3. Global Broadcast Fallback
+  // 3. Global Broadcast Fallbacks
+  io.to('role:tourist').emit('trip_accepted', acceptancePayload);
+  io.to('role:tourist').emit('trip_status_updated', acceptancePayload);
+  io.emit('trip_accepted', acceptancePayload);
+  io.emit('trip_status_updated', acceptancePayload);
   io.emit('RIDE_ACCEPTED', acceptancePayload);
 }
 

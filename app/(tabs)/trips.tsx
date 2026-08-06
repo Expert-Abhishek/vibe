@@ -116,12 +116,15 @@ export default function TripsHistoryScreen() {
     checkActiveTrip();
   }, [tripIdParam]);
 
+  const hasHandledTerminalStateRef = useRef(false);
+
   // Poll live location & trip status from DB
   useEffect(() => {
     async function loadStatus() {
-      const targetId = tripIdParam || effectiveTripId;
+      if (hasHandledTerminalStateRef.current) return;
+      if (!effectiveTripId && !tripIdParam) return;
       try {
-        const res = await fetchLiveLocationApi(targetId);
+        const res = await fetchLiveLocationApi(effectiveTripId || tripIdParam);
         if (res && res.success && res.data) {
           const statusStr = String(res.data.status || '');
           const statusLower = statusStr.toLowerCase();
@@ -170,18 +173,18 @@ export default function TripsHistoryScreen() {
 
           // Transition away if completed or cancelled on poll
           if (statusLower.includes('completed') || statusLower.includes('finish') || statusLower === 'done') {
+            hasHandledTerminalStateRef.current = true;
             sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
             Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
               { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
             ]);
-            router.navigate('/(tabs)/history');
             return;
           }
           if (statusLower.includes('cancelled') || statusLower.includes('declined')) {
+            hasHandledTerminalStateRef.current = true;
             Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
               { text: 'OK', onPress: () => router.navigate('/(tabs)/history') }
             ]);
-            router.navigate('/(tabs)/history');
             return;
           }
         }
