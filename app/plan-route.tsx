@@ -224,6 +224,21 @@ export default function PlanRouteScreen() {
     }
   }, [params.fromVehicle, params.selectedDriverId, params.selectedPlanId, params.selectedPlanName, livePlans]);
 
+  useEffect(() => {
+    if (selectedPlan) {
+      const allowedVehicles = (selectedPlan as any)?.allowed_vehicles || (selectedPlan as any)?.allowedVehicles;
+      if (allowedVehicles) {
+        const currentKey = bookingVehicle === '5seater' ? '5_seater' : bookingVehicle === '7seater' ? '7_seater' : bookingVehicle === '4x4jeep' ? '4x4' : bookingVehicle;
+        if (allowedVehicles[currentKey] === false) {
+          const firstAllowed = ['5_seater', '7_seater', '4x4', 'auto'].find(k => allowedVehicles[k] !== false);
+          if (firstAllowed) {
+            setBookingVehicle(firstAllowed as any);
+          }
+        }
+      }
+    }
+  }, [selectedPlan]);
+
   const jeepCarouselData = [
     {
       id: 'Thar',

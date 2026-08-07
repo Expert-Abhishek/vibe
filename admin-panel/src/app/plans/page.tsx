@@ -694,91 +694,81 @@ export default function PlansPage() {
 
 
 
-                {/* Category Vehicle Pricing Inputs */}
-                <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-3">
-                  <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
-                    Category Vehicle Pricing Rates (₹)
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🚘 5-Seater</label>
-                      <input
-                        type="number"
-                        value={addPlanForm.price_5_seater}
-                        onChange={e => setAddPlanForm({ ...addPlanForm, price_5_seater: Number(e.target.value) })}
-                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🚐 7-Seater</label>
-                      <input
-                        type="number"
-                        value={addPlanForm.price_7_seater}
-                        onChange={e => setAddPlanForm({ ...addPlanForm, price_7_seater: Number(e.target.value) })}
-                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🏔️ 4x4 Off-Road</label>
-                      <input
-                        type="number"
-                        value={addPlanForm.price_4x4}
-                        onChange={e => setAddPlanForm({ ...addPlanForm, price_4x4: Number(e.target.value) })}
-                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-gray-300 mb-1">🛺 Auto Rickshaw</label>
-                      <input
-                        type="number"
-                        value={addPlanForm.price_auto}
-                        onChange={e => setAddPlanForm({ ...addPlanForm, price_auto: Number(e.target.value) })}
-                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
+                {/* Category Vehicle Permission & Pricing Tiles */}
+                <div className="sm:col-span-2 p-4 bg-dark-hover/40 rounded-2xl border border-dark-border space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <span className="text-xs font-extrabold text-brand-500 uppercase tracking-wider block">
+                      Vehicle Category Pricing & Permissions
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      Toggle ON a vehicle type to permit it and enter its fare.
+                    </span>
                   </div>
-                </div>
 
-                {/* Allowed Vehicle Category Toggles */}
-                <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-2">
-                  <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
-                    Allowed Vehicle Categories for this Plan
-                  </span>
-                  <p className="text-[11px] text-gray-400">
-                    Toggle ON the vehicle types permitted for this tour plan package. Users will only see enabled vehicle types.
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                     {[
-                      { key: '5_seater', label: '🚘 5-Seater' },
-                      { key: '7_seater', label: '🚐 7-Seater' },
-                      { key: '4x4', label: '🏔️ 4x4 Off-Road' },
-                      { key: 'auto', label: '🛺 Auto Rickshaw' },
+                      { key: '5_seater', label: '🚘 5-Seater', priceKey: 'price_5_seater' },
+                      { key: '7_seater', label: '🚐 7-Seater', priceKey: 'price_7_seater' },
+                      { key: '4x4', label: '🏔️ 4x4 Off-Road', priceKey: 'price_4x4' },
+                      { key: 'auto', label: '🛺 Auto Rickshaw', priceKey: 'price_auto' },
                     ].map(item => {
                       const isEnabled = addPlanForm.allowed_vehicles?.[item.key] !== false;
+                      const priceVal = (addPlanForm as any)[item.priceKey] || 0;
+
                       return (
-                        <button
+                        <div
                           key={item.key}
-                          type="button"
-                          onClick={() =>
-                            setAddPlanForm({
-                              ...addPlanForm,
-                              allowed_vehicles: {
-                                ...addPlanForm.allowed_vehicles,
-                                [item.key]: !isEnabled,
-                              },
-                            })
-                          }
-                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${
+                          className={`p-3 rounded-xl border transition-all space-y-2.5 ${
                             isEnabled
-                              ? 'bg-brand-500/20 text-brand-300 border-brand-500/40 shadow-sm'
-                              : 'bg-dark-card text-gray-500 border-dark-border hover:bg-gray-800'
+                              ? 'bg-dark-card border-brand-500/40 shadow-sm'
+                              : 'bg-dark-card/50 border-dark-border opacity-75'
                           }`}
                         >
-                          <span>{item.label}</span>
-                          <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold ${isEnabled ? 'bg-brand-500 text-black' : 'bg-gray-800 text-gray-400'}`}>
-                            {isEnabled ? 'ON' : 'OFF'}
-                          </span>
-                        </button>
+                          {/* Toggle ON/OFF */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white">{item.label}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAddPlanForm({
+                                  ...addPlanForm,
+                                  allowed_vehicles: {
+                                    ...addPlanForm.allowed_vehicles,
+                                    [item.key]: !isEnabled,
+                                  },
+                                })
+                              }
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${
+                                isEnabled
+                                  ? 'bg-brand-500 text-black border-brand-400'
+                                  : 'bg-gray-800 text-gray-400 border-gray-700'
+                              }`}
+                            >
+                              {isEnabled ? 'ALLOWED (ON)' : 'DISABLED (OFF)'}
+                            </button>
+                          </div>
+
+                          {/* Price Input directly under toggle inside same tile when ON */}
+                          {isEnabled ? (
+                            <div>
+                              <label className="block text-[10px] font-semibold text-brand-400 mb-1">
+                                Category Price (₹)
+                              </label>
+                              <input
+                                type="number"
+                                required
+                                value={priceVal}
+                                onChange={e => setAddPlanForm({ ...addPlanForm, [item.priceKey]: Number(e.target.value) })}
+                                className="w-full bg-dark-hover border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                                placeholder="Enter price"
+                              />
+                            </div>
+                          ) : (
+                            <div className="p-2 bg-dark-hover/30 rounded-lg text-[10px] text-gray-500 text-center font-medium">
+                              Not Allowed on Trip
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -915,91 +905,81 @@ export default function PlansPage() {
 
 
 
-                  {/* Category Vehicle Pricing Inputs for Edit Modal */}
-                  <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-3">
-                    <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
-                      Category Vehicle Pricing Rates (₹)
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🚘 5-Seater</label>
-                        <input
-                          type="number"
-                          value={editPlanForm.price_5_seater}
-                          onChange={e => setEditPlanForm({ ...editPlanForm, price_5_seater: Number(e.target.value) })}
-                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🚐 7-Seater</label>
-                        <input
-                          type="number"
-                          value={editPlanForm.price_7_seater}
-                          onChange={e => setEditPlanForm({ ...editPlanForm, price_7_seater: Number(e.target.value) })}
-                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🏔️ 4x4 Off-Road</label>
-                        <input
-                          type="number"
-                          value={editPlanForm.price_4x4}
-                          onChange={e => setEditPlanForm({ ...editPlanForm, price_4x4: Number(e.target.value) })}
-                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-gray-300 mb-1">🛺 Auto Rickshaw</label>
-                        <input
-                          type="number"
-                          value={editPlanForm.price_auto}
-                          onChange={e => setEditPlanForm({ ...editPlanForm, price_auto: Number(e.target.value) })}
-                          className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                        />
-                      </div>
+                  {/* Category Vehicle Permission & Pricing Tiles for Edit Modal */}
+                  <div className="sm:col-span-2 p-4 bg-dark-hover/40 rounded-2xl border border-dark-border space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <span className="text-xs font-extrabold text-brand-500 uppercase tracking-wider block">
+                        Vehicle Category Pricing & Permissions
+                      </span>
+                      <span className="text-[11px] text-gray-400">
+                        Toggle ON a vehicle type to permit it and enter its fare.
+                      </span>
                     </div>
-                  </div>
 
-                  {/* Allowed Vehicle Category Toggles for Edit Modal */}
-                  <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-2">
-                    <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
-                      Allowed Vehicle Categories for this Plan
-                    </span>
-                    <p className="text-[11px] text-gray-400">
-                      Toggle ON the vehicle types permitted for this tour plan package. Users will only see enabled vehicle types.
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                       {[
-                        { key: '5_seater', label: '🚘 5-Seater' },
-                        { key: '7_seater', label: '🚐 7-Seater' },
-                        { key: '4x4', label: '🏔️ 4x4 Off-Road' },
-                        { key: 'auto', label: '🛺 Auto Rickshaw' },
+                        { key: '5_seater', label: '🚘 5-Seater', priceKey: 'price_5_seater' },
+                        { key: '7_seater', label: '🚐 7-Seater', priceKey: 'price_7_seater' },
+                        { key: '4x4', label: '🏔️ 4x4 Off-Road', priceKey: 'price_4x4' },
+                        { key: 'auto', label: '🛺 Auto Rickshaw', priceKey: 'price_auto' },
                       ].map(item => {
                         const isEnabled = editPlanForm.allowed_vehicles?.[item.key] !== false;
+                        const priceVal = (editPlanForm as any)[item.priceKey] || 0;
+
                         return (
-                          <button
+                          <div
                             key={item.key}
-                            type="button"
-                            onClick={() =>
-                              setEditPlanForm({
-                                ...editPlanForm,
-                                allowed_vehicles: {
-                                  ...editPlanForm.allowed_vehicles,
-                                  [item.key]: !isEnabled,
-                                },
-                              })
-                            }
-                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${
+                            className={`p-3 rounded-xl border transition-all space-y-2.5 ${
                               isEnabled
-                                ? 'bg-brand-500/20 text-brand-300 border-brand-500/40 shadow-sm'
-                                : 'bg-dark-card text-gray-500 border-dark-border hover:bg-gray-800'
+                                ? 'bg-dark-card border-brand-500/40 shadow-sm'
+                                : 'bg-dark-card/50 border-dark-border opacity-75'
                             }`}
                           >
-                            <span>{item.label}</span>
-                            <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold ${isEnabled ? 'bg-brand-500 text-black' : 'bg-gray-800 text-gray-400'}`}>
-                              {isEnabled ? 'ON' : 'OFF'}
-                            </span>
-                          </button>
+                            {/* Toggle ON/OFF */}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-white">{item.label}</span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditPlanForm({
+                                    ...editPlanForm,
+                                    allowed_vehicles: {
+                                      ...editPlanForm.allowed_vehicles,
+                                      [item.key]: !isEnabled,
+                                    },
+                                  })
+                                }
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${
+                                  isEnabled
+                                    ? 'bg-brand-500 text-black border-brand-400'
+                                    : 'bg-gray-800 text-gray-400 border-gray-700'
+                                }`}
+                              >
+                                {isEnabled ? 'ALLOWED (ON)' : 'DISABLED (OFF)'}
+                              </button>
+                            </div>
+
+                            {/* Price Input directly under toggle inside same tile when ON */}
+                            {isEnabled ? (
+                              <div>
+                                <label className="block text-[10px] font-semibold text-brand-400 mb-1">
+                                  Category Price (₹)
+                                </label>
+                                <input
+                                  type="number"
+                                  required
+                                  value={priceVal}
+                                  onChange={e => setEditPlanForm({ ...editPlanForm, [item.priceKey]: Number(e.target.value) })}
+                                  className="w-full bg-dark-hover border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                                  placeholder="Enter price"
+                                />
+                              </div>
+                            ) : (
+                              <div className="p-2 bg-dark-hover/30 rounded-lg text-[10px] text-gray-500 text-center font-medium">
+                                Not Allowed on Trip
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
