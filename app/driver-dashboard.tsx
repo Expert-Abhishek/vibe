@@ -1311,7 +1311,7 @@ export default function DriverDashboardScreen() {
       return;
     }
 
-    showError('Invalid OTP', 'The code did not match. Please enter the correct 4-digit OTP shown on Tourist app.');
+    showError('Invalid OTP ❌', 'The OTP code entered is incorrect. Please ask the tourist for the correct 4-digit OTP shown on their screen.');
   };
 
   const handleEndTrip = () => {

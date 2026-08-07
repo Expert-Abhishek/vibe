@@ -2484,7 +2484,8 @@ router.post('/:id/verify-otp', async (req, res) => {
     }
 
     const trip = tripRes.rows[0];
-    if (trip.otp && trip.otp !== otp) {
+    const expectedOtp = String(trip.otp || '').trim();
+    if (!expectedOtp || String(otp).trim() !== expectedOtp) {
       return res.status(400).json({ success: false, message: 'Invalid OTP code. Please verify with tourist.' });
     }
 

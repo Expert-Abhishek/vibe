@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { registerUser } from '@/constants/api';
+import { registerUser, sendRegisterOtpApi } from '@/constants/api';
 
 type DocKey = 'photo' | 'aadhar';
 
@@ -37,7 +37,7 @@ const colors = {
   textFaint: '#5C5C66',
 };
 
-const STEP_LABELS = ['Details', 'Exp. & Docs'];
+const STEP_LABELS = ['Details', 'Exp. & Docs', 'OTP Verification'];
 const DOC_LABELS: Record<DocKey, string> = {
   photo: 'Profile photo (Face Image)',
   aadhar: 'Aadhar card / Govt ID proof',
@@ -49,6 +49,7 @@ export default function GuideRegister() {
   const [currentStep, setCurrentStep] = useState(1);
   const [kycSubmitted, setKycSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [otp, setOtp] = useState('');
 
   const [formData, setFormData] = useState({
     name: '', phone: '', altPhone: '', password: '',
@@ -165,13 +166,34 @@ export default function GuideRegister() {
       if (!formData.expertise.trim()) stepErrors.expertise = 'Enter your expertise / specialization';
       if (!formData.experience.trim()) stepErrors.experience = 'Enter your years of experience';
       if (!docs.photo || !docs.aadhar) stepErrors.docs = 'Upload profile photo and Aadhar card to continue';
+    } else if (currentStep === 3) {
+      if (!otp.trim() || otp.trim().length !== 4) {
+        stepErrors.otp = 'Enter valid 4-digit OTP code';
+      }
     }
 
     setErrors(stepErrors);
     if (Object.keys(stepErrors).length === 0) {
       if (currentStep < 2) {
         setCurrentStep(2);
-      } else {
+      } else if (currentStep === 2) {
+        // Send 4-digit OTP code to primary phone number
+        setLoading(true);
+        const sendRes = await sendRegisterOtpApi(cleanPhone);
+        setLoading(false);
+
+        if (sendRes.success) {
+          setCurrentStep(3);
+          const debugCode = sendRes.otpDebug || '1234';
+          Alert.alert(
+            '🔐 Guide Registration OTP Sent',
+            `Your 4-digit verification OTP code sent to +91 ${cleanPhone} is: ${debugCode}\n\nPlease enter this 4-digit OTP code below to complete your registration.`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code to primary phone.');
+        }
+      } else if (currentStep === 3) {
         setLoading(true);
         try {
           const res = await registerUser({
@@ -180,6 +202,7 @@ export default function GuideRegister() {
             alternate_phone: cleanAltPhone,
             password: formData.password,
             role: 'guide',
+            otp: otp.trim(),
             expertise: formData.expertise.trim(),
             license_id: formData.licenseId || 'KA-GUIDE-CERT',
             bio: formData.bio || `${formData.experience} years experienced tour guide`,
@@ -392,12 +415,37 @@ export default function GuideRegister() {
             </View>
           )}
 
+          {currentStep === 3 && (
+            <View style={styles.formCard}>
+              <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
+                Enter OTP Verification Code 🔐
+              </Text>
+              <Text style={{ fontSize: moderateFontScale(13), color: colors.textMuted, marginBottom: verticalScale(16) }}>
+                We sent a 4-digit verification code to primary mobile <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {formData.phone}</Text>
+              </Text>
+
+              <Field
+                label="4-Digit OTP Code"
+                required
+                placeholder="4-Digit OTP Code"
+                value={otp}
+                onChangeText={(text: string) => {
+                  setOtp(text.replace(/[^0-9]/g, ''));
+                  if (errors.otp) setErrors(prev => ({ ...prev, otp: undefined }));
+                }}
+                keyboardType="number-pad"
+                maxLength={4}
+                error={errors.otp}
+              />
+            </View>
+          )}
+
           <View style={styles.buttonRow}>
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => {
                 if (currentStep > 1) {
-                  setCurrentStep(1);
+                  setCurrentStep(prev => prev - 1);
                 } else {
                   router.back();
                 }
@@ -410,7 +458,7 @@ export default function GuideRegister() {
                 <ActivityIndicator color={colors.ink} />
               ) : (
                 <Text style={styles.primaryButtonText}>
-                  {currentStep === 2 ? 'Finish setup' : 'Continue'}
+                  {currentStep === 3 ? 'Verify OTP & Complete' : currentStep === 2 ? 'Send OTP ➔' : 'Continue'}
                 </Text>
               )}
             </TouchableOpacity>

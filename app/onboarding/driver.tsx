@@ -40,7 +40,7 @@ const colors = {
   textFaint: '#5C5C66',
 };
 
-const STEP_LABELS = ['Details', 'Vehicle', 'Documents'];
+const STEP_LABELS = ['Details', 'Vehicle', 'Documents', 'OTP Verification'];
 const DOC_LABELS: Record<DocKey, string> = {
   photo: 'Profile photo',
   rc: 'Registration certificate',
@@ -53,7 +53,7 @@ const DOC_LABELS: Record<DocKey, string> = {
   carBack: 'Car back view',
 };
 
-import { registerUser } from '@/constants/api';
+import { registerUser, sendRegisterOtpApi } from '@/constants/api';
 
 export default function DriverRegister() {
   const router = useRouter();
@@ -163,20 +163,20 @@ export default function DriverRegister() {
   };
 
   const validateStep = () => {
-    let stepErrors: Record<string, string> = {};
-    const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-    const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
-
+    const stepErrors: Record<string, string> = {};
     if (currentStep === 1) {
-      if (!formData.name) stepErrors.name = 'Enter the name as it appears on your Aadhar';
+      if (!formData.name.trim()) stepErrors.name = 'Enter your full name';
+      const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
-      if (!cleanAltPhone) {
+
+      const cleanAlt = (formData.altPhone || '').replace(/[^0-9]/g, '');
+      if (!cleanAlt) {
         stepErrors.altPhone = 'Alternate phone number is required';
-      } else if (cleanAltPhone.length !== 10) {
+      } else if (cleanAlt.length !== 10) {
         stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
       }
+
       if (!formData.password || formData.password.length < 6) stepErrors.password = 'Password must be at least 6 characters';
-      if (!formData.aadharNo || formData.aadharNo.length !== 12) stepErrors.aadharNo = 'Enter a valid 12-digit Aadhar number';
     } else if (currentStep === 2) {
       if (!formData.vehicleModel) stepErrors.vehicleModel = 'Enter your vehicle model name (e.g. Swift Dzire, Innova)';
       if (!formData.rcNo) stepErrors.rcNo = 'Enter your vehicle RC number';
@@ -198,6 +198,11 @@ export default function DriverRegister() {
         stepErrors.docs = 'Upload all nine documents to continue';
       }
     }
+    else if (currentStep === 4) {
+      if (!otp.trim() || otp.trim().length !== 4) {
+        stepErrors.otp = 'Enter valid 4-digit OTP code';
+      }
+    }
     setErrors(stepErrors);
     return Object.keys(stepErrors).length === 0;
   };
@@ -207,7 +212,26 @@ export default function DriverRegister() {
 
     if (currentStep < 3) {
       setCurrentStep(prev => prev + 1);
-    } else {
+    } else if (currentStep === 3) {
+      // Send 4-digit OTP code to primary phone number
+      setLoading(true);
+      const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+      const sendRes = await sendRegisterOtpApi(cleanPhone);
+      setLoading(false);
+
+      if (sendRes.success) {
+        setCurrentStep(4);
+        const debugCode = sendRes.otpDebug || '1234';
+        Alert.alert(
+          '🔐 Driver Registration OTP Sent',
+          `Your 4-digit verification OTP code sent to +91 ${cleanPhone} is: ${debugCode}\n\nPlease enter this 4-digit OTP code to submit your application.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code to primary phone.');
+      }
+    } else if (currentStep === 4) {
+      // Submit registration with verified 4-digit OTP
       setLoading(true);
       const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
       const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
@@ -219,6 +243,7 @@ export default function DriverRegister() {
           alternate_phone: cleanAltPhone,
           password: formData.password,
           role: 'driver',
+          otp: otp.trim(),
           vehicle_type: formData.vehicleType,
           vehicle_model: formData.vehicleModel || 'Standard Cab',
           vehicle_number: formData.rcNo,
@@ -532,6 +557,31 @@ export default function DriverRegister() {
             </View>
           )}
 
+          {currentStep === 4 && (
+            <View style={styles.formCard}>
+              <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
+                Enter OTP Verification Code 🔐
+              </Text>
+              <Text style={{ fontSize: moderateFontScale(13), color: colors.textMuted, marginBottom: verticalScale(16) }}>
+                We sent a 4-digit verification code to primary mobile <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {formData.phone}</Text>
+              </Text>
+
+              <Field
+                label="4-Digit OTP Code"
+                required
+                placeholder="4-Digit OTP Code"
+                value={otp}
+                onChangeText={(text: string) => {
+                  setOtp(text.replace(/[^0-9]/g, ''));
+                  if (errors.otp) setErrors(prev => ({ ...prev, otp: undefined }));
+                }}
+                keyboardType="number-pad"
+                maxLength={4}
+                error={errors.otp}
+              />
+            </View>
+          )}
+
           <View style={styles.buttonRow}>
             <TouchableOpacity
               style={styles.secondaryButton}
@@ -550,7 +600,7 @@ export default function DriverRegister() {
                 <ActivityIndicator color={colors.ink} />
               ) : (
                 <Text style={styles.primaryButtonText}>
-                  {currentStep === 3 ? 'Submit for verification' : 'Continue'}
+                  {currentStep === 4 ? 'Verify OTP & Complete' : currentStep === 3 ? 'Send OTP ➔' : 'Continue'}
                 </Text>
               )}
             </TouchableOpacity>
