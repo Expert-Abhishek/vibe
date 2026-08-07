@@ -10,7 +10,7 @@ if (Platform.OS === 'web' && typeof window !== 'undefined' && 'BroadcastChannel'
   } catch (e) {}
 }
 
-import { emitTripRequestSocket } from '@/src/services/socketService';
+// Dynamic import of emitTripRequestSocket inside function to prevent circular dependency
 
 export function updateTripStatusGlobally(tripId: string, status: string, extraData?: any) {
   if (!tripId) return;
@@ -75,7 +75,14 @@ export function broadcastNewTripRequest(tripObject: any, skipSocketEmit: boolean
   try {
     DeviceEventEmitter.emit('new_driver_request', tripObject);
     if (!skipSocketEmit) {
-      emitTripRequestSocket(tripObject);
+      try {
+        const { emitTripRequestSocket } = require('@/src/services/socketService');
+        if (typeof emitTripRequestSocket === 'function') {
+          emitTripRequestSocket(tripObject);
+        }
+      } catch (err) {
+        console.warn('Socket emit error:', err);
+      }
     }
   } catch (e) {}
 

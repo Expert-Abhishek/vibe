@@ -26,6 +26,7 @@ const navItems = [
   { name: 'Plans & Packages', href: '/plans', icon: Route },
   { name: 'Payment Settings', href: '/payment-settings', icon: QrCode },
   { name: 'Wallet Transactions', href: '/transactions', icon: Wallet },
+  { name: 'Privacy Policy', href: '/privacy-policy', icon: ShieldCheck },
 ];
 
 

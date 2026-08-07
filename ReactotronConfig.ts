@@ -4,9 +4,11 @@ declare global {
   }
 }
 
+import { Platform } from 'react-native';
+
 let Reactotron: any = null;
 
-if (__DEV__) {
+if (__DEV__ && Platform.OS !== 'web') {
   try {
     const ReactotronModule = require('reactotron-react-native').default;
 
