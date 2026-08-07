@@ -154,11 +154,11 @@ export default function PlansPage() {
     e.preventDefault();
     if (!addPlanForm.name.trim()) return;
 
-    const baseP = addPlanForm.price || 4999;
-    const p5 = addPlanForm.price_5_seater || baseP;
-    const p7 = addPlanForm.price_7_seater || Math.round(baseP * 1.35);
-    const p4x4 = addPlanForm.price_4x4 || Math.round(baseP * 1.60);
-    const pAuto = addPlanForm.price_auto || Math.round(baseP * 0.65);
+    const p5 = addPlanForm.price_5_seater || 4999;
+    const p7 = addPlanForm.price_7_seater || Math.round(p5 * 1.35);
+    const p4x4 = addPlanForm.price_4x4 || Math.round(p5 * 1.60);
+    const pAuto = addPlanForm.price_auto || Math.round(p5 * 0.65);
+    const baseP = p5;
 
     const created = await createPlanApi({
       name: addPlanForm.name,
@@ -256,16 +256,21 @@ export default function PlansPage() {
     e.preventDefault();
     if (!editingPlan || !editPlanForm.name.trim()) return;
 
-    await updatePlanApi(editingPlan.id, editPlanForm);
+    const updatedForm = {
+      ...editPlanForm,
+      price: editPlanForm.price_5_seater || editPlanForm.price || 0,
+    };
+
+    await updatePlanApi(editingPlan.id, updatedForm);
 
     setPlans(prev =>
       prev.map(p =>
         p.id === editingPlan.id
-          ? { ...p, ...editPlanForm }
+          ? { ...p, ...updatedForm }
           : p
       )
     );
-    setEditingPlan(prev => prev ? { ...prev, ...editPlanForm } : null);
+    setEditingPlan(prev => prev ? { ...prev, ...updatedForm } : null);
     setIsEditPlanModalOpen(false);
     showToast('Plan details updated!');
     await loadData();
@@ -681,29 +686,7 @@ export default function PlansPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Base Package Price (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="4999"
-                    value={addPlanForm.price}
-                    onChange={e => {
-                      const newP = Number(e.target.value);
-                      setAddPlanForm({
-                        ...addPlanForm,
-                        price: newP,
-                        price_5_seater: newP,
-                        price_7_seater: Math.round(newP * 1.35),
-                        price_4x4: Math.round(newP * 1.60),
-                        price_auto: Math.round(newP * 0.65),
-                      });
-                    }}
-                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
-                  />
-                </div>
+
 
                 {/* Category Vehicle Pricing Inputs */}
                 <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-3">
@@ -924,25 +907,7 @@ export default function PlansPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">Base Package Price (₹)</label>
-                    <input
-                      type="number"
-                      value={editPlanForm.price}
-                      onChange={e => {
-                        const newP = Number(e.target.value);
-                        setEditPlanForm({
-                          ...editPlanForm,
-                          price: newP,
-                          price_5_seater: newP,
-                          price_7_seater: Math.round(newP * 1.35),
-                          price_4x4: Math.round(newP * 1.60),
-                          price_auto: Math.round(newP * 0.65),
-                        });
-                      }}
-                      className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
-                    />
-                  </div>
+
 
                   {/* Category Vehicle Pricing Inputs for Edit Modal */}
                   <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-3">
