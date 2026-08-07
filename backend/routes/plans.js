@@ -94,6 +94,10 @@ router.get('/', async (req, res) => {
       const p4x4 = parseFloat(p.price_4x4 || 0) || Math.round(basePrice * 1.60);
       const pAuto = parseFloat(p.price_auto || 0) || Math.round(basePrice * 0.65);
 
+      const allowedVehicles = p.allowed_vehicles
+        ? (typeof p.allowed_vehicles === 'string' ? JSON.parse(p.allowed_vehicles) : p.allowed_vehicles)
+        : { '5_seater': true, '7_seater': true, '4x4': true, 'auto': true };
+
       const planCps = checkpointsByPlan[p.id] || [];
       const planDestIds = planCps.map(cp => cp.destinationId).filter(Boolean);
 
@@ -108,6 +112,8 @@ router.get('/', async (req, res) => {
         price_7_seater: p7,
         price_4x4: p4x4,
         price_auto: pAuto,
+        allowed_vehicles: allowedVehicles,
+        allowedVehicles: allowedVehicles,
         isActive: p.is_active,
         checkpoints: planCps,
         destination_ids: planDestIds,
@@ -141,6 +147,7 @@ router.post('/', async (req, res) => {
       price_7_seater = 0,
       price_4x4 = 0,
       price_auto = 0,
+      allowed_vehicles = { '5_seater': true, '7_seater': true, '4x4': true, 'auto': true },
       destinationIds = [],
       isActive = true
     } = req.body;
@@ -157,11 +164,13 @@ router.post('/', async (req, res) => {
     const p4x4 = parseFloat(price_4x4 || 0) || Math.round(baseP * 1.60);
     const pAuto = parseFloat(price_auto || 0) || Math.round(baseP * 0.65);
 
+    const allowedVehiclesJson = typeof allowed_vehicles === 'string' ? allowed_vehicles : JSON.stringify(allowed_vehicles);
+
     const insertPlanRes = await client.query(
-      `INSERT INTO plans (name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO plans (name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, is_active, allowed_vehicles)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
        RETURNING *`,
-      [name.trim(), description, parseFloat(km), duration.trim(), baseP, p5, p7, p4x4, pAuto, isActive]
+      [name.trim(), description, parseFloat(km), duration.trim(), baseP, p5, p7, p4x4, pAuto, isActive, allowedVehiclesJson]
     );
 
     const newPlan = insertPlanRes.rows[0];
@@ -182,6 +191,10 @@ router.post('/', async (req, res) => {
 
     await client.query('COMMIT');
 
+    const retAllowed = newPlan.allowed_vehicles
+      ? (typeof newPlan.allowed_vehicles === 'string' ? JSON.parse(newPlan.allowed_vehicles) : newPlan.allowed_vehicles)
+      : allowed_vehicles;
+
     res.status(201).json({
       success: true,
       message: 'Plan package created successfully',
@@ -196,6 +209,8 @@ router.post('/', async (req, res) => {
         price_7_seater: parseFloat(newPlan.price_7_seater || 0),
         price_4x4: parseFloat(newPlan.price_4x4 || 0),
         price_auto: parseFloat(newPlan.price_auto || 0),
+        allowed_vehicles: retAllowed,
+        allowedVehicles: retAllowed,
         isActive: newPlan.is_active,
         createdAt: newPlan.created_at,
         updatedAt: newPlan.updated_at
@@ -217,7 +232,9 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, isActive } = req.body;
+    const { name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, allowed_vehicles, isActive } = req.body;
+
+    const allowedVehiclesJson = allowed_vehicles ? (typeof allowed_vehicles === 'string' ? allowed_vehicles : JSON.stringify(allowed_vehicles)) : null;
 
     const result = await db.query(
       `UPDATE plans
@@ -231,10 +248,11 @@ router.put('/:id', async (req, res) => {
            price_4x4 = COALESCE($8, price_4x4),
            price_auto = COALESCE($9, price_auto),
            is_active = COALESCE($10, is_active),
+           allowed_vehicles = COALESCE($11::jsonb, allowed_vehicles),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $11
+       WHERE id = $12
        RETURNING *`,
-      [name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, isActive, id]
+      [name, description, km, duration, price, price_5_seater, price_7_seater, price_4x4, price_auto, isActive, allowedVehiclesJson, id]
     );
 
     if (result.rows.length === 0) {
@@ -242,6 +260,10 @@ router.put('/:id', async (req, res) => {
     }
 
     const p = result.rows[0];
+    const retAllowed = p.allowed_vehicles
+      ? (typeof p.allowed_vehicles === 'string' ? JSON.parse(p.allowed_vehicles) : p.allowed_vehicles)
+      : { '5_seater': true, '7_seater': true, '4x4': true, 'auto': true };
+
     res.json({
       success: true,
       message: 'Plan details updated successfully',
@@ -256,6 +278,8 @@ router.put('/:id', async (req, res) => {
         price_7_seater: parseFloat(p.price_7_seater || 0),
         price_4x4: parseFloat(p.price_4x4 || 0),
         price_auto: parseFloat(p.price_auto || 0),
+        allowed_vehicles: retAllowed,
+        allowedVehicles: retAllowed,
         isActive: p.is_active,
         updatedAt: p.updated_at
       }

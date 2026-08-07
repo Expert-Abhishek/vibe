@@ -415,6 +415,8 @@ async function initTablesOnBoot() {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      ALTER TABLE plans ADD COLUMN IF NOT EXISTS allowed_vehicles JSONB DEFAULT '{"5_seater": true, "7_seater": true, "4x4": true, "auto": true}'::jsonb;
+
       CREATE TABLE IF NOT EXISTS plan_checkpoints (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,

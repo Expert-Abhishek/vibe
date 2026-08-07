@@ -1,46 +1,41 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import {
-  Route,
-  Plus,
-  Edit2,
-  Trash2,
-  Image as ImageIcon,
-  Video,
+  Check,
   CheckCircle2,
-  XCircle,
-  Search,
-  IndianRupee,
   Clock,
-  Navigation,
-  MapPin,
-  Map as MapIcon,
+  Edit2,
+  IndianRupee,
   Layers,
+  Map as MapIcon,
+  MapPin,
+  Navigation,
+  Plus,
+  Route,
+  Search,
+  Trash2,
   X,
-  Check
+  XCircle
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
+import { PreviewableImage } from '@/components/ImagePreviewModal';
 import {
-  Plan,
+  addPlanDestinationApi,
+  createPlanApi,
+  deletePlanApi,
+  deletePlanDestinationApi,
+  fetchDestinationsApi,
+  fetchPlansApi,
+  togglePlanDestinationApi,
+  togglePlanStatusApi,
+  updatePlanApi
+} from '@/lib/api';
+import {
   Destination,
+  Plan,
   PlanCheckpoint
 } from '@/lib/types';
-import {
-  fetchPlansApi,
-  createPlanApi,
-  updatePlanApi,
-  togglePlanStatusApi,
-  deletePlanApi,
-  fetchDestinationsApi,
-  addPlanDestinationApi,
-  togglePlanDestinationApi,
-  deletePlanDestinationApi,
-  initialPlans,
-  initialDestinations
-} from '@/lib/api';
-import LocationSearchMap from '@/components/LocationSearchMap';
-import { PreviewableImage } from '@/components/ImagePreviewModal';
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -449,9 +444,8 @@ export default function PlansPage() {
           {filteredPlans.map(plan => (
             <div
               key={plan.id}
-              className={`bg-dark-card border rounded-2xl p-6 flex flex-col justify-between space-y-5 transition-all duration-200 ${
-                plan.isActive ? 'border-dark-border hover:border-brand-500/50' : 'border-red-500/20 bg-red-950/10'
-              }`}
+              className={`bg-dark-card border rounded-2xl p-6 flex flex-col justify-between space-y-5 transition-all duration-200 ${plan.isActive ? 'border-dark-border hover:border-brand-500/50' : 'border-red-500/20 bg-red-950/10'
+                }`}
             >
               <div className="space-y-4">
                 {/* Plan Header */}
@@ -459,9 +453,8 @@ export default function PlansPage() {
                   <div>
                     <div className="flex items-center space-x-2 mb-1">
                       <h2 className="text-lg font-bold text-white">{plan.name}</h2>
-                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
-                        plan.isActive ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
+                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${plan.isActive ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        }`}>
                         {plan.isActive ? 'Active Plan' : 'Inactive'}
                       </span>
                     </div>
@@ -497,26 +490,26 @@ export default function PlansPage() {
                   </div>
                 </div>
 
-                {/* Category-Wise Pricing Matrix */}
+                {/* Category-Wise Pricing Matrix - ONLY Allowed Vehicles */}
                 <div className="p-3 bg-dark-hover/30 rounded-xl border border-dark-border/60">
-                  <span className="text-[10px] text-brand-400 font-bold uppercase block mb-2">Category Vehicle Pricing</span>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
-                      <span className="text-[11px] text-gray-300">🚘 5 Seater</span>
-                      <strong className="text-brand-400">₹{(plan.price_5_seater || plan.price).toLocaleString('en-IN')}</strong>
-                    </div>
-                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
-                      <span className="text-[11px] text-gray-300">🚐 7 Seater</span>
-                      <strong className="text-brand-400">₹{(plan.price_7_seater || Math.round(plan.price * 1.35)).toLocaleString('en-IN')}</strong>
-                    </div>
-                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
-                      <span className="text-[11px] text-gray-300">🏔️ 4x4 Off-Road</span>
-                      <strong className="text-brand-400">₹{(plan.price_4x4 || Math.round(plan.price * 1.60)).toLocaleString('en-IN')}</strong>
-                    </div>
-                    <div className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
-                      <span className="text-[11px] text-gray-300">🛺 Auto Rickshaw</span>
-                      <strong className="text-brand-400">₹{(plan.price_auto || Math.round(plan.price * 0.65)).toLocaleString('en-IN')}</strong>
-                    </div>
+                  <span className="text-[10px] text-brand-400 font-bold uppercase block mb-2">Allowed Category Rates</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {[
+                      { key: '5_seater', label: '🚘 5 Seater', price: plan.price_5_seater || plan.price },
+                      { key: '7_seater', label: '🚐 7 Seater', price: plan.price_7_seater || Math.round(plan.price * 1.35) },
+                      { key: '4x4', label: '🏔️ 4x4 Off-Road', price: plan.price_4x4 || Math.round(plan.price * 1.60) },
+                      { key: 'auto', label: '🛺 Auto Rickshaw', price: plan.price_auto || Math.round(plan.price * 0.65) },
+                    ].map(item => {
+                      const isAllowed = plan.allowed_vehicles ? plan.allowed_vehicles[item.key] !== false : true;
+                      if (!isAllowed) return null;
+
+                      return (
+                        <div key={item.key} className="bg-dark-card p-2 rounded-lg border border-dark-border flex justify-between items-center">
+                          <span className="text-[11px] text-gray-300 font-medium">{item.label}</span>
+                          <strong className="text-brand-400 font-bold">₹{item.price.toLocaleString('en-IN')}</strong>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -534,9 +527,8 @@ export default function PlansPage() {
                     {plan.checkpoints.map((cp, idx) => (
                       <div
                         key={cp.destinationId || idx}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${
-                          cp.isActiveInPlan ? 'bg-dark-hover/70 border-dark-border' : 'bg-red-950/20 border-red-500/20 opacity-60'
-                        }`}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${cp.isActiveInPlan ? 'bg-dark-hover/70 border-dark-border' : 'bg-red-950/20 border-red-500/20 opacity-60'
+                          }`}
                       >
                         <div className="flex items-center space-x-2.5 min-w-0">
                           {/* Image thumbnail from Destination Master */}
@@ -580,11 +572,10 @@ export default function PlansPage() {
 
                           <button
                             onClick={() => handleTogglePlanCheckpoint(plan.id, cp.destinationId)}
-                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
-                              cp.isActiveInPlan
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${cp.isActiveInPlan
                                 ? 'bg-green-500/20 text-green-400 border-green-500/30'
                                 : 'bg-gray-800 text-gray-400 border-gray-700'
-                            }`}
+                              }`}
                             title="Toggle checkpoint ON/OFF in plan"
                           >
                             {cp.isActiveInPlan ? 'ON' : 'OFF'}
@@ -601,11 +592,10 @@ export default function PlansPage() {
               <div className="pt-3 border-t border-dark-border flex items-center justify-between">
                 <button
                   onClick={() => handleTogglePlan(plan.id)}
-                  className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition-colors flex items-center space-x-1 ${
-                    plan.isActive
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition-colors flex items-center space-x-1 ${plan.isActive
                       ? 'bg-green-500/20 text-green-300 border-green-500/40 hover:bg-green-500/30'
                       : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
-                  }`}
+                    }`}
                 >
                   {plan.isActive ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400" /> : <XCircle className="w-3.5 h-3.5 text-gray-400" />}
                   <span>{plan.isActive ? 'Plan ON' : 'Plan OFF'}</span>
@@ -718,11 +708,10 @@ export default function PlansPage() {
                       return (
                         <div
                           key={item.key}
-                          className={`p-3 rounded-xl border transition-all space-y-2.5 ${
-                            isEnabled
+                          className={`p-3 rounded-xl border transition-all space-y-2.5 ${isEnabled
                               ? 'bg-dark-card border-brand-500/40 shadow-sm'
                               : 'bg-dark-card/50 border-dark-border opacity-75'
-                          }`}
+                            }`}
                         >
                           {/* Toggle ON/OFF */}
                           <div className="flex items-center justify-between">
@@ -738,13 +727,12 @@ export default function PlansPage() {
                                   },
                                 })
                               }
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${
-                                isEnabled
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${isEnabled
                                   ? 'bg-brand-500 text-black border-brand-400'
                                   : 'bg-gray-800 text-gray-400 border-gray-700'
-                              }`}
+                                }`}
                             >
-                              {isEnabled ? 'ALLOWED (ON)' : 'DISABLED (OFF)'}
+                              {isEnabled ? 'ON' : 'Off'}
                             </button>
                           </div>
 
@@ -779,9 +767,8 @@ export default function PlansPage() {
                   <button
                     type="button"
                     onClick={() => setAddPlanForm({ ...addPlanForm, isActive: !addPlanForm.isActive })}
-                    className={`px-4 py-1.5 rounded-xl font-bold text-xs border transition-colors ${
-                      addPlanForm.isActive ? 'bg-green-500/20 text-green-300 border-green-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'
-                    }`}
+                    className={`px-4 py-1.5 rounded-xl font-bold text-xs border transition-colors ${addPlanForm.isActive ? 'bg-green-500/20 text-green-300 border-green-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'
+                      }`}
                   >
                     {addPlanForm.isActive ? 'Active' : 'Inactive'}
                   </button>
@@ -814,19 +801,17 @@ export default function PlansPage() {
                       <div
                         key={d.id}
                         onClick={() => handleToggleDestinationSelectionInAdd(d.id)}
-                        className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${
-                          isSelected
+                        className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${isSelected
                             ? 'bg-brand-500/20 border-brand-500 text-white font-bold'
                             : 'bg-dark-hover/50 border-dark-border text-gray-300 hover:border-gray-600'
-                        }`}
+                          }`}
                       >
                         <div className="truncate mr-2">
                           <span className="block truncate">{d.name}</span>
                           <span className="text-[10px] text-dark-textMuted font-normal">{d.location}</span>
                         </div>
-                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 ${
-                          isSelected ? 'bg-brand-500 border-brand-500 text-black' : 'border-gray-600'
-                        }`}>
+                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-brand-500 border-brand-500 text-black' : 'border-gray-600'
+                          }`}>
                           {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                         </div>
                       </div>
@@ -929,11 +914,10 @@ export default function PlansPage() {
                         return (
                           <div
                             key={item.key}
-                            className={`p-3 rounded-xl border transition-all space-y-2.5 ${
-                              isEnabled
+                            className={`p-3 rounded-xl border transition-all space-y-2.5 ${isEnabled
                                 ? 'bg-dark-card border-brand-500/40 shadow-sm'
                                 : 'bg-dark-card/50 border-dark-border opacity-75'
-                            }`}
+                              }`}
                           >
                             {/* Toggle ON/OFF */}
                             <div className="flex items-center justify-between">
@@ -949,11 +933,10 @@ export default function PlansPage() {
                                     },
                                   })
                                 }
-                                className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${
-                                  isEnabled
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${isEnabled
                                     ? 'bg-brand-500 text-black border-brand-400'
                                     : 'bg-gray-800 text-gray-400 border-gray-700'
-                                }`}
+                                  }`}
                               >
                                 {isEnabled ? 'ALLOWED (ON)' : 'DISABLED (OFF)'}
                               </button>
@@ -990,9 +973,8 @@ export default function PlansPage() {
                     <button
                       type="button"
                       onClick={() => setEditPlanForm({ ...editPlanForm, isActive: !editPlanForm.isActive })}
-                      className={`px-3 py-1 rounded-xl font-bold text-xs border ${
-                        editPlanForm.isActive ? 'bg-green-500/20 text-green-300 border-green-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'
-                      }`}
+                      className={`px-3 py-1 rounded-xl font-bold text-xs border ${editPlanForm.isActive ? 'bg-green-500/20 text-green-300 border-green-500/40' : 'bg-gray-800 text-gray-400 border-gray-700'
+                        }`}
                     >
                       {editPlanForm.isActive ? 'Active (ON)' : 'Inactive (OFF)'}
                     </button>
@@ -1058,11 +1040,10 @@ export default function PlansPage() {
                       <div className="flex items-center space-x-2 self-end sm:self-center">
                         <button
                           onClick={() => handleTogglePlanCheckpoint(editingPlan.id, cp.destinationId)}
-                          className={`px-3 py-1 rounded-lg font-bold text-[11px] border transition-colors ${
-                            cp.isActiveInPlan
+                          className={`px-3 py-1 rounded-lg font-bold text-[11px] border transition-colors ${cp.isActiveInPlan
                               ? 'bg-green-500/20 text-green-400 border-green-500/30'
                               : 'bg-gray-800 text-gray-400 border-gray-700'
-                          }`}
+                            }`}
                         >
                           {cp.isActiveInPlan ? 'ON in Plan' : 'OFF in Plan'}
                         </button>
