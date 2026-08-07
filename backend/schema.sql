@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS plans (
     price_7_seater NUMERIC(10,2) DEFAULT 0.00,
     price_4x4 NUMERIC(10,2) DEFAULT 0.00,
     price_auto NUMERIC(10,2) DEFAULT 0.00,
+    allowed_vehicles JSONB DEFAULT '{"5_seater": true, "7_seater": true, "4x4": true, "auto": true}'::jsonb,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -157,6 +158,7 @@ ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_5_seater NUMERIC(10,2) DEFAULT 
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_7_seater NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_4x4 NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS price_auto NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS allowed_vehicles JSONB DEFAULT '{"5_seater": true, "7_seater": true, "4x4": true, "auto": true}'::jsonb;
 
 -- 10. Wallet Transactions Table
 CREATE TABLE IF NOT EXISTS wallet_transactions (
