@@ -993,6 +993,8 @@ router.put('/users/:id/profile', async (req, res) => {
       role,
       vehicle_model,
       vehicle_number,
+      vehicle_category,
+      vehicleCategory,
       upiId,
       upi_id,
       photo_url,
@@ -1054,7 +1056,7 @@ router.put('/users/:id/profile', async (req, res) => {
 
     // 2. Update role-specific profile
     if (userRole === 'driver' || userRole === 'captain') {
-      const vCat = vehicle_category || vehicleCategory || null;
+      const vCat = vehicle_category || vehicleCategory || req.body?.vehicle_category || req.body?.vehicleCategory || null;
       const updateRes = await db.query(
         `UPDATE driver_profiles
          SET photo_url = COALESCE($1, photo_url),

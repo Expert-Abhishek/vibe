@@ -968,9 +968,9 @@ export default function DriverDashboardScreen() {
           sendLocalNotification('Trip Cancelled ❌', 'Your active trip was cancelled by Tourist / Admin.');
 
           Alert.alert(
-            '⚠️ Trip Cancelled',
+            '⚠️ Trip Cancelled ',
             'Your active trip has been cancelled by Tourist / Admin.\n\nYour active trip has been cleared. You are returned to the Home page and ready for new ride requests!',
-            [{ text: 'OK (Go to Home)', onPress: () => setActiveTab('duty') }]
+            // [{ text: 'OK', onPress: () => setActiveTab('duty') }]
           );
         }
       };
@@ -1150,6 +1150,19 @@ export default function DriverDashboardScreen() {
 
   const handleAcceptRequest = async () => {
     if (!incomingRequest) return;
+
+    // Pre-flight check: Driver must have at least ₹300 wallet balance to accept trip requests
+    if (earningsBalance < 300) {
+      stopNotificationChime();
+      setRequestVisible(false);
+      setIncomingRequest(null);
+      showError(
+        '⚠️ Low Wallet Balance',
+        `Your wallet balance is ₹${earningsBalance}. Minimum ₹300 wallet balance is required to accept trip requests. Please top up your Vibe wallet.`
+      );
+      return;
+    }
+
     const session = getUserSessionSync();
     const driverId = String(session?.id || (session as any)?.driverId || (session as any)?.user?.id || 'd1').trim();
     const tripId = (incomingRequest as any).tripId || (incomingRequest as any).id;
