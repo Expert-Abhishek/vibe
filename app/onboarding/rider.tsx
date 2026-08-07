@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
     ActivityIndicator,
+    Alert,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -79,13 +80,12 @@ export default function RiderRegister() {
 
     if (sendRes.success) {
       setStep('otp');
-      const debugCode = sendRes.otpDebug || '1234';
       Alert.alert(
-        '🔐 Registration OTP Sent',
-        `Your 4-digit verification OTP code is: ${debugCode}\n\nPlease enter this 4-digit OTP code below to complete your registration.`,
+        '📱 OTP Sent via SMS',
+        `A 4-digit verification OTP code has been sent to +91 ${cleanPhone} via SMS.\n\nPlease enter the OTP code below to complete registration.`,
         [{ text: 'OK' }]
       );
-      showToast(`Registration OTP sent to +91 ${cleanPhone}`, 'success');
+      showToast(`Registration OTP sent via SMS to +91 ${cleanPhone}`, 'success');
     } else {
       const msg = sendRes.message || 'Failed to send OTP code.';
       setErrors({ api: msg });

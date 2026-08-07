@@ -1293,6 +1293,19 @@ async function sendFast2SmsOtp(phoneNumber, otpCode) {
       return { success: true, message: 'OTP sent via Fast2SMS', data: getData };
     }
 
+    // 3. Fallback to Fast2SMS Quick SMS route ('q')
+    try {
+      const qUrl = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(FAST2SMS_API_KEY)}&route=q&message=${encodeURIComponent(`Your Vibe App OTP verification code is ${otpCode}. Valid for 10 minutes.`)}&flash=0&numbers=${encodeURIComponent(cleanPhone)}`;
+      const qRes = await fetch(qUrl);
+      const qData = await qRes.json();
+      console.log('[Fast2SMS] Quick SMS Fallback Response:', qData);
+      if (qData && (qData.return === true || qData.status_code === 200)) {
+        return { success: true, message: 'OTP sent via Fast2SMS Quick SMS', data: qData };
+      }
+    } catch (qErr) {
+      console.warn('[Fast2SMS] Quick SMS fallback warning:', qErr.message);
+    }
+
     return { success: true, message: 'OTP processed', data: getData || data };
   } catch (err) {
     console.error('[Fast2SMS] Error sending SMS:', err);

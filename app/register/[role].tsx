@@ -87,13 +87,12 @@ export default function RegisterScreen() {
 
     if (sendRes.success) {
       setStep('otp');
-      const debugOtpCode = sendRes.otpDebug || '1234';
       Alert.alert(
-        '🔐 Registration OTP Sent',
-        `Your 4-digit verification OTP code is: ${debugOtpCode}\n\nPlease enter this 4-digit OTP code below to complete your registration.`,
+        '📱 OTP Sent via SMS',
+        `A 4-digit verification OTP code has been sent to +91 ${cleanPhone} via SMS.\n\nPlease enter the OTP code below to complete your registration.`,
         [{ text: 'OK' }]
       );
-      showToast(`Registration OTP sent to +91 ${cleanPhone}`);
+      showToast(`Registration OTP sent via SMS to +91 ${cleanPhone}`);
     } else {
       Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code.');
     }

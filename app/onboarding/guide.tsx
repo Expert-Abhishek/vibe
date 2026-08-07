@@ -37,7 +37,7 @@ const colors = {
   textFaint: '#5C5C66',
 };
 
-const STEP_LABELS = ['Details', 'Exp. & Docs', 'OTP Verification'];
+const STEP_LABELS = ['Details', 'Exp. & Docs'];
 const DOC_LABELS: Record<DocKey, string> = {
   photo: 'Profile photo (Face Image)',
   aadhar: 'Aadhar card / Govt ID proof',
@@ -47,6 +47,7 @@ export default function GuideRegister() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [kycSubmitted, setKycSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otp, setOtp] = useState('');
@@ -166,8 +167,7 @@ export default function GuideRegister() {
       if (!formData.expertise.trim()) stepErrors.expertise = 'Enter your expertise / specialization';
       if (!formData.experience.trim()) stepErrors.experience = 'Enter your years of experience';
       if (!docs.photo || !docs.aadhar) stepErrors.docs = 'Upload profile photo and Aadhar card to continue';
-    } else if (currentStep === 3) {
-      if (!otp.trim() || otp.trim().length !== 4) {
+      if (showOtpScreen && (!otp.trim() || otp.trim().length !== 4)) {
         stepErrors.otp = 'Enter valid 4-digit OTP code';
       }
     }
@@ -177,48 +177,50 @@ export default function GuideRegister() {
       if (currentStep < 2) {
         setCurrentStep(2);
       } else if (currentStep === 2) {
-        // Send 4-digit OTP code to primary phone number
-        setLoading(true);
-        const sendRes = await sendRegisterOtpApi(cleanPhone);
-        setLoading(false);
-
-        if (sendRes.success) {
-          setCurrentStep(3);
-          const debugCode = sendRes.otpDebug || '1234';
-          Alert.alert(
-            '🔐 Guide Registration OTP Sent',
-            `Your 4-digit verification OTP code sent to +91 ${cleanPhone} is: ${debugCode}\n\nPlease enter this 4-digit OTP code below to complete your registration.`,
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code to primary phone.');
-        }
-      } else if (currentStep === 3) {
-        setLoading(true);
-        try {
-          const res = await registerUser({
-            name: formData.name.trim(),
-            phone: cleanPhone,
-            alternate_phone: cleanAltPhone,
-            password: formData.password,
-            role: 'guide',
-            otp: otp.trim(),
-            expertise: formData.expertise.trim(),
-            license_id: formData.licenseId || 'KA-GUIDE-CERT',
-            bio: formData.bio || `${formData.experience} years experienced tour guide`,
-            photo_url: docs.photo || undefined,
-            id_proof_url: docs.aadhar || undefined,
-          });
-
+        if (!showOtpScreen) {
+          // 1. Send 4-digit OTP code to primary phone number
+          setLoading(true);
+          const sendRes = await sendRegisterOtpApi(cleanPhone);
           setLoading(false);
-          if (res.success) {
-            setKycSubmitted(true);
+
+          if (sendRes.success) {
+            setShowOtpScreen(true);
+            Alert.alert(
+              '📱 OTP Sent via SMS',
+              `A 4-digit verification OTP code has been sent to +91 ${cleanPhone} via SMS.\n\nPlease enter the OTP code below and click Submit Application.`,
+              [{ text: 'OK' }]
+            );
           } else {
-            Alert.alert('Registration Failed', res.message || 'Something went wrong during registration.');
+            Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code to primary phone.');
           }
-        } catch (err: any) {
-          setLoading(false);
-          Alert.alert('Registration Error', err?.message || 'Failed to connect to backend server.');
+        } else {
+          // 2. Submit registration with verified 4-digit OTP
+          setLoading(true);
+          try {
+            const res = await registerUser({
+              name: formData.name.trim(),
+              phone: cleanPhone,
+              alternate_phone: cleanAltPhone,
+              password: formData.password,
+              role: 'guide',
+              otp: otp.trim(),
+              expertise: formData.expertise.trim(),
+              license_id: formData.licenseId || 'KA-GUIDE-CERT',
+              bio: formData.bio || `${formData.experience} years experienced tour guide`,
+              photo_url: docs.photo || undefined,
+              id_proof_url: docs.aadhar || undefined,
+            });
+
+            setLoading(false);
+            if (res.success) {
+              setKycSubmitted(true);
+            } else {
+              Alert.alert('Registration Failed', res.message || 'Something went wrong during registration.');
+            }
+          } catch (err: any) {
+            setLoading(false);
+            Alert.alert('Registration Error', err?.message || 'Failed to connect to backend server.');
+          }
         }
       }
     }
@@ -415,10 +417,10 @@ export default function GuideRegister() {
             </View>
           )}
 
-          {currentStep === 3 && (
-            <View style={styles.formCard}>
+          {currentStep === 2 && showOtpScreen && (
+            <View style={[styles.formCard, { marginTop: verticalScale(14) }]}>
               <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
-                Enter OTP Verification Code 🔐
+                Enter Verification OTP Code 🔐
               </Text>
               <Text style={{ fontSize: moderateFontScale(13), color: colors.textMuted, marginBottom: verticalScale(16) }}>
                 We sent a 4-digit verification code to primary mobile <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {formData.phone}</Text>
@@ -444,7 +446,9 @@ export default function GuideRegister() {
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => {
-                if (currentStep > 1) {
+                if (showOtpScreen) {
+                  setShowOtpScreen(false);
+                } else if (currentStep > 1) {
                   setCurrentStep(prev => prev - 1);
                 } else {
                   router.back();
@@ -458,7 +462,7 @@ export default function GuideRegister() {
                 <ActivityIndicator color={colors.ink} />
               ) : (
                 <Text style={styles.primaryButtonText}>
-                  {currentStep === 3 ? 'Verify OTP & Complete' : currentStep === 2 ? 'Send OTP ➔' : 'Continue'}
+                  {currentStep === 2 ? (showOtpScreen ? 'Submit Application' : 'Finish setup') : 'Continue'}
                 </Text>
               )}
             </TouchableOpacity>

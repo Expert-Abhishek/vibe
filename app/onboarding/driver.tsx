@@ -40,7 +40,7 @@ const colors = {
   textFaint: '#5C5C66',
 };
 
-const STEP_LABELS = ['Details', 'Vehicle', 'Documents', 'OTP Verification'];
+const STEP_LABELS = ['Details', 'Vehicle', 'Documents'];
 const DOC_LABELS: Record<DocKey, string> = {
   photo: 'Profile photo',
   rc: 'Registration certificate',
@@ -59,6 +59,7 @@ export default function DriverRegister() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [kycStatus, setKycStatus] = useState<KYCStatus>('form');
   const [loading, setLoading] = useState(false);
   const [appId] = useState(
@@ -197,9 +198,7 @@ export default function DriverRegister() {
       ) {
         stepErrors.docs = 'Upload all nine documents to continue';
       }
-    }
-    else if (currentStep === 4) {
-      if (!otp.trim() || otp.trim().length !== 4) {
+      if (showOtpScreen && (!otp.trim() || otp.trim().length !== 4)) {
         stepErrors.otp = 'Enter valid 4-digit OTP code';
       }
     }
@@ -213,65 +212,66 @@ export default function DriverRegister() {
     if (currentStep < 3) {
       setCurrentStep(prev => prev + 1);
     } else if (currentStep === 3) {
-      // Send 4-digit OTP code to primary phone number
-      setLoading(true);
-      const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-      const sendRes = await sendRegisterOtpApi(cleanPhone);
-      setLoading(false);
-
-      if (sendRes.success) {
-        setCurrentStep(4);
-        const debugCode = sendRes.otpDebug || '1234';
-        Alert.alert(
-          '🔐 Driver Registration OTP Sent',
-          `Your 4-digit verification OTP code sent to +91 ${cleanPhone} is: ${debugCode}\n\nPlease enter this 4-digit OTP code to submit your application.`,
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code to primary phone.');
-      }
-    } else if (currentStep === 4) {
-      // Submit registration with verified 4-digit OTP
-      setLoading(true);
-      const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-      const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
-
-      try {
-        const res = await registerUser({
-          name: formData.name.trim(),
-          phone: cleanPhone,
-          alternate_phone: cleanAltPhone,
-          password: formData.password,
-          role: 'driver',
-          otp: otp.trim(),
-          vehicle_type: formData.vehicleType,
-          vehicle_model: formData.vehicleModel || 'Standard Cab',
-          vehicle_number: formData.rcNo,
-
-          license_number: formData.dlNo,
-          photo_url: docs.photo || undefined,
-          rc_url: docs.rc || undefined,
-          dl_url: docs.dl || undefined,
-          insurance_url: docs.insurance || undefined,
-          aadhar_url: docs.aadhar || undefined,
-          car_front_url: docs.carFront || undefined,
-          car_left_url: docs.carLeft || undefined,
-          car_right_url: docs.carRight || undefined,
-          car_back_url: docs.carBack || undefined,
-        });
-
+      if (!showOtpScreen) {
+        // 1. Send 4-digit OTP code to primary phone number
+        setLoading(true);
+        const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+        const sendRes = await sendRegisterOtpApi(cleanPhone);
         setLoading(false);
 
-        if (res.success) {
-          setKycStatus('pending');
-        } else if (res.message && res.message.includes('already registered')) {
-          Alert.alert('Already Registered', res.message);
+        if (sendRes.success) {
+          setShowOtpScreen(true);
+          Alert.alert(
+            '📱 OTP Sent via SMS',
+            `A 4-digit verification OTP code has been sent to +91 ${cleanPhone} via SMS.\n\nPlease enter the OTP code below and click Submit Application.`,
+            [{ text: 'OK' }]
+          );
         } else {
-          Alert.alert('Registration Failed', res.message || 'Driver registration failed. Please try again.');
+          Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code to primary phone.');
         }
-      } catch (err: any) {
-        setLoading(false);
-        Alert.alert('Error', err?.message || 'Failed to connect to backend server.');
+      } else {
+        // 2. Submit registration with verified 4-digit OTP
+        setLoading(true);
+        const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+        const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
+
+        try {
+          const res = await registerUser({
+            name: formData.name.trim(),
+            phone: cleanPhone,
+            alternate_phone: cleanAltPhone,
+            password: formData.password,
+            role: 'driver',
+            otp: otp.trim(),
+            vehicle_type: formData.vehicleType,
+            vehicle_model: formData.vehicleModel || 'Standard Cab',
+            vehicle_number: formData.rcNo,
+
+            license_number: formData.dlNo,
+            photo_url: docs.photo || undefined,
+            rc_url: docs.rc || undefined,
+            dl_url: docs.dl || undefined,
+            insurance_url: docs.insurance || undefined,
+            aadhar_url: docs.aadhar || undefined,
+            car_front_url: docs.carFront || undefined,
+            car_left_url: docs.carLeft || undefined,
+            car_right_url: docs.carRight || undefined,
+            car_back_url: docs.carBack || undefined,
+          });
+
+          setLoading(false);
+
+          if (res.success) {
+            setKycStatus('pending');
+          } else if (res.message && res.message.includes('already registered')) {
+            Alert.alert('Already Registered', res.message);
+          } else {
+            Alert.alert('Registration Failed', res.message || 'Driver registration failed. Please try again.');
+          }
+        } catch (err: any) {
+          setLoading(false);
+          Alert.alert('Error', err?.message || 'Failed to connect to backend server.');
+        }
       }
     }
   };
@@ -557,10 +557,10 @@ export default function DriverRegister() {
             </View>
           )}
 
-          {currentStep === 4 && (
-            <View style={styles.formCard}>
+          {currentStep === 3 && showOtpScreen && (
+            <View style={[styles.formCard, { marginTop: verticalScale(14) }]}>
               <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
-                Enter OTP Verification Code 🔐
+                Enter Verification OTP Code 🔐
               </Text>
               <Text style={{ fontSize: moderateFontScale(13), color: colors.textMuted, marginBottom: verticalScale(16) }}>
                 We sent a 4-digit verification code to primary mobile <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {formData.phone}</Text>
@@ -586,7 +586,9 @@ export default function DriverRegister() {
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => {
-                if (currentStep > 1) {
+                if (showOtpScreen) {
+                  setShowOtpScreen(false);
+                } else if (currentStep > 1) {
                   setCurrentStep(prev => prev - 1);
                 } else {
                   router.back();
@@ -600,7 +602,7 @@ export default function DriverRegister() {
                 <ActivityIndicator color={colors.ink} />
               ) : (
                 <Text style={styles.primaryButtonText}>
-                  {currentStep === 4 ? 'Verify OTP & Complete' : currentStep === 3 ? 'Send OTP ➔' : 'Continue'}
+                  {currentStep === 3 ? (showOtpScreen ? 'Submit Application' : 'Submit for verification') : 'Continue'}
                 </Text>
               )}
             </TouchableOpacity>
