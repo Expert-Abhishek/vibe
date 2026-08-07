@@ -149,7 +149,11 @@ export async function updateUserProfileApi(userId: string, profileData: any): Pr
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profileData),
     });
-    return await res.json();
+    const data = await res.json();
+    if (res.ok && data && data.success !== false) {
+      data.success = true;
+    }
+    return data;
   } catch (e) {
     console.warn('updateUserProfileApi error:', e);
     return { success: false, message: 'Network or server error' };

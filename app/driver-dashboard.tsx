@@ -545,7 +545,8 @@ export default function DriverDashboardScreen() {
       photoUrl: photoUrl,
       upiId: upiId,
     });
-    if (!apiRes?.success) {
+    const isSuccess = apiRes?.success === true || (apiRes && !apiRes.error && (apiRes.user || String(apiRes.message || '').toLowerCase().includes('success')));
+    if (!isSuccess) {
       setIsSavingProfile(false);
       showError('Update Failed', apiRes?.message || 'Could not save your profile. Please try again.');
       return;
@@ -916,23 +917,38 @@ export default function DriverDashboardScreen() {
         }
       };
 
+      const handleTripAcceptedByOther = (data: any) => {
+        console.log('[DriverDashboard] 🟢 Received real-time trip_accepted event:', data);
+        if (!data) return;
+
+        const session = getUserSessionSync();
+        const currentDriverId = String(session?.id || session?.userId || session?.profile?.id || '').toLowerCase().trim();
+        const acceptedDriverId = String(data.driverId || data.driver_id || data.assignedToId || '').toLowerCase().trim();
+        const accTripId = String(data.tripId || data.id || '').toLowerCase().trim();
+
+        // CASE 1: Another driver accepted this ride request!
+        if (acceptedDriverId && currentDriverId && acceptedDriverId !== currentDriverId) {
+          stopNotificationChime();
+          setIncomingRequest(null);
+          setRequestVisible(false);
+          showError('Trip Claimed ✋', 'Another captain accepted this booking request first.');
+        }
+      };
+
       const handleTripCancelled = (cancelData: any) => {
         console.log('[DriverDashboard] ❌ Received real-time trip_cancelled event:', cancelData);
+
+        // CASE 2: User/Admin cancelled trip -> IMMEDIATELY stop chime & dismiss incoming popup!
+        stopNotificationChime();
+        setIncomingRequest(null);
+        setRequestVisible(false);
+
         if (!cancelData) return;
 
         const cancelTripId = String(cancelData.tripId || cancelData.id || '').toLowerCase().trim();
         const targetDriverId = String(cancelData.driver_id || cancelData.driverId || cancelData.assignedToId || '').toLowerCase().trim();
         const session = getUserSessionSync();
         const currentDriverId = String(session?.id || session?.userId || session?.profile?.id || '').toLowerCase().trim();
-
-        // Dismiss incoming request popup if it matches cancelled trip
-        if (incomingRequest) {
-          const incId = String(incomingRequest.id || incomingRequest.tripId || '').toLowerCase().trim();
-          if (cancelTripId && incId === cancelTripId) {
-            setIncomingRequest(null);
-            setRequestVisible(false);
-          }
-        }
 
         // Check if cancellation targets THIS driver specifically or driver's active trip
         const isTargetDriver = (targetDriverId && currentDriverId && targetDriverId === currentDriverId) ||
@@ -963,8 +979,11 @@ export default function DriverDashboardScreen() {
       socket.on('trip_requested', handleIncomingTripData);
       socket.on('new_driver_request', handleIncomingTripData);
       socket.on('RIDE_REQUESTED', handleIncomingTripData);
+      socket.on('trip_accepted', handleTripAcceptedByOther);
+      socket.on('RIDE_ACCEPTED', handleTripAcceptedByOther);
       socket.on('trip_cancelled', handleTripCancelled);
       socket.on('RIDE_CANCELLED', handleTripCancelled);
+      socket.on('trip_declined', handleTripCancelled);
     }
 
     const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
