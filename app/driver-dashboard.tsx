@@ -963,14 +963,14 @@ export default function DriverDashboardScreen() {
             adminState.userTrips = adminState.userTrips.filter((t: any) => String(t.id).toLowerCase().trim() !== cancelTripId);
           }
 
-          // Return driver to Home tab
-          setActiveTab('home');
+          // Return driver to Duty / Home tab ('duty')
+          setActiveTab('duty');
           sendLocalNotification('Trip Cancelled ❌', 'Your active trip was cancelled by Tourist / Admin.');
 
           Alert.alert(
             '⚠️ Trip Cancelled',
             'Your active trip has been cancelled by Tourist / Admin.\n\nYour active trip has been cleared. You are returned to the Home page and ready for new ride requests!',
-            [{ text: 'OK (Go to Home)', onPress: () => setActiveTab('home') }]
+            [{ text: 'OK (Go to Home)', onPress: () => setActiveTab('duty') }]
           );
         }
       };
