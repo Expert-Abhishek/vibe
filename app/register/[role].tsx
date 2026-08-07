@@ -87,6 +87,12 @@ export default function RegisterScreen() {
 
     if (sendRes.success) {
       setStep('otp');
+      const debugOtpCode = sendRes.otpDebug || '1234';
+      Alert.alert(
+        '🔐 Registration OTP Sent',
+        `Your 4-digit verification OTP code is: ${debugOtpCode}\n\nPlease enter this 4-digit OTP code below to complete your registration.`,
+        [{ text: 'OK' }]
+      );
       showToast(`Registration OTP sent to +91 ${cleanPhone}`);
     } else {
       Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code.');
@@ -98,8 +104,8 @@ export default function RegisterScreen() {
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
     const cleanOtp = otp.trim();
 
-    if (!cleanOtp || cleanOtp.length < 4) {
-      Alert.alert('Required', 'Please enter the 6-digit OTP code sent to your phone.');
+    if (!cleanOtp || cleanOtp.length !== 4) {
+      Alert.alert('Required', 'Please enter the 4-digit OTP code sent to your phone.');
       return;
     }
 
@@ -162,17 +168,17 @@ export default function RegisterScreen() {
 
             <Text style={styles.title}>Enter OTP Code 🔐</Text>
             <Text style={[styles.subtitle, { marginBottom: 20 }]}>
-              We sent a 6-digit verification code to <Text style={{ fontWeight: '800', color: '#0d1b3e' }}>+91 {phone}</Text>
+              We sent a 4-digit verification code to <Text style={{ fontWeight: '800', color: '#0d1b3e' }}>+91 {phone}</Text>
             </Text>
 
             <TextInput
               style={[styles.input, { letterSpacing: 8, fontSize: 22, textAlign: 'center', fontWeight: '900', color: '#0d1b3e', paddingVertical: 14 }]}
-              placeholder="6-Digit OTP Code"
+              placeholder="4-Digit OTP Code"
               placeholderTextColor="#aaa"
               value={otp}
               onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ''))}
               keyboardType="number-pad"
-              maxLength={6}
+              maxLength={4}
             />
 
             <TouchableOpacity

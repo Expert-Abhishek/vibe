@@ -939,9 +939,9 @@ export default function TripStatusScreen() {
                     text: '📞 Call Admin Support',
                     onPress: () => {
                       try {
-                        Linking.openURL('tel:919876543210');
+                        Linking.openURL('tel:918088626099');
                       } catch (e) {
-                        Alert.alert('Admin Support', 'Please call Admin Support at +91 9876543210 to cancel your active trip.');
+                        Alert.alert('Admin Support', 'Please call Admin Support at +91 80886 26099 to cancel your active trip.');
                       }
                     },
                   },

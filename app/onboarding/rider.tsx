@@ -79,6 +79,12 @@ export default function RiderRegister() {
 
     if (sendRes.success) {
       setStep('otp');
+      const debugCode = sendRes.otpDebug || '1234';
+      Alert.alert(
+        '🔐 Registration OTP Sent',
+        `Your 4-digit verification OTP code is: ${debugCode}\n\nPlease enter this 4-digit OTP code below to complete your registration.`,
+        [{ text: 'OK' }]
+      );
       showToast(`Registration OTP sent to +91 ${cleanPhone}`, 'success');
     } else {
       const msg = sendRes.message || 'Failed to send OTP code.';
@@ -91,8 +97,8 @@ export default function RiderRegister() {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanOtp = otp.trim();
 
-    if (!cleanOtp || cleanOtp.length < 4) {
-      setErrors({ otp: 'Enter 6-digit OTP code' });
+    if (!cleanOtp || cleanOtp.length !== 4) {
+      setErrors({ otp: 'Enter 4-digit OTP code' });
       return;
     }
 
@@ -178,16 +184,16 @@ export default function RiderRegister() {
 
               <Text style={[styles.title, { fontSize: moderateFontScale(22) }]}>Enter Verification OTP 🔐</Text>
               <Text style={[styles.subtitle, { marginBottom: verticalScale(16) }]}>
-                We sent a 6-digit verification code to <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {phone}</Text>
+                We sent a 4-digit verification code to <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {phone}</Text>
               </Text>
 
               <View style={styles.labelRow}>
-                <Text style={styles.label}>6-Digit OTP Code</Text>
+                <Text style={styles.label}>4-Digit OTP Code</Text>
                 <View style={styles.requiredDot} />
               </View>
               <TextInput
                 style={[styles.input, { letterSpacing: 8, fontSize: moderateFontScale(22), textAlign: 'center', fontWeight: '900', color: colors.amber }]}
-                placeholder="6-Digit OTP"
+                placeholder="4-Digit OTP"
                 placeholderTextColor={colors.textFaint}
                 value={otp}
                 onChangeText={(t) => {
@@ -195,7 +201,7 @@ export default function RiderRegister() {
                   if (errors.otp) setErrors(prev => ({ ...prev, otp: undefined }));
                 }}
                 keyboardType="number-pad"
-                maxLength={6}
+                maxLength={4}
               />
               {errors.otp && <Text style={styles.errorText}>{errors.otp}</Text>}
               {errors.api && <Text style={[styles.errorText, { marginTop: verticalScale(10), textAlign: 'center' }]}>{errors.api}</Text>}

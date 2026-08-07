@@ -705,7 +705,7 @@ export default function DriverDashboardScreen() {
         const combined = [...(dbReqs || []), ...(driverReqs || []), ...memoryReqs];
         const unhandled = combined.filter((r: any) => r && r.id && !handledTripIdsRef.current.has(String(r.id)));
 
-        if (isMounted && unhandled.length > 0 && !activeTrip && !requestVisible) {
+        if (isMounted && unhandled.length > 0 && !activeTrip && !requestVisible && earningsBalance >= 300) {
           const firstReq = unhandled[0];
           const reqIdStr = String(firstReq.id);
 
@@ -748,7 +748,7 @@ export default function DriverDashboardScreen() {
     pollRequests();
 
     const cleanupSync = listenForTripRequests((trip) => {
-      if (trip && trip.id && !handledTripIdsRef.current.has(String(trip.id))) {
+      if (trip && trip.id && earningsBalance >= 300 && !handledTripIdsRef.current.has(String(trip.id))) {
         const reqIdStr = String(trip.id);
         setIncomingRequest({
           touristName: trip.touristName || trip.customerName || 'Tourist Customer',
@@ -889,7 +889,7 @@ export default function DriverDashboardScreen() {
 
       // Listen for targeted and broadcast trip requests
       const handleIncomingTripData = (tripData: any) => {
-        if (!isOnline || !tripData) return;
+        if (!isOnline || !tripData || earningsBalance < 300) return;
         const payload = tripData.trip || tripData;
         const incomingTripId = String(payload.id || payload.tripId || payload.id);
 
@@ -1509,8 +1509,8 @@ export default function DriverDashboardScreen() {
         </View>
       </View>
 
-      {/* Low Wallet Balance Warning Banner (Only displayed after balance is loaded and if balance < ₹50) */}
-      {isWalletLoaded && earningsBalance < 50 && (
+      {/* Low Wallet Balance Warning Banner (Only displayed after balance is loaded and if balance < ₹300) */}
+      {isWalletLoaded && earningsBalance < 300 && (
         <View style={{
           backgroundColor: 'rgba(245, 197, 24, 0.12)',
           borderWidth: 1,
@@ -1530,7 +1530,7 @@ export default function DriverDashboardScreen() {
               Low Wallet Balance (₹{earningsBalance})
             </Text>
             <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), marginTop: 2 }}>
-              Recharge soon to avoid ride rejection (Min ₹10 platform fee required).
+              Recharge now to receive trip requests (Min ₹300 wallet balance required).
             </Text>
           </View>
           <TouchableOpacity
@@ -1939,9 +1939,9 @@ export default function DriverDashboardScreen() {
                               text: '📞 Call Admin Support',
                               onPress: () => {
                                 try {
-                                  Linking.openURL('tel:919876543210');
+                                  Linking.openURL('tel:918088626099');
                                 } catch (e) {
-                                  Alert.alert('Admin Support', 'Please call Admin Support at +91 9876543210 to cancel active trip.');
+                                  Alert.alert('Admin Support', 'Please call Admin Support at +91 80886 26099 to cancel active trip.');
                                 }
                               },
                             },
@@ -1959,9 +1959,28 @@ export default function DriverDashboardScreen() {
                   <View style={styles.phasePanelBlock}>
                     <Text style={[styles.phaseTitleText, { color: colors.textPrimary }]}>Phase 1: Navigate to Pickup</Text>
                     <View style={styles.phaseAddressCard}>
-                      <MaterialIcons name="pin-drop" size={scale(16)} color={colors.amber} style={{ marginRight: scale(6) }} />
-                      <Text style={[styles.phaseAddressVal, { color: colors.textPrimary }]} numberOfLines={1}>{activeTrip.pickup}</Text>
+                      <MaterialIcons name="pin-drop" size={scale(16)} color="#10B981" style={{ marginRight: scale(6) }} />
+                      <Text style={[styles.phaseAddressVal, { color: colors.textPrimary }]} numberOfLines={1}>Pickup: {activeTrip.pickup}</Text>
                     </View>
+
+                    {Array.isArray(activeTrip.checkpoints) && activeTrip.checkpoints.length > 0 && (
+                      <View style={{ marginLeft: scale(6), paddingLeft: scale(8), borderLeftWidth: 1.5, borderLeftColor: colors.amber, marginVertical: verticalScale(4) }}>
+                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '700', color: colors.amber, marginBottom: 2 }}>
+                          🗺️ Route Checkpoints / Stops ({activeTrip.checkpoints.length}):
+                        </Text>
+                        {activeTrip.checkpoints.map((cp: any, idx: number) => {
+                          const cpName = typeof cp === 'string' ? cp : (cp.name || cp.checkpoint_name || `Stop ${idx + 1}`);
+                          return (
+                            <View key={`cp_${idx}`} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 1 }}>
+                              <MaterialIcons name="place" size={scale(12)} color={colors.amber} style={{ marginRight: scale(4) }} />
+                              <Text style={{ fontSize: moderateFontScale(10), fontWeight: '600', color: colors.textPrimary }}>
+                                Stop {idx + 1}: {cpName}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
 
                     <View style={styles.actionBtnGrid}>
                       <TouchableOpacity
@@ -1992,11 +2011,30 @@ export default function DriverDashboardScreen() {
                   <View style={styles.phasePanelBlock}>
                     <Text style={[styles.phaseTitleText, { color: colors.textPrimary }]}>Phase 2: Driving to Dropoff</Text>
                     <View style={styles.phaseAddressCard}>
-                      <MaterialIcons name="directions-car" size={scale(16)} color={colors.amber} style={{ marginRight: scale(6) }} />
+                      <MaterialIcons name="directions-car" size={scale(16)} color="#EF4444" style={{ marginRight: scale(6) }} />
                       <Text style={[styles.phaseAddressVal, { color: colors.textPrimary }]} numberOfLines={1}>
                         Dropoff: {activeTrip.drop}
                       </Text>
                     </View>
+
+                    {Array.isArray(activeTrip.checkpoints) && activeTrip.checkpoints.length > 0 && (
+                      <View style={{ marginLeft: scale(6), paddingLeft: scale(8), borderLeftWidth: 1.5, borderLeftColor: colors.amber, marginVertical: verticalScale(4) }}>
+                        <Text style={{ fontSize: moderateFontScale(10), fontWeight: '700', color: colors.amber, marginBottom: 2 }}>
+                          🗺️ Route Checkpoints / Stops ({activeTrip.checkpoints.length}):
+                        </Text>
+                        {activeTrip.checkpoints.map((cp: any, idx: number) => {
+                          const cpName = typeof cp === 'string' ? cp : (cp.name || cp.checkpoint_name || `Stop ${idx + 1}`);
+                          return (
+                            <View key={`cp_d_${idx}`} style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 1 }}>
+                              <MaterialIcons name="place" size={scale(12)} color={colors.amber} style={{ marginRight: scale(4) }} />
+                              <Text style={{ fontSize: moderateFontScale(10), fontWeight: '600', color: colors.textPrimary }}>
+                                Stop {idx + 1}: {cpName}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
 
                     <View style={styles.actionBtnGrid}>
                       <View style={{ flex: 1 }} />
@@ -2149,38 +2187,7 @@ export default function DriverDashboardScreen() {
                 />
               </View>
 
-              {/* Registered Vehicle Category Selector */}
-              <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>
-                Registered Vehicle Category (Targeted Dispatching)
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(6), marginTop: verticalScale(4) }}>
-                {[
-                  { key: '5_seater', label: '🚘 5-Seater (Sedan)' },
-                  { key: '7_seater', label: '🚐 7-Seater (SUV)' },
-                  { key: '4x4', label: '🏔️ 4x4 Off-Road' },
-                  { key: 'auto', label: '🛺 Auto Rickshaw' },
-                ].map(cat => {
-                  const isSelected = vehicleCategory === cat.key;
-                  return (
-                    <TouchableOpacity
-                      key={cat.key}
-                      style={{
-                        paddingVertical: scale(6),
-                        paddingHorizontal: scale(10),
-                        borderRadius: scale(8),
-                        borderWidth: isSelected ? 1.5 : 1,
-                        borderColor: isSelected ? colors.amber : colors.border,
-                        backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
-                      }}
-                      onPress={() => setVehicleCategory(cat.key as any)}
-                    >
-                      <Text style={{ fontSize: moderateFontScale(11), fontWeight: isSelected ? '800' : '500', color: isSelected ? colors.amber : colors.textPrimary }}>
-                        {cat.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+
 
               <Text style={[styles.inputLabel, { color: colors.textPrimary, marginTop: verticalScale(10) }]}>Current Password (Required to change password)</Text>
               <View style={[styles.inputFieldBox, { borderColor: colors.border, marginTop: verticalScale(4) }]}>
