@@ -52,7 +52,11 @@ export default function TripsHistoryScreen() {
     if (tid) {
       return all.find((t: any) => t && (String(t.id).toLowerCase().trim() === tid || String(t.tripId || '').toLowerCase().trim() === tid)) || null;
     }
-    return null;
+    return all.find((t: any) => {
+      if (!t) return false;
+      const st = String(t.status || '').toLowerCase();
+      return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
+    }) || null;
   }, [tripIdParam]);
 
   const [loading, setLoading] = useState(true);

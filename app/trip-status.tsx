@@ -104,10 +104,10 @@ export default function TripStatusScreen() {
 
   const [pickupLocation, setPickupLocation] = useState(initialLocalTrip?.pickupName || initialLocalTrip?.pickup || 'Pickup Spot');
   const [dropLocation, setDropLocation] = useState(initialLocalTrip?.dropName || initialLocalTrip?.drop || 'Destination');
-  const [pickupLat, setPickupLat] = useState<number>(initialLocalTrip?.pickupLat || 12.9716);
-  const [pickupLng, setPickupLng] = useState<number>(initialLocalTrip?.pickupLng || 77.5946);
-  const [dropLat, setDropLat] = useState<number>(initialLocalTrip?.dropLat || 12.2958);
-  const [dropLng, setDropLng] = useState<number>(initialLocalTrip?.dropLng || 76.6394);
+  const [pickupLat, setPickupLat] = useState<number>(initialLocalTrip?.pickupLat || 12.9723);
+  const [pickupLng, setPickupLng] = useState<number>(initialLocalTrip?.pickupLng || 75.7865);
+  const [dropLat, setDropLat] = useState<number>(initialLocalTrip?.dropLat || 12.9730);
+  const [dropLng, setDropLng] = useState<number>(initialLocalTrip?.dropLng || 75.7845);
   const [fareAmount, setFareAmount] = useState(initialLocalTrip?.price || initialLocalTrip?.amount || 1200);
   const [paymentMode, setPaymentMode] = useState(initialLocalTrip?.paymentMode || 'Wallet');
   const [advanceDepositPaid, setAdvanceDepositPaid] = useState<number>(initialLocalTrip?.advanceDepositPaid || 0);
@@ -144,17 +144,37 @@ export default function TripStatusScreen() {
           const statusLower = statusStr.toLowerCase();
           setTripStatus(statusStr);
 
-          if (res.data.driver) {
-            setDriverInfo((prev: any) => ({
-              ...prev,
-              name: res.data.driver.name || prev.name,
-              phone: res.data.driver.phone || prev.phone,
-              vehicleModel: res.data.driver.vehicleModel || prev.vehicleModel,
-              vehicleNumber: (res.data.driver.vehicleNumber && res.data.driver.vehicleNumber !== 'Assigning Captain...') ? res.data.driver.vehicleNumber : prev.vehicleNumber,
-              latitude: res.data.driver.latitude || prev.latitude,
-              longitude: res.data.driver.longitude || prev.longitude,
-              heading: res.data.driver.heading || prev.heading,
-            }));
+          const dObj = res.data.driver || res.data.driverDetails || {};
+          const dName = dObj.name || dObj.driverName || res.data.driver_or_guide_name || res.data.driverName || res.data.driver_name;
+          const dPhone = dObj.phone || dObj.driverPhone || res.data.driver_phone || res.data.driverPhone;
+          const dModel = dObj.vehicleModel || dObj.vehicle_model || res.data.vehicle_model || res.data.vehicleModel;
+          const dNum = dObj.vehicleNumber || dObj.vehicle_number || res.data.vehicle_number || res.data.vehicleNumber;
+
+          if (dName || dPhone || dModel || dNum) {
+            setDriverInfo((prev: any) => {
+              const updated = {
+                ...prev,
+                name: dName || prev.name,
+                phone: dPhone || prev.phone,
+                vehicleModel: dModel || prev.vehicleModel,
+                vehicleNumber: (dNum && dNum !== 'Assigning Captain...') ? dNum : prev.vehicleNumber,
+                latitude: dObj.latitude ? parseFloat(dObj.latitude) : prev.latitude,
+                longitude: dObj.longitude ? parseFloat(dObj.longitude) : prev.longitude,
+                heading: dObj.heading ? parseFloat(dObj.heading) : prev.heading,
+              };
+
+              if (Array.isArray(adminState.userTrips)) {
+                const target = adminState.userTrips.find((t: any) => String(t.id) === String(tripIdParam));
+                if (target) {
+                  target.driverOrGuideName = updated.name;
+                  target.driverName = updated.name;
+                  target.driverPhone = updated.phone;
+                  target.vehicleModel = updated.vehicleModel;
+                  target.vehicleNumber = updated.vehicleNumber;
+                }
+              }
+              return updated;
+            });
           }
           if (res.data.pickup_name || res.data.pickupName || res.data.pickup) {
             setPickupLocation(res.data.pickup_name || res.data.pickupName || res.data.pickup);
@@ -264,16 +284,35 @@ export default function TripStatusScreen() {
       console.log('[TripStatusScreen] 🟢 Received real-time trip_accepted event:', data);
       if (data) {
         setTripStatus('Accepted');
-        setDriverInfo((prev: any) => ({
-          ...prev,
-          name: data.driverName || data.driver_or_guide_name || data.name || prev.name,
-          phone: data.driverPhone || data.phone || prev.phone,
-          vehicleModel: data.vehicleModel || data.vehicle_model || prev.vehicleModel,
-          vehicleNumber: data.vehicleNumber || data.vehicle_number || prev.vehicleNumber,
-        }));
+        const dName = data.driverName || data.driver_or_guide_name || data.name;
+        const dPhone = data.driverPhone || data.phone;
+        const dModel = data.vehicleModel || data.vehicle_model;
+        const dNum = data.vehicleNumber || data.vehicle_number;
+
+        setDriverInfo((prev: any) => {
+          const updated = {
+            ...prev,
+            name: dName || prev.name,
+            phone: dPhone || prev.phone,
+            vehicleModel: dModel || prev.vehicleModel,
+            vehicleNumber: (dNum && dNum !== 'Assigning Captain...') ? dNum : prev.vehicleNumber,
+          };
+          if (Array.isArray(adminState.userTrips)) {
+            const target = adminState.userTrips.find((t: any) => String(t.id) === String(tripIdParam));
+            if (target) {
+              target.driverOrGuideName = updated.name;
+              target.driverName = updated.name;
+              target.driverPhone = updated.phone;
+              target.vehicleModel = updated.vehicleModel;
+              target.vehicleNumber = updated.vehicleNumber;
+            }
+          }
+          return updated;
+        });
+
         if (data.otp) setStartOtp(String(data.otp));
         if (data.endOtp || data.end_otp) setEndOtp(String(data.endOtp || data.end_otp));
-        sendLocalNotification('Driver Assigned!', `${data.driverName || 'Captain'} has accepted your booking.`);
+        sendLocalNotification('Driver Assigned!', `${dName || 'Captain'} has accepted your booking.`);
       }
     };
 
@@ -514,9 +553,16 @@ export default function TripStatusScreen() {
         <View style={[styles.mapFrame, { borderColor: colors.border }]}>
           {(() => {
             // Build 100% connected points sequence (Driver ➔ Pickup ➔ Checkpoints ➔ Destination)
+            const pLat = (pickupLat && pickupLat !== 12.9716 && pickupLat !== 0) ? pickupLat : 12.9723;
+            const pLng = (pickupLng && pickupLng !== 77.5946 && pickupLng !== 0) ? pickupLng : 75.7865;
+            const dLat = (dropLat && dropLat !== 12.2958 && dropLat !== 0) ? dropLat : 12.9730;
+            const dLng = (dropLng && dropLng !== 76.6394 && dropLng !== 0) ? dropLng : 75.7845;
+            const drvLat = (driverInfo.latitude && driverInfo.latitude !== 12.9716 && driverInfo.latitude !== 0) ? driverInfo.latitude : pLat + 0.002;
+            const drvLng = (driverInfo.longitude && driverInfo.longitude !== 77.5946 && driverInfo.longitude !== 0) ? driverInfo.longitude : pLng + 0.002;
+
             const connectedPoints = [
-              { latitude: driverInfo.latitude || pickupLat || 12.9716, longitude: driverInfo.longitude || pickupLng || 77.5946, label: `Driver: ${driverInfo.name}` },
-              { latitude: pickupLat || 12.9716, longitude: pickupLng || 77.5946, label: `Pickup: ${pickupLocation}` },
+              { latitude: drvLat, longitude: drvLng, label: `Driver: ${driverInfo.name || 'Captain'}` },
+              { latitude: pLat, longitude: pLng, label: `Pickup: ${pickupLocation}` },
               ...(Array.isArray(tripCheckpoints)
                 ? tripCheckpoints
                   .filter((cp: any) => cp && (cp.latitude || cp.lat) && (cp.longitude || cp.lng))
@@ -526,7 +572,7 @@ export default function TripStatusScreen() {
                     label: typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp),
                   }))
                 : []),
-              { latitude: dropLat || 12.2958, longitude: dropLng || 76.6394, label: `Destination: ${dropLocation}` },
+              { latitude: dLat, longitude: dLng, label: `Destination: ${dropLocation}` },
             ].filter((pt: any) => !isNaN(pt.latitude) && !isNaN(pt.longitude));
 
             if (Platform.OS === 'web' || !MapView) {
@@ -574,17 +620,17 @@ export default function TripStatusScreen() {
                 provider="google"
                 style={StyleSheet.absoluteFillObject}
                 initialRegion={{
-                  latitude: driverInfo.latitude || pickupLat || 12.9716,
-                  longitude: driverInfo.longitude || pickupLng || 77.5946,
+                  latitude: pLat,
+                  longitude: pLng,
                   latitudeDelta: 0.05,
                   longitudeDelta: 0.05,
                 }}
               >
                 {/* Driver Marker */}
                 <Marker
-                  coordinate={{ latitude: driverInfo.latitude || 12.9716, longitude: driverInfo.longitude || 77.5946 }}
-                  title={`Driver: ${driverInfo.name}`}
-                  description={driverInfo.vehicleModel}
+                  coordinate={{ latitude: drvLat, longitude: drvLng }}
+                  title={`Driver: ${driverInfo.name || 'Captain'}`}
+                  description={driverInfo.vehicleModel || 'Cab'}
                   pinColor={colors.amber}
                   rotation={driverInfo.heading || 0}
                   flat={true}
@@ -592,7 +638,7 @@ export default function TripStatusScreen() {
 
                 {/* Pickup Marker */}
                 <Marker
-                  coordinate={{ latitude: pickupLat, longitude: pickupLng }}
+                  coordinate={{ latitude: pLat, longitude: pLng }}
                   title="Pickup Spot"
                   description={pickupLocation}
                   pinColor="#10B981"
@@ -618,7 +664,7 @@ export default function TripStatusScreen() {
 
                 {/* Drop Marker */}
                 <Marker
-                  coordinate={{ latitude: dropLat, longitude: dropLng }}
+                  coordinate={{ latitude: dLat, longitude: dLng }}
                   title="Destination"
                   description={dropLocation}
                   pinColor="#EF4444"
@@ -650,7 +696,8 @@ export default function TripStatusScreen() {
         {/* Driver Details Card */}
         {(() => {
           const dNameLower = String(driverInfo?.name || '').toLowerCase();
-          const isPendingDriver = statusLower.includes('pending') || statusLower.includes('dispatched') || dNameLower.includes('search') || dNameLower.includes('auto') || !driverInfo?.name;
+          const hasDriver = Boolean(driverInfo?.name && !dNameLower.includes('searching'));
+          const isPendingDriver = !hasDriver || (statusLower.includes('pending') || statusLower.includes('dispatched'));
           const captainTitle = isPendingDriver ? 'Searching Captain...' : (driverInfo?.name || 'Searching Captain...');
           const vehicleNumberDisplay = isPendingDriver ? 'Assigning Captain...' : (driverInfo?.vehicleNumber || 'Assigning Captain...');
 
