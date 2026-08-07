@@ -921,6 +921,8 @@ export default function DriverDashboardScreen() {
         if (!cancelData) return;
 
         const cancelTripId = String(cancelData.tripId || cancelData.id || '').toLowerCase().trim();
+        const targetDriverId = String(cancelData.driver_id || cancelData.driverId || cancelData.assignedToId || '').toLowerCase().trim();
+        const currentDriverId = String(user?.id || user?.user_id || driverId || '').toLowerCase().trim();
 
         // Dismiss incoming request popup if it matches cancelled trip
         if (incomingRequest) {
@@ -931,16 +933,28 @@ export default function DriverDashboardScreen() {
           }
         }
 
-        // ONLY clear active trip and show toast if this trip was active for THIS driver!
-        if (activeTrip) {
-          const actId = String(activeTrip.id || activeTrip.tripId || '').toLowerCase().trim();
-          if (!cancelTripId || actId === cancelTripId) {
-            setActiveTrip(null);
-            setIncomingRequest(null);
-            setRequestVisible(false);
-            sendLocalNotification('Trip Cancelled', 'Your active trip was cancelled.');
-            showError('Trip Cancelled', 'Your active trip was cancelled by user/admin.');
+        // Check if cancellation targets THIS driver specifically or driver's active trip
+        const isTargetDriver = (targetDriverId && currentDriverId && targetDriverId === currentDriverId) ||
+          (activeTrip && (!cancelTripId || String(activeTrip.id || activeTrip.tripId || '').toLowerCase().trim() === cancelTripId));
+
+        if (isTargetDriver || activeTrip) {
+          setActiveTrip(null);
+          setIncomingRequest(null);
+          setRequestVisible(false);
+
+          if (Array.isArray(adminState.userTrips)) {
+            adminState.userTrips = adminState.userTrips.filter((t: any) => String(t.id).toLowerCase().trim() !== cancelTripId);
           }
+
+          // Return driver to Home tab
+          setActiveTab('home');
+          sendLocalNotification('Trip Cancelled ❌', 'Your active trip was cancelled by Tourist / Admin.');
+
+          Alert.alert(
+            '⚠️ Trip Cancelled',
+            'Your active trip has been cancelled by Tourist / Admin.\n\nYour active trip has been cleared. You are returned to the Home page and ready for new ride requests!',
+            [{ text: 'OK (Go to Home)', onPress: () => setActiveTab('home') }]
+          );
         }
       };
 
