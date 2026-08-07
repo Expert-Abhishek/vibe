@@ -132,6 +132,12 @@ export default function PlansPage() {
       price_7_seater: 6749,
       price_4x4: 7999,
       price_auto: 3249,
+      allowed_vehicles: {
+        '5_seater': true,
+        '7_seater': true,
+        '4x4': true,
+        'auto': true,
+      },
       selectedDestinationIds: [],
       isActive: true,
     });

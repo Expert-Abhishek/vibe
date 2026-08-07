@@ -373,6 +373,7 @@ export async function createPlanApi(payload: {
   price_7_seater?: number;
   price_4x4?: number;
   price_auto?: number;
+  allowed_vehicles?: Record<string, boolean>;
   destinationIds: string[];
 }): Promise<Plan | null> {
   try {
