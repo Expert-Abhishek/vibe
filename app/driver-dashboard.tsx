@@ -922,7 +922,8 @@ export default function DriverDashboardScreen() {
 
         const cancelTripId = String(cancelData.tripId || cancelData.id || '').toLowerCase().trim();
         const targetDriverId = String(cancelData.driver_id || cancelData.driverId || cancelData.assignedToId || '').toLowerCase().trim();
-        const currentDriverId = String(user?.id || user?.user_id || driverId || '').toLowerCase().trim();
+        const session = getUserSessionSync();
+        const currentDriverId = String(session?.id || session?.userId || session?.profile?.id || '').toLowerCase().trim();
 
         // Dismiss incoming request popup if it matches cancelled trip
         if (incomingRequest) {

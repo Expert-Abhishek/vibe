@@ -549,7 +549,9 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
       `SELECT * FROM trips
        WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
          AND status_code NOT IN (3, 4)
-         AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish')
+         AND LOWER(status) NOT LIKE '%cancel%'
+         AND LOWER(status) NOT LIKE '%complete%'
+         AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish', 'withdraw', 'withdrawn')
        ORDER BY created_at DESC
        LIMIT 1`,
       [String(customerId)]
@@ -1707,7 +1709,10 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
         const activeCheck = await db.query(
           `SELECT id, title, status FROM trips
            WHERE (customer_id::text = $1::text OR CAST(customer_id AS VARCHAR) = $1::text)
-             AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish')
+             AND status_code NOT IN (3, 4)
+             AND LOWER(status) NOT LIKE '%cancel%'
+             AND LOWER(status) NOT LIKE '%complete%'
+             AND LOWER(status) NOT IN ('completed', 'cancelled', 'declined', 'rejected', 'done', 'finish', 'withdraw', 'withdrawn')
            LIMIT 1`,
           [String(customerId)]
         );

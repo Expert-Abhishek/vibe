@@ -952,6 +952,9 @@ export async function cancelTripApi(tripId: string, options: { reason?: string; 
       }),
     });
     clearTripApiCache();
+    if (Array.isArray(adminState.userTrips)) {
+      adminState.userTrips = adminState.userTrips.filter((t: any) => String(t.id || t.tripId) !== String(tripId));
+    }
     return await res.json();
   } catch (e) {
     console.warn('cancelTripApi error:', e);

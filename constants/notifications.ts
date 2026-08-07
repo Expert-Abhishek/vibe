@@ -103,13 +103,30 @@ export async function getExpoPushToken(): Promise<string | null> {
   }
 }
 
-import { notificationStore } from '@src/store/notificationStore';
+const recentNotificationsCache = new Map<string, number>();
 
 export async function sendLocalNotification(title: string, body: string, data?: any): Promise<void> {
+  const cleanTitle = title.replace(/^🔔\s*/, '').trim();
+  const dedupKey = `${cleanTitle}:${body.trim()}`;
+  const now = Date.now();
+  const lastTime = recentNotificationsCache.get(dedupKey) || 0;
+
+  // Filter out duplicate notifications arriving within 3.5 seconds
+  if (now - lastTime < 3500) {
+    return;
+  }
+  recentNotificationsCache.set(dedupKey, now);
+
+  if (recentNotificationsCache.size > 50) {
+    for (const [key, time] of recentNotificationsCache.entries()) {
+      if (now - time > 10000) recentNotificationsCache.delete(key);
+    }
+  }
+
   try {
     // Add to notificationStore for clean UI badge rendering & drawer storage
     notificationStore.addNotification({
-      title: `🔔 ${title}`,
+      title: `🔔 ${cleanTitle}`,
       body,
       isRead: false,
     });
@@ -119,7 +136,7 @@ export async function sendLocalNotification(title: string, body: string, data?: 
       if (Notifications && typeof Notifications.scheduleNotificationAsync === 'function') {
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: `🔔 ${title}`,
+            title: `🔔 ${cleanTitle}`,
             body,
             data: data || {},
             sound: 'default',
