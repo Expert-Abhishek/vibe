@@ -28,7 +28,7 @@
       "package": "com.abhittac.myawesomeapp"
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
