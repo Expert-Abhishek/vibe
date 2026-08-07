@@ -113,7 +113,6 @@ router.get('/', async (req, res) => {
         price_4x4: p4x4,
         price_auto: pAuto,
         allowed_vehicles: allowedVehicles,
-        allowedVehicles: allowedVehicles,
         isActive: p.is_active,
         checkpoints: planCps,
         destination_ids: planDestIds,
@@ -210,7 +209,6 @@ router.post('/', async (req, res) => {
         price_4x4: parseFloat(newPlan.price_4x4 || 0),
         price_auto: parseFloat(newPlan.price_auto || 0),
         allowed_vehicles: retAllowed,
-        allowedVehicles: retAllowed,
         isActive: newPlan.is_active,
         createdAt: newPlan.created_at,
         updatedAt: newPlan.updated_at
@@ -279,7 +277,6 @@ router.put('/:id', async (req, res) => {
         price_4x4: parseFloat(p.price_4x4 || 0),
         price_auto: parseFloat(p.price_auto || 0),
         allowed_vehicles: retAllowed,
-        allowedVehicles: retAllowed,
         isActive: p.is_active,
         updatedAt: p.updated_at
       }

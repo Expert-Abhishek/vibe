@@ -38,10 +38,18 @@ export interface CheckpointObj {
 interface TourPackage {
   id: string;
   name: string;
+  description?: string;
   checkpoints: string[];
   checkpointObjs?: CheckpointObj[];
   travelHours: number;
   distanceKm: number;
+  price?: number;
+  price_5_seater?: number;
+  price_7_seater?: number;
+  price_4x4?: number;
+  price_auto?: number;
+  allowed_vehicles?: Record<string, boolean>;
+  allowedVehicles?: Record<string, boolean>;
   image: string;
   destinationIds?: string[];
   destinationId?: string;
@@ -151,11 +159,18 @@ export default function PlanRouteScreen() {
     return {
       id: p.id || `p_${idx}`,
       name: p.name,
+      description: p.description || '',
       checkpoints: checkpointNames,
       checkpointObjs: checkpointObjs,
       travelHours: parseFloat(p.duration) || 8,
       distanceKm: parseFloat(p.km) || 150,
       price: parseFloat(p.price) || 4999,
+      price_5_seater: p.price_5_seater ? Number(p.price_5_seater) : undefined,
+      price_7_seater: p.price_7_seater ? Number(p.price_7_seater) : undefined,
+      price_4x4: p.price_4x4 ? Number(p.price_4x4) : undefined,
+      price_auto: p.price_auto ? Number(p.price_auto) : undefined,
+      allowed_vehicles: p.allowed_vehicles || p.allowedVehicles,
+      allowedVehicles: p.allowed_vehicles || p.allowedVehicles,
       image: firstImg,
       destinationIds: destIds.length > 0 ? destIds : (p.destinationIds || p.destination_ids || []),
       destinationId: destIds[0] || p.destinationId || p.destination_id,
@@ -223,6 +238,15 @@ export default function PlanRouteScreen() {
       router.setParams({ fromVehicle: undefined });
     }
   }, [params.fromVehicle, params.selectedDriverId, params.selectedPlanId, params.selectedPlanName, livePlans]);
+
+  useEffect(() => {
+    if (selectedPlan && displayPackagePlans.length > 0) {
+      const match = displayPackagePlans.find((p) => String(p.id) === String(selectedPlan.id) || p.name.toLowerCase() === selectedPlan.name.toLowerCase());
+      if (match && (!selectedPlan.allowed_vehicles || JSON.stringify(selectedPlan.allowed_vehicles) !== JSON.stringify(match.allowed_vehicles))) {
+        setSelectedPlan((prev) => prev ? { ...prev, ...match } : match);
+      }
+    }
+  }, [livePlans, selectedPlan?.id]);
 
   useEffect(() => {
     if (selectedPlan) {
