@@ -573,8 +573,8 @@ export default function PlansPage() {
                           <button
                             onClick={() => handleTogglePlanCheckpoint(plan.id, cp.destinationId)}
                             className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${cp.isActiveInPlan
-                                ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                                : 'bg-gray-800 text-gray-400 border-gray-700'
+                              ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                              : 'bg-gray-800 text-gray-400 border-gray-700'
                               }`}
                             title="Toggle checkpoint ON/OFF in plan"
                           >
@@ -593,8 +593,8 @@ export default function PlansPage() {
                 <button
                   onClick={() => handleTogglePlan(plan.id)}
                   className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition-colors flex items-center space-x-1 ${plan.isActive
-                      ? 'bg-green-500/20 text-green-300 border-green-500/40 hover:bg-green-500/30'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
+                    ? 'bg-green-500/20 text-green-300 border-green-500/40 hover:bg-green-500/30'
+                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'
                     }`}
                 >
                   {plan.isActive ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400" /> : <XCircle className="w-3.5 h-3.5 text-gray-400" />}
@@ -709,8 +709,8 @@ export default function PlansPage() {
                         <div
                           key={item.key}
                           className={`p-3 rounded-xl border transition-all space-y-2.5 ${isEnabled
-                              ? 'bg-dark-card border-brand-500/40 shadow-sm'
-                              : 'bg-dark-card/50 border-dark-border opacity-75'
+                            ? 'bg-dark-card border-brand-500/40 shadow-sm'
+                            : 'bg-dark-card/50 border-dark-border opacity-75'
                             }`}
                         >
                           {/* Toggle ON/OFF */}
@@ -728,8 +728,8 @@ export default function PlansPage() {
                                 })
                               }
                               className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${isEnabled
-                                  ? 'bg-brand-500 text-black border-brand-400'
-                                  : 'bg-gray-800 text-gray-400 border-gray-700'
+                                ? 'bg-brand-500 text-black border-brand-400'
+                                : 'bg-gray-800 text-gray-400 border-gray-700'
                                 }`}
                             >
                               {isEnabled ? 'ON' : 'Off'}
@@ -802,8 +802,8 @@ export default function PlansPage() {
                         key={d.id}
                         onClick={() => handleToggleDestinationSelectionInAdd(d.id)}
                         className={`p-2.5 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-all ${isSelected
-                            ? 'bg-brand-500/20 border-brand-500 text-white font-bold'
-                            : 'bg-dark-hover/50 border-dark-border text-gray-300 hover:border-gray-600'
+                          ? 'bg-brand-500/20 border-brand-500 text-white font-bold'
+                          : 'bg-dark-hover/50 border-dark-border text-gray-300 hover:border-gray-600'
                           }`}
                       >
                         <div className="truncate mr-2">
@@ -915,8 +915,8 @@ export default function PlansPage() {
                           <div
                             key={item.key}
                             className={`p-3 rounded-xl border transition-all space-y-2.5 ${isEnabled
-                                ? 'bg-dark-card border-brand-500/40 shadow-sm'
-                                : 'bg-dark-card/50 border-dark-border opacity-75'
+                              ? 'bg-dark-card border-brand-500/40 shadow-sm'
+                              : 'bg-dark-card/50 border-dark-border opacity-75'
                               }`}
                           >
                             {/* Toggle ON/OFF */}
@@ -934,11 +934,11 @@ export default function PlansPage() {
                                   })
                                 }
                                 className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-colors border ${isEnabled
-                                    ? 'bg-brand-500 text-black border-brand-400'
-                                    : 'bg-gray-800 text-gray-400 border-gray-700'
+                                  ? 'bg-brand-500 text-black border-brand-400'
+                                  : 'bg-gray-800 text-gray-400 border-gray-700'
                                   }`}
                               >
-                                {isEnabled ? 'ALLOWED (ON)' : 'DISABLED (OFF)'}
+                                {isEnabled ? 'On' : 'Off'}
                               </button>
                             </div>
 
@@ -1041,8 +1041,8 @@ export default function PlansPage() {
                         <button
                           onClick={() => handleTogglePlanCheckpoint(editingPlan.id, cp.destinationId)}
                           className={`px-3 py-1 rounded-lg font-bold text-[11px] border transition-colors ${cp.isActiveInPlan
-                              ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                              : 'bg-gray-800 text-gray-400 border-gray-700'
+                            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                            : 'bg-gray-800 text-gray-400 border-gray-700'
                             }`}
                         >
                           {cp.isActiveInPlan ? 'ON in Plan' : 'OFF in Plan'}

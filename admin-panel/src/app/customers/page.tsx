@@ -197,7 +197,7 @@ export default function CustomersPage() {
       {/* Customer Detail View Modal */}
       {selectedCustomer && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-5xl lg:max-w-6xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
             {/* Modal Header */}
             <div className="p-6 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-10">
               <div className="flex items-center space-x-3">
