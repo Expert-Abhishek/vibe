@@ -98,22 +98,39 @@ export default function TripsHistoryScreen() {
     blue: '#3B82F6',
   };
 
-  // Check active trip on mount if tripIdParam is missing
+  // Check active trip on mount and sync bottom tab bar "Trips" with /trip-status
   useEffect(() => {
-    async function checkActiveTrip() {
+    async function checkAndRedirectActiveTrip() {
       const session = getUserSessionSync();
       const uId = session?.id;
-      if (!tripIdParam && uId) {
+      let targetId = tripIdParam || effectiveTripId;
+
+      if (!targetId && uId) {
         try {
           const res = await fetchActiveTripApi(uId);
           if (res && res.hasActiveTrip && res.trip) {
-            const tid = String(res.trip.id || res.trip.tripId || '');
-            if (tid) setEffectiveTripId(tid);
+            targetId = String(res.trip.id || res.trip.tripId || '');
           }
         } catch (e) {}
       }
+
+      if (!targetId && Array.isArray(adminState.userTrips)) {
+        const localActive = adminState.userTrips.find(t => {
+          if (!t) return false;
+          const st = String(t.status || '').toLowerCase();
+          return !st.includes('cancel') && !st.includes('decline') && !st.includes('complete') && !st.includes('finish') && st !== 'done';
+        });
+        if (localActive) {
+          targetId = String(localActive.id || (localActive as any).tripId || '');
+        }
+      }
+
+      if (targetId) {
+        setEffectiveTripId(targetId);
+        router.replace({ pathname: '/trip-status', params: { tripId: targetId } });
+      }
     }
-    checkActiveTrip();
+    checkAndRedirectActiveTrip();
   }, [tripIdParam]);
 
   const hasHandledTerminalStateRef = useRef(false);
@@ -283,10 +300,12 @@ export default function TripsHistoryScreen() {
 
     const handleCancelled = () => {
       setTripStatus('CANCELLED');
-      router.navigate('/(tabs)/history');
-      setTimeout(() => {
-        Alert.alert('Trip Cancelled', 'This trip has been cancelled.');
-      }, 300);
+      if (Array.isArray(adminState.userTrips)) {
+        adminState.userTrips = adminState.userTrips.filter(t => t && String(t.id) !== String(effectiveTripId || tripIdParam));
+      }
+      Alert.alert('Trip Cancelled', 'This booking was cancelled by Admin/Driver.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)' as any) }
+      ]);
     };
 
     const handleLocationStream = (data: any) => {

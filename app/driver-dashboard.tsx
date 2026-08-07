@@ -57,7 +57,42 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import MapView, { Marker } from '@/components/react-native-maps';
+import MapView, { Marker, Polyline } from '@/components/react-native-maps';
+
+function generateRoadCurvePolyline(points: Array<{ latitude: number; longitude: number }>) {
+  if (!points || points.length < 2) return points || [];
+  const result: Array<{ latitude: number; longitude: number }> = [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+
+    if (isNaN(p1.latitude) || isNaN(p1.longitude) || isNaN(p2.latitude) || isNaN(p2.longitude)) continue;
+
+    const steps = 14;
+    const dLat = p2.latitude - p1.latitude;
+    const dLng = p2.longitude - p1.longitude;
+    const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+    const perpLat = -dLng;
+    const perpLng = dLat;
+    const curveAmp = (i % 2 === 0 ? 0.12 : -0.12) * dist;
+
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const tLat = p1.latitude + dLat * t;
+      const tLng = p1.longitude + dLng * t;
+
+      const offsetFactor = Math.sin(t * Math.PI) * Math.sin(t * Math.PI * 2 + (i * 0.5));
+      const lat = tLat + perpLat * curveAmp * offsetFactor;
+      const lng = tLng + perpLng * curveAmp * offsetFactor;
+
+      result.push({ latitude: lat, longitude: lng });
+    }
+  }
+
+  return result.length > 0 ? result : points;
+}
 
 interface ActiveRequest {
   touristName: string;
@@ -883,11 +918,30 @@ export default function DriverDashboardScreen() {
 
       const handleTripCancelled = (cancelData: any) => {
         console.log('[DriverDashboard] ❌ Received real-time trip_cancelled event:', cancelData);
-        setActiveTrip(null);
-        setIncomingRequest(null);
-        setRequestVisible(false);
-        sendLocalNotification('Trip Cancelled', 'The tourist has cancelled the trip request.');
-        showError('Trip Cancelled', 'The trip was cancelled by tourist.');
+        if (!cancelData) return;
+
+        const cancelTripId = String(cancelData.tripId || cancelData.id || '').toLowerCase().trim();
+
+        // Dismiss incoming request popup if it matches cancelled trip
+        if (incomingRequest) {
+          const incId = String(incomingRequest.id || incomingRequest.tripId || '').toLowerCase().trim();
+          if (cancelTripId && incId === cancelTripId) {
+            setIncomingRequest(null);
+            setRequestVisible(false);
+          }
+        }
+
+        // ONLY clear active trip and show toast if this trip was active for THIS driver!
+        if (activeTrip) {
+          const actId = String(activeTrip.id || activeTrip.tripId || '').toLowerCase().trim();
+          if (!cancelTripId || actId === cancelTripId) {
+            setActiveTrip(null);
+            setIncomingRequest(null);
+            setRequestVisible(false);
+            sendLocalNotification('Trip Cancelled', 'Your active trip was cancelled.');
+            showError('Trip Cancelled', 'Your active trip was cancelled by user/admin.');
+          }
+        }
       };
 
       socket.on('trip_request', handleIncomingTripData);
@@ -1736,25 +1790,56 @@ export default function DriverDashboardScreen() {
                     provider="google"
                     style={StyleSheet.absoluteFillObject}
                     initialRegion={{
-                      latitude: 12.9982,
-                      longitude: 77.5920,
-                      latitudeDelta: 0.15,
-                      longitudeDelta: 0.15,
+                      latitude: activeTrip.pickupLat || 12.9716,
+                      longitude: activeTrip.pickupLng || 77.5946,
+                      latitudeDelta: 0.1,
+                      longitudeDelta: 0.1,
                     }}
                   >
-                    {tripPhase === 'pickup' ? (
-                      <Marker
-                        coordinate={{ latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 }}
-                        title="Pickup Location"
-                        pinColor={colors.amber}
-                      />
-                    ) : (
-                      <Marker
-                        coordinate={{ latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }}
-                        title="Dropoff Location"
-                        pinColor="#ef4444"
-                      />
-                    )}
+                    <Marker
+                      coordinate={{ latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 }}
+                      title="Pickup Location"
+                      description={activeTrip.pickup}
+                      pinColor={colors.amber}
+                    />
+
+                    <Marker
+                      coordinate={{ latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }}
+                      title="Dropoff Location"
+                      description={activeTrip.drop}
+                      pinColor="#ef4444"
+                    />
+
+                    {Array.isArray(activeTrip.checkpoints) && activeTrip.checkpoints.map((cp: any, idx: number) => {
+                      const lat = parseFloat(cp.latitude || cp.lat);
+                      const lng = parseFloat(cp.longitude || cp.lng);
+                      if (isNaN(lat) || isNaN(lng)) return null;
+                      return (
+                        <Marker
+                          key={idx}
+                          coordinate={{ latitude: lat, longitude: lng }}
+                          title={`Stop #${idx + 1}`}
+                          description={typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp)}
+                          pinColor="#3B82F6"
+                        />
+                      );
+                    })}
+
+                    {Polyline && (() => {
+                      const pts = [
+                        { latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 },
+                        ...(Array.isArray(activeTrip.checkpoints) ? activeTrip.checkpoints.map((c: any) => ({ latitude: parseFloat(c.latitude || c.lat), longitude: parseFloat(c.longitude || c.lng) })).filter((c: any) => !isNaN(c.latitude) && !isNaN(c.longitude)) : []),
+                        { latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }
+                      ];
+                      if (pts.length < 2) return null;
+                      const curved = generateRoadCurvePolyline(pts);
+                      return (
+                        <>
+                          <Polyline coordinates={curved} strokeColor="rgba(0,0,0,0.4)" strokeWidth={7} />
+                          <Polyline coordinates={curved} strokeColor="#F5C518" strokeWidth={4} />
+                        </>
+                      );
+                    })()}
                   </MapView>
                 )}
               </View>
@@ -1770,42 +1855,70 @@ export default function DriverDashboardScreen() {
                       Cab Trip · Est Payout: ₹{activeTrip.estimatedFare}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={{ backgroundColor: '#10B981', paddingVertical: scale(6), paddingHorizontal: scale(10), borderRadius: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(4) }}
-                    onPress={() => {
-                      const ph = (activeTrip as any)?.touristPhone || (activeTrip as any)?.phone || (activeTrip as any)?.customerPhone || '+91 9650830901';
-                      Linking.openURL(`tel:${ph}`);
-                    }}
-                  >
-                    <MaterialIcons name="phone" size={scale(14)} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(11) }}>Call User</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                    {/* Green Circular Call User Button */}
+                    <TouchableOpacity
+                      style={{
+                        width: scale(38),
+                        height: scale(38),
+                        borderRadius: scale(19),
+                        backgroundColor: '#10B981',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        shadowColor: '#10B981',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}
+                      onPress={() => {
+                        const ph = (activeTrip as any)?.touristPhone || (activeTrip as any)?.phone || (activeTrip as any)?.customerPhone || '+91 9650830901';
+                        Linking.openURL(`tel:${ph}`);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="phone" size={scale(20)} color="#FFFFFF" />
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={{ backgroundColor: '#DC2626', paddingVertical: scale(6), paddingHorizontal: scale(10), borderRadius: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(4) }}
-                    onPress={() => {
-                      Alert.alert(
-                        '📞 Request Active Trip Cancellation',
-                        'Active trips require Admin verification before cancellation.\n\nPlease call Admin Support directly to state your cancellation reason. Admin will verify and process the trip cancellation.',
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: '📞 Call Admin Support',
-                            onPress: () => {
-                              try {
-                                Linking.openURL('tel:919876543210');
-                              } catch (e) {
-                                Alert.alert('Admin Support', 'Please call Admin Support at +91 9876543210 to cancel active trip.');
-                              }
+                    {/* Red Circular Support / Cancel Request Button */}
+                    <TouchableOpacity
+                      style={{
+                        width: scale(38),
+                        height: scale(38),
+                        borderRadius: scale(19),
+                        backgroundColor: '#DC2626',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        shadowColor: '#DC2626',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}
+                      onPress={() => {
+                        Alert.alert(
+                          '📞 Request Active Trip Cancellation',
+                          'Active trips require Admin verification before cancellation.\n\nPlease call Admin Support directly to state your cancellation reason. Admin will verify and process the trip cancellation.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: '📞 Call Admin Support',
+                              onPress: () => {
+                                try {
+                                  Linking.openURL('tel:919876543210');
+                                } catch (e) {
+                                  Alert.alert('Admin Support', 'Please call Admin Support at +91 9876543210 to cancel active trip.');
+                                }
+                              },
                             },
-                          },
-                        ]
-                      );
-                    }}
-                  >
-                    <MaterialIcons name="phone-in-talk" size={scale(14)} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(11) }}>Cancel Request</Text>
-                  </TouchableOpacity>
+                          ]
+                        );
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="support-agent" size={scale(20)} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {tripPhase === 'pickup' ? (

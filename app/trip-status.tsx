@@ -1,16 +1,16 @@
 import NotificationModal from '@/components/NotificationModal';
-import LanguageSelector from '@/src/components/LanguageSelector';
-import { useTranslation } from 'react-i18next';
 import { adminState } from '@/constants/admin-state';
 import { cancelTripApi, fetchLiveLocationApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { getSocket, initSocketService, joinTripRoom } from '@src/services/socketService';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,41 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
+
+function generateRoadCurvePolyline(points: Array<{ latitude: number; longitude: number }>) {
+  if (!points || points.length < 2) return points || [];
+  const result: Array<{ latitude: number; longitude: number }> = [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+
+    if (isNaN(p1.latitude) || isNaN(p1.longitude) || isNaN(p2.latitude) || isNaN(p2.longitude)) continue;
+
+    const steps = 14;
+    const dLat = p2.latitude - p1.latitude;
+    const dLng = p2.longitude - p1.longitude;
+    const dist = Math.sqrt(dLat * dLat + dLng * dLng);
+
+    const perpLat = -dLng;
+    const perpLng = dLat;
+    const curveAmp = (i % 2 === 0 ? 0.12 : -0.12) * dist;
+
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const tLat = p1.latitude + dLat * t;
+      const tLng = p1.longitude + dLng * t;
+
+      const offsetFactor = Math.sin(t * Math.PI) * Math.sin(t * Math.PI * 2 + (i * 0.5));
+      const lat = tLat + perpLat * curveAmp * offsetFactor;
+      const lng = tLng + perpLng * curveAmp * offsetFactor;
+
+      result.push({ latitude: lat, longitude: lng });
+    }
+  }
+
+  return result.length > 0 ? result : points;
+}
 
 export default function TripStatusScreen() {
   const { t } = useTranslation();
@@ -172,8 +207,11 @@ export default function TripStatusScreen() {
           }
           if (statusLower.includes('cancelled') || statusLower.includes('declined')) {
             hasHandledTerminalStateRef.current = true;
-            Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
-              { text: 'OK', onPress: () => router.navigate('/(tabs)/history') }
+            if (Array.isArray(adminState.userTrips)) {
+              adminState.userTrips = adminState.userTrips.filter(t => t && String(t.id) !== String(tripIdParam));
+            }
+            Alert.alert('Trip Cancelled', 'This booking was cancelled by Admin/Driver.', [
+              { text: 'OK', onPress: () => router.replace('/(tabs)' as any) }
             ]);
             return;
           }
@@ -265,8 +303,11 @@ export default function TripStatusScreen() {
       if (hasHandledTerminalStateRef.current) return;
       hasHandledTerminalStateRef.current = true;
       setTripStatus('CANCELLED');
-      Alert.alert('Trip Cancelled', 'This booking was cancelled.', [
-        { text: 'OK', onPress: () => router.replace('/(tabs)/history') }
+      if (Array.isArray(adminState.userTrips)) {
+        adminState.userTrips = adminState.userTrips.filter(t => t && String(t.id) !== String(tripIdParam));
+      }
+      Alert.alert('Trip Cancelled', 'This booking was cancelled by Admin/Driver.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)' as any) }
       ]);
     };
 
@@ -583,14 +624,24 @@ export default function TripStatusScreen() {
                   pinColor="#EF4444"
                 />
 
-                {/* Connected Live Route Polyline */}
-                {Polyline && connectedPoints.length >= 2 && (
-                  <Polyline
-                    coordinates={connectedPoints}
-                    strokeColor="#F5C518"
-                    strokeWidth={4}
-                  />
-                )}
+                {/* Connected Uber/Rapido Style Road Polyline */}
+                {Polyline && connectedPoints.length >= 2 && (() => {
+                  const curvedRoadPoints = generateRoadCurvePolyline(connectedPoints);
+                  return (
+                    <>
+                      <Polyline
+                        coordinates={curvedRoadPoints}
+                        strokeColor="rgba(0, 0, 0, 0.4)"
+                        strokeWidth={7}
+                      />
+                      <Polyline
+                        coordinates={curvedRoadPoints}
+                        strokeColor="#F5C518"
+                        strokeWidth={4}
+                      />
+                    </>
+                  );
+                })()}
               </MapView>
             );
           })()}
@@ -824,7 +875,7 @@ export default function TripStatusScreen() {
             ) : (
               <>
                 <MaterialIcons name="cancel" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-                <Text style={styles.cancelBtnText}>Withdraw Booking Request</Text>
+                <Text style={styles.cancelBtnText}>Withdraw Trip Request</Text>
               </>
             )}
           </TouchableOpacity>
@@ -852,7 +903,7 @@ export default function TripStatusScreen() {
             }}
           >
             <MaterialIcons name="phone-in-talk" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-            <Text style={styles.cancelBtnText}>Cancel Request (Call Admin to Cancel)</Text>
+            <Text style={styles.cancelBtnText}>CANCEL TRIP</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
