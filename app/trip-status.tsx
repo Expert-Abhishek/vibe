@@ -812,8 +812,8 @@ export default function TripStatusScreen() {
           )}
         </View>
 
-        {/* Cancel Trip Action Button (ONLY ALLOWED WHEN PENDING) */}
-        {statusLower.includes('pending') && (
+        {/* Cancel / Withdraw Action Button for Pending and Active Trips */}
+        {statusLower.includes('pending') ? (
           <TouchableOpacity
             style={[styles.cancelBtn, { backgroundColor: colors.danger }]}
             onPress={handleCancelTrip}
@@ -824,9 +824,35 @@ export default function TripStatusScreen() {
             ) : (
               <>
                 <MaterialIcons name="cancel" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-                <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+                <Text style={styles.cancelBtnText}>Withdraw Booking Request</Text>
               </>
             )}
+          </TouchableOpacity>
+        ) : (!statusLower.includes('cancel') && !statusLower.includes('completed') && !statusLower.includes('done')) && (
+          <TouchableOpacity
+            style={[styles.cancelBtn, { backgroundColor: '#DC2626', marginTop: verticalScale(10) }]}
+            onPress={() => {
+              Alert.alert(
+                '📞 Request Active Trip Cancellation',
+                'Active trips require Admin verification before cancellation.\n\nPlease call Admin Support directly to state your cancellation reason. Admin will verify with the captain/tourist and process the cancellation.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: '📞 Call Admin Support',
+                    onPress: () => {
+                      try {
+                        Linking.openURL('tel:919876543210');
+                      } catch (e) {
+                        Alert.alert('Admin Support', 'Please call Admin Support at +91 9876543210 to cancel your active trip.');
+                      }
+                    },
+                  },
+                ]
+              );
+            }}
+          >
+            <MaterialIcons name="phone-in-talk" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
+            <Text style={styles.cancelBtnText}>Cancel Request (Call Admin to Cancel)</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

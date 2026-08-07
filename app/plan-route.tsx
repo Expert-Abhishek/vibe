@@ -8,7 +8,9 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   DeviceEventEmitter,
+  FlatList,
   Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -70,6 +72,10 @@ export default function PlanRouteScreen() {
   const [stationList, setStationList] = useState<PresetLocation[]>(PRESET_PICKUP_DROP_LOCATIONS);
   const [selectedPickup, setSelectedPickup] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[0]);
   const [selectedDrop, setSelectedDrop] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[1]);
+  const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
+  const [isDropModalOpen, setIsDropModalOpen] = useState(false);
+  const [pickupSearchQuery, setPickupSearchQuery] = useState('');
+  const [dropSearchQuery, setDropSearchQuery] = useState('');
 
   const getInitialTimeParts = () => {
     const d = new Date();
@@ -759,75 +765,216 @@ export default function PlanRouteScreen() {
             {/* PICKUP & DROP LOCATION SELECTOR FOR TOUR PLAN */}
             <View style={{ marginVertical: verticalScale(10), backgroundColor: colors.surface, padding: scale(14), borderRadius: scale(16), borderWidth: 1, borderColor: colors.border }}>
 
-
-              {/* Pickup Location Selector */}
+              {/* Pickup Location Dropdown Button */}
               <View style={{ marginBottom: verticalScale(12) }}>
                 <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', letterSpacing: 0.5, marginBottom: verticalScale(6) }}>
                   PICKUP LOCATION
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {stationList.map((loc) => {
-                    const isSelected = selectedPickup.id === loc.id;
-                    return (
-                      <TouchableOpacity
-                        key={`p_${loc.id}`}
-                        style={{
-                          paddingHorizontal: scale(12),
-                          paddingVertical: verticalScale(8),
-                          borderRadius: scale(10),
-                          borderWidth: 1.5,
-                          borderColor: isSelected ? colors.amber : colors.border,
-                          backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
-                          marginRight: scale(8),
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: scale(6),
-                        }}
-                        onPress={() => setSelectedPickup(loc)}
-                      >
-                        <MaterialIcons name="trip-origin" size={scale(14)} color={isSelected ? colors.amber : colors.textMuted} />
-                        <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: isSelected ? '800' : '600' }}>
-                          {loc.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                    paddingHorizontal: scale(14),
+                    paddingVertical: verticalScale(12),
+                    borderRadius: scale(12),
+                    borderWidth: 1.5,
+                    borderColor: colors.amber,
+                  }}
+                  onPress={() => {
+                    setIsPickupModalOpen(!isPickupModalOpen);
+                    setIsDropModalOpen(false);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), flex: 1 }}>
+                    <MaterialIcons name="trip-origin" size={scale(20)} color={colors.amber} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800' }}>
+                        {selectedPickup.name}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }} numberOfLines={1}>
+                        {selectedPickup.address}
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons name={isPickupModalOpen ? "arrow-drop-up" : "arrow-drop-down"} size={scale(24)} color={colors.amber} />
+                </TouchableOpacity>
+
+                {/* Inline Select Dropdown List */}
+                {isPickupModalOpen && (
+                  <View style={{
+                    marginTop: verticalScale(6),
+                    backgroundColor: isDark ? '#1C1C22' : '#FFFFFF',
+                    borderRadius: scale(12),
+                    borderWidth: 1.5,
+                    borderColor: colors.amber,
+                    padding: scale(10),
+                    maxHeight: verticalScale(220),
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }}>
+                    <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border, marginTop: 0, marginBottom: verticalScale(8), height: scale(38) }]}>
+                      <MaterialIcons name="search" size={scale(18)} color={colors.amber} style={styles.searchIcon} />
+                      <TextInput
+                        placeholder="Search pickup location..."
+                        placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
+                        style={[styles.searchInput, { color: colors.textPrimary, fontSize: moderateFontScale(12) }]}
+                        value={pickupSearchQuery}
+                        onChangeText={setPickupSearchQuery}
+                      />
+                    </View>
+
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: verticalScale(160) }} showsVerticalScrollIndicator={true}>
+                      {stationList
+                        .filter(loc => !pickupSearchQuery.trim() || loc.name.toLowerCase().includes(pickupSearchQuery.toLowerCase()) || loc.address.toLowerCase().includes(pickupSearchQuery.toLowerCase()))
+                        .map((loc) => {
+                          const isSelected = selectedPickup.id === loc.id;
+                          return (
+                            <TouchableOpacity
+                              key={`p_drop_${loc.id}`}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingVertical: verticalScale(10),
+                                paddingHorizontal: scale(10),
+                                borderRadius: scale(8),
+                                backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                                marginBottom: 2,
+                              }}
+                              onPress={() => {
+                                setSelectedPickup(loc);
+                                setIsPickupModalOpen(false);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), flex: 1 }}>
+                                <MaterialIcons name="trip-origin" size={scale(16)} color={isSelected ? colors.amber : colors.textMuted} />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontWeight: isSelected ? '800' : '600', fontSize: moderateFontScale(12.5) }}>
+                                    {loc.name}
+                                  </Text>
+                                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }} numberOfLines={1}>
+                                    {loc.address}
+                                  </Text>
+                                </View>
+                              </View>
+                              {isSelected && <MaterialIcons name="check" size={scale(18)} color={colors.amber} />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
-              {/* Drop Location Selector */}
+              {/* Drop Location Dropdown Button */}
               <View style={{ marginBottom: verticalScale(4) }}>
                 <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', letterSpacing: 0.5, marginBottom: verticalScale(6) }}>
                   DROP LOCATION
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {stationList.map((loc) => {
-                    const isSelected = selectedDrop.id === loc.id;
-                    return (
-                      <TouchableOpacity
-                        key={`d_${loc.id}`}
-                        style={{
-                          paddingHorizontal: scale(12),
-                          paddingVertical: verticalScale(8),
-                          borderRadius: scale(10),
-                          borderWidth: 1.5,
-                          borderColor: isSelected ? colors.amber : colors.border,
-                          backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'rgba(255,255,255,0.03)',
-                          marginRight: scale(8),
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: scale(6),
-                        }}
-                        onPress={() => setSelectedDrop(loc)}
-                      >
-                        <MaterialIcons name="location-on" size={scale(14)} color={isSelected ? '#EF4444' : colors.textMuted} />
-                        <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontSize: moderateFontScale(11.5), fontWeight: isSelected ? '800' : '600' }}>
-                          {loc.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                    paddingHorizontal: scale(14),
+                    paddingVertical: verticalScale(12),
+                    borderRadius: scale(12),
+                    borderWidth: 1.5,
+                    borderColor: '#EF4444',
+                  }}
+                  onPress={() => {
+                    setIsDropModalOpen(!isDropModalOpen);
+                    setIsPickupModalOpen(false);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), flex: 1 }}>
+                    <MaterialIcons name="location-on" size={scale(20)} color="#EF4444" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800' }}>
+                        {selectedDrop.name}
+                      </Text>
+                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }} numberOfLines={1}>
+                        {selectedDrop.address}
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialIcons name={isDropModalOpen ? "arrow-drop-up" : "arrow-drop-down"} size={scale(24)} color="#EF4444" />
+                </TouchableOpacity>
+
+                {/* Inline Select Dropdown List */}
+                {isDropModalOpen && (
+                  <View style={{
+                    marginTop: verticalScale(6),
+                    backgroundColor: isDark ? '#1C1C22' : '#FFFFFF',
+                    borderRadius: scale(12),
+                    borderWidth: 1.5,
+                    borderColor: '#EF4444',
+                    padding: scale(10),
+                    maxHeight: verticalScale(220),
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }}>
+                    <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border, marginTop: 0, marginBottom: verticalScale(8), height: scale(38) }]}>
+                      <MaterialIcons name="search" size={scale(18)} color="#EF4444" style={styles.searchIcon} />
+                      <TextInput
+                        placeholder="Search drop location..."
+                        placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
+                        style={[styles.searchInput, { color: colors.textPrimary, fontSize: moderateFontScale(12) }]}
+                        value={dropSearchQuery}
+                        onChangeText={setDropSearchQuery}
+                      />
+                    </View>
+
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: verticalScale(160) }} showsVerticalScrollIndicator={true}>
+                      {stationList
+                        .filter(loc => !dropSearchQuery.trim() || loc.name.toLowerCase().includes(dropSearchQuery.toLowerCase()) || loc.address.toLowerCase().includes(dropSearchQuery.toLowerCase()))
+                        .map((loc) => {
+                          const isSelected = selectedDrop.id === loc.id;
+                          return (
+                            <TouchableOpacity
+                              key={`d_drop_${loc.id}`}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingVertical: verticalScale(10),
+                                paddingHorizontal: scale(10),
+                                borderRadius: scale(8),
+                                backgroundColor: isSelected ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                                marginBottom: 2,
+                              }}
+                              onPress={() => {
+                                setSelectedDrop(loc);
+                                setIsDropModalOpen(false);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), flex: 1 }}>
+                                <MaterialIcons name="location-on" size={scale(16)} color={isSelected ? '#EF4444' : colors.textMuted} />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ color: isSelected ? '#EF4444' : colors.textPrimary, fontWeight: isSelected ? '800' : '600', fontSize: moderateFontScale(12.5) }}>
+                                    {loc.name}
+                                  </Text>
+                                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }} numberOfLines={1}>
+                                    {loc.address}
+                                  </Text>
+                                </View>
+                              </View>
+                              {isSelected && <MaterialIcons name="check" size={scale(18)} color="#EF4444" />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -837,73 +984,91 @@ export default function PlanRouteScreen() {
                 Select Vehicle Category & Pricing
               </Text>
               <View style={{ gap: scale(8) }}>
-                {[
-                  { key: '5_seater', label: '5 Seater', icon: 'directions-car', capacity: '4 Pax + 2 Bags', desc: 'Comfortable standard AC cab' },
-                  { key: '7_seater', label: '7 Seater', icon: 'airport-shuttle', capacity: '6 Pax + 4 Bags', desc: 'Spacious for family & extra luggage' },
-                  { key: '4x4', label: '4x4 Off-Road', icon: 'terrain', capacity: '4 Pax + Adventure Gear', desc: 'Powerful 4WD for hills & rough terrain' },
-                  { key: 'auto', label: 'Auto Rickshaw', icon: 'electric-rickshaw', capacity: '3 Pax Local Sightseeing', desc: 'Budget-friendly open air tour' },
-                ].map((cat) => {
-                  const isSelected = bookingVehicle === cat.key || (bookingVehicle === '5seater' && cat.key === '5_seater') || (bookingVehicle === '7seater' && cat.key === '7_seater') || (bookingVehicle === '4x4jeep' && cat.key === '4x4');
-                  const catPrice = calculatePackagePrice(selectedPlan, cat.key).computedPrice;
-                  const catDeposit = !adminState.instantBookingEnabled ? Math.round(catPrice * 0.20) : catPrice;
+                {(() => {
+                  const allowedVehicles = (selectedPlan as any)?.allowed_vehicles || (selectedPlan as any)?.allowedVehicles;
+                  const allCategories = [
+                    { key: '5_seater', label: '5 Seater', icon: 'directions-car', capacity: '4 Pax + 2 Bags', desc: 'Comfortable standard AC cab' },
+                    { key: '7_seater', label: '7 Seater', icon: 'airport-shuttle', capacity: '6 Pax + 4 Bags', desc: 'Spacious for family & extra luggage' },
+                    { key: '4x4', label: '4x4 Off-Road', icon: 'terrain', capacity: '4 Pax + Adventure Gear', desc: 'Powerful 4WD for hills & rough terrain' },
+                    { key: 'auto', label: 'Auto Rickshaw', icon: 'electric-rickshaw', capacity: '3 Pax Local Sightseeing', desc: 'Budget-friendly open air tour' },
+                  ];
 
-                  return (
-                    <TouchableOpacity
-                      key={cat.key}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: scale(12),
-                        borderRadius: scale(14),
-                        borderWidth: isSelected ? 2 : 1,
-                        borderColor: isSelected ? colors.amber : colors.border,
-                        backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                      }}
-                      onPress={() => setBookingVehicle(cat.key as any)}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), flex: 1 }}>
-                        <View style={{
-                          width: scale(38),
-                          height: scale(38),
-                          borderRadius: scale(10),
-                          backgroundColor: isSelected ? colors.amber : 'rgba(255, 255, 255, 0.08)',
-                          justifyContent: 'center',
+                  const filteredCategories = allCategories.filter((cat) => {
+                    if (!allowedVehicles) return true;
+                    return allowedVehicles[cat.key] !== false;
+                  });
+
+                  if (filteredCategories.length === 0) {
+                    return (
+                      <View style={{ padding: scale(12), backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(12), border: '1px solid ' + colors.border }}>
+                        <Text style={{ color: colors.textMuted, textAlign: 'center' }}>No vehicle categories enabled for this tour package.</Text>
+                      </View>
+                    );
+                  }
+
+                  return filteredCategories.map((cat) => {
+                    const isSelected = bookingVehicle === cat.key || (bookingVehicle === '5seater' && cat.key === '5_seater') || (bookingVehicle === '7seater' && cat.key === '7_seater') || (bookingVehicle === '4x4jeep' && cat.key === '4x4');
+                    const catPrice = calculatePackagePrice(selectedPlan, cat.key).computedPrice;
+                    const catDeposit = !adminState.instantBookingEnabled ? Math.round(catPrice * 0.20) : catPrice;
+
+                    return (
+                      <TouchableOpacity
+                        key={cat.key}
+                        style={{
+                          flexDirection: 'row',
                           alignItems: 'center',
-                        }}>
-                          <MaterialIcons name={cat.icon as any} size={scale(22)} color={isSelected ? '#101014' : colors.textPrimary} />
-                        </View>
-
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-                            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
-                              {cat.label}
-                            </Text>
-                            {isSelected && (
-                              <View style={{ backgroundColor: colors.amber, paddingHorizontal: scale(6), paddingVertical: 1, borderRadius: scale(4) }}>
-                                <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(9) }}>SELECTED</Text>
-                              </View>
-                            )}
+                          justifyContent: 'space-between',
+                          padding: scale(12),
+                          borderRadius: scale(14),
+                          borderWidth: isSelected ? 2 : 1,
+                          borderColor: isSelected ? colors.amber : colors.border,
+                          backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                        }}
+                        onPress={() => setBookingVehicle(cat.key as any)}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), flex: 1 }}>
+                          <View style={{
+                            width: scale(38),
+                            height: scale(38),
+                            borderRadius: scale(10),
+                            backgroundColor: isSelected ? colors.amber : 'rgba(255, 255, 255, 0.08)',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}>
+                            <MaterialIcons name={cat.icon as any} size={scale(22)} color={isSelected ? '#101014' : colors.textPrimary} />
                           </View>
-                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 2 }}>
-                            {cat.capacity} • {cat.desc}
-                          </Text>
-                        </View>
-                      </View>
 
-                      <View style={{ alignItems: 'flex-end', marginLeft: scale(8) }}>
-                        <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>
-                          ₹{catPrice}
-                        </Text>
-                        {!adminState.instantBookingEnabled && (
-                          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5) }}>
-                            Deposit ₹{catDeposit}
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                              <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(13) }}>
+                                {cat.label}
+                              </Text>
+                              {isSelected && (
+                                <View style={{ backgroundColor: colors.amber, paddingHorizontal: scale(6), paddingVertical: 1, borderRadius: scale(4) }}>
+                                  <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(9) }}>SELECTED</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 2 }}>
+                              {cat.capacity} • {cat.desc}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end', marginLeft: scale(8) }}>
+                          <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>
+                            ₹{catPrice}
                           </Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+                          {!adminState.instantBookingEnabled && (
+                            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(9.5) }}>
+                              Deposit ₹{catDeposit}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
               </View>
             </View>
 

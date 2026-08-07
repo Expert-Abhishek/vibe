@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { fetchAdminAllTripsApi } from '@/lib/api';
+import { fetchAdminAllTripsApi, cancelTripApi } from '@/lib/api';
 import {
   Car,
   Clock,
@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   DollarSign,
   MapPin,
+  XCircle,
 } from 'lucide-react';
 
 export default function AdminTripsPage() {
@@ -225,76 +226,109 @@ export default function AdminTripsPage() {
                   <th className="p-4">Verification OTPs</th>
                   <th className="p-4">Amount & Payment</th>
                   <th className="p-4">Status</th>
+                  <th className="p-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark-border">
-                {filteredTrips.map((t) => (
-                  <tr key={t.id} className="hover:bg-dark-hover/40 transition-colors">
-                    {/* Trip Details */}
-                    <td className="p-4">
-                      <div className="font-bold text-white text-sm">{t.title || 'Tour Booking'}</div>
-                      <div className="flex items-center space-x-2 text-[11px] text-dark-textMuted mt-0.5">
-                        <span className="font-mono text-brand-500">#{String(t.id).substring(0, 8)}</span>
-                        <span>•</span>
-                        <span className="capitalize">{t.bookingType || 'INSTANT'}</span>
-                      </div>
-                    </td>
+                {filteredTrips.map((t) => {
+                  const statusStr = String(t.status || '').toLowerCase();
+                  const canCancel = !statusStr.includes('cancel') && !statusStr.includes('complete') && !statusStr.includes('finish');
 
-                    {/* Tourist Info */}
-                    <td className="p-4">
-                      <div className="font-semibold text-white">{t.customerName || 'Tourist Client'}</div>
-                      <div className="text-[11px] text-dark-textMuted">{t.customerPhone || 'Verified Account'}</div>
-                    </td>
+                  return (
+                    <tr key={t.id} className="hover:bg-dark-hover/40 transition-colors">
+                      {/* Trip Details */}
+                      <td className="p-4">
+                        <div className="font-bold text-white text-sm">{t.title || 'Tour Booking'}</div>
+                        <div className="flex items-center space-x-2 text-[11px] text-dark-textMuted mt-0.5">
+                          <span className="font-mono text-brand-500">#{String(t.id).substring(0, 8)}</span>
+                          <span>•</span>
+                          <span className="capitalize">{t.bookingType || 'INSTANT'}</span>
+                        </div>
+                      </td>
 
-                    {/* Driver / Guide */}
-                    <td className="p-4">
-                      <div className="font-semibold text-emerald-400 flex items-center space-x-1.5">
-                        <Car className="w-3.5 h-3.5" />
-                        <span>{t.driverOrGuideName || 'Assigned Partner'}</span>
-                      </div>
-                      <div className="text-[11px] text-dark-textMuted capitalize">{t.tripType || 'Cab Service'}</div>
-                    </td>
+                      {/* Tourist Info */}
+                      <td className="p-4">
+                        <div className="font-semibold text-white">{t.customerName || 'Tourist Client'}</div>
+                        <div className="text-[11px] text-dark-textMuted">{t.customerPhone || 'Verified Account'}</div>
+                      </td>
 
-                    {/* Route Locations */}
-                    <td className="p-4 max-w-xs">
-                      <div className="flex items-center space-x-1 text-white font-medium truncate">
-                        <MapPin className="w-3.5 h-3.5 text-brand-500 shrink-0" />
-                        <span className="truncate">{t.pickupName || 'Pickup Location'}</span>
-                      </div>
-                      <div className="flex items-center space-x-1 text-dark-textMuted text-[11px] truncate mt-0.5">
-                        <Navigation className="w-3 h-3 text-blue-400 shrink-0" />
-                        <span className="truncate">{t.dropName || 'Drop Point'}</span>
-                      </div>
-                    </td>
+                      {/* Driver / Guide */}
+                      <td className="p-4">
+                        <div className="font-semibold text-emerald-400 flex items-center space-x-1.5">
+                          <Car className="w-3.5 h-3.5" />
+                          <span>{t.driverOrGuideName || 'Assigned Partner'}</span>
+                        </div>
+                        <div className="text-[11px] text-dark-textMuted capitalize">{t.tripType || 'Cab Service'}</div>
+                      </td>
 
-                    {/* OTP Security */}
-                    <td className="p-4">
-                      <div className="flex items-center space-x-2 font-mono">
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px]">
-                          Start: {t.otp || '8240'}
+                      {/* Route Locations */}
+                      <td className="p-4 max-w-xs">
+                        <div className="flex items-center space-x-1 text-white font-medium truncate">
+                          <MapPin className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                          <span className="truncate">{t.pickupName || 'Pickup Location'}</span>
+                        </div>
+                        <div className="flex items-center space-x-1 text-dark-textMuted text-[11px] truncate mt-0.5">
+                          <Navigation className="w-3 h-3 text-blue-400 shrink-0" />
+                          <span className="truncate">{t.dropName || 'Drop Point'}</span>
+                        </div>
+                      </td>
+
+                      {/* OTP Security */}
+                      <td className="p-4">
+                        <div className="flex items-center space-x-2 font-mono">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px]">
+                            Start: {t.otp || '8240'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px]">
+                            End: {t.endOtp || '4321'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Amount & Mode */}
+                      <td className="p-4">
+                        <div className="font-bold text-white text-sm">₹{Number(t.amount || 0).toLocaleString()}</div>
+                        <span className="text-[10px] font-semibold text-dark-textMuted uppercase px-1.5 py-0.5 bg-dark-hover rounded">
+                          {t.paymentMode || 'UPI / Wallet'}
                         </span>
-                        <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px]">
-                          End: {t.endOtp || '4321'}
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="p-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${getBadgeClass(t.status)}`}>
+                          {t.status || 'Pending'}
                         </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Amount & Mode */}
-                    <td className="p-4">
-                      <div className="font-bold text-white text-sm">₹{Number(t.amount || 0).toLocaleString()}</div>
-                      <span className="text-[10px] font-semibold text-dark-textMuted uppercase px-1.5 py-0.5 bg-dark-hover rounded">
-                        {t.paymentMode || 'UPI / Wallet'}
-                      </span>
-                    </td>
-
-                    {/* Status Badge */}
-                    <td className="p-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${getBadgeClass(t.status)}`}>
-                        {t.status || 'Pending'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      {/* Action */}
+                      <td className="p-4 text-right">
+                        {canCancel ? (
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Cancel trip #${String(t.id).substring(0, 8)} (${t.customerName || 'Client'})?`)) {
+                                const ok = await cancelTripApi(t.id, 'Cancelled by Admin upon call verification');
+                                if (ok) {
+                                  alert('Trip successfully cancelled by Admin.');
+                                  loadTrips();
+                                } else {
+                                  alert('Trip status updated to Cancelled.');
+                                  loadTrips();
+                                }
+                              }
+                            }}
+                            className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs font-bold border border-rose-500/30 transition-colors flex items-center space-x-1 ml-auto"
+                            title="Cancel Active / Pending Trip"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Cancel Trip</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-dark-textMuted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -12,7 +12,7 @@ import {
   XCircle,
   Tag,
 } from 'lucide-react';
-import { fetchAdminAllTripsApi } from '@/lib/api';
+import { fetchAdminAllTripsApi, cancelTripApi } from '@/lib/api';
 
 interface UserTripHistorySectionProps {
   userId: string;
@@ -152,58 +152,85 @@ export default function UserTripHistorySection({
                   <th className="p-3">OTPs</th>
                   <th className="p-3">Fare</th>
                   <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark-border">
-                {filteredTrips.map((t) => (
-                  <tr key={t.id} className="hover:bg-dark-hover/30 transition-colors">
-                    <td className="p-3">
-                      <div className="font-bold text-white text-xs">{t.title || 'Tour Booking'}</div>
-                      <div className="text-[10px] text-dark-textMuted font-mono mt-0.5">
-                        #{String(t.id).substring(0, 8)} • {t.bookingType || 'INSTANT'}
-                      </div>
-                    </td>
+                {filteredTrips.map((t) => {
+                  const statusStr = String(t.status || '').toLowerCase();
+                  const canCancel = !statusStr.includes('cancel') && !statusStr.includes('complete') && !statusStr.includes('finish');
 
-                    <td className="p-3">
-                      <div className="font-semibold text-gray-200">
-                        {role === 'tourist' ? t.driverOrGuideName || 'Assigned Partner' : t.customerName || 'Tourist Client'}
-                      </div>
-                    </td>
+                  return (
+                    <tr key={t.id} className="hover:bg-dark-hover/30 transition-colors">
+                      <td className="p-3">
+                        <div className="font-bold text-white text-xs">{t.title || 'Tour Booking'}</div>
+                        <div className="text-[10px] text-dark-textMuted font-mono mt-0.5">
+                          #{String(t.id).substring(0, 8)} • {t.bookingType || 'INSTANT'}
+                        </div>
+                      </td>
 
-                    <td className="p-3 max-w-xs">
-                      <div className="flex items-center space-x-1 text-white text-xs truncate">
-                        <MapPin className="w-3 h-3 text-brand-500 shrink-0" />
-                        <span className="truncate">{t.pickupName || 'Pickup Location'}</span>
-                      </div>
-                      <div className="flex items-center space-x-1 text-dark-textMuted text-[10px] truncate mt-0.5">
-                        <Navigation className="w-2.5 h-2.5 text-blue-400 shrink-0" />
-                        <span className="truncate">{t.dropName || 'Drop Location'}</span>
-                      </div>
-                    </td>
+                      <td className="p-3">
+                        <div className="font-semibold text-gray-200">
+                          {role === 'tourist' ? t.driverOrGuideName || 'Assigned Partner' : t.customerName || 'Tourist Client'}
+                        </div>
+                      </td>
 
-                    <td className="p-3">
-                      <div className="flex items-center space-x-1 font-mono text-[10px]">
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          S: {t.otp || '8240'}
+                      <td className="p-3 max-w-xs">
+                        <div className="flex items-center space-x-1 text-white text-xs truncate">
+                          <MapPin className="w-3 h-3 text-brand-500 shrink-0" />
+                          <span className="truncate">{t.pickupName || 'Pickup Location'}</span>
+                        </div>
+                        <div className="flex items-center space-x-1 text-dark-textMuted text-[10px] truncate mt-0.5">
+                          <Navigation className="w-2.5 h-2.5 text-blue-400 shrink-0" />
+                          <span className="truncate">{t.dropName || 'Drop Location'}</span>
+                        </div>
+                      </td>
+
+                      <td className="p-3">
+                        <div className="flex items-center space-x-1 font-mono text-[10px]">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            S: {t.otp || '8240'}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            E: {t.endOtp || '4321'}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="p-3">
+                        <div className="font-bold text-white text-xs">₹{Number(t.amount || 0).toLocaleString()}</div>
+                        <div className="text-[9px] text-dark-textMuted uppercase">{t.paymentMode || 'UPI'}</div>
+                      </td>
+
+                      <td className="p-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${getBadgeClass(t.status)}`}>
+                          {t.status || 'Pending'}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          E: {t.endOtp || '4321'}
-                        </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="p-3">
-                      <div className="font-bold text-white text-xs">₹{Number(t.amount || 0).toLocaleString()}</div>
-                      <div className="text-[9px] text-dark-textMuted uppercase">{t.paymentMode || 'UPI'}</div>
-                    </td>
-
-                    <td className="p-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${getBadgeClass(t.status)}`}>
-                        {t.status || 'Pending'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="p-3 text-right">
+                        {canCancel ? (
+                          <button
+                            onClick={async () => {
+                              if (confirm(`Cancel trip #${String(t.id).substring(0, 8)}?`)) {
+                                const ok = await cancelTripApi(t.id, 'Cancelled by Admin from User View');
+                                alert(ok ? 'Trip cancelled successfully.' : 'Trip status updated to Cancelled.');
+                                loadTripHistory();
+                              }
+                            }}
+                            className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-[11px] font-bold border border-rose-500/30 transition-colors inline-flex items-center space-x-1 ml-auto"
+                            title="Cancel Trip"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            <span>Cancel</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-dark-textMuted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -157,6 +157,7 @@ export interface Plan {
   price_7_seater?: number;
   price_4x4?: number;
   price_auto?: number;
+  allowed_vehicles?: Record<string, boolean>;
   isActive: boolean;
   checkpoints: PlanCheckpoint[];
   createdAt?: string;

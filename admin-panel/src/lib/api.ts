@@ -957,6 +957,22 @@ export async function fetchAdminAllTripsApi(): Promise<any[]> {
   return [];
 }
 
+export async function cancelTripApi(tripId: string, reason?: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/trips/${tripId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cancelledBy: 'admin', role: 'admin', reason: reason || 'Cancelled by Admin' }),
+    });
+    const data = await res.json();
+    return data.success;
+  } catch (e) {
+    console.warn('Error cancelling trip on backend:', e);
+    return false;
+  }
+}
+
+
 
 
 

@@ -1,11 +1,10 @@
 // Optional dev logging config
-if (__DEV__) {
-  try {
-    require('../ReactotronConfig');
-  } catch (e) { }
-}
+// if (__DEV__) {
+//   try {
+//     require('../ReactotronConfig');
+//   } catch (e) { }
+// }
 
-import { Platform } from 'react-native';
 
 // Universal Safeguard for WakeLock / KeepAwake permission errors across Native & Web
 if (typeof window !== 'undefined' && window.addEventListener) {
@@ -23,7 +22,7 @@ if (typeof window !== 'undefined' && window.addEventListener) {
         if (event.stopPropagation) event.stopPropagation();
       }
     });
-  } catch (e) {}
+  } catch (e) { }
 }
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
@@ -38,8 +37,8 @@ import { getUserSessionSync } from '@/constants/authStore';
 import { getExpoPushToken } from '@/constants/notifications';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ModalProvider } from '@src/context/ModalContext';
-import { initSocketService } from '@src/services/socketService';
 import '@src/i18n';
+import { initSocketService } from '@src/services/socketService';
 
 export const unstable_settings = {
   anchor: '(tabs)',

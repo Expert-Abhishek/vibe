@@ -1771,14 +1771,40 @@ export default function DriverDashboardScreen() {
                     </Text>
                   </View>
                   <TouchableOpacity
-                    style={{ backgroundColor: '#10B981', paddingVertical: scale(6), paddingHorizontal: scale(12), borderRadius: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(4) }}
+                    style={{ backgroundColor: '#10B981', paddingVertical: scale(6), paddingHorizontal: scale(10), borderRadius: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(4) }}
                     onPress={() => {
                       const ph = (activeTrip as any)?.touristPhone || (activeTrip as any)?.phone || (activeTrip as any)?.customerPhone || '+91 9650830901';
                       Linking.openURL(`tel:${ph}`);
                     }}
                   >
-                    <MaterialIcons name="phone" size={scale(16)} color="#FFFFFF" />
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(12) }}>Call User</Text>
+                    <MaterialIcons name="phone" size={scale(14)} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(11) }}>Call User</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#DC2626', paddingVertical: scale(6), paddingHorizontal: scale(10), borderRadius: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(4) }}
+                    onPress={() => {
+                      Alert.alert(
+                        '📞 Request Active Trip Cancellation',
+                        'Active trips require Admin verification before cancellation.\n\nPlease call Admin Support directly to state your cancellation reason. Admin will verify and process the trip cancellation.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: '📞 Call Admin Support',
+                            onPress: () => {
+                              try {
+                                Linking.openURL('tel:919876543210');
+                              } catch (e) {
+                                Alert.alert('Admin Support', 'Please call Admin Support at +91 9876543210 to cancel active trip.');
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <MaterialIcons name="phone-in-talk" size={scale(14)} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(11) }}>Cancel Request</Text>
                   </TouchableOpacity>
                 </View>
 

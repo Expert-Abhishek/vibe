@@ -61,6 +61,12 @@ export default function PlansPage() {
     price_7_seater: 6749,
     price_4x4: 7999,
     price_auto: 3249,
+    allowed_vehicles: {
+      '5_seater': true,
+      '7_seater': true,
+      '4x4': true,
+      'auto': true,
+    } as Record<string, boolean>,
     selectedDestinationIds: [] as string[],
     isActive: true,
   });
@@ -78,6 +84,12 @@ export default function PlansPage() {
     price_7_seater: 0,
     price_4x4: 0,
     price_auto: 0,
+    allowed_vehicles: {
+      '5_seater': true,
+      '7_seater': true,
+      '4x4': true,
+      'auto': true,
+    } as Record<string, boolean>,
     isActive: true,
   });
 
@@ -158,6 +170,7 @@ export default function PlansPage() {
       price_7_seater: p7,
       price_4x4: p4x4,
       price_auto: pAuto,
+      allowed_vehicles: addPlanForm.allowed_vehicles,
       destinationIds: addPlanForm.selectedDestinationIds,
     });
 
@@ -188,6 +201,7 @@ export default function PlansPage() {
       price_7_seater: p7,
       price_4x4: p4x4,
       price_auto: pAuto,
+      allowed_vehicles: addPlanForm.allowed_vehicles,
       isActive: addPlanForm.isActive,
       checkpoints: populatedCheckpoints,
     };
@@ -227,6 +241,12 @@ export default function PlansPage() {
       price_7_seater: plan.price_7_seater || Math.round(baseP * 1.35),
       price_4x4: plan.price_4x4 || Math.round(baseP * 1.60),
       price_auto: plan.price_auto || Math.round(baseP * 0.65),
+      allowed_vehicles: plan.allowed_vehicles || {
+        '5_seater': true,
+        '7_seater': true,
+        '4x4': true,
+        'auto': true,
+      },
       isActive: plan.isActive,
     });
     setIsEditPlanModalOpen(true);
@@ -730,6 +750,51 @@ export default function PlansPage() {
                   </div>
                 </div>
 
+                {/* Allowed Vehicle Category Toggles */}
+                <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-2">
+                  <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
+                    Allowed Vehicle Categories for this Plan
+                  </span>
+                  <p className="text-[11px] text-gray-400">
+                    Toggle ON the vehicle types permitted for this tour plan package. Users will only see enabled vehicle types.
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    {[
+                      { key: '5_seater', label: '🚘 5-Seater' },
+                      { key: '7_seater', label: '🚐 7-Seater' },
+                      { key: '4x4', label: '🏔️ 4x4 Off-Road' },
+                      { key: 'auto', label: '🛺 Auto Rickshaw' },
+                    ].map(item => {
+                      const isEnabled = addPlanForm.allowed_vehicles?.[item.key] !== false;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() =>
+                            setAddPlanForm({
+                              ...addPlanForm,
+                              allowed_vehicles: {
+                                ...addPlanForm.allowed_vehicles,
+                                [item.key]: !isEnabled,
+                              },
+                            })
+                          }
+                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${
+                            isEnabled
+                              ? 'bg-brand-500/20 text-brand-300 border-brand-500/40 shadow-sm'
+                              : 'bg-dark-card text-gray-500 border-dark-border hover:bg-gray-800'
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold ${isEnabled ? 'bg-brand-500 text-black' : 'bg-gray-800 text-gray-400'}`}>
+                            {isEnabled ? 'ON' : 'OFF'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between sm:pt-6">
                   <span className="text-xs font-bold text-gray-300 uppercase">Plan Active Status</span>
                   <button
@@ -748,11 +813,11 @@ export default function PlansPage() {
                     Description
                   </label>
                   <textarea
-                    rows={2}
-                    placeholder="Brief description of the tour plan..."
+                    rows={3}
+                    placeholder="Brief highlights of this package..."
                     value={addPlanForm.description}
                     onChange={e => setAddPlanForm({ ...addPlanForm, description: e.target.value })}
-                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 resize-none"
+                    className="w-full bg-dark-hover border border-dark-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500"
                   />
                 </div>
               </div>
@@ -791,17 +856,17 @@ export default function PlansPage() {
                 </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-end space-x-3 border-t border-dark-border">
+              <div className="pt-4 border-t border-dark-border flex items-center justify-end space-x-3">
                 <button
                   type="button"
                   onClick={() => setIsAddPlanModalOpen(false)}
-                  className="px-4 py-2 bg-dark-hover text-gray-300 rounded-xl text-sm font-semibold hover:text-white"
+                  className="px-4 py-2 bg-dark-hover hover:bg-gray-800 text-gray-300 rounded-xl text-xs font-bold border border-dark-border"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-brand-500 text-black font-bold rounded-xl text-sm hover:bg-brand-400 shadow-md shadow-brand-500/20"
+                  className="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-black font-extrabold rounded-xl text-xs shadow-lg shadow-brand-500/20"
                 >
                   Create Plan Package
                 </button>
@@ -811,14 +876,14 @@ export default function PlansPage() {
         </div>
       )}
 
-      {/* EDIT PLAN & CHECKPOINTS MODAL */}
+      {/* EDIT PLAN MODAL */}
       {isEditPlanModalOpen && editingPlan && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
+          <div className="bg-dark-card border border-dark-border rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
             <div className="p-5 border-b border-dark-border flex items-center justify-between">
               <h3 className="font-extrabold text-white text-base flex items-center space-x-2">
                 <Edit2 className="w-5 h-5 text-brand-500" />
-                <span>Edit Plan & Manage Included Checkpoints</span>
+                <span>Edit Tour Package Plan details</span>
               </h3>
               <button onClick={() => setIsEditPlanModalOpen(false)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -924,7 +989,52 @@ export default function PlansPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:pt-5">
+                  {/* Allowed Vehicle Category Toggles for Edit Modal */}
+                  <div className="sm:col-span-2 p-3 bg-dark-hover/40 rounded-xl border border-dark-border space-y-2">
+                    <span className="text-xs font-bold text-brand-500 uppercase tracking-wider block">
+                      Allowed Vehicle Categories for this Plan
+                    </span>
+                    <p className="text-[11px] text-gray-400">
+                      Toggle ON the vehicle types permitted for this tour plan package. Users will only see enabled vehicle types.
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      {[
+                        { key: '5_seater', label: '🚘 5-Seater' },
+                        { key: '7_seater', label: '🚐 7-Seater' },
+                        { key: '4x4', label: '🏔️ 4x4 Off-Road' },
+                        { key: 'auto', label: '🛺 Auto Rickshaw' },
+                      ].map(item => {
+                        const isEnabled = editPlanForm.allowed_vehicles?.[item.key] !== false;
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() =>
+                              setEditPlanForm({
+                                ...editPlanForm,
+                                allowed_vehicles: {
+                                  ...editPlanForm.allowed_vehicles,
+                                  [item.key]: !isEnabled,
+                                },
+                              })
+                            }
+                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-between ${
+                              isEnabled
+                                ? 'bg-brand-500/20 text-brand-300 border-brand-500/40 shadow-sm'
+                                : 'bg-dark-card text-gray-500 border-dark-border hover:bg-gray-800'
+                            }`}
+                          >
+                            <span>{item.label}</span>
+                            <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded font-extrabold ${isEnabled ? 'bg-brand-500 text-black' : 'bg-gray-800 text-gray-400'}`}>
+                              {isEnabled ? 'ON' : 'OFF'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:pt-4 sm:col-span-2">
                     <span className="text-xs font-bold text-gray-300 uppercase">Plan Active Status</span>
                     <button
                       type="button"
@@ -938,10 +1048,10 @@ export default function PlansPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex justify-end pt-2">
                   <button
                     type="submit"
-                    className="px-4 py-1.5 bg-brand-500 text-black font-bold rounded-xl text-xs hover:bg-brand-400"
+                    className="px-5 py-2 bg-brand-500 text-black font-extrabold rounded-xl text-xs hover:bg-brand-400 shadow-md shadow-brand-500/20"
                   >
                     Save Details
                   </button>
