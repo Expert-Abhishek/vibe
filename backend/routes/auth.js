@@ -1441,7 +1441,7 @@ router.post('/verify-reset-otp', async (req, res) => {
       const updateRes = await db.query(
         `UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP 
          WHERE phone LIKE $2 OR phone = $3 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $3 
-         RETURNING id, name, phone, role, status, email, profile_image, theme, language`,
+         RETURNING id, name, phone, role, status, email`,
         [passwordHash, `%${cleanPhone}`, cleanPhone]
       );
 
@@ -1449,7 +1449,7 @@ router.post('/verify-reset-otp', async (req, res) => {
       await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [cleanPhone, `%${cleanPhone}`]);
 
       const user = updateRes.rows[0];
-      const token = user ? jwt.sign({ id: user.id, phone: user.phone, role: user.role }, JWT_SECRET, { expiresIn: '30d' }) : undefined;
+      const token = user ? jwt.sign({ userId: user.id, phone: user.phone, role: user.role }, JWT_SECRET, { expiresIn: '30d' }) : undefined;
 
       return res.json({
         success: true,
