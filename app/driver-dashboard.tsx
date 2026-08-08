@@ -208,6 +208,19 @@ export default function DriverDashboardScreen() {
     const session = getUserSessionSync();
     const uId = session?.id || 'd1';
 
+    // Register driver push token with backend for instant ride request notifications
+    try {
+      const { getExpoPushToken } = require('@/constants/notifications');
+      const { savePushTokenApi } = require('@/constants/api');
+      const pushToken = await getExpoPushToken();
+      if (pushToken && session?.id) {
+        await savePushTokenApi(session.id, pushToken, session.phone);
+        console.log('✅ Driver Push Token registered to backend DB');
+      }
+    } catch (pushErr) {
+      // non-blocking
+    }
+
     const data = await fetchWalletBalanceApi(uId);
     if (data && data.success) {
       if (data.balance !== undefined) setEarningsBalance(data.balance);

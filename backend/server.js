@@ -271,7 +271,8 @@ async function initTablesOnBoot() {
     await db.query(`
       ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS trip_id UUID REFERENCES trips(id) ON DELETE SET NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token VARCHAR(255);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
+      ALTER TABLE users ALTER COLUMN push_token TYPE TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS theme VARCHAR(20) DEFAULT 'dark';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(10) DEFAULT 'en';

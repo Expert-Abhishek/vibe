@@ -199,6 +199,19 @@ export default function GuideDashboardScreen() {
     setLoading(true);
     if (session?.name) setName(session.name);
 
+    // Register guide push token with backend for instant tour booking notifications
+    try {
+      const { getExpoPushToken } = require('@/constants/notifications');
+      const { savePushTokenApi } = require('@/constants/api');
+      const pushToken = await getExpoPushToken();
+      if (pushToken && session?.id) {
+        await savePushTokenApi(session.id, pushToken, session.phone);
+        console.log('✅ Guide Push Token registered to backend DB');
+      }
+    } catch (pushErr) {
+      // non-blocking
+    }
+
     const userRes = await fetchUserProfileApi(userId);
     if (userRes && userRes.success && userRes.user) {
       if (userRes.user.name) setName(userRes.user.name);

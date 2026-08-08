@@ -43,6 +43,19 @@ export default function SignInScreen() {
           profile: apiRes.user.profile,
         });
 
+        // Register push token for real-time Firebase Cloud Messaging alerts
+        try {
+          const { getExpoPushToken } = require('@/constants/notifications');
+          const { savePushTokenApi } = require('@/constants/api');
+          const token = await getExpoPushToken();
+          if (token && apiRes.user.id) {
+            await savePushTokenApi(apiRes.user.id, token, apiRes.user.phone);
+            console.log(`🔥 [FCM] Token registered for ${apiRes.user.role} (${apiRes.user.name})`);
+          }
+        } catch (pushErr) {
+          // non-blocking
+        }
+
         // Strict status verification check
         if (apiRes.user.role === 'driver' || apiRes.user.role === 'guide') {
           if (apiRes.user.status !== 'Active') {

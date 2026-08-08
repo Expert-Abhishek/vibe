@@ -1,30 +1,49 @@
-// Optional dev logging config
-// if (__DEV__) {
-//   try {
-//     require('../ReactotronConfig');
-//   } catch (e) { }
-// }
-
-
 // Universal Safeguard for WakeLock / KeepAwake permission errors across Native & Web
-if (typeof window !== 'undefined' && window.addEventListener) {
-  try {
+try {
+  if (typeof console !== 'undefined' && console.error) {
+    const originalConsoleError = console.error;
+    console.error = (...args: any[]) => {
+      const msg = args.map((a) => String(a?.message || a || '')).join(' ');
+      if (
+        msg.includes('Unable to activate keep awake') ||
+        msg.includes('keep awake') ||
+        msg.includes('KeepAwake') ||
+        msg.includes('WakeLock')
+      ) {
+        return; // suppress benign keep-awake dev warning
+      }
+      originalConsoleError(...args);
+    };
+  }
+
+  if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('unhandledrejection', (event: any) => {
       const reasonStr = String(event?.reason?.message || event?.reason || '');
       if (
         reasonStr.includes('keep awake') ||
         reasonStr.includes('KeepAwake') ||
         reasonStr.includes('WakeLock') ||
-        reasonStr.includes('Unable to activate') ||
-        reasonStr.includes('split')
+        reasonStr.includes('Unable to activate')
       ) {
         if (event.preventDefault) event.preventDefault();
         if (event.stopPropagation) event.stopPropagation();
       }
     });
-  } catch (e) { }
-}
+  }
 
+  if (typeof globalThis !== 'undefined' && (globalThis as any).ErrorUtils?.setGlobalHandler) {
+    const defaultHandler = (globalThis as any).ErrorUtils.getGlobalHandler?.();
+    (globalThis as any).ErrorUtils.setGlobalHandler((err: any, isFatal?: boolean) => {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('keep awake') || msg.includes('KeepAwake') || msg.includes('Unable to activate')) {
+        return;
+      }
+      if (defaultHandler) defaultHandler(err, isFatal);
+    });
+  }
+} catch (e) { }
+
+import { Platform } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -53,21 +72,18 @@ export default function RootLayout() {
       initSocketService(session.id, session.role || 'tourist');
     }
 
-    async function configurePushNotifications() {
-      try {
-        const token = await getExpoPushToken();
-        if (token) {
-          console.log('🎉 Expo Push Token:', token);
-          if (session?.id) {
+    if (Platform.OS !== 'web') {
+      (async () => {
+        try {
+          const token = await getExpoPushToken();
+          if (token && session?.id) {
             await savePushTokenApi(session.id, token);
-            console.log('✅ Push Token registered to backend DB.');
           }
+        } catch (err) {
+          // silent in dev
         }
-      } catch (err) {
-        console.warn('configurePushNotifications error:', err);
-      }
+      })();
     }
-    configurePushNotifications();
   }, []);
 
   return (

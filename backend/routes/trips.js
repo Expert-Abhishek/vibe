@@ -384,39 +384,14 @@ router.get('/admin/all', async (req, res) => {
   }
 });
 
-/**
- * Expo Push Notification Helper
- */
-async function sendExpoPushNotification(pushToken, title, body, data = {}) {
-  if (!pushToken || typeof pushToken !== 'string' || !pushToken.startsWith('ExponentPushToken')) {
-    return;
-  }
-  try {
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: pushToken,
-        sound: 'default',
-        title: title,
-        body: body,
-        data: data,
-        priority: 'high',
-      }),
-    });
-    const result = await response.json();
-    console.log('📡 Expo Push Notification sent:', result);
-  } catch (err) {
-    console.error('❌ Failed to send Expo Push Notification:', err);
-  }
-}
+const {
+  sendPushNotification,
+  sendPushToUser,
+  sendPushToRole,
+} = require('../services/fcmService');
 
 /**
- * Activity Notification Logger Helper
+ * Activity Notification Logger & Push Dispatcher Helper
  */
 async function logActivityNotification(userId, role, title, body, tripId = null) {
   try {
@@ -448,14 +423,18 @@ async function logActivityNotification(userId, role, title, body, tripId = null)
       tripId,
     });
 
+    // High-priority Push Notification via Firebase Cloud Messaging (FCM) & Expo
     if (userId) {
-      const userRes = await db.query('SELECT push_token FROM users WHERE id = $1', [userId]);
-      if (userRes.rows.length > 0 && userRes.rows[0].push_token) {
-        sendExpoPushNotification(userRes.rows[0].push_token, title, body, { tripId, role });
-      }
+      await sendPushToUser(userId, {
+        title,
+        body,
+        data: { tripId: tripId ? String(tripId) : '', role: role || 'tourist' },
+        collapseKey: tripId ? `trip_${tripId}` : `alert_${role || 'user'}`,
+        channelId: 'default',
+      });
     }
   } catch (err) {
-    console.error('❌ Failed to log activity notification:', err);
+    console.error('❌ Failed to log and send activity notification:', err);
   }
 }
 
@@ -1483,22 +1462,33 @@ router.post('/book', async (req, res) => {
     // Query all driver / guide tokens to send push notification!
     const targetRole = tripType === 'guide' ? 'guide' : 'driver';
     const tokensRes = await db.query(
-      `SELECT push_token FROM users WHERE role = $1 AND push_token IS NOT NULL AND push_token != ''`,
+      `SELECT DISTINCT push_token FROM users 
+       WHERE (LOWER(role::text) = LOWER($1) OR (LOWER($1) = 'driver' AND LOWER(role::text) IN ('driver', 'captain'))) 
+         AND push_token IS NOT NULL AND push_token != ''`,
       [targetRole]
     );
 
     const notifyTitle = tripType === 'guide' ? '🚩 New Tour Guide Booking!' : '🚖 New Cab Ride Request!';
     const notifyBody = `Pickup: ${pickupName} | Fare: ₹${amount} | Passenger: ${customerName}`;
 
+    console.log(`📡 [FCM] Broadcasting new trip to ${tokensRes.rows.length} ${targetRole} partners...`);
+
     tokensRes.rows.forEach(row => {
-      sendExpoPushNotification(row.push_token, notifyTitle, notifyBody, {
-        tripId: newTrip.id,
-        tripType: newTrip.trip_type,
-        pickupName: newTrip.pickup_name,
-        dropName: newTrip.drop_name,
-        amount: newTrip.amount,
-        customerName: newTrip.customer_name,
-        otp: newTrip.otp,
+      sendPushNotification({
+        token: row.push_token,
+        title: notifyTitle,
+        body: notifyBody,
+        data: {
+          tripId: String(newTrip.id),
+          tripType: newTrip.trip_type,
+          pickupName: newTrip.pickup_name,
+          dropName: newTrip.drop_name,
+          amount: String(newTrip.amount),
+          customerName: newTrip.customer_name,
+          otp: String(newTrip.otp || ''),
+        },
+        collapseKey: `trip_request_${newTrip.id}`,
+        channelId: 'trips',
       });
     });
 
@@ -2098,19 +2088,19 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
 
     // Notify tourist
     if (trip.customer_id) {
-      try {
-        const userRes = await db.query('SELECT push_token FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [trip.customer_id]);
-        if (userRes.rows.length > 0 && userRes.rows[0].push_token) {
-          sendExpoPushNotification(
-            userRes.rows[0].push_token,
-            '🎉 Partner Confirmed Your Booking!',
-            `${driverName} has accepted your trip request! Your Start OTP is ${generatedStartOtp}.`,
-            { tripId: trip.id, status: 'Accepted', driverName, otp: generatedStartOtp, endOtp: generatedEndOtp }
-          );
-        }
-      } catch (pushErr) {
-        console.warn('Push notification error on accept:', pushErr.message);
-      }
+      sendPushToUser(trip.customer_id, {
+        title: '🎉 Partner Confirmed Your Booking!',
+        body: `${driverName} has accepted your trip request! Your Start OTP is ${generatedStartOtp}.`,
+        data: {
+          tripId: String(trip.id),
+          status: 'Accepted',
+          driverName: String(driverName),
+          otp: String(generatedStartOtp),
+          endOtp: String(generatedEndOtp || ''),
+        },
+        collapseKey: `trip_${trip.id}`,
+        channelId: 'trips',
+      });
     }
 
     res.json({
@@ -2588,15 +2578,17 @@ router.post(['/complete-trip/:id', '/:id/complete'], async (req, res) => {
 
     // Notify Tourist
     if (trip.customer_id) {
-      const userRes = await db.query('SELECT push_token FROM users WHERE id = $1', [trip.customer_id]);
-      if (userRes.rows.length > 0 && userRes.rows[0].push_token) {
-        sendExpoPushNotification(
-          userRes.rows[0].push_token,
-          '🏁 Trip Finished!',
-          `Your trip has ended. Total fare ₹${fare} settled. Thank you for choosing VIBZZ!`,
-          { tripId: trip.id, status: 'Completed' }
-        );
-      }
+      sendPushToUser(trip.customer_id, {
+        title: '🏁 Trip Finished!',
+        body: `Your trip has ended. Total fare ₹${fare} settled. Thank you for choosing VIBZZ!`,
+        data: {
+          tripId: String(trip.id),
+          status: 'Completed',
+          fare: String(fare),
+        },
+        collapseKey: `trip_${trip.id}`,
+        channelId: 'trips',
+      });
     }
 
     res.json({ success: true, message: 'Trip completed! Earnings credited to wallet.', fare });

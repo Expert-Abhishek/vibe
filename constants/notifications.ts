@@ -1,7 +1,72 @@
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 /**
- * Safe helper to fetch expo-notifications module ONLY in standalone native builds.
+ * Activity Notification item structure for in-app drawer & badge rendering
+ */
+export interface ActivityNotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  tripId?: string;
+  createdAt: number;
+}
+
+// In-memory reactive notification store
+class NotificationStore {
+  private notifications: ActivityNotificationItem[] = [];
+  private listeners: Set<() => void> = new Set();
+
+  getNotifications(): ActivityNotificationItem[] {
+    return this.notifications;
+  }
+
+  getUnreadCount(): number {
+    return this.notifications.filter((n) => !n.isRead).length;
+  }
+
+  addNotification(item: Omit<ActivityNotificationItem, 'id' | 'createdAt'>): void {
+    const newItem: ActivityNotificationItem = {
+      ...item,
+      id: Math.random().toString(36).substring(2, 9),
+      createdAt: Date.now(),
+    };
+    this.notifications = [newItem, ...this.notifications.slice(0, 49)];
+    this.notify();
+  }
+
+  markAllAsRead(): void {
+    this.notifications = this.notifications.map((n) => ({ ...n, isRead: true }));
+    this.notify();
+  }
+
+  clearAll(): void {
+    this.notifications = [];
+    this.notify();
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(): void {
+    this.listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (err) {
+        // ignore listener errors
+      }
+    });
+  }
+}
+
+export const notificationStore = new NotificationStore();
+
+/**
+ * Safe helper to fetch expo-notifications module in standalone native builds.
  * Bypasses in Expo Go & Web to prevent 'Cannot find native module ExpoPushTokenManager'.
  */
 function getNotificationsModule(): any {
@@ -13,7 +78,6 @@ function getNotificationsModule(): any {
       return null;
     }
 
-    // Verify native ExpoPushTokenManager module exists before requiring expo-notifications
     const { NativeModulesProxy, requireNativeModule } = require('expo-modules-core');
     let hasNativeModule = !!NativeModulesProxy?.ExpoPushTokenManager;
     if (!hasNativeModule && typeof requireNativeModule === 'function') {
@@ -33,7 +97,7 @@ function getNotificationsModule(): any {
   }
 }
 
-// Safely configure notification behavior if standalone native module exists
+// Safely configure notification behavior for foreground alerts & sound
 try {
   const Notifications = getNotificationsModule();
   if (Notifications && typeof Notifications.setNotificationHandler === 'function') {
@@ -42,27 +106,42 @@ try {
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
-      } as any),
+      }),
     });
   }
 } catch (e) {
   // Ignored in Expo Go & Web
 }
 
+/**
+ * Request Notification Permissions & Register Android Notification Channels
+ */
 export async function requestNotificationPermissions(): Promise<boolean> {
   try {
     if (Platform.OS === 'web') return true;
     const Notifications = getNotificationsModule();
     if (!Notifications) return false;
 
-    // Set Android Notification Channel for push alerts & sound
+    // Set Android Notification Channels with high priority, lights & sound
     if (Platform.OS === 'android' && typeof Notifications.setNotificationChannelAsync === 'function') {
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'Vibe App Notifications',
+        name: 'Vibzz General Alerts',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#F5C518',
         sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
+      });
+
+      await Notifications.setNotificationChannelAsync('trips', {
+        name: 'Vibzz Trip & Ride Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 500, 200, 500],
+        lightColor: '#F5C518',
+        sound: 'default',
+        enableVibrate: true,
+        showBadge: true,
       });
     }
 
@@ -82,29 +161,51 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
+/**
+ * Get native FCM Device Token or Expo Push Token for Backend registration
+ */
 export async function getExpoPushToken(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   try {
     const Notifications = getNotificationsModule();
-    if (!Notifications || typeof Notifications.getExpoPushTokenAsync !== 'function') return null;
+    if (!Notifications) return null;
 
     const hasPermission = await requestNotificationPermissions();
     if (!hasPermission) return null;
 
-    const projectId = '2a8823ee-df40-49f4-95b6-452edc6a3025';
+    // 1. Try fetching direct native FCM device registration token
+    if (typeof Notifications.getDevicePushTokenAsync === 'function') {
+      try {
+        const deviceToken = await Notifications.getDevicePushTokenAsync();
+        if (deviceToken?.data) {
+          return String(deviceToken.data);
+        }
+      } catch (devTokenErr) {
+        // fallback to Expo token
+      }
+    }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
-    return tokenData?.data || null;
+    // 2. Fallback to Expo Push Token
+    if (typeof Notifications.getExpoPushTokenAsync === 'function') {
+      const projectId = '2a8823ee-df40-49f4-95b6-452edc6a3025';
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId,
+      });
+      return tokenData?.data || null;
+    }
+
+    return null;
   } catch (e: any) {
-    console.warn('getExpoPushToken suppressed error:', e?.message || e);
+    console.warn('Push Token fetch warning:', e?.message || e);
     return null;
   }
 }
 
 const recentNotificationsCache = new Map<string, number>();
 
+/**
+ * Send local notification with anti-duplicate de-duplication cache
+ */
 export async function sendLocalNotification(title: string, body: string, data?: any): Promise<void> {
   const cleanTitle = title.replace(/^🔔\s*/, '').trim();
   const dedupKey = `${cleanTitle}:${body.trim()}`;
@@ -129,6 +230,7 @@ export async function sendLocalNotification(title: string, body: string, data?: 
       title: `🔔 ${cleanTitle}`,
       body,
       isRead: false,
+      tripId: data?.tripId,
     });
 
     if (Platform.OS !== 'web') {
@@ -140,6 +242,7 @@ export async function sendLocalNotification(title: string, body: string, data?: 
             body,
             data: data || {},
             sound: 'default',
+            channelId: data?.tripId ? 'trips' : 'default',
           },
           trigger: null,
         });

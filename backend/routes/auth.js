@@ -894,22 +894,32 @@ router.post('/google', async (req, res) => {
 
 /**
  * POST /api/auth/push-token
- * Register/Update push token for the user
+ * Register/Update FCM / Push token for the user
  */
-router.post('/push-token', async (req, res) => {
+router.post(['/push-token', '/fcm-token'], async (req, res) => {
   try {
-    const { userId, pushToken } = req.body;
+    const { userId, phone, pushToken, fcmToken, token } = req.body;
+    const activeToken = (pushToken || fcmToken || token || '').trim();
+    const identifier = (userId || phone || '').trim();
 
-    if (!userId || !pushToken) {
-      return res.status(400).json({ success: false, message: 'userId and pushToken are required' });
+    if (!identifier || !activeToken) {
+      return res.status(400).json({ success: false, message: 'userId/phone and pushToken are required' });
     }
 
-    await db.query(
-      'UPDATE users SET push_token = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [pushToken, userId]
+    const cleanPhone = identifier.replace(/\D/g, '').slice(-10);
+
+    const updateRes = await db.query(
+      `UPDATE users 
+       SET push_token = $1, updated_at = CURRENT_TIMESTAMP 
+       WHERE id::text = $2::text OR phone = $2::text OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $3`,
+      [activeToken, identifier, cleanPhone || 'none']
     );
 
-    res.json({ success: true, message: 'Push token updated successfully' });
+    res.json({
+      success: true,
+      message: 'FCM / Push token updated successfully in backend database',
+      rowCount: updateRes.rowCount,
+    });
   } catch (error) {
     console.error('Error updating push token:', error);
     res.status(500).json({ success: false, message: 'Failed to update push token', error: error.message });

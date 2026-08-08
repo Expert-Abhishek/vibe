@@ -10,7 +10,7 @@ try {
 export async function safeActivateKeepAwake(tag?: string) {
   try {
     if (activateKeepAwakeAsync) {
-      await activateKeepAwakeAsync(tag);
+      await activateKeepAwakeAsync(tag).catch(() => {});
     }
   } catch (e) {
     // Quietly catch keep awake rejection
@@ -20,7 +20,7 @@ export async function safeActivateKeepAwake(tag?: string) {
 export async function safeDeactivateKeepAwake(tag?: string) {
   try {
     if (deactivateKeepAwake) {
-      await deactivateKeepAwake(tag);
+      await deactivateKeepAwake(tag).catch(() => {});
     }
   } catch (e) {
     // Quietly catch deactivate keep awake rejection
