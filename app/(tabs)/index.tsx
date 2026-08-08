@@ -164,18 +164,18 @@ export default function HomeScreen() {
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(4) }}>
                 <View style={styles.pulsingGreenDot} />
-                <Text style={[styles.activeBannerTag, { color: colors.amber }]}>LIVE RIDE IN PROGRESS</Text>
+                <Text style={[styles.activeBannerTag, { color: colors.amber }]}>{t('liveRideInProgress')}</Text>
               </View>
               <Text style={[styles.activeBannerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                 {activeTrip.pickup || activeTrip.pickup_name || activeTrip.title || 'Active Trip'} ➔ {activeTrip.drop_name || 'Destination'}
               </Text>
               <Text style={[styles.activeBannerSub, { color: colors.textMuted }]}>
-                Captain: {activeTrip.driverName || activeTrip.driver_or_guide_name || 'Assigned Partner'}
+                {t('captain')}: {activeTrip.driverName || activeTrip.driver_or_guide_name || 'Assigned Partner'}
               </Text>
             </View>
 
             <View style={[styles.trackQuickBtn, { backgroundColor: colors.amber }]}>
-              <Text style={styles.trackQuickBtnText}>Track 🗺️</Text>
+              <Text style={styles.trackQuickBtnText}>{t('track')}</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -193,56 +193,6 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* INSTANT / PRE-BOOKING TOGGLE (COMMENTED OUT TEMPORARILY FOR NOW) */}
-        {/*
-        <View style={styles.bookingTypeRow}>
-          <Animated.View
-            style={[
-              styles.bookingActiveBg,
-              {
-                left: slideAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['1%', '51%'],
-                }),
-              },
-            ]}
-          />
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.bookingTab}
-            onPress={() => handleToggle(false)}
-          >
-            <Text
-              style={[
-                styles.bookingLabel,
-                !instantEnabled
-                  ? { color: colors.amber, fontSize: moderateFontScale(15), fontWeight: '800' }
-                  : { color: colors.textMuted, fontSize: moderateFontScale(13), fontWeight: '600' }
-              ]}
-            >
-              Pre Booking
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.bookingTab}
-            onPress={() => handleToggle(true)}
-          >
-            <Text
-              style={[
-                styles.bookingLabel,
-                instantEnabled
-                  ? { color: colors.amber, fontSize: moderateFontScale(15), fontWeight: '800' }
-                  : { color: colors.textMuted, fontSize: moderateFontScale(13), fontWeight: '600' }
-              ]}
-            >
-              Instant
-            </Text>
-          </TouchableOpacity>
-        </View>
-        */}
 
         {/* Guides & Custom Trip Side-by-Side (50% each) */}
         <View style={styles.servicesGridRow}>
@@ -295,13 +245,13 @@ export default function HomeScreen() {
           >
             <View style={styles.overlayStrong} />
             <View style={styles.karnatakaContent}>
-              <Text style={styles.karnatakaText}>{"Let's explore the beauty or thrill in Karnataka"}</Text>
+              <Text style={styles.karnatakaText}>{t('exploreKarnataka')}</Text>
               <TouchableOpacity
                 activeOpacity={0.8}
                 style={styles.planRouteBtn}
                 onPress={() => router.push('/plan-route' as any)}
               >
-                <Text style={styles.planRouteBtnText}>Plan Route</Text>
+                <Text style={styles.planRouteBtnText}>{t('planRoute')}</Text>
               </TouchableOpacity>
             </View>
             {/* Cutout SUV graphic placed overlapping on bottom right */}
@@ -315,7 +265,7 @@ export default function HomeScreen() {
 
         {/* CHOOSE YOUR RIDE */}
         <View style={styles.chooseRideHeader}>
-          <Text style={styles.sectionTitleNoMargin}>Choose Your Ride</Text>
+          <Text style={styles.sectionTitleNoMargin}>{t('chooseYourRide')}</Text>
         </View>
 
         <ScrollView
@@ -324,7 +274,12 @@ export default function HomeScreen() {
           style={styles.rideSlider}
           contentContainerStyle={styles.rideSliderContent}
         >
-          {rides.map((ride) => {
+          {[
+            { key: '5seater', nameKey: 'fiveSeater', descKey: 'fiveSeaterDesc', image: require('@/assets/images/sedan.png') },
+            { key: '7seater', nameKey: 'sevenSeater', descKey: 'sevenSeaterDesc', image: require('@/assets/images/hatch.png') },
+            { key: '4x4jeep', nameKey: 'fourByFourJeep', descKey: 'jeepDesc', image: require('@/assets/images/thar.png') },
+            { key: 'auto', nameKey: 'auto', descKey: 'autoDesc', image: require('@/assets/images/auto.png') },
+          ].map((ride) => {
             const isSelected = selectedRide === ride.key;
             return (
               <TouchableOpacity
@@ -348,24 +303,22 @@ export default function HomeScreen() {
                   />
                 </View>
                 <Text style={[styles.rideCardName, isSelected ? { color: '#F5C518' } : { color: colors.textPrimary }]}>
-                  {ride.name}
+                  {t(ride.nameKey)}
                 </Text>
                 <Text style={[styles.rideCardDesc, isSelected ? { color: 'rgba(245,197,24,0.7)' } : { color: colors.textMuted }]}>
-                  {isSelected ? 'Selected' : ride.desc}
+                  {isSelected ? t('selected') : t(ride.descKey)}
                 </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-
-
         {/* VIBE WITH US FOOTER CARD */}
         <View style={styles.footerVibeCard}>
           <View style={styles.waveOverlay} />
-          <Text style={styles.vibeCardTitle}>#MAKE YOUR OWN VIBE WITH US</Text>
-          <Text style={styles.vibeCardSub}>Made in India</Text>
-          <Text style={styles.vibeCardCrafted}>Crafted in Karnataka</Text>
+          <Text style={styles.vibeCardTitle}>{t('makeYourVibe')}</Text>
+          <Text style={styles.vibeCardSub}>{t('madeInIndia')}</Text>
+          <Text style={styles.vibeCardCrafted}>{t('craftedInKarnataka')}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

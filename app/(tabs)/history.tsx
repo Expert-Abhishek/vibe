@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 interface HistoryRecord {
   id: string;
@@ -38,6 +39,7 @@ interface HistoryRecord {
 }
 
 export default function HistoryScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -262,15 +264,15 @@ export default function HistoryScreen() {
   const getTypeName = (type: string) => {
     switch (type) {
       case 'cab':
-        return 'Cab Ride';
+        return t('cabRide');
       case 'custom_trip':
-        return 'Custom Route';
+        return t('customRoute');
       case 'guide':
-        return 'Local Guide';
+        return t('localGuide');
       case 'plan':
-        return 'Trip Plan Package';
+        return t('tripPlanPackage');
       default:
-        return 'Travel';
+        return t('travel');
     }
   };
 
@@ -280,20 +282,18 @@ export default function HistoryScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Travel History</Text>
-        <Text style={[styles.headerSub, { color: colors.textMuted }]}>View your past rides, hired guides, and package tours</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('travelHistory')}</Text>
+        <Text style={[styles.headerSub, { color: colors.textMuted }]}>{t('travelHistorySub')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-
 
         {/* Search Input Bar */}
         <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <MaterialIcons name="search" size={scale(20)} color={colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Search trips, places, drivers, destination ID..."
+            placeholder={t('searchTripsPlaceholder')}
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -322,7 +322,7 @@ export default function HistoryScreen() {
                   { color: activeFilter === filter ? '#101010' : colors.textPrimary }
                 ]}
               >
-                {filter === 'all' ? 'All' : filter === 'cab' ? 'Cabs' : filter === 'guide' ? 'Guides' : 'Plans'}
+                {filter === 'all' ? t('all') : filter === 'cab' ? t('cabs') : filter === 'guide' ? t('guides') : t('plans')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -332,7 +332,7 @@ export default function HistoryScreen() {
         {loading ? (
           <View style={{ paddingVertical: verticalScale(40), alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.amber} />
-            <Text style={{ color: colors.textMuted, marginTop: verticalScale(10), fontSize: moderateFontScale(12) }}>Loading travel history...</Text>
+            <Text style={{ color: colors.textMuted, marginTop: verticalScale(10), fontSize: moderateFontScale(12) }}>{t('loadingHistory')}</Text>
           </View>
         ) : (
           /* List of past bookings */
@@ -341,7 +341,7 @@ export default function HistoryScreen() {
               <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <MaterialIcons name="history" size={scale(40)} color={colors.textMuted} />
                 <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                  {searchQuery ? 'No matching trips found.' : 'No past records found for this category.'}
+                  {searchQuery ? t('noMatchingTrips') : t('noHistoryFound')}
                 </Text>
               </View>
             ) : (
@@ -375,7 +375,7 @@ export default function HistoryScreen() {
                           { color: item.status === 'Completed' ? colors.success : colors.danger },
                         ]}
                       >
-                        {item.status}
+                        {item.status === 'Completed' ? t('completed') : item.status === 'Cancelled' ? t('cancelled') : item.status}
                       </Text>
                     </View>
                   </View>
@@ -388,7 +388,7 @@ export default function HistoryScreen() {
                     <View style={styles.destIdRow}>
                       <MaterialIcons name="place" size={scale(13)} color={colors.amber} />
                       <Text style={[styles.destIdText, { color: colors.amber }]}>
-                        Destination ID: {item.destinationId}
+                        {t('destinationIdLabel')}: {item.destinationId}
                       </Text>
                     </View>
                   )}
@@ -396,14 +396,14 @@ export default function HistoryScreen() {
                   {/* Full Route Itinerary (Pickup, Checkpoints, Drop) */}
                   <View style={[styles.routeBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: scale(10), borderRadius: scale(12), marginVertical: verticalScale(8), gap: verticalScale(6) }]}>
                     <Text style={{ fontSize: moderateFontScale(10), fontWeight: '800', color: colors.textMuted, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: verticalScale(2) }}>
-                      Full Travel Itinerary
+                      {t('fullItinerary')}
                     </Text>
 
                     {/* Pickup Row */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                       <MaterialIcons name="my-location" size={scale(16)} color="#10B981" />
                       <Text style={{ fontSize: moderateFontScale(12), color: colors.textPrimary, flex: 1 }} numberOfLines={1}>
-                        <Text style={{ fontWeight: '800' }}>Pickup: </Text>{item.pickupName || 'Pickup Location'}
+                        <Text style={{ fontWeight: '800' }}>{t('pickup')}: </Text>{item.pickupName || 'Pickup Location'}
                       </Text>
                     </View>
 
@@ -412,7 +412,7 @@ export default function HistoryScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                         <MaterialIcons name="alt-route" size={scale(16)} color={colors.amber} />
                         <Text style={{ fontSize: moderateFontScale(11.5), color: colors.amber, flex: 1 }} numberOfLines={2}>
-                          <Text style={{ fontWeight: '800' }}>Stops ({item.route.length}): </Text>{item.route.join(' ➔ ')}
+                          <Text style={{ fontWeight: '800' }}>{t('stops')} ({item.route.length}): </Text>{item.route.join(' ➔ ')}
                         </Text>
                       </View>
                     )}
@@ -421,7 +421,7 @@ export default function HistoryScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                       <MaterialIcons name="place" size={scale(16)} color="#EF4444" />
                       <Text style={{ fontSize: moderateFontScale(12), color: colors.textPrimary, flex: 1 }} numberOfLines={1}>
-                        <Text style={{ fontWeight: '800' }}>Drop: </Text>{item.dropName || 'Destination'}
+                        <Text style={{ fontWeight: '800' }}>{t('drop')}: </Text>{item.dropName || 'Destination'}
                       </Text>
                     </View>
                   </View>
@@ -430,7 +430,7 @@ export default function HistoryScreen() {
                   {item.driverOrGuideName && (
                     <View style={styles.metaRow}>
                       <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
-                        {item.type === 'guide' ? 'Guide: ' : 'Captain: '}
+                        {item.type === 'guide' ? `${t('guide')}: ` : `${t('captain')}: `}
                         <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>
                           {item.driverOrGuideName}
                         </Text>
@@ -447,7 +447,7 @@ export default function HistoryScreen() {
                     )}
                     {item.paymentMode && (
                       <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
-                        Payment: <Text style={{ color: colors.amber, fontWeight: '600' }}>{item.paymentMode}</Text>
+                        {t('payment')}: <Text style={{ color: colors.amber, fontWeight: '600' }}>{item.paymentMode}</Text>
                       </Text>
                     )}
                   </View>

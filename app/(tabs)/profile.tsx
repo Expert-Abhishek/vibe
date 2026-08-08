@@ -37,8 +37,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useLanguage, SUPPORTED_LANGUAGES, AppLanguage } from '@/hooks/use-language';
+import { useTranslation } from 'react-i18next';
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const [appLang, setAppLang] = useLanguage();
@@ -486,10 +488,10 @@ export default function ProfileScreen() {
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
             <MaterialIcons name="account-balance-wallet" size={scale(18)} color={colors.amber} />
-            <Text style={[styles.cardTitle, { color: colors.amber, marginBottom: 0 }]}>Vibe Wallet</Text>
+            <Text style={[styles.cardTitle, { color: colors.amber, marginBottom: 0 }]}>{t('vibeWallet')}</Text>
           </View>
           <View style={{ marginBottom: verticalScale(14) }}>
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>{t('availableBalance')}</Text>
             <Text style={{ color: colors.amber, fontSize: moderateFontScale(26), fontWeight: 'bold' }}>₹{walletBalance}</Text>
           </View>
 
@@ -505,7 +507,7 @@ export default function ProfileScreen() {
               }}
             >
               <MaterialIcons name="add-circle-outline" size={scale(14)} color="#101014" />
-              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(11) }]}>Add Money</Text>
+              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(11) }]}>{t('addMoney')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -517,7 +519,7 @@ export default function ProfileScreen() {
               }}
             >
               <MaterialIcons name="payment" size={scale(14)} color={colors.amber} />
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>Withdraw</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>{t('withdraw')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -525,7 +527,7 @@ export default function ProfileScreen() {
               onPress={() => setWalletModalVisible(true)}
             >
               <MaterialIcons name="history" size={scale(14)} color={colors.textPrimary} />
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>History</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(11) }]}>{t('walletHistory')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -560,7 +562,7 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
                 <MaterialIcons name="translate" size={scale(18)} color={colors.amber} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary, fontSize: moderateFontScale(14) }]}>App Language</Text>
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary, fontSize: moderateFontScale(14) }]}>{t('appLanguage')}</Text>
               </View>
               <Text style={[styles.toggleSubLabel, { color: colors.textMuted, marginTop: 4 }]}>
                 {SUPPORTED_LANGUAGES.find((l) => l.code === appLang)?.flag} {SUPPORTED_LANGUAGES.find((l) => l.code === appLang)?.nativeName} ({SUPPORTED_LANGUAGES.find((l) => l.code === appLang)?.name}) • Powered by Google Translate
@@ -574,10 +576,10 @@ export default function ProfileScreen() {
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
             <MaterialIcons name="headset-mic" size={scale(18)} color={colors.amber} />
-            <Text style={[styles.cardTitle, { color: colors.amber, marginBottom: 0 }]}>Help & Customer Support</Text>
+            <Text style={[styles.cardTitle, { color: colors.amber, marginBottom: 0 }]}>{t('helpSupport')}</Text>
           </View>
           <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
-            Reach out to our dedicated support team for assistance with bookings, payments, or trips.
+            {t('helpSupportSub')}
           </Text>
 
           <View style={{ flexDirection: 'row', gap: scale(10) }}>
@@ -586,7 +588,7 @@ export default function ProfileScreen() {
               onPress={() => Linking.openURL('tel:8088626099')}
             >
               <MaterialIcons name="phone" size={scale(16)} color="#101014" />
-              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(12) }]}>Call Support</Text>
+              <Text style={[styles.primaryButtonText, { fontSize: moderateFontScale(12) }]}>{t('callSupport')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -594,7 +596,7 @@ export default function ProfileScreen() {
               onPress={() => Linking.openURL('mailto:vibzzpvtltd@gmail.com')}
             >
               <MaterialIcons name="email" size={scale(16)} color={colors.amber} />
-              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(12) }]}>Mail Support</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.textPrimary, fontSize: moderateFontScale(12) }]}>{t('mailSupport')}</Text>
             </TouchableOpacity>
           </View>
         </View>
