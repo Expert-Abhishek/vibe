@@ -21,8 +21,10 @@ import { sendResetOtpApi, verifyResetOtpApi } from '@/constants/api';
 export default function VerifyOtpScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ phone?: string }>();
-  const phone = (params.phone as string) || '';
+  const initialPhone = ((params.phone as string) || '').replace(/\D/g, '').slice(-10);
 
+  const [userPhone, setUserPhone] = useState(initialPhone);
+  const [isEditingPhone, setIsEditingPhone] = useState(!initialPhone);
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,8 +43,14 @@ export default function VerifyOtpScreen() {
   }, [timer]);
 
   const handleVerify = async () => {
-    if (code.length < 6) {
-      Alert.alert('Incomplete OTP', 'Please enter all 6 digits of the OTP code received via SMS.');
+    const cleanPhone = userPhone.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      Alert.alert('Phone Number Required', 'Please enter your registered 10-digit mobile number.');
+      return;
+    }
+
+    if (code.length < 4) {
+      Alert.alert('Incomplete OTP', 'Please enter all 4 digits of the OTP code received via SMS.');
       return;
     }
 
@@ -54,8 +62,8 @@ export default function VerifyOtpScreen() {
     setLoading(true);
     try {
       const res = await verifyResetOtpApi({
-        phone: phone || '8088626099',
-        otp: code,
+        phone: cleanPhone,
+        otp: code.trim(),
         newPassword: newPassword.trim(),
       });
       setLoading(false);
@@ -72,7 +80,7 @@ export default function VerifyOtpScreen() {
           ]
         );
       } else {
-        Alert.alert('Verification Failed', res?.message || 'Invalid or expired OTP code.');
+        Alert.alert('Verification Failed', res?.message || 'Invalid or expired 4-digit OTP code.');
       }
     } catch (err: any) {
       setLoading(false);
@@ -92,15 +100,16 @@ export default function VerifyOtpScreen() {
 
   const handleResend = async () => {
     if (timer > 0) return;
-    if (!phone) {
-      Alert.alert('Phone Required', 'Phone number missing. Please go back and re-enter phone number.');
+    const cleanPhone = userPhone.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      Alert.alert('Phone Required', 'Please enter a valid 10-digit registered phone number.');
       return;
     }
 
     try {
-      const res = await sendResetOtpApi(phone);
+      const res = await sendResetOtpApi(cleanPhone);
       if (res && res.success) {
-        Alert.alert('OTP Resent 🚀', res.message || 'A new 6-digit OTP code has been sent to your phone number.');
+        Alert.alert('OTP Resent 🚀', res.message || `A new 4-digit OTP code has been sent to +91 ${cleanPhone}.`);
         setTimer(59);
         setCode('');
       } else {
@@ -142,14 +151,54 @@ export default function VerifyOtpScreen() {
             </View>
 
             <Text style={styles.title}>Secure Access</Text>
-            <Text style={styles.subtitle}>
-              Enter the 6-digit code sent to{' '}
-              <Text style={styles.phoneHighlight}>+91 {phone || 'your mobile'}</Text>.
-            </Text>
+            
+            {isEditingPhone ? (
+              <View style={{ width: '100%', marginBottom: verticalScale(20), paddingHorizontal: scale(10) }}>
+                <Text style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: moderateFontScale(12), fontWeight: '600', marginBottom: verticalScale(6) }}>
+                  Registered Mobile Number
+                </Text>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  borderWidth: 1,
+                  borderColor: '#F5C518',
+                  borderRadius: scale(14),
+                  paddingHorizontal: scale(14),
+                  height: verticalScale(48),
+                }}>
+                  <Text style={{ color: '#F5C518', fontWeight: '700', fontSize: moderateFontScale(14), marginRight: scale(8) }}>+91</Text>
+                  <TextInput
+                    style={{ flex: 1, color: '#ffffff', fontSize: moderateFontScale(15), fontWeight: '600' }}
+                    placeholder="10-digit mobile number"
+                    placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    value={userPhone}
+                    onChangeText={(t) => setUserPhone(t.replace(/\D/g, ''))}
+                  />
+                  {userPhone.length === 10 && (
+                    <TouchableOpacity onPress={() => setIsEditingPhone(false)} style={{ padding: scale(4) }}>
+                      <MaterialIcons name="check" size={scale(20)} color="#F5C518" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(24) }}>
+                <Text style={styles.subtitle}>
+                  Enter the 4-digit code sent to{' '}
+                  <Text style={styles.phoneHighlight}>+91 {userPhone}</Text>
+                </Text>
+                <TouchableOpacity onPress={() => setIsEditingPhone(true)} style={{ marginLeft: scale(6) }}>
+                  <MaterialIcons name="edit" size={scale(16)} color="#F5C518" />
+                </TouchableOpacity>
+              </View>
+            )}
 
-            {/* OTP CODE INPUTS */}
+            {/* 4-DIGIT OTP CODE INPUTS */}
             <Pressable style={styles.otpContainer} onPress={handlePressOtp}>
-              {Array.from({ length: 6 }).map((_, idx) => {
+              {Array.from({ length: 4 }).map((_, idx) => {
                 const char = code[idx] || '';
                 const isCurrent = idx === code.length;
                 const showFocus = focused && isCurrent;
@@ -172,12 +221,12 @@ export default function VerifyOtpScreen() {
               })}
             </Pressable>
 
-            {/* Hidden Input field to drive the OTP values */}
+            {/* Hidden Input field to drive the 4-digit OTP values */}
             <TextInput
               ref={inputRef}
               style={styles.hiddenInput}
               keyboardType="number-pad"
-              maxLength={6}
+              maxLength={4}
               value={code}
               onChangeText={setCode}
               onFocus={() => setFocused(true)}
@@ -221,10 +270,10 @@ export default function VerifyOtpScreen() {
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                code.length < 6 || !newPassword || loading ? styles.verifyButtonDisabled : null,
+                code.length < 4 || !newPassword || loading ? styles.verifyButtonDisabled : null,
               ]}
               onPress={handleVerify}
-              disabled={code.length < 6 || !newPassword || loading}
+              disabled={code.length < 4 || !newPassword || loading}
               activeOpacity={0.9}
             >
               {loading ? (
@@ -347,31 +396,38 @@ const styles = StyleSheet.create({
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: scale(14),
     width: '100%',
     paddingHorizontal: scale(10),
   },
   otpBox: {
-    width: scale(46),
-    height: scale(46),
-    borderRadius: scale(23),
-    borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    width: scale(62),
+    height: scale(62),
+    borderRadius: scale(16),
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   otpBoxFilled: {
-    borderColor: 'rgba(255, 255, 255, 0.35)',
+    borderColor: '#F5C518',
+    backgroundColor: 'rgba(245, 197, 24, 0.08)',
   },
   otpBoxFocused: {
-    borderColor: '#3B82F6', // Blue outline focus border as shown in reference image
-    borderWidth: 1.8,
+    borderColor: '#F5C518',
+    borderWidth: 2,
+    shadowColor: '#F5C518',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
   },
   otpChar: {
-    color: '#ffffff',
-    fontSize: moderateFontScale(18),
-    fontWeight: '700',
+    color: '#F5C518',
+    fontSize: moderateFontScale(24),
+    fontWeight: '800',
   },
   hiddenInput: {
     position: 'absolute',

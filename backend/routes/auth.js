@@ -1338,14 +1338,15 @@ router.post('/send-reset-otp', async (req, res) => {
 
     // 1. Check if user exists with this phone number
     const userRes = await db.query(
-      'SELECT id, name, phone, role FROM users WHERE phone LIKE $1 OR phone = $2',
-      [`%${cleanPhone}`, cleanPhone]
+      `SELECT id, name, phone, role FROM users 
+       WHERE phone LIKE $1 OR phone = $2 OR REPLACE(REPLACE(phone, ' ', ''), '+', '') LIKE $3`,
+      [`%${cleanPhone}`, cleanPhone, `%${cleanPhone}`]
     );
 
     if (userRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `No account registered with phone number ${cleanPhone}. Please check or register first.`,
+        message: `No account registered with phone number +91 ${cleanPhone}. Please check your number or register first.`,
       });
     }
 
@@ -1363,7 +1364,7 @@ router.post('/send-reset-otp', async (req, res) => {
     );
 
     // 4. Send SMS via Fast2SMS API Key
-    const smsRes = await sendFast2SmsOtp(cleanPhone, otpCode);
+    await sendFast2SmsOtp(cleanPhone, otpCode);
 
     return res.json({
       success: true,
@@ -1397,12 +1398,14 @@ router.post('/verify-reset-otp', async (req, res) => {
 
     // 1. Query stored OTP
     const otpRes = await db.query(
-      'SELECT otp, expires_at FROM password_reset_otps WHERE phone = $1',
-      [cleanPhone]
+      `SELECT otp, expires_at FROM password_reset_otps 
+       WHERE phone = $1 OR phone LIKE $2 
+       ORDER BY created_at DESC LIMIT 1`,
+      [cleanPhone, `%${cleanPhone}`]
     );
 
     if (otpRes.rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'OTP not requested or expired. Please request a new OTP.' });
+      return res.status(400).json({ success: false, message: 'OTP not requested or expired. Please request a new OTP code.' });
     }
 
     const record = otpRes.rows[0];
@@ -1425,12 +1428,14 @@ router.post('/verify-reset-otp', async (req, res) => {
 
       const passwordHash = await bcrypt.hash(targetPassword, 10);
       const updateRes = await db.query(
-        'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE phone LIKE $2 OR phone = $3 RETURNING id, name, phone, role, status, email, profile_image, theme, language',
-        [passwordHash, `%${cleanPhone}`, cleanPhone]
+        `UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE phone LIKE $2 OR phone = $3 OR REPLACE(REPLACE(phone, ' ', ''), '+', '') LIKE $4 
+         RETURNING id, name, phone, role, status, email, profile_image, theme, language`,
+        [passwordHash, `%${cleanPhone}`, cleanPhone, `%${cleanPhone}`]
       );
 
       // Clear reset OTP
-      await db.query('DELETE FROM password_reset_otps WHERE phone = $1', [cleanPhone]);
+      await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [cleanPhone, `%${cleanPhone}`]);
 
       const user = updateRes.rows[0];
       const token = user ? jwt.sign({ id: user.id, phone: user.phone, role: user.role }, JWT_SECRET, { expiresIn: '30d' }) : undefined;

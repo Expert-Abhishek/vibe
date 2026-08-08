@@ -16,20 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { sendResetOtpApi, getResetPasswordWebUrl } from '@/constants/api';
+import { sendResetOtpApi } from '@/constants/api';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const handleOpenWebResetPortal = () => {
-    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
-    const webUrl = getResetPasswordWebUrl(cleanPhone);
-    Linking.openURL(webUrl).catch(() => {
-      Alert.alert('Web Portal', `Please visit in your browser: ${webUrl}`);
-    });
-  };
 
   const handleSendOtp = async () => {
     const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
@@ -107,24 +99,6 @@ export default function ForgotPasswordScreen() {
                 />
               </View>
             </View>
-
-            {/* WEB PORTAL RESET OPTION BANNER */}
-            <TouchableOpacity
-              style={styles.webResetCard}
-              activeOpacity={0.8}
-              onPress={handleOpenWebResetPortal}
-            >
-              <View style={styles.webResetLeft}>
-                <MaterialIcons name="open-in-browser" size={scale(24)} color="#F5C518" />
-                <View style={{ flex: 1, marginLeft: scale(12) }}>
-                  <Text style={styles.webResetTitle}>Reset via Web Portal</Text>
-                  <Text style={styles.webResetSubtitle}>
-                    Open admin/web password reset page in browser
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons name="chevron-right" size={scale(20)} color="#F5C518" />
-            </TouchableOpacity>
           </View>
 
           {/* FOOTER ACTIONS */}

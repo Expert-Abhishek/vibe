@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View, Text, ActivityIndicator, Linking } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { getResetPasswordWebUrl } from '@/constants/api';
 
 interface LoginFormProps {
   onLogin: (phone: string, pass: string) => void;
@@ -17,11 +16,6 @@ export function LoginForm({ onLogin, isLoading = false }: LoginFormProps) {
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
   const [errors, setErrors] = useState<{ phone?: string; password?: string }>({});
-
-  const handleWebReset = () => {
-    const clean = phone.replace(/\D/g, '').slice(-10);
-    Linking.openURL(getResetPasswordWebUrl(clean));
-  };
 
   const handleLoginSubmit = () => {
     if (isLoading) return;
@@ -122,16 +116,6 @@ export function LoginForm({ onLogin, isLoading = false }: LoginFormProps) {
         )}
       </TouchableOpacity>
       <Text style={styles.tipText}>Tip: Enter password {"\""}guide{"\""} or {"\""}driver{"\""} to sign in to their respective partner dashboards.</Text>
-
-      <TouchableOpacity
-        onPress={handleWebReset}
-        disabled={isLoading}
-        style={{ marginTop: verticalScale(10), alignItems: 'center' }}
-      >
-        <ThemedText style={{ color: '#F5C518', fontSize: moderateFontScale(12), fontWeight: '600' }}>
-          🌐 Reset Password on Web Portal
-        </ThemedText>
-      </TouchableOpacity>
     </View>
   );
 }
