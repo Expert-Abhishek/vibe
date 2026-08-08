@@ -388,7 +388,7 @@ const {
   sendPushNotification,
   sendPushToUser,
   sendPushToRole,
-} = require('../services/fcmService');
+} = require('../services/expoPushService');
 
 /**
  * Activity Notification Logger & Push Dispatcher Helper
@@ -423,7 +423,7 @@ async function logActivityNotification(userId, role, title, body, tripId = null)
       tripId,
     });
 
-    // High-priority Push Notification via Firebase Cloud Messaging (FCM) & Expo
+    // High-priority Push Notification via Expo Push API (exp.host)
     if (userId) {
       await sendPushToUser(userId, {
         title,

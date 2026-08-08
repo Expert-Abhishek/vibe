@@ -6,7 +6,7 @@ const { emitNotification, emitWalletUpdate } = require('../config/socket');
 
 const router = express.Router();
 
-const { sendPushToUser } = require('../services/fcmService');
+const { sendPushToUser } = require('../services/expoPushService');
 
 async function logWalletNotification(userId, role, title, body) {
   try {

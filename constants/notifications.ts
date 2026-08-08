@@ -162,7 +162,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 }
 
 /**
- * Get native FCM Device Token or Expo Push Token for Backend registration
+ * Get Expo Push Token for Backend registration (ExponentPushToken[...])
  */
 export async function getExpoPushToken(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
@@ -171,32 +171,38 @@ export async function getExpoPushToken(): Promise<string | null> {
     if (!Notifications) return null;
 
     const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) return null;
-
-    // 1. Try fetching direct native FCM device registration token
-    if (typeof Notifications.getDevicePushTokenAsync === 'function') {
-      try {
-        const deviceToken = await Notifications.getDevicePushTokenAsync();
-        if (deviceToken?.data) {
-          return String(deviceToken.data);
-        }
-      } catch (devTokenErr) {
-        // fallback to Expo token
-      }
+    if (!hasPermission) {
+      console.warn('⚠️ Push notification permission not granted.');
+      return null;
     }
 
-    // 2. Fallback to Expo Push Token
     if (typeof Notifications.getExpoPushTokenAsync === 'function') {
-      const projectId = '2a8823ee-df40-49f4-95b6-452edc6a3025';
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId,
-      });
-      return tokenData?.data || null;
+      try {
+        const Constants = require('expo-constants').default;
+        const projectId =
+          Constants?.expoConfig?.extra?.eas?.projectId ||
+          Constants?.easConfig?.projectId ||
+          '2a8823ee-df40-49f4-95b6-452edc6a3025';
+
+        const tokenData = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
+
+        if (tokenData?.data) {
+          return String(tokenData.data);
+        }
+      } catch (err: any) {
+        console.warn('getExpoPushTokenAsync with projectId error, trying default:', err?.message);
+        const fallbackTokenData = await Notifications.getExpoPushTokenAsync();
+        if (fallbackTokenData?.data) {
+          return String(fallbackTokenData.data);
+        }
+      }
     }
 
     return null;
   } catch (e: any) {
-    console.warn('Push Token fetch warning:', e?.message || e);
+    console.warn('Expo Push Token fetch warning:', e?.message || e);
     return null;
   }
 }
