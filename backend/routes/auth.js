@@ -1318,12 +1318,12 @@ async function sendFast2SmsOtp(phoneNumber, otpCode) {
 
 /**
  * POST /api/auth/send-reset-otp
- * Send 6-digit OTP for Forgot Password using Fast2SMS API Key
+ * Send 4-digit OTP for Forgot Password using Fast2SMS API Key
  */
 router.post('/send-reset-otp', async (req, res) => {
   try {
-    const { phone, phoneNumber } = req.body;
-    const rawPhone = (phone || phoneNumber || '').trim();
+    const { phone } = req.body;
+    const rawPhone = (phone || '').trim();
 
     if (!rawPhone) {
       return res.status(400).json({ success: false, message: 'Phone number is required.' });
@@ -1339,8 +1339,8 @@ router.post('/send-reset-otp', async (req, res) => {
     // 1. Check if user exists with this phone number
     const userRes = await db.query(
       `SELECT id, name, phone, role FROM users 
-       WHERE phone LIKE $1 OR phone = $2 OR REPLACE(REPLACE(phone, ' ', ''), '+', '') LIKE $3`,
-      [`%${cleanPhone}`, cleanPhone, `%${cleanPhone}`]
+       WHERE phone LIKE $1 OR phone = $2 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $2`,
+      [`%${cleanPhone}`, cleanPhone]
     );
 
     if (userRes.rows.length === 0) {
@@ -1352,14 +1352,13 @@ router.post('/send-reset-otp', async (req, res) => {
 
     // 2. Generate 4-digit OTP code
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes valid
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes valid
 
-    // 3. Save OTP in DB
+    // 3. Save OTP in DB (Clean delete old OTP then insert)
+    await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [cleanPhone, `%${cleanPhone}`]);
     await db.query(
       `INSERT INTO password_reset_otps (phone, otp, expires_at)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (phone) DO UPDATE 
-       SET otp = $2, expires_at = $3, created_at = CURRENT_TIMESTAMP`,
+       VALUES ($1, $2, $3)`,
       [cleanPhone, otpCode, expiresAt]
     );
 
@@ -1384,10 +1383,10 @@ router.post('/send-reset-otp', async (req, res) => {
  */
 router.post('/verify-reset-otp', async (req, res) => {
   try {
-    const { phone, phoneNumber, otp, code, newPassword, password } = req.body;
-    const rawPhone = (phone || phoneNumber || '').trim();
-    const otpCode = (otp || code || '').trim();
-    const targetPassword = (newPassword || password || '').trim();
+    const { phone, otp, newPassword } = req.body;
+    const rawPhone = (phone || '').trim();
+    const otpCode = (otp || '').trim();
+    const targetPassword = (newPassword || '').trim();
 
     if (!rawPhone || !otpCode) {
       return res.status(400).json({ success: false, message: 'Phone number and 4-digit OTP are required.' });
@@ -1396,9 +1395,13 @@ router.post('/verify-reset-otp', async (req, res) => {
     let cleanPhone = rawPhone.replace(/\D/g, '');
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
 
+    if (cleanPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit mobile number.' });
+    }
+
     // 1. Query stored OTP
     const otpRes = await db.query(
-      `SELECT otp, expires_at FROM password_reset_otps 
+      `SELECT otp, expires_at, created_at FROM password_reset_otps 
        WHERE phone = $1 OR phone LIKE $2 
        ORDER BY created_at DESC LIMIT 1`,
       [cleanPhone, `%${cleanPhone}`]
@@ -1410,14 +1413,22 @@ router.post('/verify-reset-otp', async (req, res) => {
 
     const record = otpRes.rows[0];
 
-    // Check expiration
-    if (new Date() > new Date(record.expires_at)) {
-      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new code.' });
+    // Check code match (case-insensitive & trimmed)
+    if (String(record.otp).trim() !== String(otpCode).trim()) {
+      return res.status(400).json({ success: false, message: 'Invalid 4-digit OTP code. Please check and try again.' });
     }
 
-    // Check code match
-    if (record.otp !== otpCode) {
-      return res.status(400).json({ success: false, message: 'Invalid 4-digit OTP code. Please check and try again.' });
+    // Check expiration (generous 15 minute window)
+    const expiryDate = record.expires_at ? new Date(record.expires_at) : null;
+    const createdDate = record.created_at ? new Date(record.created_at) : null;
+    const now = new Date();
+
+    const isExpired = expiryDate 
+      ? (now.getTime() - expiryDate.getTime() > 15 * 60 * 1000 && now.getTime() - (createdDate ? createdDate.getTime() : 0) > 15 * 60 * 1000)
+      : false;
+
+    if (isExpired) {
+      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new code.' });
     }
 
     // 2. If newPassword is provided, update password in DB
@@ -1429,9 +1440,9 @@ router.post('/verify-reset-otp', async (req, res) => {
       const passwordHash = await bcrypt.hash(targetPassword, 10);
       const updateRes = await db.query(
         `UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP 
-         WHERE phone LIKE $2 OR phone = $3 OR REPLACE(REPLACE(phone, ' ', ''), '+', '') LIKE $4 
+         WHERE phone LIKE $2 OR phone = $3 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $3 
          RETURNING id, name, phone, role, status, email, profile_image, theme, language`,
-        [passwordHash, `%${cleanPhone}`, cleanPhone, `%${cleanPhone}`]
+        [passwordHash, `%${cleanPhone}`, cleanPhone]
       );
 
       // Clear reset OTP
