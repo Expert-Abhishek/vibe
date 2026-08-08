@@ -69,12 +69,15 @@ router.post('/register', async (req, res) => {
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
     const cleanEmail = email ? email.trim().toLowerCase() : null;
 
-    // Optional OTP verification check if provided
+    // OTP verification check if provided
     const otpCode = (req.body.otp || req.body.code || '').trim();
     if (otpCode) {
+      if (otpCode.length !== 4) {
+        return res.status(400).json({ success: false, message: 'Valid 4-digit verification OTP code is required.' });
+      }
       const otpCheck = await db.query('SELECT otp, expires_at FROM registration_otps WHERE phone = $1', [cleanPhone]);
       if (otpCheck.rows.length === 0 || otpCheck.rows[0].otp !== otpCode || new Date() > new Date(otpCheck.rows[0].expires_at)) {
-        return res.status(400).json({ success: false, message: 'Invalid or expired registration OTP code.' });
+        return res.status(400).json({ success: false, message: 'Invalid or expired 4-digit registration OTP code.' });
       }
       await db.query('DELETE FROM registration_otps WHERE phone = $1', [cleanPhone]);
     }
@@ -1346,8 +1349,8 @@ router.post('/send-reset-otp', async (req, res) => {
       });
     }
 
-    // 2. Generate 6-digit OTP code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // 2. Generate 4-digit OTP code
+    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes valid
 
     // 3. Save OTP in DB
@@ -1376,7 +1379,7 @@ router.post('/send-reset-otp', async (req, res) => {
 
 /**
  * POST /api/auth/verify-reset-otp
- * Verify 6-digit OTP and reset password for user
+ * Verify 4-digit OTP and reset password for user
  */
 router.post('/verify-reset-otp', async (req, res) => {
   try {
@@ -1386,7 +1389,7 @@ router.post('/verify-reset-otp', async (req, res) => {
     const targetPassword = (newPassword || password || '').trim();
 
     if (!rawPhone || !otpCode) {
-      return res.status(400).json({ success: false, message: 'Phone number and 6-digit OTP are required.' });
+      return res.status(400).json({ success: false, message: 'Phone number and 4-digit OTP are required.' });
     }
 
     let cleanPhone = rawPhone.replace(/\D/g, '');
@@ -1411,7 +1414,7 @@ router.post('/verify-reset-otp', async (req, res) => {
 
     // Check code match
     if (record.otp !== otpCode) {
-      return res.status(400).json({ success: false, message: 'Invalid 6-digit OTP code. Please check and try again.' });
+      return res.status(400).json({ success: false, message: 'Invalid 4-digit OTP code. Please check and try again.' });
     }
 
     // 2. If newPassword is provided, update password in DB
@@ -1459,7 +1462,7 @@ db.query(`
 
 /**
  * POST /api/auth/send-register-otp
- * Send 6-digit OTP via Fast2SMS for User Registration
+ * Send 4-digit OTP via Fast2SMS for User Registration
  */
 router.post('/send-register-otp', async (req, res) => {
   try {
@@ -1490,8 +1493,8 @@ router.post('/send-register-otp', async (req, res) => {
       });
     }
 
-    // 2. Generate 6-digit OTP code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // 2. Generate 4-digit OTP code
+    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes valid
 
     // 3. Save OTP in DB
@@ -1508,7 +1511,7 @@ router.post('/send-register-otp', async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Registration OTP code successfully sent to +91 ${cleanPhone}.`,
+      message: `Registration 4-digit OTP code successfully sent to +91 ${cleanPhone}.`,
       phone: cleanPhone,
       otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
     });
@@ -1520,7 +1523,7 @@ router.post('/send-register-otp', async (req, res) => {
 
 /**
  * POST /api/auth/verify-register-otp
- * Verify 6-digit OTP for User Registration
+ * Verify 4-digit OTP for User Registration
  */
 router.post('/verify-register-otp', async (req, res) => {
   try {
@@ -1529,7 +1532,7 @@ router.post('/verify-register-otp', async (req, res) => {
     const otpCode = (otp || code || '').trim();
 
     if (!rawPhone || !otpCode) {
-      return res.status(400).json({ success: false, message: 'Phone number and 6-digit OTP are required.' });
+      return res.status(400).json({ success: false, message: 'Phone number and 4-digit OTP are required.' });
     }
 
     let cleanPhone = rawPhone.replace(/\D/g, '');
@@ -1551,7 +1554,7 @@ router.post('/verify-register-otp', async (req, res) => {
     }
 
     if (record.otp !== otpCode) {
-      return res.status(400).json({ success: false, message: 'Invalid 6-digit OTP code. Please check and try again.' });
+      return res.status(400).json({ success: false, message: 'Invalid 4-digit OTP code. Please check and try again.' });
     }
 
     return res.json({

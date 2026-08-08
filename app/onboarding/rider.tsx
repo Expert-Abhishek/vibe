@@ -121,15 +121,17 @@ export default function RiderRegister() {
           router.replace('/(auth)/sign-in');
         }, 1500);
       } else {
-        const errorMsg = res.message || 'Registration failed. Invalid OTP code.';
-        setErrors({ api: errorMsg });
+        const errorMsg = res.message || 'Registration failed. Invalid 4-digit OTP code.';
+        setErrors({ api: errorMsg, otp: errorMsg });
         showToast(errorMsg, 'error');
+        Alert.alert('Registration Failed', errorMsg);
       }
     } catch (err: any) {
       setLoading(false);
       const errorMsg = err?.message || 'Server error. Please try again.';
       setErrors({ api: errorMsg });
       showToast(errorMsg, 'error');
+      Alert.alert('Error', errorMsg);
     }
   };
 

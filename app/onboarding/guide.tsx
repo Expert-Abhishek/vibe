@@ -195,6 +195,12 @@ export default function GuideRegister() {
           }
         } else {
           // 2. Submit registration with verified 4-digit OTP
+          const cleanOtp = otp.trim();
+          if (!cleanOtp || cleanOtp.length !== 4) {
+            setErrors(prev => ({ ...prev, otp: 'Enter valid 4-digit OTP code' }));
+            return;
+          }
+
           setLoading(true);
           try {
             const res = await registerUser({
@@ -203,7 +209,7 @@ export default function GuideRegister() {
               alternate_phone: cleanAltPhone,
               password: formData.password,
               role: 'guide',
-              otp: otp.trim(),
+              otp: cleanOtp,
               expertise: formData.expertise.trim(),
               license_id: formData.licenseId || 'KA-GUIDE-CERT',
               bio: formData.bio || `${formData.experience} years experienced tour guide`,
@@ -215,11 +221,15 @@ export default function GuideRegister() {
             if (res.success) {
               setKycSubmitted(true);
             } else {
-              Alert.alert('Registration Failed', res.message || 'Something went wrong during registration.');
+              const errMsg = res.message || 'Guide registration failed. Invalid 4-digit OTP code.';
+              setErrors(prev => ({ ...prev, otp: errMsg }));
+              Alert.alert('Registration Failed', errMsg);
             }
           } catch (err: any) {
             setLoading(false);
-            Alert.alert('Registration Error', err?.message || 'Failed to connect to backend server.');
+            const errMsg = err?.message || 'Failed to connect to backend server.';
+            setErrors(prev => ({ ...prev, otp: errMsg }));
+            Alert.alert('Registration Error', errMsg);
           }
         }
       }
@@ -419,6 +429,16 @@ export default function GuideRegister() {
 
           {currentStep === 2 && showOtpScreen && (
             <View style={[styles.formCard, { marginTop: verticalScale(14) }]}>
+              <TouchableOpacity
+                onPress={() => setShowOtpScreen(false)}
+                style={{ flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(14) }}
+              >
+                <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>
+                  Edit Details / Change Phone
+                </Text>
+              </TouchableOpacity>
+
               <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
                 Enter Verification OTP Code 🔐
               </Text>
@@ -433,12 +453,34 @@ export default function GuideRegister() {
                 value={otp}
                 onChangeText={(text: string) => {
                   setOtp(text.replace(/[^0-9]/g, ''));
-                  if (errors.otp) setErrors(prev => ({ ...prev, otp: undefined }));
+                  setErrors(prev => {
+                    const next = { ...prev };
+                    delete next.otp;
+                    return next;
+                  });
                 }}
                 keyboardType="number-pad"
                 maxLength={4}
                 error={errors.otp}
               />
+
+              <TouchableOpacity
+                style={{ marginTop: verticalScale(14), alignItems: 'center' }}
+                onPress={async () => {
+                  const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+                  setLoading(true);
+                  const sendRes = await sendRegisterOtpApi(cleanPhone);
+                  setLoading(false);
+                  if (sendRes.success) {
+                    Alert.alert('📱 OTP Resent', `A new 4-digit OTP has been sent to +91 ${cleanPhone} via SMS.`);
+                  } else {
+                    Alert.alert('Resend Failed', sendRes.message || 'Failed to resend OTP.');
+                  }
+                }}
+                disabled={loading}
+              >
+                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>Resend 4-Digit OTP via SMS</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -576,6 +618,15 @@ const styles = StyleSheet.create({
   },
   dash: { width: scale(6), height: scale(3), borderRadius: scale(2), backgroundColor: colors.line },
   dashActive: { backgroundColor: colors.amber },
+
+  formCard: {
+    backgroundColor: colors.surface,
+    borderRadius: scale(16),
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: scale(20),
+    marginBottom: verticalScale(24),
+  },
 
   formSection: { marginTop: verticalScale(4), minHeight: verticalScale(260) },
 
