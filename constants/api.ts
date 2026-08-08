@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { adminState } from './admin-state';
 
 // For local testing:
 // - Android Emulator: 10.0.2.2:5000
@@ -8,6 +9,16 @@ const RENDER_API_URL = 'https://vibe-backend-tlaw.onrender.com';
 const DEV_API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || RENDER_API_URL || DEV_API_URL;
+export const ADMIN_PANEL_URL = process.env.EXPO_PUBLIC_ADMIN_URL || 'https://vibe-admin-panel.vercel.app';
+
+/**
+ * Get the Web Password Reset URL pointing to the Admin-Panel baseUrl
+ */
+export function getResetPasswordWebUrl(phone?: string): string {
+  const base = ADMIN_PANEL_URL.replace(/\/$/, '');
+  const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+  return cleanPhone ? `${base}/reset-password?phone=${cleanPhone}` : `${base}/reset-password`;
+}
 
 export interface RegisterPayload {
   name: string;

@@ -194,13 +194,17 @@ export default function RiderRegister() {
                 <View style={styles.requiredDot} />
               </View>
               <TextInput
-                style={[styles.input, { letterSpacing: 8, fontSize: moderateFontScale(22), textAlign: 'center', fontWeight: '900', color: colors.amber }]}
-                placeholder="4-Digit OTP"
-                placeholderTextColor={colors.textFaint}
+                style={[styles.otpInput, errors.otp && styles.inputError]}
+                placeholder="0 0 0 0"
+                placeholderTextColor="rgba(245, 197, 24, 0.3)"
                 value={otp}
                 onChangeText={(t) => {
                   setOtp(t.replace(/[^0-9]/g, ''));
-                  if (errors.otp) setErrors(prev => ({ ...prev, otp: undefined }));
+                  setErrors(prev => {
+                    const next = { ...prev };
+                    delete next.otp;
+                    return next;
+                  });
                 }}
                 keyboardType="number-pad"
                 maxLength={4}
@@ -230,7 +234,7 @@ export default function RiderRegister() {
                 onPress={handleSendOtp}
                 disabled={loading}
               >
-                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>Resend OTP via SMS</Text>
+                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>Resend 4-Digit OTP via SMS</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -248,11 +252,15 @@ export default function RiderRegister() {
                 <TextInput
                   style={[styles.input, errors.name && styles.inputError]}
                   placeholder="As it appears on your ID"
-                  placeholderTextColor={colors.textFaint}
+                  placeholderTextColor="rgba(245, 244, 240, 0.4)"
                   value={name}
                   onChangeText={(t) => {
                     setName(t);
-                    if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
+                    setErrors(prev => {
+                      const next = { ...prev };
+                      delete next.name;
+                      return next;
+                    });
                   }}
                   onFocus={() => scrollToInput(120)}
                 />
@@ -270,11 +278,15 @@ export default function RiderRegister() {
                   placeholder="e.g. 9876543210"
                   keyboardType="phone-pad"
                   maxLength={10}
-                  placeholderTextColor={colors.textFaint}
+                  placeholderTextColor="rgba(245, 244, 240, 0.4)"
                   value={phone}
                   onChangeText={(t) => {
                     setPhone(t.replace(/[^0-9]/g, ''));
-                    if (errors.phone) setErrors(prev => ({ ...prev, phone: undefined }));
+                    setErrors(prev => {
+                      const next = { ...prev };
+                      delete next.phone;
+                      return next;
+                    });
                   }}
                   onFocus={() => scrollToInput(180)}
                 />
@@ -291,17 +303,21 @@ export default function RiderRegister() {
                   <TextInput
                     style={styles.passwordInput}
                     placeholder="Min 6 characters"
-                    placeholderTextColor={colors.textFaint}
+                    placeholderTextColor="rgba(245, 244, 240, 0.4)"
                     secureTextEntry={!showPassword}
                     value={password}
                     onChangeText={(t) => {
                       setPassword(t);
-                      if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
+                      setErrors(prev => {
+                        const next = { ...prev };
+                        delete next.password;
+                        return next;
+                      });
                     }}
                     onFocus={() => scrollToInput(240)}
                   />
                   <TouchableOpacity
-                    style={{ padding: scale(8) }}
+                    style={{ padding: scale(10) }}
                     onPress={() => setShowPassword(!showPassword)}
                   >
                     <MaterialIcons
@@ -429,9 +445,14 @@ const styles = StyleSheet.create({
 
   input: {
     backgroundColor: colors.surfaceAlt,
-    padding: scale(15), borderRadius: scale(10),
-    borderWidth: 1, borderColor: colors.line,
-    fontSize: moderateFontScale(15), color: colors.textPrimary,
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(13),
+    borderRadius: scale(10),
+    borderWidth: 1,
+    borderColor: colors.line,
+    fontSize: moderateFontScale(15),
+    fontWeight: '500',
+    color: colors.textPrimary,
   },
   passwordWrapper: {
     flexDirection: 'row',
@@ -440,13 +461,26 @@ const styles = StyleSheet.create({
     borderRadius: scale(10),
     borderWidth: 1,
     borderColor: colors.line,
-    paddingRight: scale(8),
   },
   passwordInput: {
     flex: 1,
-    padding: scale(15),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(13),
     fontSize: moderateFontScale(15),
+    fontWeight: '500',
     color: colors.textPrimary,
+  },
+  otpInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: scale(12),
+    borderWidth: 1.5,
+    borderColor: colors.amber,
+    fontSize: moderateFontScale(24),
+    textAlign: 'center',
+    fontWeight: '800',
+    color: colors.amber,
+    paddingVertical: verticalScale(14),
+    letterSpacing: scale(10),
   },
   inputError: { borderColor: colors.danger },
   errorText: { color: colors.danger, fontSize: moderateFontScale(12), marginTop: verticalScale(6) },

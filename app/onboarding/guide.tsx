@@ -446,10 +446,14 @@ export default function GuideRegister() {
                 We sent a 4-digit verification code to primary mobile <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {formData.phone}</Text>
               </Text>
 
-              <Field
-                label="4-Digit OTP Code"
-                required
-                placeholder="4-Digit OTP Code"
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>4-Digit OTP Code</Text>
+                <View style={styles.requiredDot} />
+              </View>
+              <TextInput
+                style={[styles.otpInput, errors.otp && styles.inputError]}
+                placeholder="0 0 0 0"
+                placeholderTextColor="rgba(245, 197, 24, 0.3)"
                 value={otp}
                 onChangeText={(text: string) => {
                   setOtp(text.replace(/[^0-9]/g, ''));
@@ -461,8 +465,8 @@ export default function GuideRegister() {
                 }}
                 keyboardType="number-pad"
                 maxLength={4}
-                error={errors.otp}
               />
+              {errors.otp && <Text style={styles.errorText}>{errors.otp}</Text>}
 
               <TouchableOpacity
                 style={{ marginTop: verticalScale(14), alignItems: 'center' }}
@@ -531,7 +535,7 @@ export default function GuideRegister() {
 // ---- Small reusable field component ---------------------------------------
 
 function Field({
-  label, required, hint, error, secureTextEntry, onFocus, ...inputProps
+  label, required, hint, error, secureTextEntry, onFocus, value, style, ...inputProps
 }: {
   label: string;
   required?: boolean;
@@ -539,12 +543,14 @@ function Field({
   error?: string;
   secureTextEntry?: boolean;
   onFocus?: () => void;
+  value?: string;
+  style?: any;
   [key: string]: any;
 }) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <View style={{ marginBottom: 4 }}>
+    <View style={{ marginBottom: verticalScale(14) }}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
         {required && <View style={styles.requiredDot} />}
@@ -553,15 +559,16 @@ function Field({
       {secureTextEntry ? (
         <View style={[styles.passwordWrapper, error && styles.inputError]}>
           <TextInput
-            style={styles.passwordInput}
-            placeholderTextColor={colors.textFaint}
+            style={[styles.passwordInput, style]}
+            placeholderTextColor="rgba(245, 244, 240, 0.4)"
             secureTextEntry={!showPassword}
+            value={value}
             onFocus={onFocus}
             {...inputProps}
           />
           <TouchableOpacity
             onPress={() => setShowPassword(!showPassword)}
-            style={{ padding: scale(8) }}
+            style={{ padding: scale(10) }}
             activeOpacity={0.7}
           >
             <MaterialIcons
@@ -573,8 +580,9 @@ function Field({
         </View>
       ) : (
         <TextInput
-          style={[styles.input, error && styles.inputError]}
-          placeholderTextColor={colors.textFaint}
+          style={[styles.input, error && styles.inputError, style]}
+          placeholderTextColor="rgba(245, 244, 240, 0.4)"
+          value={value}
           onFocus={onFocus}
           {...inputProps}
         />
@@ -630,7 +638,7 @@ const styles = StyleSheet.create({
 
   formSection: { marginTop: verticalScale(4), minHeight: verticalScale(260) },
 
-  labelRow: { flexDirection: 'row', alignItems: 'center', marginTop: verticalScale(14), marginBottom: verticalScale(8) },
+  labelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(6) },
   label: { fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary },
   requiredDot: { width: scale(4), height: scale(4), borderRadius: scale(2), backgroundColor: colors.amber, marginLeft: scale(6) },
   hintText: { fontSize: moderateFontScale(11), color: colors.textFaint, marginLeft: scale(8) },
@@ -638,9 +646,14 @@ const styles = StyleSheet.create({
 
   input: {
     backgroundColor: colors.surfaceAlt,
-    padding: scale(15), borderRadius: scale(10),
-    borderWidth: 1, borderColor: colors.line,
-    fontSize: moderateFontScale(15), color: colors.textPrimary,
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(13),
+    borderRadius: scale(10),
+    borderWidth: 1,
+    borderColor: colors.line,
+    fontSize: moderateFontScale(15),
+    fontWeight: '500',
+    color: colors.textPrimary,
   },
   passwordWrapper: {
     flexDirection: 'row',
@@ -649,13 +662,26 @@ const styles = StyleSheet.create({
     borderRadius: scale(10),
     borderWidth: 1,
     borderColor: colors.line,
-    paddingRight: scale(8),
   },
   passwordInput: {
     flex: 1,
-    padding: scale(15),
+    paddingHorizontal: scale(16),
+    paddingVertical: verticalScale(13),
     fontSize: moderateFontScale(15),
+    fontWeight: '500',
     color: colors.textPrimary,
+  },
+  otpInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: scale(12),
+    borderWidth: 1.5,
+    borderColor: colors.amber,
+    fontSize: moderateFontScale(24),
+    textAlign: 'center',
+    fontWeight: '800',
+    color: colors.amber,
+    paddingVertical: verticalScale(14),
+    letterSpacing: scale(10),
   },
   inputError: { borderColor: colors.danger },
   errorText: { color: colors.danger, fontSize: moderateFontScale(12), marginTop: verticalScale(6) },

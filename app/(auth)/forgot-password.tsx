@@ -16,16 +16,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { sendResetOtpApi } from '@/constants/api';
+import { sendResetOtpApi, getResetPasswordWebUrl } from '@/constants/api';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleOpenWebResetPortal = () => {
+    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
+    const webUrl = getResetPasswordWebUrl(cleanPhone);
+    Linking.openURL(webUrl).catch(() => {
+      Alert.alert('Web Portal', `Please visit in your browser: ${webUrl}`);
+    });
+  };
+
   const handleSendOtp = async () => {
-    const cleanPhone = phoneNumber.trim();
-    if (!cleanPhone) {
+    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length !== 10) {
       Alert.alert('Phone Number Required', 'Please enter your registered 10-digit mobile number.');
       return;
     }
@@ -36,13 +44,13 @@ export default function ForgotPasswordScreen() {
       setLoading(false);
 
       if (res && res.success) {
-        Alert.alert('OTP Sent 🚀', res.message || 'A 6-digit OTP code has been sent to your mobile number via Fast2SMS.');
+        Alert.alert('OTP Sent 🚀', res.message || 'A 4-digit OTP code has been sent to your registered mobile number via SMS.');
         router.push({
           pathname: '/(auth)/verify-otp',
           params: { phone: res.phone || cleanPhone },
         });
       } else {
-        Alert.alert('OTP Request Failed', res?.message || 'Could not send OTP. Please check phone number.');
+        Alert.alert('OTP Request Failed', res?.message || 'Could not send OTP. Please verify your phone number.');
       }
     } catch (err: any) {
       setLoading(false);
@@ -73,12 +81,12 @@ export default function ForgotPasswordScreen() {
           <View style={styles.content}>
             <Text style={styles.title}>Reset your access</Text>
             <Text style={styles.subtitle}>
-              {"Enter your registered mobile number to receive a verification code. We'll send a 6-digit OTP to reset your password via SMS."}
+              {"Enter your registered mobile number to receive a verification code. We'll send a 4-digit OTP to reset your password via SMS."}
             </Text>
 
             {/* INPUT FIELD */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Phone Number</Text>
+              <Text style={styles.label}>Registered Phone Number</Text>
               <View style={styles.inputWrapper}>
                 <MaterialIcons
                   name="smartphone"
@@ -95,10 +103,28 @@ export default function ForgotPasswordScreen() {
                   keyboardType="phone-pad"
                   maxLength={10}
                   value={phoneNumber}
-                  onChangeText={setPhoneNumber}
+                  onChangeText={(t) => setPhoneNumber(t.replace(/\D/g, ''))}
                 />
               </View>
             </View>
+
+            {/* WEB PORTAL RESET OPTION BANNER */}
+            <TouchableOpacity
+              style={styles.webResetCard}
+              activeOpacity={0.8}
+              onPress={handleOpenWebResetPortal}
+            >
+              <View style={styles.webResetLeft}>
+                <MaterialIcons name="open-in-browser" size={scale(24)} color="#F5C518" />
+                <View style={{ flex: 1, marginLeft: scale(12) }}>
+                  <Text style={styles.webResetTitle}>Reset via Web Portal</Text>
+                  <Text style={styles.webResetSubtitle}>
+                    Open admin/web password reset page in browser
+                  </Text>
+                </View>
+              </View>
+              <MaterialIcons name="chevron-right" size={scale(20)} color="#F5C518" />
+            </TouchableOpacity>
           </View>
 
           {/* FOOTER ACTIONS */}
@@ -113,7 +139,7 @@ export default function ForgotPasswordScreen() {
                 <ActivityIndicator color="#101010" size="small" />
               ) : (
                 <View style={styles.buttonRow}>
-                  <Text style={styles.sendButtonText}>Send OTP Code</Text>
+                  <Text style={styles.sendButtonText}>Send 4-Digit OTP Code</Text>
                   <MaterialIcons name="send" size={scale(18)} color="#101010" />
                 </View>
               )}
@@ -261,5 +287,31 @@ const styles = StyleSheet.create({
   supportHighlight: {
     color: '#F5C518',
     fontWeight: '700',
+  },
+  webResetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(245, 197, 24, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 197, 24, 0.25)',
+    borderRadius: scale(16),
+    padding: scale(16),
+    marginTop: verticalScale(10),
+  },
+  webResetLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  webResetTitle: {
+    color: '#F5C518',
+    fontSize: moderateFontScale(14),
+    fontWeight: '700',
+  },
+  webResetSubtitle: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: moderateFontScale(12),
+    marginTop: verticalScale(2),
   },
 });

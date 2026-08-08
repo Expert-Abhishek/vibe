@@ -1424,17 +1424,22 @@ router.post('/verify-reset-otp', async (req, res) => {
       }
 
       const passwordHash = await bcrypt.hash(targetPassword, 10);
-      await db.query(
-        'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE phone LIKE $2 OR phone = $3',
+      const updateRes = await db.query(
+        'UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE phone LIKE $2 OR phone = $3 RETURNING id, name, phone, role, status, email, profile_image, theme, language',
         [passwordHash, `%${cleanPhone}`, cleanPhone]
       );
 
       // Clear reset OTP
       await db.query('DELETE FROM password_reset_otps WHERE phone = $1', [cleanPhone]);
 
+      const user = updateRes.rows[0];
+      const token = user ? jwt.sign({ id: user.id, phone: user.phone, role: user.role }, JWT_SECRET, { expiresIn: '30d' }) : undefined;
+
       return res.json({
         success: true,
         message: 'Password reset successfully! You can now log in with your new password.',
+        user,
+        token,
       });
     }
 
