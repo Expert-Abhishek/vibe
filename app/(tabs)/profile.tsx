@@ -36,12 +36,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useLanguage } from '@/hooks/use-language';
+import { useLanguage, SUPPORTED_LANGUAGES, AppLanguage } from '@/hooks/use-language';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const [appLang, setAppLang] = useLanguage();
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const isDark = colorScheme === 'dark';
   const { showError, showSuccess } = useAppModal();
 
@@ -235,8 +236,8 @@ export default function ProfileScreen() {
     danger: '#F0555F',
   };
 
-  // Kannada Translations Mapping
-  const trans = {
+  // Profile Translations Mapping
+  const profileTrans: Record<string, any> = {
     en: {
       profileRole: 'Vibzz Premium Member',
       accountInfo: 'Account Information',
@@ -250,9 +251,9 @@ export default function ProfileScreen() {
       darkTheme: 'Dark Theme',
       darkActive: 'Dark mode active',
       darkInactive: 'Light mode active',
-      langTitle: 'Kannada Language',
-      langActive: 'ಕನ್ನಡ ಸಕ್ರಿಯವಾಗಿದೆ',
-      langInactive: 'English is active',
+      langTitle: 'App Language',
+      langActive: 'Active',
+      langInactive: 'English',
       logout: 'Logout',
     },
     kn: {
@@ -268,12 +269,13 @@ export default function ProfileScreen() {
       darkTheme: 'ಡಾರ್ಕ್ ಥೀಮ್',
       darkActive: 'ಡಾರ್ಕ್ ಮೋಡ್ ಸಕ್ರಿಯವಾಗಿದೆ',
       darkInactive: 'ಲೈಟ್ ಮೋಡ್ ಸಕ್ರಿಯವಾಗಿದೆ',
-      langTitle: 'ಕನ್ನಡ ಭಾಷೆ',
-      langActive: 'ಕನ್ನಡ ಸಕ್ರಿಯವಾಗಿದೆ',
-      langInactive: 'ಇಂಗ್ಲಿಷ್ ಸಕ್ರಿಯವಾಗಿದೆ',
+      langTitle: 'ಆ್ಯಪ್ ಭಾಷೆ',
+      langActive: 'ಸಕ್ರಿಯವಾಗಿದೆ',
+      langInactive: 'ಇಂಗ್ಲಿಷ್',
       logout: 'ನಿರ್ಗಮಿಸಿ',
     },
-  }[appLang];
+  };
+  const trans = profileTrans[appLang] || profileTrans.en;
 
   const handlePickImage = async () => {
     Alert.alert(
@@ -550,29 +552,22 @@ export default function ProfileScreen() {
 
           <View style={[styles.divider, { backgroundColor: colors.line, marginVertical: verticalScale(10) }]} />
 
-          {/* Kannada Language toggle switch */}
-          <View style={styles.toggleRow}>
-            <View>
-              <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>{trans.langTitle}</Text>
-              <Text style={[styles.toggleSubLabel, { color: colors.textMuted }]}>
-                {appLang === 'kn' ? trans.langActive : trans.langInactive}
+          {/* Multi-Language Google Translate selector */}
+          <TouchableOpacity
+            style={[styles.toggleRow, { paddingVertical: verticalScale(8) }]}
+            onPress={() => setLanguageModalVisible(true)}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                <MaterialIcons name="translate" size={scale(18)} color={colors.amber} />
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary, fontSize: moderateFontScale(14) }]}>App Language</Text>
+              </View>
+              <Text style={[styles.toggleSubLabel, { color: colors.textMuted, marginTop: 4 }]}>
+                {SUPPORTED_LANGUAGES.find((l) => l.code === appLang)?.flag} {SUPPORTED_LANGUAGES.find((l) => l.code === appLang)?.nativeName} ({SUPPORTED_LANGUAGES.find((l) => l.code === appLang)?.name}) • Powered by Google Translate
               </Text>
             </View>
-            <Switch
-              value={appLang === 'kn'}
-              onValueChange={(val) => {
-                const newLang = val ? 'kn' : 'en';
-                setAppLang(newLang);
-                if (userId) saveUserSettingsApi(userId, { language: newLang });
-                Alert.alert(
-                  val ? 'ಭಾಷೆ ಬದಲಾಗಿದೆ' : 'Language Changed',
-                  val ? 'ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.' : 'Language has been changed to English.'
-                );
-              }}
-              trackColor={{ false: '#767577', true: colors.amber }}
-              thumbColor={appLang === 'kn' ? '#FFFFFF' : '#f4f3f4'}
-            />
-          </View>
+            <MaterialIcons name="chevron-right" size={scale(24)} color={colors.amber} />
+          </TouchableOpacity>
         </View>
 
         {/* HELP & CUSTOMER SUPPORT SECTION */}
@@ -891,6 +886,90 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </TouchableOpacity>
           </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Google Translate Language Selection Modal */}
+      <Modal
+        visible={languageModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setLanguageModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setLanguageModalVisible(false)}
+        >
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: scale(24),
+              borderTopRightRadius: scale(24),
+              padding: scale(20),
+              borderTopWidth: 1,
+              borderColor: colors.line,
+              maxHeight: '80%',
+            }}
+            activeOpacity={1}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(16) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                <MaterialIcons name="translate" size={scale(22)} color={colors.amber} />
+                <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: 'bold' }}>Select App Language</Text>
+              </View>
+              <TouchableOpacity onPress={() => setLanguageModalVisible(false)}>
+                <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginBottom: verticalScale(14) }}>
+              Translate app text instantly using Google Translate technology.
+            </Text>
+
+            <ScrollView style={{ maxHeight: verticalScale(340) }}>
+              {SUPPORTED_LANGUAGES.map((item) => {
+                const isSelected = appLang === item.code;
+                return (
+                  <TouchableOpacity
+                    key={item.code}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : colors.surfaceAlt,
+                      borderWidth: 1,
+                      borderColor: isSelected ? colors.amber : colors.line,
+                      borderRadius: scale(14),
+                      padding: scale(14),
+                      marginBottom: verticalScale(10),
+                    }}
+                    onPress={() => {
+                      setAppLang(item.code);
+                      if (userId) saveUserSettingsApi(userId, { language: item.code });
+                      setLanguageModalVisible(false);
+                      showSuccess('Language Changed', `App language set to ${item.nativeName} (${item.name}).`);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(12) }}>
+                      <Text style={{ fontSize: moderateFontScale(22) }}>{item.flag}</Text>
+                      <View>
+                        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(15), fontWeight: 'bold' }}>
+                          {item.nativeName}
+                        </Text>
+                        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>
+                          {item.name}
+                        </Text>
+                      </View>
+                    </View>
+                    {isSelected && (
+                      <MaterialIcons name="check-circle" size={scale(22)} color={colors.amber} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>

@@ -626,7 +626,7 @@ export default function DriverDashboardScreen() {
   };
 
   // Translations
-  const trans = {
+  const driverTrans: Record<string, any> = {
     en: {
       dashboard: 'Driver Dashboard',
       duty: 'Duty Status',
@@ -661,7 +661,8 @@ export default function DriverDashboardScreen() {
       call: 'ಅಡ್ಮಿನ್ ಸಹಾಯವಾಣಿಗೆ ಕರೆ ಮಾಡಿ',
       lang: 'ಭಾಷೆ ಮತ್ತು ಆಪ್ ಸೆಟ್ಟಿಂಗ್ಸ್',
     }
-  }[appLang];
+  };
+  const trans = driverTrans[appLang] || driverTrans.en;
 
   // Driver Session & Live Location Updates
   useEffect(() => {

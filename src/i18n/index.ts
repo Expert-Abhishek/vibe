@@ -4,7 +4,6 @@ import { initReactI18next } from 'react-i18next';
 export const resources = {
   en: {
     translation: {
-      // General & Common
       appName: 'Vibzz Sakleshpur',
       welcome: 'Welcome to Sakleshpur',
       searchPlaceholder: 'Search destinations, homestays, waterfalls...',
@@ -15,7 +14,11 @@ export const resources = {
       back: 'Back',
       language: 'Language',
       english: 'English',
+      hindi: 'हिंदी',
       kannada: 'ಕನ್ನಡ',
+      tamil: 'தமிழ்',
+      telugu: 'తెలుగు',
+      malayalam: 'മലയാളം',
       selectLanguage: 'Select Preferred Language',
 
       // Navigation & Tabs
@@ -73,6 +76,7 @@ export const resources = {
       role: 'User Role',
       walletBalance: 'Wallet Balance',
       logout: 'Logout',
+      changeLanguage: 'Change App Language',
 
       // Trip Status & Tracking
       liveStatus: 'Live Trip Status',
@@ -115,9 +119,116 @@ export const resources = {
       payout: 'Instant Bank Payout',
     },
   },
+  hi: {
+    translation: {
+      appName: 'वाइब्स सकलेशपुर',
+      welcome: 'सकलेशपुर में आपका स्वागत है',
+      searchPlaceholder: 'स्थानों, होमस्टे, झरनों की खोज करें...',
+      loading: 'लोड हो रहा है...',
+      cancel: 'रद्द करें',
+      confirm: 'पुष्टि करें',
+      save: 'सहेजें',
+      back: 'वापस',
+      language: 'भाषा',
+      english: 'English',
+      hindi: 'हिंदी',
+      kannada: 'ಕನ್ನಡ',
+      tamil: 'தமிழ்',
+      telugu: 'తెలుగు',
+      malayalam: 'മലയാളം',
+      selectLanguage: 'अपनी पसंदीदा भाषा चुनें',
+
+      home: 'होम',
+      trips: 'यात्राएं',
+      history: 'इतिहास',
+      profile: 'प्रोफ़ाइल',
+      driverDashboard: 'वाइब कैप्टन',
+
+      quickActions: 'त्वरित सवारी और टूर सेवाएं',
+      bookCab: 'कैब / एसयूवी बुक करें',
+      bookCabSub: 'तेज़ लोकल पिकअप और स्टेशन सवारी',
+      customTrip: 'कस्टम टूर पैकेज',
+      customTripSub: 'अपना यात्रा कार्यक्रम स्वयं बनाएं',
+      hireGuide: 'लोकल टूर गाइड',
+      hireGuideSub: 'विशेषज्ञ सकलेशपुर गाइड और ट्रैकिंग',
+      jungleSafari: 'जंगल सफारी',
+      jungleSafariSub: 'जीप एडवेंचर और ऑफरोड टूर',
+      popularDestinations: 'सकलेशपुर के प्रसिद्ध स्थान',
+      instantBooking: 'तत्काल बुकिंग',
+
+      selectPickup: 'पिकअप स्थान चुनें',
+      selectDrop: 'गंतव्य चुनें',
+      chooseVehicle: 'वाहन का प्रकार चुनें',
+      estimatedFare: 'अनुमानित किराया',
+      confirmRide: 'सवारी बुकिंग की पुष्टि करें',
+
+      createPackage: 'कस्टम टूर प्लान बनाएं',
+      selectCheckpoints: 'दर्शनीय स्थल चुनें',
+      duration: 'अवधि',
+      distance: 'अनुमानित दूरी',
+      bookPackageNow: 'टूर पैकेज अभी बुक करें',
+
+      selectGuide: 'लोकल गाइड चुनें',
+      experience: 'अनुभव',
+      perDayRate: 'प्रति दिन दर',
+      bookGuideNow: 'गाइड अभी बुक करें',
+
+      tripHistory: 'सवारी और बुकिंग इतिहास',
+      all: 'सभी',
+      cabs: 'कैब',
+      guides: 'गाइड',
+      completed: 'पूरा हुआ',
+      cancelled: 'रद्द',
+      noHistory: 'कोई पिछला बुकिंग रिकॉर्ड नहीं मिला',
+
+      userProfile: 'मेरी प्रोफ़ाइल और खाता',
+      phone: 'फ़ोन नंबर',
+      role: 'उपयोगकर्ता भूमिका',
+      walletBalance: 'वॉलेट शेष',
+      logout: 'लॉग आउट',
+      changeLanguage: 'ऐप की भाषा बदलें',
+
+      liveStatus: 'लाइव यात्रा स्थिति',
+      searchingCaptain: '⏳ कैप्टन द्वारा सवारी स्वीकार करने की प्रतीक्षा जारी है...',
+      partnerAssigned: 'ड्राइवर नियुक्त और रास्ते में है',
+      driverArrived: 'ड्राइवर पिकअप स्थान पर पहुंच गया है',
+      tripInProgress: 'यात्रा प्रगति पर है',
+      tripCompleted: 'यात्रा पूरी हुई 🎉',
+      tripCancelled: 'यात्रा रद्द / अस्वीकृत',
+      pickupPoint: 'पिकअप पॉइंट',
+      finalDropPoint: 'अंतिम ड्रॉप पॉइंट',
+      stop: 'स्टॉप',
+      tourItineraryStops: '📍 टूर के दर्शनीय स्थल',
+      driverWillPickUp: '* ड्राइवर पर्यटक को पिकअप पॉइंट से लेगा',
+      finalDestinationDrop: '* अंतिम ड्रॉप पॉइंट',
+      assignedCaptain: 'नियुक्त कैप्टन',
+      searchingNearbyCaptains: 'पास के कैप्टन खोजे जा रहे हैं',
+      verificationCodes: '🔐 यात्रा सत्यापन कोड',
+      startOtp: 'स्टार्ट ओटीपी',
+      endOtp: 'एंड ओटीपी',
+      paymentMode: 'भुगतान का तरीका',
+      totalFare: 'कुल किराया',
+      advanceDepositPaid: 'अग्रिम राशि का भुगतान किया गया',
+      remainingCashBalance: 'शेष नकद राशि',
+      cancelBooking: 'बुकिंग रद्द करें',
+      withdrawRequest: 'अनुरोध वापस लें',
+
+      online: 'ऑनलाइन',
+      offline: 'ऑफलाइन',
+      incomingRequest: 'नई यात्रा का अनुरोध',
+      acceptRide: 'सवारी स्वीकार करें',
+      declineRide: 'अस्वीकार करें',
+      enterStartOtp: 'स्टार्ट ओटीपी दर्ज करें',
+      enterEndOtp: 'एंड ओटीपी दर्ज करें',
+      verifyOtp: 'ओटीपी सत्यापित करें',
+      startRide: 'यात्रा शुरू करें',
+      completeRide: 'यात्रा पूरी करें',
+      todayEarnings: 'आज की कमाई',
+      payout: 'बैंक निकासी',
+    },
+  },
   kn: {
     translation: {
-      // General & Common
       appName: 'ವೈಬ್ ಸಕಲೇಶಪುರ',
       welcome: 'ಸಕಲೇಶಪುರಕ್ಕೆ ಸುಸ್ವಾಗತ',
       searchPlaceholder: 'ಪ್ರವಾಸಿ ತಾಣಗಳು, ಹೋಮ್‌ಸ್ಟೇಗಳನ್ನು ಹುಡುಕಿ...',
@@ -128,17 +239,19 @@ export const resources = {
       back: 'ಹಿಂದೆ',
       language: 'ಭಾಷೆ',
       english: 'English',
+      hindi: 'हिंदी',
       kannada: 'ಕನ್ನಡ',
+      tamil: 'தமிழ்',
+      telugu: 'తెలుగు',
+      malayalam: 'മലയാളം',
       selectLanguage: 'ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ',
 
-      // Navigation & Tabs
       home: 'ಹೋಮ್',
       trips: 'ಪ್ರಯಾಣಗಳು',
       history: 'ಇತಿಹಾಸ',
       profile: 'ಪ್ರೊಫೈಲ್',
       driverDashboard: 'ವೈಬ್ ಕ್ಯಾಪ್ಟನ್',
 
-      // Home Screen Cards & Options
       quickActions: 'ಸವಾರಿ ಮತ್ತು ಪ್ರವಾಸ ಸೇವೆಗಳು',
       bookCab: 'ಕ್ಯಾಬ್ ಬುಕಿಂಗ್',
       bookCabSub: 'ಲೋಕಲ್ ಪ್ರಯಾಣ ಮತ್ತು ಟ್ಯಾಕ್ಸಿ ಸೇವೆ',
@@ -151,27 +264,23 @@ export const resources = {
       popularDestinations: 'ಸಕಲೇಶಪುರದ ಪ್ರಸಿದ್ಧ ತಾಣಗಳು',
       instantBooking: 'ತಕ್ಷಣದ ಬುಕಿಂಗ್',
 
-      // Book Cab Screen
       selectPickup: 'ಪಿಕಪ್ ಸ್ಥಳ ಆಯ್ಕೆಮಾಡಿ',
       selectDrop: 'ತಲುಪುವ ಸ್ಥಳ ಆಯ್ಕೆಮಾಡಿ',
       chooseVehicle: 'ವಾಹನ ಪ್ರಕಾರ ಆಯ್ಕೆಮಾಡಿ',
       estimatedFare: 'ಅಂದಾಜು ದರ',
       confirmRide: 'ಸವಾರಿ ಬುಕಿಂಗ್ ಖಚಿತಪಡಿಸಿ',
 
-      // Custom Tour / Make Trip Screen
       createPackage: 'ಕಸ್ಟಮ್ ಪ್ರವಾಸ ಪಟ್ಟಿ ತಯಾರಿಸಿ',
       selectCheckpoints: 'ಪ್ರವಾಸಿ ತಾಣಗಳನ್ನು ಆಯ್ಕೆಮಾಡಿ',
       duration: 'ಸಮಯಾವಧಿ',
       distance: 'ಅಂದಾಜು ದೂರ',
       bookPackageNow: 'ಈಗಲೇ ಟೂರ್ ಪ್ಯಾಕೇಜ್ ಬುಕ್ ಮಾಡಿ',
 
-      // Hire Guide Screen
       selectGuide: 'ಸ್ಥಳೀಯ ಗೈಡ್ ಆಯ್ಕೆಮಾಡಿ',
       experience: 'ಅನುಭವ',
       perDayRate: 'ದಿನದ ದರ',
       bookGuideNow: 'ಈಗಲೇ ಗೈಡ್ ಬುಕ್ ಮಾಡಿ',
 
-      // History Screen
       tripHistory: 'ಪ್ರಯಾಣದ ಇತಿಹಾಸ',
       all: 'ಎಲ್ಲವೂ',
       cabs: 'ಕ್ಯಾಬ್‌ಗಳು',
@@ -180,14 +289,13 @@ export const resources = {
       cancelled: 'ರದ್ದುಗೊಂಡಿದೆ',
       noHistory: 'ಯಾವ ಹಳೆಯ ಪ್ರಯಾಣದ ದಾಖಲೆಗಳು ಸಿಗಲಿಲ್ಲ',
 
-      // Profile Screen
       userProfile: 'ನನ್ನ ಪ್ರೊಫೈಲ್ ಮತ್ತು ಖಾತೆ',
       phone: 'ಫೋನ್ ಸಂಖ್ಯೆ',
       role: 'ಬಳಕೆದಾರರ ಪಾತ್ರ',
       walletBalance: 'ವ್ಯಾಲೆಟ್ ಬಾಕಿ',
       logout: 'ಲಾಗ್ ಔಟ್',
+      changeLanguage: 'ಆ್ಯಪ್ ಭಾಷೆ ಬದಲಾಯಿಸಿ',
 
-      // Trip Status & Tracking
       liveStatus: 'ಲೈವ್ ಪ್ರಯಾಣದ ಸ್ಥಿತಿ',
       searchingCaptain: '⏳ ಕ್ಯಾಪ್ಟನ್ ಸವಾರಿಯನ್ನು ಸ್ವೀಕರಿಸಲು ಕಾಯಲಾಗುತ್ತಿದೆ...',
       partnerAssigned: 'ಚಾಲಕರು ನಿಯೋಜಿಸಲಾಗಿದೆ ಮತ್ತು ಹಾದಿಯಲ್ಲಿದ್ದಾರೆ',
@@ -213,7 +321,6 @@ export const resources = {
       cancelBooking: 'ಬುಕಿಂಗ್ ರದ್ದುಗೊಳಿಸಿ',
       withdrawRequest: 'ಮನವಿ ಹಿಂಪಡೆಯಿರಿ',
 
-      // Driver Dashboard
       online: 'ಆನ್‌ಲೈನ್',
       offline: 'ಆಫ್‌ಲೈನ್',
       incomingRequest: 'ಹೊಸ ಪ್ರಯಾಣದ ವಿನಂತಿ',
@@ -228,26 +335,147 @@ export const resources = {
       payout: 'ಬ್ಯಾಂಕ್ ಹಿಂಪಡೆಯುವಿಕೆ',
     },
   },
+  ta: {
+    translation: {
+      appName: 'வைப்ஸ் சகலேஷ்பூர்',
+      welcome: 'சகலேஷ்பூருக்கு நல்வரவு',
+      searchPlaceholder: 'இடங்கள், தங்குமிடங்கள் தேடுக...',
+      loading: 'ஏற்றப்படுகிறது...',
+      cancel: 'ரத்து செய்',
+      confirm: 'உறுதி செய்',
+      save: 'சேமி',
+      back: 'பின்செல்',
+      language: 'மொழி',
+      english: 'English',
+      hindi: 'हिंदी',
+      kannada: 'ಕನ್ನಡ',
+      tamil: 'தமிழ்',
+      telugu: 'తెలుగు',
+      malayalam: 'മലയാളം',
+      selectLanguage: 'மொழியைத் தேர்ந்தெடுக்கவும்',
+
+      home: 'முகப்பு',
+      trips: 'பயணங்கள்',
+      history: 'வரலாறு',
+      profile: 'சுயவிவரம்',
+      driverDashboard: 'வைப் கேப்டன்',
+
+      quickActions: 'பயணச் சேவைகள்',
+      bookCab: 'டாக்சி பதிவு செய்க',
+      bookCabSub: 'உள்ளூர் மற்றும் வெளியூர் பயணங்கள்',
+      customTrip: 'சுற்றுலாத் திட்டம்',
+      customTripSub: 'உங்கள் விருப்பப்படி திட்டமிடுங்கள்',
+      hireGuide: 'சுற்றுலா வழிகாட்டி',
+      hireGuideSub: 'சகலேஷ்பூர் வழிகாட்டிகள்',
+      jungleSafari: 'காட்டு சஃபாரி',
+      jungleSafariSub: 'ஜீப் பயணம் மற்றும் சாகசம்',
+      popularDestinations: 'பிரபலமான இடங்கள்',
+      instantBooking: 'உடனடி பதிவு',
+
+      selectPickup: 'தொடக்க இடம்',
+      selectDrop: 'செல்லும் இடம்',
+      chooseVehicle: 'வாகன வகை',
+      estimatedFare: 'மதிப்பிடப்பட்ட கட்டணம்',
+      confirmRide: 'பயணத்தை உறுதி செய்',
+
+      userProfile: 'என் கணக்கு',
+      phone: 'தொலைபேசி எண்',
+      role: 'பங்கு',
+      walletBalance: 'வாலட் இருப்பு',
+      logout: 'வெளியேறு',
+      changeLanguage: 'மொழியை மாற்று',
+    },
+  },
+  te: {
+    translation: {
+      appName: 'వైబ్స్ సకలేష్‌పూర్',
+      welcome: 'సకలేష్‌పూర్‌కు స్వాగతం',
+      searchPlaceholder: 'ప్రాంతాలు, హోమ్‌స్టేలను శోధించండి...',
+      loading: 'లోడ్ అవుతోంది...',
+      cancel: 'రద్దు చేయండి',
+      confirm: 'సరే',
+      save: 'సేవ్ చేయండి',
+      back: 'వెనుకకు',
+      language: 'భాష',
+      english: 'English',
+      hindi: 'हिंदी',
+      kannada: 'ಕನ್ನಡ',
+      tamil: 'தமிழ்',
+      telugu: 'తెలుగు',
+      malayalam: 'മലയാളം',
+      selectLanguage: 'మీ భాషను ఎంచుకోండి',
+
+      home: 'హోమ్',
+      trips: 'ప్రయాణాలు',
+      history: 'చరిత్ర',
+      profile: 'ప్రొఫైల్',
+      driverDashboard: 'వైబ్ కెప్టెన్',
+
+      quickActions: 'ప్రయాణ సేవలు',
+      bookCab: 'క్యాబ్ బుక్ చేయండి',
+      bookCabSub: 'స్థానిక మరియు ఇతర ప్రయాణాలు',
+      customTrip: 'టూర్ ప్యాకేజీ',
+      customTripSub: 'మీ స్వంత ప్రయాణాన్ని ప్లాన్ చేయండి',
+      hireGuide: 'లోకల్ గైడ్',
+      hireGuideSub: 'సకలేష్‌పూర్ గైడ్‌లు',
+      jungleSafari: 'జంగిల్ సఫారీ',
+      jungleSafariSub: 'జీప్ అడ్వెంచర్ సఫారీ',
+      popularDestinations: 'ప్రసిద్ధ ప్రదేశాలు',
+      instantBooking: 'తక్షణ బుకింగ్',
+
+      userProfile: 'నా ప్రొఫైల్',
+      phone: 'ఫోన్ నంబర్',
+      role: 'పాత్ర',
+      walletBalance: 'వాలెట్ నిల్వ',
+      logout: 'లాగౌట్',
+      changeLanguage: 'భాషను మార్చండి',
+    },
+  },
+  ml: {
+    translation: {
+      appName: 'വൈബ്സ് സകലേശ്പൂർ',
+      welcome: 'സകലേശ്പൂരിലേക്ക് സ്വാഗതം',
+      searchPlaceholder: 'സ്ഥലങ്ങൾ, ഹോംസ്റ്റേകൾ തിരയുക...',
+      loading: 'ലോഡ് ചെയ്യുന്നു...',
+      cancel: 'റദ്ദാക്കുക',
+      confirm: 'സ്ഥിരീകരിക്കുക',
+      save: 'സേവ് ചെയ്യുക',
+      back: 'തിരികെ',
+      language: 'ഭാഷ',
+      english: 'English',
+      hindi: 'हिंदी',
+      kannada: 'കന്നഡ',
+      tamil: 'തമിഴ്',
+      telugu: 'തെലുങ്ക്',
+      malayalam: 'മലയാളം',
+      selectLanguage: 'നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക',
+
+      home: 'ഹോം',
+      trips: 'യാത്രകൾ',
+      history: 'ചരിത്രം',
+      profile: 'പ്രൊഫൈൽ',
+      driverDashboard: 'വൈബ് ക്യാപ്റ്റൻ',
+
+      userProfile: 'എന്റെ പ്രൊഫൈൽ',
+      phone: 'ഫോൺ നമ്പർ',
+      role: 'റോൾ',
+      walletBalance: 'വാലറ്റ് ബാലൻസ്',
+      logout: 'ലോഗ്ഔട്ട്',
+      changeLanguage: 'ആപ്പ് ഭാഷ മാറ്റുക',
+    },
+  },
 };
 
 i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: 'en', // Default language is English
+    lng: 'en',
     fallbackLng: 'en',
     interpolation: {
-      escapeValue: false, // React handles escaping natively
+      escapeValue: false,
     },
     compatibilityJSON: 'v4',
   });
-
-export async function setAppLanguage(lang: 'en' | 'kn') {
-  await i18n.changeLanguage(lang);
-}
-
-export function getCurrentLanguage(): string {
-  return i18n.language || 'en';
-}
 
 export default i18n;

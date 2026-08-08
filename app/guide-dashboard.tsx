@@ -617,7 +617,7 @@ export default function GuideDashboardScreen() {
   };
 
   // Translations
-  const trans = {
+  const guideTrans: Record<string, any> = {
     en: {
       duty: 'Duty Status',
       activeTour: 'Active Tour',
@@ -648,7 +648,8 @@ export default function GuideDashboardScreen() {
       ringtone: 'ಅಲರ್ಟ್ ಟೋನ್ ಆಯ್ಕೆ',
       vol: 'ಅಲರ್ಟ್ ಟೋನ್ ವಾಲ್ಯೂಮ್',
     }
-  }[appLang];
+  };
+  const trans = guideTrans[appLang] || guideTrans.en;
 
   // Online Live Pending Requests Polling
   useEffect(() => {
