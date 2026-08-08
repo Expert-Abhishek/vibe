@@ -6,6 +6,8 @@ const { emitNotification, emitWalletUpdate } = require('../config/socket');
 
 const router = express.Router();
 
+const { sendPushToUser } = require('../services/fcmService');
+
 async function logWalletNotification(userId, role, title, body) {
   try {
     await db.query(
@@ -15,6 +17,14 @@ async function logWalletNotification(userId, role, title, body) {
     );
     emitNotification({ userId, role: role || 'tourist', title, body });
     emitWalletUpdate({ userId, role: role || 'tourist', description: body });
+    if (userId) {
+      sendPushToUser(userId, {
+        title,
+        body,
+        collapseKey: 'wallet_alert',
+        channelId: 'default',
+      });
+    }
   } catch (err) {
     console.warn('logWalletNotification error:', err.message);
   }
@@ -695,17 +705,6 @@ router.post('/topup-request', async (req, res) => {
     );
 
     const topupReq = result.rows[0];
-
-    // Log notification for Admin Queue
-    try {
-      await db.query(
-        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
-         VALUES ($1, 'admin', '💵 New Wallet Top-Up Request!', $2, CURRENT_TIMESTAMP)`,
-        [userId, `${userName} requested ₹${amount} wallet top-up. Proof uploaded.`]
-      );
-    } catch (nErr) {
-      console.warn('Failed to insert admin notification:', nErr);
-    }
 
     res.status(201).json({
       success: true,
