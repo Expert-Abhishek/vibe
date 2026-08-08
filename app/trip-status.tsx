@@ -505,22 +505,22 @@ export default function TripStatusScreen() {
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
         <MaterialIcons name="directions-car" size={scale(64)} color={colors.amber} style={{ marginBottom: 16 }} />
         <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(22), fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
-          No Active Trip Found
+          {t('noActiveTripFound')}
         </Text>
         <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
-          We couldn't find an active trip associated with this link. You can book a new trip or view your history.
+          {t('noActiveTripSub')}
         </Text>
         <TouchableOpacity
           style={{ backgroundColor: colors.amber, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
           onPress={() => router.navigate('/(tabs)')}
         >
-          <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>Book a New Trip</Text>
+          <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>{t('bookNewTrip')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, width: '100%', alignItems: 'center' }}
           onPress={() => router.navigate('/(tabs)/history')}
         >
-          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>View Trip History</Text>
+          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>{t('viewTripHistory')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
@@ -698,13 +698,13 @@ export default function TripStatusScreen() {
           const dNameLower = String(driverInfo?.name || '').toLowerCase();
           const hasDriver = Boolean(driverInfo?.name && !dNameLower.includes('searching'));
           const isPendingDriver = !hasDriver || (statusLower.includes('pending') || statusLower.includes('dispatched'));
-          const captainTitle = isPendingDriver ? 'Searching Captain...' : (driverInfo?.name || 'Searching Captain...');
+          const captainTitle = isPendingDriver ? `${t('searchingNearbyCaptains')}...` : (driverInfo?.name || `${t('searchingNearbyCaptains')}...`);
           const vehicleNumberDisplay = isPendingDriver ? 'Assigning Captain...' : (driverInfo?.vehicleNumber || 'Assigning Captain...');
 
           return (
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[styles.cardHeaderTitle, { color: colors.textMuted }]}>
-                {isPendingDriver ? 'SEARCHING NEARBY CAPTAINS' : 'ASSIGNED CAPTAIN'}
+                {isPendingDriver ? t('searchingNearbyCaptains') : t('assignedCaptain')}
               </Text>
               <View style={styles.driverInfoRow}>
                 <View style={styles.avatarCircle}>
@@ -719,7 +719,7 @@ export default function TripStatusScreen() {
                   <View style={styles.ratingRow}>
                     <MaterialIcons name="verified" size={scale(14)} color={colors.amber} />
                     <Text style={[styles.ratingText, { color: colors.textPrimary }]}>
-                      {isPendingDriver ? 'Targeted Category Captains' : 'Verified Partner'}
+                      {isPendingDriver ? t('targetedCategoryCaptains') : t('verifiedPartner')}
                     </Text>
                   </View>
                 </View>
@@ -740,11 +740,10 @@ export default function TripStatusScreen() {
         {/* Start OTP & End OTP Share Card */}
         {(() => {
           const isPending = statusLower.includes('pending') || statusLower.includes('dispatched') || statusLower.includes('search');
-          const hasOtp = !isPending && (startOtp && startOtp !== 'Pending' && startOtp !== '8240' || statusLower.includes('accept') || statusLower.includes('active'));
 
           return (
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
-              <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🔐 TRIP VERIFICATION CODES</Text>
+              <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>{t('verificationCodes')}</Text>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(10) }}>
                 {isPending ? 'Your Start OTP will be generated automatically as soon as a Captain accepts your ride.' : 'Share Start OTP with driver to begin ride, and End OTP at destination.'}
               </Text>
@@ -753,18 +752,18 @@ export default function TripStatusScreen() {
                 <View style={[styles.otpBox, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border, paddingVertical: verticalScale(14) }]}>
                   <Text style={[styles.otpLabel, { color: colors.textMuted, textAlign: 'center' }]}>START OTP STATUS</Text>
                   <Text style={[styles.otpValue, { color: colors.amber, fontSize: moderateFontScale(14), textAlign: 'center', letterSpacing: 0 }]}>
-                    ⏳ Generating on Acceptance...
+                    {t('startOtpGenerating')}
                   </Text>
                 </View>
               ) : (
                 <View style={styles.otpRowGrid}>
                   <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
-                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
+                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('startOtp')}</Text>
                     <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '8240'}</Text>
                   </View>
 
                   <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
-                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
+                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('endOtp')}</Text>
                     <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '4321'}</Text>
                   </View>
                 </View>
@@ -776,10 +775,10 @@ export default function TripStatusScreen() {
         {/* Package Plan Details & Waypoints Card */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1 }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(10) }}>
-            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🗺️ TOUR PACKAGE & ITINERARY</Text>
+            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>{t('tourPackageItinerary')}</Text>
             <View style={{ backgroundColor: 'rgba(245, 197, 24, 0.15)', paddingHorizontal: scale(8), paddingVertical: verticalScale(2), borderRadius: scale(12) }}>
               <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>
-                {durationHours} HOURS TOUR
+                {durationHours} {t('hoursTour')}
               </Text>
             </View>
           </View>
@@ -793,29 +792,29 @@ export default function TripStatusScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
               <MaterialIcons name="schedule" size={scale(14)} color={colors.amber} />
               <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted, fontWeight: '600' }}>
-                Duration: <Text style={{ color: colors.textPrimary }}>{durationHours} Hours</Text>
+                {t('duration')}: <Text style={{ color: colors.textPrimary }}>{durationHours} {t('hours')}</Text>
               </Text>
             </View>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
               <MaterialIcons name="directions-car" size={scale(14)} color={colors.success} />
               <Text style={{ fontSize: moderateFontScale(12), color: colors.textMuted, fontWeight: '600' }}>
-                Est. Distance: <Text style={{ color: colors.textPrimary }}>{distanceKm} KM</Text>
+                {t('estDistance')}: <Text style={{ color: colors.textPrimary }}>{distanceKm} {t('km')}</Text>
               </Text>
             </View>
           </View>
 
           {/* Checkpoint Nodes Timeline (Pickup -> Stop 1 to Stop N -> Final Drop) */}
           <Text style={{ fontSize: moderateFontScale(12), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(10), letterSpacing: 0.5 }}>
-            📍 TOUR ITINERARY STOPS ({Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 ? tripCheckpoints.length : 0} STOPS)
+            {t('tourItineraryStops')} ({Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0 ? tripCheckpoints.length : 0} {t('stops')})
           </Text>
 
           {(() => {
             const checkpointsList = Array.isArray(tripCheckpoints) && tripCheckpoints.length > 0
               ? tripCheckpoints.map((cp: any, idx: number) => {
-                const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `Stop ${idx + 1}`) : String(cp);
+                const cpName = typeof cp === 'object' && cp !== null ? (cp.checkpoint_name || cp.name || cp.title || `${t('stop')} ${idx + 1}`) : String(cp);
                 return {
-                  title: `STOP ${idx + 1}`,
+                  title: `${t('stop')} ${idx + 1}`,
                   name: cpName,
                   color: colors.amber,
                   note: null,
@@ -825,17 +824,17 @@ export default function TripStatusScreen() {
 
             const fullTimeline = [
               {
-                title: 'PICKUP POINT',
+                title: t('pickupPoint'),
                 name: pickupLocation || 'Pickup Point',
                 color: colors.success,
-                note: '* Driver will pick tourist up from Pickup Point',
+                note: t('driverWillPickUp'),
               },
               ...checkpointsList,
               {
-                title: 'FINAL DROP POINT',
+                title: t('finalDropPoint'),
                 name: dropLocation || 'Drop Destination',
                 color: colors.danger,
-                note: '* Final tour destination drop point',
+                note: t('finalDestinationDrop'),
               },
             ];
 
@@ -887,11 +886,11 @@ export default function TripStatusScreen() {
           {/* Payment Breakdown */}
           <View style={[styles.fareRow, { borderTopColor: colors.border, marginTop: verticalScale(14) }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Payment Mode</Text>
+              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>{t('paymentMode')}</Text>
               <Text style={[styles.paymentModeText, { color: colors.textPrimary }]}>{paymentMode}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Total Fare</Text>
+              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>{t('totalFare')}</Text>
               <Text style={[styles.fareVal, { color: colors.amber }]}>₹{fareAmount.toLocaleString('en-IN')}</Text>
             </View>
           </View>
@@ -899,11 +898,11 @@ export default function TripStatusScreen() {
           {advanceDepositPaid > 0 && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(8), paddingTop: verticalScale(8), borderTopWidth: 1, borderTopColor: colors.border }}>
               <View>
-                <Text style={{ fontSize: moderateFontScale(11), color: colors.success }}>Advance Deposit Paid</Text>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.success }}>{t('advanceDepositPaid')}</Text>
                 <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.success }}>₹{advanceDepositPaid.toLocaleString('en-IN')}</Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>Remaining Cash Balance</Text>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>{t('remainingCashBalance')}</Text>
                 <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>₹{remainingCashBalance.toLocaleString('en-IN')}</Text>
               </View>
             </View>
@@ -922,7 +921,7 @@ export default function TripStatusScreen() {
             ) : (
               <>
                 <MaterialIcons name="cancel" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-                <Text style={styles.cancelBtnText}>Withdraw Trip Request</Text>
+                <Text style={styles.cancelBtnText}>{t('withdrawTripRequest')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -950,7 +949,7 @@ export default function TripStatusScreen() {
             }}
           >
             <MaterialIcons name="phone-in-talk" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-            <Text style={styles.cancelBtnText}>CANCEL TRIP</Text>
+            <Text style={styles.cancelBtnText}>{t('cancelTrip')}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
