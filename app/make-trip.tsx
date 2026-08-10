@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { adminState } from '@/constants/admin-state';
-import { createTripApi, fetchDestinationsApi, fetchDriversApi, deductWalletApi, submitWalletDeductionRequestApi, bookTripApi } from '@/constants/api';
+import { createTripApi, fetchDestinationsApi, fetchDriversApi, deductWalletApi, submitWalletDeductionRequestApi, bookTripApi, validateVoucherApi } from '@/constants/api';
 import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { getUserSessionSync } from '@/constants/authStore';
 import { openRazorpayPayment } from '@/constants/razorpay';
@@ -46,6 +46,12 @@ export default function MakeTripScreen() {
   const [selectedRide, setSelectedRide] = useState<string>((searchParams.selectedRide as string) || '5seater');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('cash');
+
+  // Voucher states
+  const [voucherText, setVoucherText] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<string | null>(null);
+  const [voucherDiscount, setVoucherDiscount] = useState<number>(0);
+  const [voucherLoading, setVoucherLoading] = useState(false);
 
   // Vehicle selector modal visibility state
   const [isVehiclePickerVisible, setIsVehiclePickerVisible] = useState(false);
@@ -593,8 +599,37 @@ export default function MakeTripScreen() {
 
   const extraHoursRounded = Math.max(0, Math.ceil(extraHours));
   const extraAddonCharge = extraHoursRounded * vehicleHourlyRate;
-  // Upfront booking charges baseDayRate only. Extra hours are only charged at trip completion if time exceeds 6 PM.
-  const computedTripPrice = baseDayRate;
+  const baseComputedTripPrice = baseDayRate;
+  const computedTripPrice = Math.max(0, baseComputedTripPrice - voucherDiscount);
+
+  const handleApplyVoucher = async () => {
+    const code = voucherText.trim().toUpperCase();
+    if (!code) {
+      Alert.alert('Empty Voucher', 'Please enter a voucher code first.');
+      return;
+    }
+    setVoucherLoading(true);
+    try {
+      const res = await validateVoucherApi(code, 'custom_trip', baseComputedTripPrice);
+      if (res.success && res.data) {
+        setAppliedVoucher(res.data.code);
+        setVoucherDiscount(res.data.discountAmount);
+        Alert.alert('Voucher Applied! 🎉', res.message || `Saved ₹${res.data.discountAmount} on your custom trip!`);
+      } else {
+        Alert.alert('Voucher Error', res.message || 'Invalid or expired voucher code');
+      }
+    } catch (e: any) {
+      Alert.alert('Voucher Error', e.message || 'Could not validate voucher');
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherDiscount(0);
+    setVoucherText('');
+  };
 
 
   const handleConfirmTrip = () => {
@@ -750,6 +785,8 @@ export default function MakeTripScreen() {
           dropName: dropName,
           advanceDepositPaid: paymentAmount,
           remainingCashBalance: remainingAmount,
+          voucherCode: appliedVoucher || undefined,
+          voucherDiscount: voucherDiscount || 0,
         });
 
         if (tripRes?.data?.id || tripRes?.id) {
@@ -802,6 +839,8 @@ export default function MakeTripScreen() {
         scheduledTime: calculatedScheduledTime,
         checkpoints: checkpoints.map(c => c.name || (c as any).checkpoint_name || (c as any).destinationId || c),
         destinationIds: checkpoints.map(c => String((c as any).destinationId || (c as any).id || c.name)).filter(Boolean),
+        voucherCode: appliedVoucher || undefined,
+        voucherDiscount: voucherDiscount || 0,
       } as any);
 
       if (bookRes && (bookRes.success || bookRes.data)) {
@@ -1463,6 +1502,82 @@ export default function MakeTripScreen() {
 
             <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
 
+            {/* Voucher Promo Code Input Row */}
+            <View style={{
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#FFFFFF',
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: scale(12),
+              padding: scale(10),
+              marginVertical: verticalScale(6),
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                <MaterialIcons name="local-offer" size={scale(18)} color={colors.amber} />
+                <TextInput
+                  style={{
+                    flex: 1,
+                    height: verticalScale(36),
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F5F5F7',
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: scale(8),
+                    paddingHorizontal: scale(10),
+                    color: colors.textPrimary,
+                    fontSize: moderateFontScale(12),
+                    fontWeight: '700',
+                  }}
+                  placeholder="PROMO / VOUCHER CODE"
+                  placeholderTextColor={colors.textMuted}
+                  value={voucherText}
+                  onChangeText={setVoucherText}
+                  autoCapitalize="characters"
+                  editable={!appliedVoucher}
+                />
+                {appliedVoucher ? (
+                  <TouchableOpacity
+                    onPress={handleRemoveVoucher}
+                    style={{
+                      paddingHorizontal: scale(12),
+                      height: verticalScale(36),
+                      backgroundColor: '#EF4444',
+                      borderRadius: scale(8),
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(11) }}>Remove</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handleApplyVoucher}
+                    disabled={voucherLoading}
+                    style={{
+                      paddingHorizontal: scale(14),
+                      height: verticalScale(36),
+                      backgroundColor: colors.amber,
+                      borderRadius: scale(8),
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {voucherLoading ? (
+                      <ActivityIndicator size="small" color="#101010" />
+                    ) : (
+                      <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(11) }}>Apply</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+              {appliedVoucher && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: verticalScale(6), gap: scale(4) }}>
+                  <MaterialIcons name="check-circle" size={scale(14)} color="#10B981" />
+                  <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '700' }}>
+                    Voucher {appliedVoucher} applied! Saved ₹{voucherDiscount}
+                  </Text>
+                </View>
+              )}
+            </View>
+
             {/* 30% Pre-booking Advance Breakdown Card */}
             <View style={{
               backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
@@ -1475,7 +1590,12 @@ export default function MakeTripScreen() {
             }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
                 <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Total Estimated Fare</Text>
-                <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>₹{computedTripPrice}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                  {voucherDiscount > 0 && (
+                    <Text style={{ color: colors.textMuted, textDecorationLine: 'line-through', fontSize: moderateFontScale(11) }}>₹{baseComputedTripPrice}</Text>
+                  )}
+                  <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>₹{computedTripPrice}</Text>
+                </View>
               </View>
 
               {!adminState.instantBookingEnabled ? (

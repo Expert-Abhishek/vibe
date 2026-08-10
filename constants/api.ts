@@ -1342,3 +1342,108 @@ export async function verifyRegisterOtpApi(phone: string, otp: string): Promise<
     return { success: false, message: 'Failed to verify OTP. Check network connection.' };
   }
 }
+
+/* ==========================================================================
+   VOUCHER API SERVICES
+   ========================================================================== */
+
+export interface VoucherRecord {
+  id: string;
+  code: string;
+  description: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  minTripAmount: number;
+  maxDiscountAmount: number | null;
+  isActive: boolean;
+  expiryDate: string | null;
+  usageLimit: number | null;
+  usedCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function fetchVouchersApi(): Promise<VoucherRecord[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchVouchersApi error:', e);
+  }
+  return [];
+}
+
+export async function createVoucherApi(payload: Partial<VoucherRecord>): Promise<{ success: boolean; data?: VoucherRecord; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('createVoucherApi error:', e);
+    return { success: false, message: e.message || 'Failed to connect to backend server' };
+  }
+}
+
+export async function updateVoucherApi(id: string, payload: Partial<VoucherRecord>): Promise<{ success: boolean; data?: VoucherRecord; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('updateVoucherApi error:', e);
+    return { success: false, message: e.message || 'Failed to connect to backend server' };
+  }
+}
+
+export async function deleteVoucherApi(id: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers/${id}`, {
+      method: 'DELETE',
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('deleteVoucherApi error:', e);
+    return { success: false, message: e.message || 'Failed to connect to backend server' };
+  }
+}
+
+export async function validateVoucherApi(
+  code: string,
+  tripType: 'plan_package' | 'custom_trip',
+  amount: number
+): Promise<{
+  success: boolean;
+  message: string;
+  data?: {
+    id: string;
+    code: string;
+    description: string;
+    discountType: 'percentage' | 'fixed';
+    discountValue: number;
+    discountAmount: number;
+    originalAmount: number;
+    finalAmount: number;
+  };
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, tripType, amount }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('validateVoucherApi error:', e);
+    return { success: false, message: 'Failed to connect to server to validate voucher' };
+  }
+}
+

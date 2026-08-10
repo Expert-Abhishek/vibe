@@ -6,7 +6,8 @@ import {
   DriverRateConfig,
   Guide,
   GuideRateConfig,
-  Plan
+  Plan,
+  Voucher
 } from './types';
 
 
@@ -972,6 +973,64 @@ export async function cancelTripApi(tripId: string, reason?: string): Promise<bo
     return false;
   }
 }
+
+/* ==========================================================================
+   VOUCHER API SERVICES
+   ========================================================================== */
+
+export async function fetchVouchersApi(): Promise<Voucher[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers`);
+    const data = await res.json();
+    if (data.success && Array.isArray(data.data)) {
+      return data.data;
+    }
+  } catch (e) {
+    console.warn('fetchVouchersApi error:', e);
+  }
+  return [];
+}
+
+export async function createVoucherApi(payload: Partial<Voucher>): Promise<{ success: boolean; data?: Voucher; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('createVoucherApi error:', e);
+    return { success: false, message: e.message || 'Failed to connect to backend server' };
+  }
+}
+
+export async function updateVoucherApi(id: string, payload: Partial<Voucher>): Promise<{ success: boolean; data?: Voucher; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('updateVoucherApi error:', e);
+    return { success: false, message: e.message || 'Failed to connect to backend server' };
+  }
+}
+
+export async function deleteVoucherApi(id: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/vouchers/${id}`, {
+      method: 'DELETE',
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('deleteVoucherApi error:', e);
+    return { success: false, message: e.message || 'Failed to connect to backend server' };
+  }
+}
+
 
 
 

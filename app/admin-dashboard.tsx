@@ -1,5 +1,5 @@
 import { adminState, Driver, Guide } from '@/constants/admin-state';
-import { updateUserStatus, sendAdminNotificationApi, topupWalletApi, deductWalletApi } from '@/constants/api';
+import { updateUserStatus, sendAdminNotificationApi, topupWalletApi, deductWalletApi, fetchVouchersApi, createVoucherApi, updateVoucherApi, deleteVoucherApi } from '@/constants/api';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
@@ -109,15 +109,35 @@ export default function AdminDashboardScreen() {
 
   // Vouchers state
   const [vouchers, setVouchers] = useState<Voucher[]>([
-    { id: 'v1', code: 'VIBE15', desc: '15% Off all cabs bookings', type: 'percent', val: 15 },
-    { id: 'v2', code: 'SAVE100', desc: 'Flat ₹100 Off long tours', type: 'flat', val: 100 },
-    { id: 'v3', code: 'TOUR50', desc: '50% Off first guide hire', type: 'percent', val: 50 },
+    { id: 'v1', code: 'VIBE15', desc: '15% Off all tour packages', type: 'percent', val: 15 },
+    { id: 'v2', code: 'SAVE100', desc: 'Flat ₹100 Off custom trips', type: 'flat', val: 100 },
+    { id: 'v3', code: 'TOUR50', desc: '50% Off first package tour', type: 'percent', val: 50 },
   ]);
   const [newVoucherCode, setNewVoucherCode] = useState('');
   const [newVoucherDesc, setNewVoucherDesc] = useState('');
   const [newVoucherType, setNewVoucherType] = useState<'percent' | 'flat'>('percent');
   const [newVoucherVal, setNewVoucherVal] = useState('');
   const [editingVoucherId, setEditingVoucherId] = useState<string | null>(null);
+
+  // Sync vouchers with backend API
+  const refreshVouchers = async () => {
+    const data = await fetchVouchersApi();
+    if (data && data.length > 0) {
+      setVouchers(
+        data.map((v) => ({
+          id: v.id,
+          code: v.code,
+          desc: v.description || '',
+          type: v.discountType === 'percentage' ? 'percent' : 'flat',
+          val: v.discountValue,
+        }))
+      );
+    }
+  };
+
+  React.useEffect(() => {
+    refreshVouchers();
+  }, []);
 
   // Checkpoints state
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
@@ -167,7 +187,7 @@ export default function AdminDashboardScreen() {
   };
 
   // Voucher managers
-  const handleSaveVoucher = () => {
+  const handleSaveVoucher = async () => {
     if (!newVoucherCode.trim() || !newVoucherDesc.trim() || !newVoucherVal.trim()) {
       Alert.alert('Error', 'Please fill all voucher fields.');
       return;
@@ -178,32 +198,31 @@ export default function AdminDashboardScreen() {
       return;
     }
 
+    const payload = {
+      code: newVoucherCode.toUpperCase(),
+      description: newVoucherDesc,
+      discountType: newVoucherType === 'percent' ? ('percentage' as const) : ('fixed' as const),
+      discountValue: val,
+      isActive: true,
+    };
+
     if (editingVoucherId) {
-      // Edit
-      setVouchers(prev =>
-        prev.map(v =>
-          v.id === editingVoucherId
-            ? { ...v, code: newVoucherCode.toUpperCase(), desc: newVoucherDesc, type: newVoucherType, val }
-            : v
-        )
-      );
-      Alert.alert('Success', 'Voucher updated successfully.');
-      setEditingVoucherId(null);
-    } else {
-      // Add
-      if (vouchers.find(v => v.code === newVoucherCode.toUpperCase())) {
-        Alert.alert('Error', 'Voucher with this code already exists.');
-        return;
+      const res = await updateVoucherApi(editingVoucherId, payload);
+      if (res.success) {
+        Alert.alert('Success', 'Voucher updated successfully.');
+        setEditingVoucherId(null);
+        refreshVouchers();
+      } else {
+        Alert.alert('Error', res.message || 'Failed to update voucher');
       }
-      const newV: Voucher = {
-        id: `v_${Date.now()}`,
-        code: newVoucherCode.toUpperCase(),
-        desc: newVoucherDesc,
-        type: newVoucherType,
-        val,
-      };
-      setVouchers(prev => [...prev, newV]);
-      Alert.alert('Success', 'Voucher created successfully.');
+    } else {
+      const res = await createVoucherApi(payload);
+      if (res.success) {
+        Alert.alert('Success', 'Voucher created successfully.');
+        refreshVouchers();
+      } else {
+        Alert.alert('Error', res.message || 'Failed to create voucher');
+      }
     }
 
     // Reset inputs
@@ -227,7 +246,14 @@ export default function AdminDashboardScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => setVouchers(prev => prev.filter(v => v.id !== id)),
+        onPress: async () => {
+          const res = await deleteVoucherApi(id);
+          if (res.success) {
+            refreshVouchers();
+          } else {
+            Alert.alert('Error', res.message || 'Failed to delete voucher');
+          }
+        },
       },
     ]);
   };

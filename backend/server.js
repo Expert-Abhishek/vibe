@@ -12,6 +12,7 @@ const plansRoutes = require('./routes/plans');
 const tripsRoutes = require('./routes/trips');
 const walletRoutes = require('./routes/wallet');
 const notificationsRoutes = require('./routes/notifications');
+const vouchersRoutes = require('./routes/vouchers');
 
 dotenv.config();
 
@@ -27,7 +28,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // URL Rewrite Middleware for Admin / Wallet Compatibility
 app.use((req, res, next) => {
-  if (req.url.startsWith('/api/admin/payment-settings')) {
+  if (req.url.startsWith('/api/admin/vouchers')) {
+    req.url = req.url.replace('/api/admin/vouchers', '/api/vouchers');
+  } else if (req.url.startsWith('/api/admin/payment-settings')) {
     req.url = req.url.replace('/api/admin/payment-settings', '/api/wallet/admin/payment-settings');
   } else if (req.url.startsWith('/api/admin/wallet/topup-requests')) {
     req.url = req.url.replace('/api/admin/wallet/topup-requests', '/api/wallet/admin/topup-requests');
@@ -53,6 +56,8 @@ app.use('/api/v1/stations', tripsRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/vouchers', vouchersRoutes);
+
 
 
 

@@ -164,4 +164,21 @@ export interface Plan {
   updatedAt?: string;
 }
 
+export interface Voucher {
+  id: string;
+  code: string;
+  description: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  minTripAmount: number;
+  maxDiscountAmount: number | null;
+  isActive: boolean;
+  expiryDate: string | null;
+  usageLimit: number | null;
+  usedCount: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
 

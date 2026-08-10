@@ -10,6 +10,7 @@ import {
   QrCode,
   Route,
   ShieldCheck,
+  Ticket,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ const navItems = [
   { name: 'Guides', href: '/guides', icon: Compass },
   { name: 'Destinations', href: '/destinations', icon: MapPin },
   { name: 'Plans & Packages', href: '/plans', icon: Route },
+  { name: 'Vouchers Manager', href: '/vouchers', icon: Ticket },
   { name: 'Payment Settings', href: '/payment-settings', icon: QrCode },
   { name: 'Wallet Transactions', href: '/transactions', icon: Wallet },
   { name: 'Privacy Policy', href: '/privacy-policy', icon: ShieldCheck },

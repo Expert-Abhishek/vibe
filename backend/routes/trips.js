@@ -1688,6 +1688,8 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       addonCharge = 0,
       bookingType = 'INSTANT',
       scheduledTime = null,
+      voucherCode = req.body.voucherCode || req.body.voucher_code || null,
+      voucherDiscount = req.body.voucherDiscount || req.body.voucher_discount || 0,
     } = req.body;
 
     if (!title || !title.trim()) {
@@ -1889,6 +1891,22 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
     }
 
     const t = result.rows[0];
+    if (t && voucherCode) {
+      try {
+        await db.query(
+          `UPDATE trips SET voucher_code = $1, voucher_discount = $2 WHERE id = $3`,
+          [String(voucherCode).trim().toUpperCase(), parseFloat(voucherDiscount || 0), t.id]
+        );
+        await db.query(
+          `UPDATE vouchers SET used_count = used_count + 1 WHERE UPPER(code) = UPPER($1)`,
+          [String(voucherCode).trim()]
+        );
+        t.voucher_code = String(voucherCode).trim().toUpperCase();
+        t.voucher_discount = parseFloat(voucherDiscount || 0);
+      } catch (vErr) {
+        console.warn('Voucher tracking update error:', vErr.message);
+      }
+    }
     if (t && (t.customer_id || customerId || validCustomerId)) {
       await setUserHasTrip(t.customer_id || customerId || validCustomerId, true);
     }

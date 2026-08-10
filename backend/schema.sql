@@ -276,3 +276,25 @@ CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
 CREATE INDEX IF NOT EXISTS idx_trips_customer_id ON trips(customer_id);
 CREATE INDEX IF NOT EXISTS idx_trips_driver_id ON trips(driver_id);
 
+-- 19. Vouchers Table
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS voucher_code VARCHAR(50);
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS voucher_discount NUMERIC(10,2) DEFAULT 0.00;
+
+CREATE TABLE IF NOT EXISTS vouchers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    description TEXT,
+    discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
+    discount_value NUMERIC(10,2) NOT NULL CHECK (discount_value > 0),
+    min_trip_amount NUMERIC(10,2) DEFAULT 0.00,
+    max_discount_amount NUMERIC(10,2),
+    is_active BOOLEAN DEFAULT TRUE,
+    expiry_date TIMESTAMP WITH TIME ZONE,
+    usage_limit INT,
+    used_count INT DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
+
+

@@ -6,6 +6,7 @@ import { getSocket } from '@src/services/socketService';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   DeviceEventEmitter,
   FlatList,
@@ -55,7 +56,7 @@ interface TourPackage {
   destinationId?: string;
 }
 
-import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi } from '@/constants/api';
+import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi, validateVoucherApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 
@@ -84,6 +85,43 @@ export default function PlanRouteScreen() {
   const [isDropModalOpen, setIsDropModalOpen] = useState(false);
   const [pickupSearchQuery, setPickupSearchQuery] = useState('');
   const [dropSearchQuery, setDropSearchQuery] = useState('');
+
+  // Voucher states for Tour Packages
+  const [voucherText, setVoucherText] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<string | null>(null);
+  const [voucherDiscount, setVoucherDiscount] = useState<number>(0);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+
+  const handleApplyVoucher = async () => {
+    if (!selectedPlan) return;
+    const code = voucherText.trim().toUpperCase();
+    if (!code) {
+      Alert.alert('Empty Voucher', 'Please enter a voucher code first.');
+      return;
+    }
+    const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
+    setVoucherLoading(true);
+    try {
+      const res = await validateVoucherApi(code, 'plan_package', priceInfo.computedPrice);
+      if (res.success && res.data) {
+        setAppliedVoucher(res.data.code);
+        setVoucherDiscount(res.data.discountAmount);
+        Alert.alert('Voucher Applied! 🎉', res.message || `Saved ₹${res.data.discountAmount} on this package!`);
+      } else {
+        Alert.alert('Voucher Error', res.message || 'Invalid or expired voucher code');
+      }
+    } catch (e: any) {
+      Alert.alert('Voucher Error', e.message || 'Could not validate voucher');
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherDiscount(0);
+    setVoucherText('');
+  };
 
   const getInitialTimeParts = () => {
     const d = new Date();
@@ -425,7 +463,7 @@ export default function PlanRouteScreen() {
     }
 
     const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
-    const totalPrice = priceInfo.computedPrice;
+    const totalPrice = Math.max(0, priceInfo.computedPrice - voucherDiscount);
     const isPreBooking = !adminState.instantBookingEnabled;
     const is20Percent = isPreBooking && preBookingPaymentChoice === 'advance_20';
     const prebookPayOption = preBookingPaymentChoice === 'advance_20' ? 20 : 100;
@@ -509,6 +547,8 @@ export default function PlanRouteScreen() {
         addonCharge: priceInfo.extraAddonCharge,
         bookingType: isPreBooking ? 'PRE_BOOKED' : 'INSTANT',
         scheduledTime: calculatedScheduledTime,
+        voucherCode: appliedVoucher || undefined,
+        voucherDiscount: voucherDiscount || 0,
       });
 
       if (createdTrip && createdTrip.success === false) {
@@ -650,6 +690,8 @@ export default function PlanRouteScreen() {
       durationHours: totalHours,
       extraHours: priceInfo.extraHoursRounded,
       addonCharge: priceInfo.extraAddonCharge,
+      voucherCode: appliedVoucher || undefined,
+      voucherDiscount: voucherDiscount || 0,
     });
 
     const realTripId = createdTrip?.data?.id || createdTrip?.id || createdTrip?.tripId || `plan_book_${Date.now()}`;
@@ -1399,7 +1441,9 @@ export default function PlanRouteScreen() {
             {/* PRE-BOOKING FEES BREAKDOWN CARD */}
             {(() => {
               const priceInfo = calculatePackagePrice(selectedPlan, bookingVehicle);
-              const { computedPrice, baseDayRate, extraHoursRounded, extraAddonCharge, vehicleHourlyRate, totalTripHours } = priceInfo;
+              const baseComputedPrice = priceInfo.computedPrice;
+              const computedPrice = Math.max(0, baseComputedPrice - voucherDiscount);
+              const { baseDayRate, extraHoursRounded, extraAddonCharge, vehicleHourlyRate, totalTripHours } = priceInfo;
               const isPreBooking = !adminState.instantBookingEnabled;
               const is20Percent = isPreBooking && preBookingPaymentChoice === 'advance_20';
               const advancePayable = is20Percent ? Math.round(computedPrice * 0.20) : computedPrice;
@@ -1432,7 +1476,83 @@ export default function PlanRouteScreen() {
 
                   <View style={{ height: 1, backgroundColor: colors.border, marginVertical: verticalScale(8) }} />
 
-                  {/* <View style={{
+                  {/* Voucher Promo Code Input Row */}
+                  <View style={{
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#FFFFFF',
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: scale(12),
+                    padding: scale(10),
+                    marginVertical: verticalScale(6),
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                      <MaterialIcons name="local-offer" size={scale(18)} color={colors.amber} />
+                      <TextInput
+                        style={{
+                          flex: 1,
+                          height: verticalScale(36),
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F5F5F7',
+                          borderColor: colors.border,
+                          borderWidth: 1,
+                          borderRadius: scale(8),
+                          paddingHorizontal: scale(10),
+                          color: colors.textPrimary,
+                          fontSize: moderateFontScale(12),
+                          fontWeight: '700',
+                        }}
+                        placeholder="PROMO / VOUCHER CODE"
+                        placeholderTextColor={colors.textMuted}
+                        value={voucherText}
+                        onChangeText={setVoucherText}
+                        autoCapitalize="characters"
+                        editable={!appliedVoucher}
+                      />
+                      {appliedVoucher ? (
+                        <TouchableOpacity
+                          onPress={handleRemoveVoucher}
+                          style={{
+                            paddingHorizontal: scale(12),
+                            height: verticalScale(36),
+                            backgroundColor: '#EF4444',
+                            borderRadius: scale(8),
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: moderateFontScale(11) }}>Remove</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={handleApplyVoucher}
+                          disabled={voucherLoading}
+                          style={{
+                            paddingHorizontal: scale(14),
+                            height: verticalScale(36),
+                            backgroundColor: colors.amber,
+                            borderRadius: scale(8),
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          {voucherLoading ? (
+                            <ActivityIndicator size="small" color="#101010" />
+                          ) : (
+                            <Text style={{ color: '#101010', fontWeight: '900', fontSize: moderateFontScale(11) }}>Apply</Text>
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    {appliedVoucher && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: verticalScale(6), gap: scale(4) }}>
+                        <MaterialIcons name="check-circle" size={scale(14)} color="#10B981" />
+                        <Text style={{ color: '#10B981', fontSize: moderateFontScale(11), fontWeight: '700' }}>
+                          Voucher {appliedVoucher} applied! Saved ₹{voucherDiscount}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={{
                     backgroundColor: isDark ? 'rgba(245, 197, 24, 0.08)' : 'rgba(245, 197, 24, 0.1)',
                     borderWidth: 1.5,
                     borderColor: colors.amber,
@@ -1443,7 +1563,12 @@ export default function PlanRouteScreen() {
                   }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
                       <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Total Package Fare</Text>
-                      <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>₹{computedPrice}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+                        {voucherDiscount > 0 && (
+                          <Text style={{ color: colors.textMuted, textDecorationLine: 'line-through', fontSize: moderateFontScale(11) }}>₹{baseComputedPrice}</Text>
+                        )}
+                        <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>₹{computedPrice}</Text>
+                      </View>
                     </View>
 
                     {isPreBooking ? (
@@ -1464,7 +1589,7 @@ export default function PlanRouteScreen() {
                         <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(15) }}>₹{computedPrice}</Text>
                       </View>
                     )}
-                  </View> */}
+                  </View>
                 </>
               );
             })()}
@@ -1481,11 +1606,11 @@ export default function PlanRouteScreen() {
               <Text style={styles.confirmBtnText}>
                 {paymentMethod === 'cash'
                   ? (!adminState.instantBookingEnabled
-                    ? `Book via Cash (Pre-Booking Fees ₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
-                    : `Total Fare ₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice}`)
+                    ? `Book via Cash (Pre-Booking Fees ₹${Math.round(Math.max(0, calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice - voucherDiscount) * (preBookingPaymentChoice === 'advance_20' ? 0.20 : 1.0))})`
+                    : `Total Fare ₹${Math.max(0, calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice - voucherDiscount)}`)
                   : (!adminState.instantBookingEnabled
-                    ? `Pay Pre-Booking Fees (₹${Math.round(calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice * 0.20)})`
-                    : `Pay  Total Fare (₹${calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice})`)}
+                    ? `Pay Pre-Booking Fees (₹${Math.round(Math.max(0, calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice - voucherDiscount) * (preBookingPaymentChoice === 'advance_20' ? 0.20 : 1.0))})`
+                    : `Pay  Total Fare (₹${Math.max(0, calculatePackagePrice(selectedPlan, bookingVehicle).computedPrice - voucherDiscount)})`)}
               </Text>
             </TouchableOpacity>
 
