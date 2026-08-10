@@ -936,7 +936,7 @@ export default function DriverDashboardScreen() {
         if (!data) return;
 
         const session = getUserSessionSync();
-        const currentDriverId = String(session?.id || session?.userId || session?.profile?.id || '').toLowerCase().trim();
+        const currentDriverId = String(session?.id || (session as any)?.userId || session?.profile?.id || '').toLowerCase().trim();
         const acceptedDriverId = String(data.driverId || data.driver_id || data.assignedToId || '').toLowerCase().trim();
         const accTripId = String(data.tripId || data.id || '').toLowerCase().trim();
 
@@ -962,7 +962,7 @@ export default function DriverDashboardScreen() {
         const cancelTripId = String(cancelData.tripId || cancelData.id || '').toLowerCase().trim();
         const targetDriverId = String(cancelData.driver_id || cancelData.driverId || cancelData.assignedToId || '').toLowerCase().trim();
         const session = getUserSessionSync();
-        const currentDriverId = String(session?.id || session?.userId || session?.profile?.id || '').toLowerCase().trim();
+        const currentDriverId = String(session?.id || (session as any)?.userId || session?.profile?.id || '').toLowerCase().trim();
 
         // Check if cancellation targets THIS driver specifically or driver's active trip
         const isTargetDriver = (targetDriverId && currentDriverId && targetDriverId === currentDriverId) ||

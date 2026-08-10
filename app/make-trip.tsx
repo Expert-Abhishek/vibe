@@ -42,6 +42,7 @@ interface Checkpoint {
 
 export default function MakeTripScreen() {
   const router = useRouter();
+  const mainScrollViewRef = React.useRef<ScrollView>(null);
   const searchParams = useLocalSearchParams();
   const [selectedRide, setSelectedRide] = useState<string>((searchParams.selectedRide as string) || '5seater');
   const [selected4x4Car, setSelected4x4Car] = useState<string>('Thar');
@@ -933,7 +934,13 @@ export default function MakeTripScreen() {
         <View style={{ width: scale(40) }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={mainScrollViewRef}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(140) }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Selected Vehicle Indicator */}
         {selectedRide !== '' && (
           <View style={[styles.selectedRideBadge, { backgroundColor: 'rgba(245,197,24,0.08)', borderColor: colors.border }]}>
@@ -1532,6 +1539,11 @@ export default function MakeTripScreen() {
                   onChangeText={setVoucherText}
                   autoCapitalize="characters"
                   editable={!appliedVoucher}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      mainScrollViewRef.current?.scrollToEnd({ animated: true });
+                    }, 250);
+                  }}
                 />
                 {appliedVoucher ? (
                   <TouchableOpacity

@@ -306,6 +306,8 @@ export async function createTripApi(payload: {
   dropName?: string;
   advanceDepositPaid?: number;
   remainingCashBalance?: number;
+  voucherCode?: string;
+  voucherDiscount?: number;
 }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/trips/create-trip`, {

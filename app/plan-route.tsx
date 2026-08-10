@@ -11,7 +11,9 @@ import {
   DeviceEventEmitter,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -64,6 +66,7 @@ export default function PlanRouteScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const detailsScrollViewRef = React.useRef<ScrollView>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [livePlans, setLivePlans] = useState<any[]>([]);
@@ -839,7 +842,14 @@ export default function PlanRouteScreen() {
             <View style={{ width: scale(40) }} />
           </View>
 
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <ScrollView
+              ref={detailsScrollViewRef}
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: verticalScale(140) }]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets={true}
+            >
             {/* PLAN DETAILS HEADER */}
             <Text style={[styles.modalPlanName, { color: colors.amber }]}>{selectedPlan.name}</Text>
 
@@ -1081,7 +1091,7 @@ export default function PlanRouteScreen() {
 
                   if (filteredCategories.length === 0) {
                     return (
-                      <View style={{ padding: scale(12), backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(12), border: '1px solid ' + colors.border }}>
+                      <View style={{ padding: scale(12), backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: scale(12), borderWidth: 1, borderColor: colors.border }}>
                         <Text style={{ color: colors.textMuted, textAlign: 'center' }}>No vehicle categories enabled for this tour package.</Text>
                       </View>
                     );
@@ -1506,6 +1516,11 @@ export default function PlanRouteScreen() {
                         onChangeText={setVoucherText}
                         autoCapitalize="characters"
                         editable={!appliedVoucher}
+                        onFocus={() => {
+                          setTimeout(() => {
+                            detailsScrollViewRef.current?.scrollToEnd({ animated: true });
+                          }, 250);
+                        }}
                       />
                       {appliedVoucher ? (
                         <TouchableOpacity
@@ -1616,6 +1631,7 @@ export default function PlanRouteScreen() {
 
             <View style={{ height: verticalScale(30) }} />
           </ScrollView>
+        </KeyboardAvoidingView>
         </>
       )}
     </SafeAreaView>

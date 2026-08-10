@@ -164,7 +164,7 @@ export default function TripStatusScreen() {
               };
 
               if (Array.isArray(adminState.userTrips)) {
-                const target = adminState.userTrips.find((t: any) => String(t.id) === String(tripIdParam));
+                const target: any = adminState.userTrips.find((t: any) => String(t.id) === String(tripIdParam));
                 if (target) {
                   target.driverOrGuideName = updated.name;
                   target.driverName = updated.name;
@@ -298,7 +298,7 @@ export default function TripStatusScreen() {
             vehicleNumber: (dNum && dNum !== 'Assigning Captain...') ? dNum : prev.vehicleNumber,
           };
           if (Array.isArray(adminState.userTrips)) {
-            const target = adminState.userTrips.find((t: any) => String(t.id) === String(tripIdParam));
+            const target: any = adminState.userTrips.find((t: any) => String(t.id) === String(tripIdParam));
             if (target) {
               target.driverOrGuideName = updated.name;
               target.driverName = updated.name;
@@ -480,8 +480,17 @@ export default function TripStatusScreen() {
   };
 
   const statusLower = String(tripStatus).toLowerCase();
+  const dNameLower = String(driverInfo?.name || '').toLowerCase();
+  const isDriverAccepted = (
+    statusLower.includes('accept') ||
+    statusLower.includes('arrived') ||
+    statusLower.includes('start') ||
+    statusLower.includes('active') ||
+    statusLower.includes('progress')
+  ) && Boolean(driverInfo?.name && !dNameLower.includes('search'));
+
   const getStatusBadge = () => {
-    if (statusLower.includes('accepted')) return { text: t('partnerAssigned'), bg: '#10B981', color: '#FFFFFF' };
+    if (isDriverAccepted) return { text: t('partnerAssigned'), bg: '#10B981', color: '#FFFFFF' };
     if (statusLower.includes('arrived')) return { text: t('driverArrived'), bg: '#F5C518', color: '#101014' };
     if (statusLower.includes('start') || statusLower.includes('active')) return { text: t('tripInProgress'), bg: '#3B82F6', color: '#FFFFFF' };
     if (statusLower.includes('declined') || statusLower.includes('cancel')) return { text: t('tripCancelled'), bg: '#EF4444', color: '#FFFFFF' };
@@ -737,40 +746,27 @@ export default function TripStatusScreen() {
           );
         })()}
 
-        {/* Start OTP & End OTP Share Card */}
-        {(() => {
-          const isPending = statusLower.includes('pending') || statusLower.includes('dispatched') || statusLower.includes('search');
+        {/* Start OTP & End OTP Share Card - Only shown when driver accepts trip */}
+        {isDriverAccepted && (
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
+            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>{t('verificationCodes')}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(10) }}>
+              Share Start OTP with driver to begin ride, and End OTP at destination.
+            </Text>
 
-          return (
-            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
-              <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>{t('verificationCodes')}</Text>
-              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(10) }}>
-                {isPending ? 'Your Start OTP will be generated automatically as soon as a Captain accepts your ride.' : 'Share Start OTP with driver to begin ride, and End OTP at destination.'}
-              </Text>
+            <View style={styles.otpRowGrid}>
+              <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
+                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('startOtp')}</Text>
+                <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '8240'}</Text>
+              </View>
 
-              {isPending ? (
-                <View style={[styles.otpBox, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border, paddingVertical: verticalScale(14) }]}>
-                  <Text style={[styles.otpLabel, { color: colors.textMuted, textAlign: 'center' }]}>START OTP STATUS</Text>
-                  <Text style={[styles.otpValue, { color: colors.amber, fontSize: moderateFontScale(14), textAlign: 'center', letterSpacing: 0 }]}>
-                    {t('startOtpGenerating')}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.otpRowGrid}>
-                  <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
-                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('startOtp')}</Text>
-                    <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '8240'}</Text>
-                  </View>
-
-                  <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
-                    <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('endOtp')}</Text>
-                    <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '4321'}</Text>
-                  </View>
-                </View>
-              )}
+              <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
+                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('endOtp')}</Text>
+                <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '4321'}</Text>
+              </View>
             </View>
-          );
-        })()}
+          </View>
+        )}
 
         {/* Package Plan Details & Waypoints Card */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1 }]}>
@@ -909,48 +905,50 @@ export default function TripStatusScreen() {
           )}
         </View>
 
-        {/* Cancel / Withdraw Action Button for Pending and Active Trips */}
-        {statusLower.includes('pending') ? (
-          <TouchableOpacity
-            style={[styles.cancelBtn, { backgroundColor: colors.danger }]}
-            onPress={handleCancelTrip}
-            disabled={cancelling}
-          >
-            {cancelling ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <MaterialIcons name="cancel" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-                <Text style={styles.cancelBtnText}>{t('withdrawTripRequest')}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        ) : (!statusLower.includes('cancel') && !statusLower.includes('completed') && !statusLower.includes('done')) && (
-          <TouchableOpacity
-            style={[styles.cancelBtn, { backgroundColor: '#DC2626', marginTop: verticalScale(10) }]}
-            onPress={() => {
-              Alert.alert(
-                '📞 Request Active Trip Cancellation',
-                'Active trips require Admin verification before cancellation.\n\nPlease call Admin Support directly to state your cancellation reason. Admin will verify with the captain/tourist and process the cancellation.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: '📞 Call Admin Support',
-                    onPress: () => {
-                      try {
-                        Linking.openURL('tel:918088626099');
-                      } catch (e) {
-                        Alert.alert('Admin Support', 'Please call Admin Support at +91 80886 26099 to cancel your active trip.');
-                      }
+        {/* Cancel / Withdraw Action Button */}
+        {(!statusLower.includes('cancel') && !statusLower.includes('completed') && !statusLower.includes('done')) && (
+          !isDriverAccepted ? (
+            <TouchableOpacity
+              style={[styles.cancelBtn, { backgroundColor: colors.danger }]}
+              onPress={handleCancelTrip}
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <MaterialIcons name="cancel" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
+                  <Text style={styles.cancelBtnText}>{t('cancelTrip')}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.cancelBtn, { backgroundColor: '#DC2626', marginTop: verticalScale(10) }]}
+              onPress={() => {
+                Alert.alert(
+                  '📞 Request Active Trip Cancellation',
+                  'Active trips require Admin verification before cancellation.\n\nPlease call Admin Support directly to state your cancellation reason. Admin will verify with the captain/tourist and process the cancellation.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: '📞 Call Admin Support',
+                      onPress: () => {
+                        try {
+                          Linking.openURL('tel:918088626099');
+                        } catch (e) {
+                          Alert.alert('Admin Support', 'Please call Admin Support at +91 80886 26099 to cancel your active trip.');
+                        }
+                      },
                     },
-                  },
-                ]
-              );
-            }}
-          >
-            <MaterialIcons name="phone-in-talk" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-            <Text style={styles.cancelBtnText}>{t('cancelTrip')}</Text>
-          </TouchableOpacity>
+                  ]
+                );
+              }}
+            >
+              <MaterialIcons name="phone-in-talk" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
+              <Text style={styles.cancelBtnText}>{t('cancelTrip')}</Text>
+            </TouchableOpacity>
+          )
         )}
       </ScrollView>
     </SafeAreaView>
