@@ -52,7 +52,7 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { savePushTokenApi } from '@/constants/api';
-import { getUserSessionSync } from '@/constants/authStore';
+import { getUserSessionSync, loadUserSessionAsync } from '@/constants/authStore';
 import { getExpoPushToken } from '@/constants/notifications';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { ModalProvider } from '@src/context/ModalContext';
@@ -67,23 +67,22 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
-    const session = getUserSessionSync();
-    if (session?.id) {
-      initSocketService(session.id, session.role || 'tourist');
-    }
-
-    if (Platform.OS !== 'web') {
-      (async () => {
-        try {
-          const token = await getExpoPushToken();
-          if (token && session?.id) {
-            await savePushTokenApi(session.id, token);
+    (async () => {
+      try {
+        const session = await loadUserSessionAsync();
+        if (session?.id) {
+          initSocketService(session.id, session.role || 'tourist');
+          if (Platform.OS !== 'web') {
+            const token = await getExpoPushToken();
+            if (token) {
+              await savePushTokenApi(session.id, token);
+            }
           }
-        } catch (err) {
-          // silent in dev
         }
-      })();
-    }
+      } catch (err) {
+        // silent in dev
+      }
+    })();
   }, []);
 
   return (
