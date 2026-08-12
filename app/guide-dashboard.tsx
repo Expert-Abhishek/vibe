@@ -983,8 +983,6 @@ export default function GuideDashboardScreen() {
     );
   };
 
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-
   const handleLogout = async () => {
     Alert.alert(
       'Guide Logout',
@@ -1661,19 +1659,14 @@ export default function GuideDashboardScreen() {
               marginBottom: verticalScale(20),
             }}
             onPress={handleDeleteAccount}
-            disabled={isDeletingAccount}
             activeOpacity={0.7}
           >
-            {isDeletingAccount ? (
-              <ActivityIndicator size="small" color="#ef4444" />
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <MaterialIcons name="delete-forever" size={scale(16)} color="#ef4444" style={{ marginRight: scale(4) }} />
-                <Text style={{ color: '#ef4444', fontSize: moderateFontScale(13), fontWeight: '600', textDecorationLine: 'underline', opacity: 0.85 }}>
-                  Delete Account
-                </Text>
-              </View>
-            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <MaterialIcons name="open-in-browser" size={scale(16)} color="#ef4444" style={{ marginRight: scale(4) }} />
+              <Text style={{ color: '#ef4444', fontSize: moderateFontScale(13), fontWeight: '600', textDecorationLine: 'underline', opacity: 0.85 }}>
+                Delete Account (Open in Browser)
+              </Text>
+            </View>
           </TouchableOpacity>
 
           <View style={{ height: verticalScale(80) }} />

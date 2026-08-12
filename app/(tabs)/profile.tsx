@@ -617,17 +617,12 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.deleteAccountLink}
           onPress={handleDeleteAccount}
-          disabled={isDeletingAccount}
           activeOpacity={0.7}
         >
-          {isDeletingAccount ? (
-            <ActivityIndicator size="small" color="#EF4444" />
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MaterialIcons name="delete-forever" size={scale(16)} color="#EF4444" style={{ marginRight: scale(4) }} />
-              <Text style={styles.deleteAccountText}>Delete Account</Text>
-            </View>
-          )}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <MaterialIcons name="open-in-browser" size={scale(16)} color="#EF4444" style={{ marginRight: scale(4) }} />
+            <Text style={styles.deleteAccountText}>Delete Account (Open in Browser)</Text>
+          </View>
         </TouchableOpacity>
 
       </ScrollView>
