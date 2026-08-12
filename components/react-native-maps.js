@@ -1,4 +1,4 @@
-import React, { Component, forwardRef } from 'react';
+import React, { Component, forwardRef, useRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import MapView, { Marker, Polyline, Circle, Callout, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
 
@@ -27,9 +27,86 @@ class MapErrorBoundary extends Component {
 }
 
 const SafeMapView = forwardRef((props, ref) => {
+  const innerRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    fitToCoordinates: (coordinates, options) => {
+      setTimeout(() => {
+        try {
+          if (innerRef.current && typeof innerRef.current.fitToCoordinates === 'function') {
+            innerRef.current.fitToCoordinates(coordinates, options);
+          }
+        } catch (e) {
+          console.warn('[SafeMapView] fitToCoordinates bypassed safely:', e);
+        }
+      }, 400);
+    },
+    animateToRegion: (region, duration) => {
+      setTimeout(() => {
+        try {
+          if (innerRef.current && typeof innerRef.current.animateToRegion === 'function') {
+            innerRef.current.animateToRegion(region, duration);
+          }
+        } catch (e) {
+          console.warn('[SafeMapView] animateToRegion bypassed safely:', e);
+        }
+      }, 400);
+    },
+    fitToElements: (animated) => {
+      setTimeout(() => {
+        try {
+          if (innerRef.current && typeof innerRef.current.fitToElements === 'function') {
+            innerRef.current.fitToElements(animated);
+          }
+        } catch (e) {
+          console.warn('[SafeMapView] fitToElements bypassed safely:', e);
+        }
+      }, 400);
+    },
+    fitToSuppliedMarkers: (markers, options) => {
+      setTimeout(() => {
+        try {
+          if (innerRef.current && typeof innerRef.current.fitToSuppliedMarkers === 'function') {
+            innerRef.current.fitToSuppliedMarkers(markers, options);
+          }
+        } catch (e) {
+          console.warn('[SafeMapView] fitToSuppliedMarkers bypassed safely:', e);
+        }
+      }, 400);
+    },
+    animateCamera: (camera, options) => {
+      setTimeout(() => {
+        try {
+          if (innerRef.current && typeof innerRef.current.animateCamera === 'function') {
+            innerRef.current.animateCamera(camera, options);
+          }
+        } catch (e) {
+          console.warn('[SafeMapView] animateCamera bypassed safely:', e);
+        }
+      }, 400);
+    },
+    setCamera: (camera) => {
+      setTimeout(() => {
+        try {
+          if (innerRef.current && typeof innerRef.current.setCamera === 'function') {
+            innerRef.current.setCamera(camera);
+          }
+        } catch (e) {
+          console.warn('[SafeMapView] setCamera bypassed safely:', e);
+        }
+      }, 400);
+    },
+  }));
+
+  const { provider, ...restProps } = props;
+
   return (
     <MapErrorBoundary style={props.style}>
-      <MapView ref={ref} {...props} />
+      <MapView
+        ref={innerRef}
+        provider={provider || PROVIDER_DEFAULT}
+        {...restProps}
+      />
     </MapErrorBoundary>
   );
 });

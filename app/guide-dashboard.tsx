@@ -2,6 +2,7 @@ import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import {
   acceptTripApi,
+  deleteUser,
   completeTripApi,
   declineTripApi,
   fetchAdminPaymentSettingsApi,
@@ -981,6 +982,8 @@ export default function GuideDashboardScreen() {
     );
   };
 
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
   const handleLogout = async () => {
     Alert.alert(
       'Guide Logout',
@@ -995,6 +998,38 @@ export default function GuideDashboardScreen() {
             router.replace('/(auth)/sign-in');
           }
         }
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      '⚠️ Delete Account',
+      'Are you sure you want to permanently delete your Guide account? All your profile details, tour bookings, and wallet balance will be removed permanently. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsDeletingAccount(true);
+              const session = getUserSessionSync();
+              if (session?.id) {
+                await deleteUser(session.id);
+              }
+              await clearUserSession();
+              Alert.alert('Account Deleted', 'Your guide account has been deleted successfully.');
+              router.replace('/(auth)/sign-in');
+            } catch (e) {
+              console.warn('Account deletion error:', e);
+              await clearUserSession();
+              router.replace('/(auth)/sign-in');
+            } finally {
+              setIsDeletingAccount(false);
+            }
+          },
+        },
       ]
     );
   };
@@ -1639,6 +1674,33 @@ export default function GuideDashboardScreen() {
             <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: moderateFontScale(14) }}>
               Logout from Account
             </Text>
+          </TouchableOpacity>
+
+          {/* Delete Account Link */}
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: verticalScale(10),
+              alignSelf: 'center',
+              marginTop: verticalScale(-10),
+              marginBottom: verticalScale(20),
+            }}
+            onPress={handleDeleteAccount}
+            disabled={isDeletingAccount}
+            activeOpacity={0.7}
+          >
+            {isDeletingAccount ? (
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MaterialIcons name="delete-forever" size={scale(16)} color="#ef4444" style={{ marginRight: scale(4) }} />
+                <Text style={{ color: '#ef4444', fontSize: moderateFontScale(13), fontWeight: '600', textDecorationLine: 'underline', opacity: 0.85 }}>
+                  Delete Account
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <View style={{ height: verticalScale(80) }} />

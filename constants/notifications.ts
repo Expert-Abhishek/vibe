@@ -193,9 +193,13 @@ export async function getExpoPushToken(): Promise<string | null> {
         }
       } catch (err: any) {
         console.warn('getExpoPushTokenAsync with projectId error, trying default:', err?.message);
-        const fallbackTokenData = await Notifications.getExpoPushTokenAsync();
-        if (fallbackTokenData?.data) {
-          return String(fallbackTokenData.data);
+        try {
+          const fallbackTokenData = await Notifications.getExpoPushTokenAsync();
+          if (fallbackTokenData?.data) {
+            return String(fallbackTokenData.data);
+          }
+        } catch (fallbackErr) {
+          console.warn('Fallback push token fetch failed safely:', fallbackErr);
         }
       }
     }

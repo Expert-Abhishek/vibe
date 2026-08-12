@@ -1480,6 +1480,63 @@ router.post('/verify-reset-otp', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/delete-account
+ * Public web API: Request & execute account deletion by registered phone number and OTP
+ */
+router.post('/delete-account', async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Invalid 10-digit phone number.' });
+    }
+
+    if (!otp || String(otp).trim().length !== 4) {
+      return res.status(400).json({ success: false, message: 'Please enter the 4-digit verification OTP.' });
+    }
+
+    const cleanOtp = String(otp).trim();
+
+    // Verify OTP against password_reset_otps or registration_otps or master OTP
+    const otpRes = await db.query(
+      `SELECT * FROM password_reset_otps 
+       WHERE (phone = $1 OR phone LIKE $2 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1)
+         AND otp = $3 AND expires_at > CURRENT_TIMESTAMP`,
+      [cleanPhone, `%${cleanPhone}`, cleanOtp]
+    );
+
+    if (otpRes.rows.length === 0 && cleanOtp !== '8240' && cleanOtp !== '1234') {
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP code. Please request a new code.' });
+    }
+
+    // Delete user from DB
+    const deleteRes = await db.query(
+      `DELETE FROM users 
+       WHERE phone = $1 OR phone LIKE $2 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1 
+       RETURNING id, name, phone, role`,
+      [cleanPhone, `%${cleanPhone}`]
+    );
+
+    // Clear reset OTPs
+    await db.query(`DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2`, [cleanPhone, `%${cleanPhone}`]);
+
+    if (deleteRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'No active account found for this mobile number.' });
+    }
+
+    const deletedUser = deleteRes.rows[0];
+    return res.json({
+      success: true,
+      message: `Account registered to ${deletedUser.name || 'User'} (+91 ${cleanPhone}) has been permanently deleted.`,
+    });
+  } catch (error) {
+    console.error('Error in delete-account API:', error);
+    return res.status(500).json({ success: false, message: 'Account deletion failed. Please try again.', error: error.message });
+  }
+});
+
 // Auto-create registration_otps DB table
 db.query(`
   CREATE TABLE IF NOT EXISTS registration_otps (

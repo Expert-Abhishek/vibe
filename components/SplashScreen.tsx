@@ -23,31 +23,40 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const pulseScale = useSharedValue(1);
 
   useEffect(() => {
-    // 1. Logo scale, fade in & rotate
-    logoOpacity.value = withTiming(1, { duration: 600 });
-    logoScale.value = withSpring(1, { damping: 10, stiffness: 100 });
-    logoRotate.value = withSpring(0, { damping: 12, stiffness: 90 });
+    let mounted = true;
+    try {
+      // 1. Logo scale, fade in & rotate
+      logoOpacity.value = withTiming(1, { duration: 600 });
+      logoScale.value = withSpring(1, { damping: 10, stiffness: 100 });
+      logoRotate.value = withSpring(0, { damping: 12, stiffness: 90 });
 
-    // 2. Text fade & slide up
-    textOpacity.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.quad) });
-    textTranslateY.value = withSpring(0, { damping: 12, stiffness: 90 });
+      // 2. Text fade & slide up
+      textOpacity.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.quad) });
+      textTranslateY.value = withSpring(0, { damping: 12, stiffness: 90 });
+    } catch (e) {}
 
     // 3. Continuous soft pulse
     const pulseInterval = setInterval(() => {
-      pulseScale.value = withSequence(
-        withTiming(1.06, { duration: 400 }),
-        withTiming(1, { duration: 400 })
-      );
+      if (!mounted) return;
+      try {
+        pulseScale.value = withSequence(
+          withTiming(1.06, { duration: 400 }),
+          withTiming(1, { duration: 400 })
+        );
+      } catch (e) {}
     }, 900);
 
     const timer = setTimeout(() => {
       clearInterval(pulseInterval);
-      if (onFinish) {
-        onFinish();
+      if (mounted && onFinish) {
+        try {
+          onFinish();
+        } catch (e) {}
       }
-    }, 2500);
+    }, 2200);
 
     return () => {
+      mounted = false;
       clearInterval(pulseInterval);
       clearTimeout(timer);
     };

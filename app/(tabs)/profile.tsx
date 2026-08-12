@@ -1,4 +1,5 @@
 import {
+  deleteUser,
   fetchAdminPaymentSettingsApi,
   fetchUserProfileApi,
   fetchWalletBalanceApi,
@@ -395,6 +396,8 @@ export default function ProfileScreen() {
     setNewPassword('');
   };
 
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -407,6 +410,38 @@ export default function ProfileScreen() {
         },
       },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      '⚠️ Delete Account',
+      'Are you sure you want to permanently delete your Vibzz account? All your profile information, saved bookings, and wallet data will be removed permanently. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsDeletingAccount(true);
+              const session = getUserSessionSync();
+              if (session?.id) {
+                await deleteUser(session.id);
+              }
+              await clearUserSession();
+              Alert.alert('Account Deleted', 'Your account has been deleted successfully.');
+              router.replace('/(auth)/sign-in');
+            } catch (e) {
+              console.warn('Account deletion error:', e);
+              await clearUserSession();
+              router.replace('/(auth)/sign-in');
+            } finally {
+              setIsDeletingAccount(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -605,6 +640,23 @@ export default function ProfileScreen() {
         <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger }]} onPress={handleLogout}>
           <MaterialIcons name="exit-to-app" size={scale(20)} color={colors.danger} style={{ marginRight: scale(8) }} />
           <Text style={[styles.logoutText, { color: colors.danger }]}>{trans.logout}</Text>
+        </TouchableOpacity>
+
+        {/* DELETE ACCOUNT LINK */}
+        <TouchableOpacity
+          style={styles.deleteAccountLink}
+          onPress={handleDeleteAccount}
+          disabled={isDeletingAccount}
+          activeOpacity={0.7}
+        >
+          {isDeletingAccount ? (
+            <ActivityIndicator size="small" color="#EF4444" />
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <MaterialIcons name="delete-forever" size={scale(16)} color="#EF4444" style={{ marginRight: scale(4) }} />
+              <Text style={styles.deleteAccountText}>Delete Account</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
       </ScrollView>
@@ -1099,5 +1151,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  deleteAccountLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: verticalScale(-15),
+    marginBottom: verticalScale(30),
+    paddingVertical: verticalScale(8),
+    alignSelf: 'center',
+  },
+  deleteAccountText: {
+    color: '#EF4444',
+    fontSize: moderateFontScale(13),
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    opacity: 0.85,
   },
 });

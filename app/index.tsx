@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { getUserSessionSync, loadUserSessionAsync, UserSession } from '@/constants/authStore';
 import { Redirect } from 'expo-router';
 import SplashScreen from '@/components/SplashScreen';
+import * as ExpoSplashScreen from 'expo-splash-screen';
+
+try {
+  ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
+} catch (e) {}
 
 export default function Index() {
   const [isSplashActive, setIsSplashActive] = useState(true);
@@ -9,18 +14,30 @@ export default function Index() {
   const [loadingSession, setLoadingSession] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     async function init() {
       try {
         const stored = await loadUserSessionAsync();
-        setSession(stored);
+        if (mounted) setSession(stored);
       } catch (e) {
         console.warn('Session init error:', e);
       } finally {
-        setLoadingSession(false);
+        if (mounted) setLoadingSession(false);
       }
     }
     init();
+    return () => {
+      mounted = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!isSplashActive && !loadingSession) {
+      try {
+        ExpoSplashScreen.hideAsync().catch(() => {});
+      } catch (e) {}
+    }
+  }, [isSplashActive, loadingSession]);
 
   if (isSplashActive || loadingSession) {
     return <SplashScreen onFinish={() => setIsSplashActive(false)} />;
@@ -38,3 +55,4 @@ export default function Index() {
 
   return <Redirect href="/(auth)/sign-in" />;
 }
+

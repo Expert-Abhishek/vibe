@@ -226,21 +226,24 @@ export default function TripsHistoryScreen() {
 
   // Dynamic Map Bounds Camera Fit
   useEffect(() => {
-    if (mapRef.current && mapRef.current.fitToCoordinates && driverInfo.latitude && pickupLat && dropLat) {
-      try {
-        mapRef.current.fitToCoordinates(
-          [
-            { latitude: driverInfo.latitude, longitude: driverInfo.longitude },
-            { latitude: pickupLat, longitude: pickupLng },
-            { latitude: dropLat, longitude: dropLng },
-          ],
-          {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-            animated: true,
-          }
-        );
-      } catch (e) { }
-    }
+    const timer = setTimeout(() => {
+      if (mapRef.current && mapRef.current.fitToCoordinates && driverInfo.latitude && pickupLat && dropLat) {
+        try {
+          mapRef.current.fitToCoordinates(
+            [
+              { latitude: driverInfo.latitude, longitude: driverInfo.longitude },
+              { latitude: pickupLat, longitude: pickupLng },
+              { latitude: dropLat, longitude: dropLng },
+            ],
+            {
+              edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+              animated: true,
+            }
+          );
+        } catch (e) { }
+      }
+    }, 600);
+    return () => clearTimeout(timer);
   }, [driverInfo.latitude, driverInfo.longitude, pickupLat, pickupLng, dropLat, dropLng]);
 
   // Socket & DeviceEventEmitter listeners

@@ -20,6 +20,15 @@ export function getResetPasswordWebUrl(phone?: string): string {
   return cleanPhone ? `${base}/reset-password?phone=${cleanPhone}` : `${base}/reset-password`;
 }
 
+/**
+ * Get the Web Delete Account URL pointing to the Admin-Panel baseUrl for Google Play Console Data Safety Compliance
+ */
+export function getDeleteAccountWebUrl(phone?: string): string {
+  const base = ADMIN_PANEL_URL.replace(/\/$/, '');
+  const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+  return cleanPhone ? `${base}/delete-account?phone=${cleanPhone}` : `${base}/delete-account`;
+}
+
 export interface RegisterPayload {
   name: string;
   phone: string;
