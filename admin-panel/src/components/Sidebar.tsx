@@ -30,7 +30,6 @@ const navItems = [
   { name: 'Payment Settings', href: '/payment-settings', icon: QrCode },
   { name: 'Wallet Transactions', href: '/transactions', icon: Wallet },
   { name: 'Privacy Policy', href: '/privacy-policy', icon: ShieldCheck },
-  { name: 'Delete Account Portal', href: '/delete-account', icon: Trash2 },
 ];
 
 

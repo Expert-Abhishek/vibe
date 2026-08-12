@@ -1,12 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import Sidebar from '@/components/Sidebar';
-import Navbar from '@/components/Navbar';
-import { ImageModalProvider } from '@/components/ImagePreviewModal';
+import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
-  title: 'Vibzz - Super Admin Dashboard',
-  description: 'Control center for Vibzz tourists, drivers, guides, and rate pricing.',
+  title: 'Vibzz - Platform Services',
+  description: 'Vibzz application platform services, privacy policy, and account management.',
 };
 
 export default function RootLayout({
@@ -17,13 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-dark-bg text-white antialiased flex min-h-screen">
-        <ImageModalProvider>
-          <Sidebar />
-          <div className="flex-1 flex flex-col min-w-0">
-            <Navbar />
-            <main className="p-6 md:p-8 flex-1 overflow-y-auto">{children}</main>
-          </div>
-        </ImageModalProvider>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
