@@ -21,10 +21,10 @@ export function getResetPasswordWebUrl(phone?: string): string {
 }
 
 /**
- * Get the Web Delete Account URL pointing to the Admin-Panel baseUrl for Google Play Console Data Safety Compliance
+ * Get the Web Delete Account URL pointing to the live backend URL for Google Play Console Data Safety Compliance
  */
 export function getDeleteAccountWebUrl(phone?: string): string {
-  const base = ADMIN_PANEL_URL.replace(/\/$/, '');
+  const base = (API_BASE_URL || RENDER_API_URL || 'https://vibe-backend-tlaw.onrender.com').replace(/\/$/, '');
   const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
   return cleanPhone ? `${base}/delete-account?phone=${cleanPhone}` : `${base}/delete-account`;
 }

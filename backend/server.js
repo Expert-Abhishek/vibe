@@ -526,6 +526,201 @@ async function initTablesOnBoot() {
   }
 }
 
+// Standalone Web Route for Google Play Console Account Deletion Policy
+app.get('/delete-account', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vibzz - Account Deletion Portal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background-color: #101014; color: #f4f3f4; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+    .card { background-color: #1a1a20; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; width: 100%; max-width: 480px; padding: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+    .header { text-align: center; margin-bottom: 24px; }
+    .icon-badge { width: 56px; height: 56px; background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 16px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: #ef4444; font-size: 24px; }
+    h1 { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 6px; }
+    p.subtitle { font-size: 13px; color: #a1a1aa; line-height: 1.5; }
+    .notice-box { background-color: rgba(245, 197, 24, 0.08); border: 1px solid rgba(245, 197, 24, 0.2); border-radius: 12px; padding: 12px; font-size: 12px; color: #f5c518; margin-bottom: 20px; line-height: 1.4; }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #d4d4d8; margin-bottom: 8px; }
+    .input-wrapper { position: relative; }
+    .prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #a1a1aa; font-weight: 700; font-size: 14px; }
+    input { width: 100%; background-color: #24242c; border: 1px solid #33333e; border-radius: 12px; padding: 14px 14px 14px 48px; color: #ffffff; font-size: 15px; font-weight: 600; outline: none; transition: border-color 0.2s; }
+    input:focus { border-color: #ef4444; }
+    input.otp-input { padding: 14px; text-align: center; font-size: 20px; letter-spacing: 8px; font-weight: 800; }
+    .btn { width: 100%; background-color: #ef4444; color: #ffffff; border: none; border-radius: 12px; padding: 14px; font-size: 15px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; margin-top: 6px; }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background-color: transparent; border: 1px solid #33333e; color: #a1a1aa; margin-top: 10px; font-weight: 600; font-size: 13px; }
+    .btn-secondary:hover { background-color: #24242c; color: #fff; }
+    .alert { padding: 12px; border-radius: 10px; font-size: 13px; margin-bottom: 16px; display: none; }
+    .alert-error { background-color: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; }
+    .alert-success { background-color: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; }
+    .footer-policy { border-top: 1px solid #282832; margin-top: 24px; padding-top: 16px; font-size: 11px; color: #71717a; line-height: 1.5; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <div class="icon-badge">🗑️</div>
+      <h1>Delete Vibzz Account</h1>
+      <p class="subtitle">Official Google Play Data Safety Account Deletion Portal</p>
+    </div>
+
+    <div class="notice-box">
+      ⚠️ <strong>Account Data Deletion Disclosure:</strong> Requesting account deletion will permanently purge your user profile, saved trips, mobile registration, vehicle logs, and notification tokens.
+    </div>
+
+    <div id="alert-box" class="alert"></div>
+
+    <!-- Step 1 Form: Phone Number -->
+    <div id="step-phone">
+      <div class="form-group">
+        <label>Registered Mobile Phone Number</label>
+        <div class="input-wrapper">
+          <span class="prefix">+91</span>
+          <input type="tel" id="phone" placeholder="Enter 10-digit phone number" maxlength="10">
+        </div>
+      </div>
+      <button class="btn" id="btn-send" onclick="sendOtp()">Send Verification SMS Code</button>
+    </div>
+
+    <!-- Step 2 Form: Verification OTP -->
+    <div id="step-otp" style="display: none;">
+      <div class="form-group">
+        <label>4-Digit SMS Code Sent to <span id="display-phone" style="color:#f5c518"></span></label>
+        <input type="text" id="otp" class="otp-input" placeholder="0000" maxlength="4">
+      </div>
+      <button class="btn" id="btn-delete" onclick="confirmDelete()">Permanently Delete Account</button>
+      <button class="btn btn-secondary" onclick="backToPhone()">Change Phone Number</button>
+    </div>
+
+    <!-- Step 3: Success Confirmation -->
+    <div id="step-success" style="display: none; text-align: center; padding: 10px 0;">
+      <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+      <h2 style="color: #ffffff; font-size: 20px; font-weight: 800; margin-bottom: 8px;">Account Deleted Successfully</h2>
+      <p style="color: #a1a1aa; font-size: 13px; line-height: 1.5;" id="success-message">
+        Your user profile and associated data have been permanently purged from Vibzz platform.
+      </p>
+    </div>
+
+    <div class="footer-policy">
+      Support Contact: privacy@vibzz.com | Hotline: +91 96508 30901<br>
+      © Vibzz Platform. All rights reserved.
+    </div>
+  </div>
+
+  <script>
+    // Auto-populate phone from URL query string ?phone=9876543210
+    const urlParams = new URLSearchParams(window.location.search);
+    const phoneParam = urlParams.get('phone');
+    if (phoneParam) {
+      const clean = phoneParam.replace(/\\D/g, '').slice(-10);
+      if (clean) document.getElementById('phone').value = clean;
+    }
+
+    function showAlert(msg, isSuccess = false) {
+      const box = document.getElementById('alert-box');
+      box.className = 'alert ' + (isSuccess ? 'alert-success' : 'alert-error');
+      box.innerText = msg;
+      box.style.display = 'block';
+    }
+
+    function hideAlert() {
+      document.getElementById('alert-box').style.display = 'none';
+    }
+
+    async function sendOtp() {
+      hideAlert();
+      const phoneInput = document.getElementById('phone').value.replace(/\\D/g, '').slice(-10);
+      if (!phoneInput || phoneInput.length !== 10) {
+        showAlert('Please enter a valid 10-digit mobile phone number.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-send');
+      btn.disabled = true;
+      btn.innerText = 'Sending SMS Code...';
+
+      try {
+        const res = await fetch('/api/auth/send-reset-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: phoneInput })
+        });
+        const data = await res.json();
+        btn.disabled = false;
+        btn.innerText = 'Send Verification SMS Code';
+
+        if (data.success) {
+          document.getElementById('display-phone').innerText = '+91 ' + phoneInput;
+          document.getElementById('step-phone').style.display = 'none';
+          document.getElementById('step-otp').style.display = 'block';
+          showAlert('4-Digit Verification SMS Code sent to +91 ' + phoneInput, true);
+        } else {
+          showAlert(data.message || 'No registered user found with this mobile number.');
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = 'Send Verification SMS Code';
+        showAlert('Connection error. Please check your internet connection.');
+      }
+    }
+
+    async function confirmDelete() {
+      hideAlert();
+      const phoneInput = document.getElementById('phone').value.replace(/\\D/g, '').slice(-10);
+      const otpInput = document.getElementById('otp').value.trim();
+
+      if (!otpInput || otpInput.length !== 4) {
+        showAlert('Please enter the 4-digit SMS verification code.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-delete');
+      btn.disabled = true;
+      btn.innerText = 'Deleting Account...';
+
+      try {
+        const res = await fetch('/api/auth/delete-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: phoneInput, otp: otpInput })
+        });
+        const data = await res.json();
+        btn.disabled = false;
+        btn.innerText = 'Permanently Delete Account';
+
+        if (data.success) {
+          document.getElementById('step-otp').style.display = 'none';
+          document.getElementById('step-success').style.display = 'block';
+          if (data.message) document.getElementById('success-message').innerText = data.message;
+          hideAlert();
+        } else {
+          showAlert(data.message || 'Account deletion failed. Invalid SMS Code.');
+        }
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerText = 'Permanently Delete Account';
+        showAlert('Connection error during deletion request.');
+      }
+    }
+
+    function backToPhone() {
+      hideAlert();
+      document.getElementById('step-otp').style.display = 'none';
+      document.getElementById('step-phone').style.display = 'block';
+    }
+  </script>
+</body>
+</html>
+  `);
+});
+
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'API Endpoint not found' });
