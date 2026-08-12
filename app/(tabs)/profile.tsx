@@ -994,6 +994,7 @@ export default function ProfileScreen() {
                 );
               })}
             </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
