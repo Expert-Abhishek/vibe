@@ -18,6 +18,7 @@ import {
   subscribeWalletChange,
   updateDriverLocationApi,
   deleteUser,
+  getDeleteAccountWebUrl,
   updatePasswordApi,
   updateUserProfileApi,
   verifyTripOtpApi,
@@ -1166,35 +1167,7 @@ export default function DriverDashboardScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      '⚠️ Delete Account',
-      'Are you sure you want to permanently delete your Driver account? All your vehicle details, active trips, and wallet balance will be removed permanently. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsDeletingAccount(true);
-              const session = getUserSessionSync();
-              if (session?.id) {
-                await deleteUser(session.id);
-              }
-              await clearUserSession();
-              Alert.alert('Account Deleted', 'Your driver account has been deleted successfully.');
-              router.replace('/(auth)/sign-in');
-            } catch (e) {
-              console.warn('Account deletion error:', e);
-              await clearUserSession();
-              router.replace('/(auth)/sign-in');
-            } finally {
-              setIsDeletingAccount(false);
-            }
-          },
-        },
-      ]
-    );
+    Linking.openURL(getDeleteAccountWebUrl(driverPhone));
   };
 
   const handleAcceptRequest = async () => {

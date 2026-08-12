@@ -3,6 +3,7 @@ import { adminState } from '@/constants/admin-state';
 import {
   acceptTripApi,
   deleteUser,
+  getDeleteAccountWebUrl,
   completeTripApi,
   declineTripApi,
   fetchAdminPaymentSettingsApi,
@@ -1003,35 +1004,7 @@ export default function GuideDashboardScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      '⚠️ Delete Account',
-      'Are you sure you want to permanently delete your Guide account? All your profile details, tour bookings, and wallet balance will be removed permanently. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsDeletingAccount(true);
-              const session = getUserSessionSync();
-              if (session?.id) {
-                await deleteUser(session.id);
-              }
-              await clearUserSession();
-              Alert.alert('Account Deleted', 'Your guide account has been deleted successfully.');
-              router.replace('/(auth)/sign-in');
-            } catch (e) {
-              console.warn('Account deletion error:', e);
-              await clearUserSession();
-              router.replace('/(auth)/sign-in');
-            } finally {
-              setIsDeletingAccount(false);
-            }
-          },
-        },
-      ]
-    );
+    Linking.openURL(getDeleteAccountWebUrl(guidePhone));
   };
 
   const handleInstantPayout = async () => {
@@ -2268,6 +2241,7 @@ export default function GuideDashboardScreen() {
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }

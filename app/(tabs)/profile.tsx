@@ -1,5 +1,6 @@
 import {
   deleteUser,
+  getDeleteAccountWebUrl,
   fetchAdminPaymentSettingsApi,
   fetchUserProfileApi,
   fetchWalletBalanceApi,
@@ -396,8 +397,6 @@ export default function ProfileScreen() {
     setNewPassword('');
   };
 
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -413,35 +412,7 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      '⚠️ Delete Account',
-      'Are you sure you want to permanently delete your Vibzz account? All your profile information, saved bookings, and wallet data will be removed permanently. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsDeletingAccount(true);
-              const session = getUserSessionSync();
-              if (session?.id) {
-                await deleteUser(session.id);
-              }
-              await clearUserSession();
-              Alert.alert('Account Deleted', 'Your account has been deleted successfully.');
-              router.replace('/(auth)/sign-in');
-            } catch (e) {
-              console.warn('Account deletion error:', e);
-              await clearUserSession();
-              router.replace('/(auth)/sign-in');
-            } finally {
-              setIsDeletingAccount(false);
-            }
-          },
-        },
-      ]
-    );
+    Linking.openURL(getDeleteAccountWebUrl(phone));
   };
 
   return (
@@ -1023,7 +994,6 @@ export default function ProfileScreen() {
                 );
               })}
             </ScrollView>
-          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
