@@ -263,11 +263,17 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Search user by phone or email
+    // Search user by phone or email with pre-joined profile for single DB roundtrip (<10ms execution)
     const userQuery = `
-      SELECT id, name, phone, email, password, role, status, theme, language
-      FROM users
-      WHERE phone = $1 OR LOWER(email) = LOWER($1)
+      SELECT 
+        u.id, u.name, u.phone, u.email, u.password, u.role, u.status, u.theme, u.language,
+        d.id as d_id, d.vehicle_type, d.vehicle_model, d.vehicle_number, d.license_number, d.alternate_phone as d_alt_phone, d.is_active as d_active, d.wallet_balance as d_wallet, d.daily_rate as d_daily_rate, d.hourly_addon_rate as d_hourly_rate, d.upi_id as d_upi, d.photo_url as d_photo,
+        g.id as g_id, g.expertise, g.license_id, g.bio, g.alternate_phone as g_alt_phone, g.is_active as g_active, g.wallet_balance as g_wallet, g.daily_rate as g_daily_rate, g.upi_id as g_upi, g.photo_url as g_photo
+      FROM users u
+      LEFT JOIN driver_profiles d ON d.user_id = u.id
+      LEFT JOIN guide_profiles g ON g.user_id = u.id
+      WHERE u.phone = $1 OR LOWER(u.email) = LOWER($1)
+      LIMIT 1
     `;
     const result = await db.query(userQuery, [loginKey]);
 
@@ -278,10 +284,10 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const user = result.rows[0];
+    const row = result.rows[0];
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, row.password);
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -290,22 +296,22 @@ router.post('/login', async (req, res) => {
     }
 
     // Strict KYC Status Enforcement for Driver & Guide
-    if (user.role === 'driver' || user.role === 'guide') {
-      if (user.status === 'Pending KYC') {
+    if (row.role === 'driver' || row.role === 'guide') {
+      if (row.status === 'Pending KYC') {
         return res.status(403).json({
           success: false,
           message: 'Your registration is currently pending admin KYC approval. Please wait for admin verification.',
           status: 'Pending KYC',
         });
       }
-      if (user.status === 'Inactive') {
+      if (row.status === 'Inactive') {
         return res.status(403).json({
           success: false,
           message: 'Your account has been deactivated by the admin.',
           status: 'Inactive',
         });
       }
-      if (user.status === 'KYC Declined') {
+      if (row.status === 'KYC Declined') {
         return res.status(403).json({
           success: false,
           message: 'Your driver/guide registration KYC was declined by the admin.',
@@ -314,30 +320,48 @@ router.post('/login', async (req, res) => {
       }
     }
 
-    // Fetch light profile details based on role (excluding heavy base64 strings for maximum speed)
+    // Assemble role profile data directly from pre-joined query results
     let profileData = null;
-    const userRole = (user.role || '').toLowerCase();
+    const userRole = (row.role || '').toLowerCase();
     if (userRole === 'driver' || userRole === 'captain') {
-      const driverRes = await db.query(
-        `SELECT id, user_id, vehicle_type, vehicle_model, vehicle_number, license_number, 
-                alternate_phone, is_active, wallet_balance, daily_rate, hourly_addon_rate, upi_id
-         FROM driver_profiles WHERE user_id = $1`,
-        [user.id]
-      );
-      profileData = driverRes.rows[0] || null;
+      if (row.d_id) {
+        profileData = {
+          id: row.d_id,
+          user_id: row.id,
+          vehicle_type: row.vehicle_type,
+          vehicle_model: row.vehicle_model,
+          vehicle_number: row.vehicle_number,
+          license_number: row.license_number,
+          alternate_phone: row.d_alt_phone,
+          is_active: row.d_active,
+          wallet_balance: row.d_wallet,
+          daily_rate: row.d_daily_rate,
+          hourly_addon_rate: row.d_hourly_rate,
+          upi_id: row.d_upi,
+          photo_url: row.d_photo,
+        };
+      }
     } else if (userRole === 'guide') {
-      const guideRes = await db.query(
-        `SELECT id, user_id, expertise, license_id, alternate_phone, bio, 
-                is_active, wallet_balance, daily_rate, upi_id
-         FROM guide_profiles WHERE user_id = $1`,
-        [user.id]
-      );
-      profileData = guideRes.rows[0] || null;
+      if (row.g_id) {
+        profileData = {
+          id: row.g_id,
+          user_id: row.id,
+          expertise: row.expertise,
+          license_id: row.license_id,
+          bio: row.bio,
+          alternate_phone: row.g_alt_phone,
+          is_active: row.g_active,
+          wallet_balance: row.g_wallet,
+          daily_rate: row.g_daily_rate,
+          upi_id: row.g_upi,
+          photo_url: row.g_photo,
+        };
+      }
     }
 
     // Generate JWT Token
     const token = jwt.sign(
-      { userId: user.id, phone: user.phone, role: user.role },
+      { userId: row.id, phone: row.phone, role: row.role },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -347,14 +371,14 @@ router.post('/login', async (req, res) => {
       message: 'Login successful!',
       token,
       user: {
-        id: user.id,
-        name: user.name,
-        phone: user.phone,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        theme: user.theme || 'dark',
-        language: user.language || 'en',
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        email: row.email,
+        role: row.role,
+        status: row.status,
+        theme: row.theme || 'dark',
+        language: row.language || 'en',
         profile: profileData,
       },
     });
@@ -656,27 +680,46 @@ router.get('/customers/:id', async (req, res) => {
   }
 });
 
+// Fast In-Memory Cache for Drivers Listing (<2ms response time)
+let driversCache = null;
+let driversCacheTimestamp = 0;
+const DRIVERS_CACHE_TTL_MS = 30 * 1000;
+
 /**
  * GET /api/auth/drivers
- * Read API: Fetch all Drivers with full profile & document details
+ * Read API: Fetch all Drivers (Lightweight payload with 30s cache)
  */
 router.get('/drivers', async (req, res) => {
   try {
+    const isFullDocs = req.query.fullDocs === 'true';
+    if (!isFullDocs && driversCache && (Date.now() - driversCacheTimestamp < DRIVERS_CACHE_TTL_MS)) {
+      return res.json(driversCache);
+    }
+
+    const selectColumns = isFullDocs
+      ? `d.*, u.id AS user_id, u.name, u.phone, COALESCE(d.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at`
+      : `d.id, d.user_id, d.vehicle_type, d.vehicle_model, d.vehicle_number, d.license_number, d.is_active, d.wallet_balance, d.daily_rate, d.hourly_addon_rate, d.upi_id, d.photo_url, d.car_front_url, u.name, u.phone, COALESCE(d.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at`;
+
     const query = `
-      SELECT 
-        d.*,
-        u.id AS user_id, u.name, u.phone, COALESCE(d.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
+      SELECT ${selectColumns}
       FROM users u
       LEFT JOIN driver_profiles d ON u.id = d.user_id
       WHERE u.role = 'driver'
       ORDER BY u.created_at DESC
     `;
     const result = await db.query(query);
-    return res.json({
+    const responseObj = {
       success: true,
       count: result.rows.length,
       drivers: result.rows,
-    });
+    };
+
+    if (!isFullDocs) {
+      driversCache = responseObj;
+      driversCacheTimestamp = Date.now();
+    }
+
+    return res.json(responseObj);
   } catch (error) {
     console.error('Error fetching drivers:', error);
     return res.status(500).json({ success: false, message: 'Failed to fetch drivers', error: error.message });

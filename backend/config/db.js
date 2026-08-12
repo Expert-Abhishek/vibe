@@ -12,6 +12,10 @@ if (connectionString) {
   poolConfig = {
     connectionString,
     ssl: (isLocalHost && process.env.DISABLE_DB_SSL === 'true') ? false : { rejectUnauthorized: false },
+    max: 25,
+    min: 4,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 3000,
   };
 } else {
   poolConfig = {
@@ -20,6 +24,10 @@ if (connectionString) {
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD || 'postgres',
     database: process.env.PGDATABASE || 'vibe_db',
+    max: 25,
+    min: 4,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 3000,
   };
 }
 

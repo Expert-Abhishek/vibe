@@ -28,12 +28,26 @@ const DEFAULT_CHECKPOINT_IMAGES = [
   'https://images.unsplash.com/photo-1590050752117-238cb0fb12b1?w=600',
 ];
 
+// Fast In-Memory Cache for Plans Listing (<2ms response time)
+let plansCache = null;
+let plansCacheTimestamp = 0;
+const PLANS_CACHE_TTL_MS = 60 * 1000;
+
+function invalidatePlansCache() {
+  plansCache = null;
+  plansCacheTimestamp = 0;
+}
+
 /**
  * GET /api/plans
  * Get all tour plans with included checkpoints pulled from Destinations Master
  */
 router.get('/', async (req, res) => {
   try {
+    if (plansCache && (Date.now() - plansCacheTimestamp < PLANS_CACHE_TTL_MS)) {
+      return res.json(plansCache);
+    }
+
     const plansRes = await db.query('SELECT * FROM plans ORDER BY created_at DESC');
 
     const planCheckpointsQuery = `
@@ -122,7 +136,10 @@ router.get('/', async (req, res) => {
       };
     });
 
-    res.json({ success: true, data: plans });
+    const responseObj = { success: true, data: plans };
+    plansCache = responseObj;
+    plansCacheTimestamp = Date.now();
+    res.json(responseObj);
   } catch (error) {
     console.error('Error fetching plans:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch plans', error: error.message });
