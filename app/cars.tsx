@@ -171,6 +171,8 @@ export default function FleetCatalogScreen() {
       });
     } else {
       const existingCheckpoints = (searchParams as any).checkpoints;
+      const existingPickup = (searchParams as any).pickup;
+      const existingDrop = (searchParams as any).drop;
       router.push({
         pathname: '/make-trip',
         params: {
@@ -184,6 +186,8 @@ export default function FleetCatalogScreen() {
           selectedDriverRate: dayRate,
           selectedDriverAddonRate: hrAddonRate,
           checkpoints: existingCheckpoints,
+          pickup: existingPickup,
+          drop: existingDrop,
         }
       });
     }

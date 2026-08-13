@@ -364,26 +364,34 @@ export default function MakeTripScreen() {
     setSuggestions([]);
   };
 
-  const handleSelectLiveDestination = (dest: any) => {
-    if (touristCheckpoints.length >= 5) {
-      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 tourist places in a customer trip.');
-      return;
+  const handleToggleLiveDestination = (dest: any) => {
+    const destName = (dest.name || '').toLowerCase().trim();
+    const isAlreadyAdded = touristCheckpoints.some(
+      c => (c.name || '').toLowerCase().trim() === destName || String(c.id) === String(dest.id)
+    );
+
+    if (isAlreadyAdded) {
+      if (touristCheckpoints.length <= 1) {
+        Alert.alert('Notice', 'A custom trip needs at least 1 tourist place to visit.');
+        return;
+      }
+      setTouristCheckpoints(prev =>
+        prev.filter(c => (c.name || '').toLowerCase().trim() !== destName && String(c.id) !== String(dest.id))
+      );
+    } else {
+      if (touristCheckpoints.length >= 5) {
+        Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 tourist places in a customer trip.');
+        return;
+      }
+      const newPoint: Checkpoint = {
+        id: dest.id ? String(dest.id) : Math.random().toString(),
+        name: dest.name,
+        latitude: parseFloat(dest.latitude) || 15.3350,
+        longitude: parseFloat(dest.longitude) || 76.4600,
+        address: dest.location || 'Verified Tourist Place',
+      };
+      setTouristCheckpoints(prev => [...prev, newPoint]);
     }
-    const name = dest.name || 'Tourist Place';
-    if (touristCheckpoints.find(c => c.name.toLowerCase() === name.toLowerCase())) {
-      Alert.alert('Checkpoint Exists', `${name} is already in your tourist places itinerary.`);
-      return;
-    }
-    const newPoint: Checkpoint = {
-      id: Math.random().toString(),
-      name: dest.name,
-      latitude: parseFloat(dest.latitude) || 15.3350,
-      longitude: parseFloat(dest.longitude) || 76.4600,
-      address: dest.location || 'Tourist Place',
-    };
-    setTouristCheckpoints(prev => [...prev, newPoint]);
-    setSearchText('');
-    setSuggestions([]);
   };
 
 
@@ -942,7 +950,20 @@ export default function MakeTripScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          setTouristCheckpoints([
+            { id: 'dest-1', name: 'Virupaksha Temple', latitude: 15.3350, longitude: 76.4600, address: 'Hampi, Karnataka' },
+            { id: 'dest-2', name: 'Vittala Temple Stone Chariot', latitude: 15.3370, longitude: 76.4760, address: 'Hampi, Karnataka' },
+          ]);
+          setSelectedPickup(PRESET_PICKUP_DROP_LOCATIONS[0]);
+          setSelectedDrop(PRESET_PICKUP_DROP_LOCATIONS[1]);
+          setSelectedDriver(null);
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.navigate('/(tabs)');
+          }
+        }}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Custom Trip Builder</Text>
@@ -1145,26 +1166,41 @@ export default function MakeTripScreen() {
                 d.name.toLowerCase().includes(searchText.toLowerCase()) ||
                 (d.location && d.location.toLowerCase().includes(searchText.toLowerCase()))
               )
-              .map((dest) => (
-                <TouchableOpacity
-                  key={`admin-${dest.id}`}
-                  style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
-                  onPress={() => handleSelectLiveDestination(dest)}
-                >
-                  <View style={styles.suggestionLeft}>
-                    <MaterialIcons name="stars" size={scale(18)} color={colors.amber} style={{ marginRight: scale(10) }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.suggestionText, { color: colors.textPrimary, fontWeight: 'bold' }]} numberOfLines={1}>
-                        {dest.name}
-                      </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }} numberOfLines={1}>
-                        📍 {dest.location || 'Verified Tourist Place'}
-                      </Text>
+              .map((dest) => {
+                const isAdded = touristCheckpoints.some(
+                  c => (c.name || '').toLowerCase().trim() === (dest.name || '').toLowerCase().trim() || String(c.id) === String(dest.id)
+                );
+                return (
+                  <TouchableOpacity
+                    key={`admin-${dest.id}`}
+                    style={[
+                      styles.suggestionItem,
+                      {
+                        borderBottomColor: colors.border,
+                        backgroundColor: isAdded ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                      }
+                    ]}
+                    onPress={() => handleToggleLiveDestination(dest)}
+                  >
+                    <View style={styles.suggestionLeft}>
+                      <MaterialIcons name="stars" size={scale(18)} color={isAdded ? '#EF4444' : colors.amber} style={{ marginRight: scale(10) }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.suggestionText, { color: isAdded ? '#EF4444' : colors.textPrimary, fontWeight: 'bold' }]} numberOfLines={1}>
+                          {dest.name}
+                        </Text>
+                        <Text style={{ color: isAdded ? '#EF4444' : colors.textMuted, fontSize: moderateFontScale(10) }} numberOfLines={1}>
+                          {isAdded ? '✓ ADDED TO ITINERARY (TAP TO REMOVE)' : `📍 ${dest.location || 'Verified Tourist Place'}`}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  <MaterialIcons name="add-circle-outline" size={scale(20)} color={colors.amber} />
-                </TouchableOpacity>
-              ))}
+                    <MaterialIcons
+                      name={isAdded ? "remove-circle" : "add-circle"}
+                      size={scale(22)}
+                      color={isAdded ? "#EF4444" : colors.amber}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
 
             {/* Google Places Autocomplete Suggestions */}
             {suggestions.map((item) => (
@@ -1537,7 +1573,12 @@ export default function MakeTripScreen() {
               onPress={() => {
                 router.push({
                   pathname: '/cars',
-                  params: { mode: 'custom_trip' }
+                  params: {
+                    mode: 'custom_trip',
+                    checkpoints: JSON.stringify(touristCheckpoints),
+                    pickup: JSON.stringify(selectedPickup),
+                    drop: JSON.stringify(selectedDrop),
+                  }
                 });
               }}
             >
@@ -2115,60 +2156,83 @@ export default function MakeTripScreen() {
       {/* Admin Destination Master Picker Modal */}
       <Modal visible={isDestPickerOpen} animationType="slide" transparent>
         <View style={styles.overlayModal}>
-          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(16) }]}>
+          <View style={[styles.mapContainerBox, { backgroundColor: colors.surface, padding: scale(16), maxHeight: '85%' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                 <MaterialIcons name="stars" size={scale(22)} color={colors.amber} />
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Verified Tourist Place</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Select Verified Tourist Places</Text>
               </View>
               <TouchableOpacity onPress={() => setIsDestPickerOpen(false)}>
                 <MaterialIcons name="close" size={scale(24)} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginVertical: verticalScale(10) }}>
-              Only Tourist Places created by Admin in Destination Master can be added to custom trips.
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginVertical: verticalScale(8) }}>
+              Tap items to add (+) or remove (-). You can pick multiple tourist spots at once!
             </Text>
 
-            <ScrollView style={{ maxHeight: verticalScale(400) }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: verticalScale(380) }} showsVerticalScrollIndicator={true}>
               {liveDestinations.length > 0 ? (
-                liveDestinations.map((dest) => (
-                  <TouchableOpacity
-                    key={`modal-dest-${dest.id}`}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: verticalScale(12),
-                      paddingHorizontal: scale(12),
-                      borderRadius: scale(12),
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      marginBottom: verticalScale(8),
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FAF9F6',
-                    }}
-                    onPress={() => {
-                      handleSelectLiveDestination(dest);
-                      setIsDestPickerOpen(false);
-                    }}
-                  >
-                    <MaterialIcons name="place" size={scale(24)} color={colors.amber} style={{ marginRight: scale(10) }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(14) }}>
-                        {dest.name}
-                      </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginTop: verticalScale(2) }}>
-                        📍 {dest.location || 'Official Tourist Destination'}
-                      </Text>
-                    </View>
-                    <MaterialIcons name="add-circle" size={scale(24)} color={colors.amber} />
-                  </TouchableOpacity>
-                ))
+                liveDestinations.map((dest) => {
+                  const isAdded = touristCheckpoints.some(
+                    c => (c.name || '').toLowerCase().trim() === (dest.name || '').toLowerCase().trim() || String(c.id) === String(dest.id)
+                  );
+                  return (
+                    <TouchableOpacity
+                      key={`modal-dest-${dest.id}`}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: verticalScale(12),
+                        paddingHorizontal: scale(12),
+                        borderRadius: scale(12),
+                        borderWidth: 1.5,
+                        borderColor: isAdded ? '#EF4444' : colors.border,
+                        marginBottom: verticalScale(8),
+                        backgroundColor: isAdded ? 'rgba(239, 68, 68, 0.12)' : (isDark ? 'rgba(255,255,255,0.03)' : '#FAF9F6'),
+                      }}
+                      onPress={() => handleToggleLiveDestination(dest)}
+                    >
+                      <MaterialIcons name="place" size={scale(24)} color={isAdded ? '#EF4444' : colors.amber} style={{ marginRight: scale(10) }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: isAdded ? '#EF4444' : colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(14) }}>
+                          {dest.name}
+                        </Text>
+                        <Text style={{ color: isAdded ? '#EF4444' : colors.textMuted, fontSize: moderateFontScale(11), marginTop: verticalScale(2) }}>
+                          {isAdded ? '✓ ADDED TO ITINERARY (TAP TO REMOVE)' : `📍 ${dest.location || 'Official Tourist Destination'}`}
+                        </Text>
+                      </View>
+                      <MaterialIcons
+                        name={isAdded ? "remove-circle" : "add-circle"}
+                        size={scale(26)}
+                        color={isAdded ? "#EF4444" : colors.amber}
+                      />
+                    </TouchableOpacity>
+                  );
+                })
               ) : (
                 <View style={{ padding: scale(20), alignItems: 'center' }}>
-                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13) }}>Loading Admin Destinations...</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13) }}>
+                    Loading verified destinations...
+                  </Text>
                 </View>
               )}
             </ScrollView>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.amber,
+                borderRadius: scale(12),
+                paddingVertical: verticalScale(12),
+                alignItems: 'center',
+                marginTop: verticalScale(12),
+              }}
+              onPress={() => setIsDestPickerOpen(false)}
+            >
+              <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(14) }}>
+                Done Selecting Places ({touristCheckpoints.length} Added)
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
