@@ -161,6 +161,16 @@ export default function MakeTripScreen() {
     loadBackendData();
   }, []);
 
+  const [stationList, setStationList] = useState<PresetLocation[]>(PRESET_PICKUP_DROP_LOCATIONS);
+  const [selectedPickup, setSelectedPickup] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[0]);
+  const [selectedDrop, setSelectedDrop] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[1]);
+  const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
+  const [isDropModalOpen, setIsDropModalOpen] = useState(false);
+  const [pickupSearchQuery, setPickupSearchQuery] = useState('');
+  const [dropSearchQuery, setDropSearchQuery] = useState('');
+
+  const [touristCheckpoints, setTouristCheckpoints] = useState<Checkpoint[]>([]);
+
   // Listen for vehicle selection returned from Fleet Showcase (/cars)
   useEffect(() => {
     if (searchParams.checkpoints) {
@@ -169,11 +179,23 @@ export default function MakeTripScreen() {
           ? JSON.parse(searchParams.checkpoints)
           : searchParams.checkpoints;
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setCheckpoints(parsed);
+          setTouristCheckpoints(parsed);
         }
       } catch (e) {
         console.warn('Could not parse checkpoints from searchParams:', e);
       }
+    }
+    if (searchParams.pickup) {
+      try {
+        const p = typeof searchParams.pickup === 'string' ? JSON.parse(searchParams.pickup) : searchParams.pickup;
+        if (p && p.name) setSelectedPickup(p);
+      } catch (e) { }
+    }
+    if (searchParams.drop) {
+      try {
+        const d = typeof searchParams.drop === 'string' ? JSON.parse(searchParams.drop) : searchParams.drop;
+        if (d && d.name) setSelectedDrop(d);
+      } catch (e) { }
     }
     if (searchParams.fromVehicle === 'true') {
       if (searchParams.selectedRide) {
@@ -193,20 +215,7 @@ export default function MakeTripScreen() {
       }
       router.setParams({ fromVehicle: undefined });
     }
-  }, [searchParams.fromVehicle, searchParams.selectedDriverId, searchParams.checkpoints]);
-
-  const [stationList, setStationList] = useState<PresetLocation[]>(PRESET_PICKUP_DROP_LOCATIONS);
-  const [selectedPickup, setSelectedPickup] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[0]);
-  const [selectedDrop, setSelectedDrop] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[1]);
-  const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
-  const [isDropModalOpen, setIsDropModalOpen] = useState(false);
-  const [pickupSearchQuery, setPickupSearchQuery] = useState('');
-  const [dropSearchQuery, setDropSearchQuery] = useState('');
-
-  const [touristCheckpoints, setTouristCheckpoints] = useState<Checkpoint[]>([
-    { id: 'dest-1', name: 'Virupaksha Temple', latitude: 15.3350, longitude: 76.4600, address: 'Hampi, Karnataka' },
-    { id: 'dest-2', name: 'Vittala Temple Stone Chariot', latitude: 15.3370, longitude: 76.4760, address: 'Hampi, Karnataka' },
-  ]);
+  }, [searchParams.fromVehicle, searchParams.selectedDriverId, searchParams.checkpoints, searchParams.pickup, searchParams.drop]);
 
   const checkpoints = React.useMemo(() => {
     return [
@@ -371,10 +380,6 @@ export default function MakeTripScreen() {
     );
 
     if (isAlreadyAdded) {
-      if (touristCheckpoints.length <= 1) {
-        Alert.alert('Notice', 'A custom trip needs at least 1 tourist place to visit.');
-        return;
-      }
       setTouristCheckpoints(prev =>
         prev.filter(c => (c.name || '').toLowerCase().trim() !== destName && String(c.id) !== String(dest.id))
       );
@@ -415,10 +420,6 @@ export default function MakeTripScreen() {
   };
 
   const handleDelete = (id: string) => {
-    if (touristCheckpoints.length <= 1) {
-      Alert.alert('Notice', 'A custom trip needs at least 1 tourist place to visit.');
-      return;
-    }
     setTouristCheckpoints(prev => prev.filter(c => c.id !== id));
   };
 
@@ -1104,7 +1105,7 @@ export default function MakeTripScreen() {
 
         {/* Select Admin Tourist Places Master Button & Search Bar */}
         <View style={{ marginBottom: verticalScale(14), gap: verticalScale(8) }}>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -1120,7 +1121,7 @@ export default function MakeTripScreen() {
             <Text style={{ color: '#101010', fontSize: moderateFontScale(13), fontWeight: '900' }}>
               Select Admin Tourist Places ({liveDestinations.length})
             </Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border, width: '100%', flex: undefined }]}>
             <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
@@ -1514,17 +1515,40 @@ export default function MakeTripScreen() {
                         </View>
 
                         <TouchableOpacity
-                          style={[styles.deleteBtnCompact, touristCheckpoints.length <= 1 && styles.controlBtnDisabled]}
+                          style={styles.deleteBtnCompact}
                           onPress={() => handleDelete(checkpoint.id)}
-                          disabled={touristCheckpoints.length <= 1}
                         >
-                          <MaterialIcons name="delete" size={scale(14)} color={touristCheckpoints.length <= 1 ? colors.border : '#ef4444'} />
+                          <MaterialIcons name="delete" size={scale(14)} color="#ef4444" />
                         </TouchableOpacity>
                       </View>
                     </View>
                   </View>
                 );
               })}
+
+              {/* ADD TOURIST PLACES BUTTON CARD */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: scale(8),
+                  backgroundColor: 'rgba(245,197,24,0.12)',
+                  borderColor: colors.amber,
+                  borderWidth: 1.5,
+                  borderStyle: 'dashed',
+                  paddingVertical: verticalScale(12),
+                  paddingHorizontal: scale(14),
+                  borderRadius: scale(14),
+                  marginVertical: verticalScale(8),
+                }}
+                onPress={() => setIsDestPickerOpen(true)}
+              >
+                <MaterialIcons name="add-circle-outline" size={scale(20)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(13) }}>
+                  Add Places to Visit {touristCheckpoints.length > 0 ? `(${touristCheckpoints.length}/5)` : ''}
+                </Text>
+              </TouchableOpacity>
 
               {/* FIXED DROP NODE AT END */}
               <View style={styles.timelineItem}>
