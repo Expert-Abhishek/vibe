@@ -17,6 +17,7 @@
       }
     },
     "android": {
+      "versionCode": 12,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -60,15 +61,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "2a8823ee-df40-49f4-95b6-452edc6a3025"
+        "projectId": "3a7a353d-ead3-4e68-b3e5-5c95c3075cb6"
       }
     },
-    "owner": "abhittac",
+    "owner": "abhishekchauhan",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/2a8823ee-df40-49f4-95b6-452edc6a3025"
+      "url": "https://u.expo.dev/3a7a353d-ead3-4e68-b3e5-5c95c3075cb6"
     }
   }
 }
