@@ -25,6 +25,7 @@ import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { getUserSessionSync } from '@/constants/authStore';
 import { openRazorpayPayment } from '@/constants/razorpay';
 import { sendLocalNotification } from '@/constants/notifications';
+import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 
 
 
@@ -196,10 +197,26 @@ export default function MakeTripScreen() {
     }
   }, [searchParams.fromVehicle, searchParams.selectedDriverId, searchParams.checkpoints]);
 
-  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
-    { id: 'start', name: 'KSRTC Bus Stand Sakleshpur (Start)', latitude: 12.9416, longitude: 75.7790, address: 'Sakleshpura, Karnataka 573134' },
-    { id: 'stop-1', name: 'Sakleshpur Town Center', latitude: 12.9455178, longitude: 75.7789167, address: 'Main Road, Sakleshpur, Karnataka 573134' },
+  const [stationList, setStationList] = useState<PresetLocation[]>(PRESET_PICKUP_DROP_LOCATIONS);
+  const [selectedPickup, setSelectedPickup] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[0]);
+  const [selectedDrop, setSelectedDrop] = useState<PresetLocation>(PRESET_PICKUP_DROP_LOCATIONS[1]);
+  const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
+  const [isDropModalOpen, setIsDropModalOpen] = useState(false);
+  const [pickupSearchQuery, setPickupSearchQuery] = useState('');
+  const [dropSearchQuery, setDropSearchQuery] = useState('');
+
+  const [touristCheckpoints, setTouristCheckpoints] = useState<Checkpoint[]>([
+    { id: 'dest-1', name: 'Virupaksha Temple', latitude: 15.3350, longitude: 76.4600, address: 'Hampi, Karnataka' },
+    { id: 'dest-2', name: 'Vittala Temple Stone Chariot', latitude: 15.3370, longitude: 76.4760, address: 'Hampi, Karnataka' },
   ]);
+
+  const checkpoints = React.useMemo(() => {
+    return [
+      { id: selectedPickup.id, name: selectedPickup.name, latitude: selectedPickup.latitude, longitude: selectedPickup.longitude, address: selectedPickup.address, isPickup: true },
+      ...touristCheckpoints,
+      { id: selectedDrop.id, name: selectedDrop.name, latitude: selectedDrop.latitude, longitude: selectedDrop.longitude, address: selectedDrop.address, isDrop: true },
+    ];
+  }, [selectedPickup, selectedDrop, touristCheckpoints]);
 
 
   const [searchText, setSearchText] = useState('');
@@ -350,13 +367,13 @@ export default function MakeTripScreen() {
   };
 
   const handleSelectLiveDestination = (dest: any) => {
-    if (checkpoints.length >= 5) {
-      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 places to visit in a customer trip.');
+    if (touristCheckpoints.length >= 5) {
+      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 tourist places in a customer trip.');
       return;
     }
     const name = dest.name || 'Tourist Place';
-    if (checkpoints.find(c => c.name.toLowerCase() === name.toLowerCase())) {
-      Alert.alert('Checkpoint Exists', `${name} is already in your itinerary.`);
+    if (touristCheckpoints.find(c => c.name.toLowerCase() === name.toLowerCase())) {
+      Alert.alert('Checkpoint Exists', `${name} is already in your tourist places itinerary.`);
       return;
     }
     const newPoint: Checkpoint = {
@@ -366,37 +383,37 @@ export default function MakeTripScreen() {
       longitude: parseFloat(dest.longitude) || 76.4600,
       address: dest.location || 'Tourist Place',
     };
-    setCheckpoints(prev => [...prev, newPoint]);
+    setTouristCheckpoints(prev => [...prev, newPoint]);
     setSearchText('');
     setSuggestions([]);
   };
 
 
-  // Checkpoint Reordering and Deleting
+  // Checkpoint Reordering and Deleting for Tourist Places (Pickup & Drop positions are fixed)
   const handleMoveUp = (index: number) => {
     if (index === 0) return;
-    const nextList = [...checkpoints];
+    const nextList = [...touristCheckpoints];
     const temp = nextList[index];
     nextList[index] = nextList[index - 1];
     nextList[index - 1] = temp;
-    setCheckpoints(nextList);
+    setTouristCheckpoints(nextList);
   };
 
   const handleMoveDown = (index: number) => {
-    if (index === checkpoints.length - 1) return;
-    const nextList = [...checkpoints];
+    if (index === touristCheckpoints.length - 1) return;
+    const nextList = [...touristCheckpoints];
     const temp = nextList[index];
     nextList[index] = nextList[index + 1];
     nextList[index + 1] = temp;
-    setCheckpoints(nextList);
+    setTouristCheckpoints(nextList);
   };
 
   const handleDelete = (id: string) => {
-    if (checkpoints.length <= 2) {
-      Alert.alert('Failed', 'A planned trip must have at least 2 checkpoints (Start and End).');
+    if (touristCheckpoints.length <= 1) {
+      Alert.alert('Notice', 'A custom trip needs at least 1 tourist place to visit.');
       return;
     }
-    setCheckpoints(prev => prev.filter(c => c.id !== id));
+    setTouristCheckpoints(prev => prev.filter(c => c.id !== id));
   };
 
   // Decode Polyline from Google Directions
@@ -1177,78 +1194,325 @@ export default function MakeTripScreen() {
         )}
 
 
+        {/* PICKUP & DROP LOCATION SELECTOR FOR CUSTOM TRIP BUILDER */}
+        <View style={{ marginVertical: verticalScale(12), backgroundColor: colors.surface, padding: scale(14), borderRadius: scale(16), borderWidth: 1, borderColor: colors.border }}>
+          <Text style={{ color: colors.amber, fontSize: moderateFontScale(13), fontWeight: '800', marginBottom: verticalScale(10) }}>
+            📍 Select Pickup & Drop Locations (Stations / Hotels)
+          </Text>
+
+          {/* Pickup Location Dropdown Button */}
+          <View style={{ marginBottom: verticalScale(12) }}>
+            <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', letterSpacing: 0.5, marginBottom: verticalScale(6) }}>
+              PICKUP LOCATION (START POINT)
+            </Text>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                paddingHorizontal: scale(14),
+                paddingVertical: verticalScale(12),
+                borderRadius: scale(12),
+                borderWidth: 1.5,
+                borderColor: colors.amber,
+              }}
+              onPress={() => {
+                setIsPickupModalOpen(!isPickupModalOpen);
+                setIsDropModalOpen(false);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), flex: 1 }}>
+                <MaterialIcons name="trip-origin" size={scale(20)} color={colors.amber} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800' }}>
+                    {selectedPickup.name}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }} numberOfLines={1}>
+                    {selectedPickup.address}
+                  </Text>
+                </View>
+              </View>
+              <MaterialIcons name={isPickupModalOpen ? "arrow-drop-up" : "arrow-drop-down"} size={scale(24)} color={colors.amber} />
+            </TouchableOpacity>
+
+            {/* Inline Select Dropdown List */}
+            {isPickupModalOpen && (
+              <View style={{
+                marginTop: verticalScale(6),
+                backgroundColor: isDark ? '#1C1C22' : '#FFFFFF',
+                borderRadius: scale(12),
+                borderWidth: 1.5,
+                borderColor: colors.amber,
+                padding: scale(10),
+                maxHeight: verticalScale(220),
+                elevation: 5,
+              }}>
+                <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border, marginTop: 0, marginBottom: verticalScale(8), height: scale(38) }]}>
+                  <MaterialIcons name="search" size={scale(18)} color={colors.amber} style={styles.searchIcon} />
+                  <TextInput
+                    placeholder="Search pickup location..."
+                    placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
+                    style={[styles.searchInput, { color: colors.textPrimary, fontSize: moderateFontScale(12) }]}
+                    value={pickupSearchQuery}
+                    onChangeText={setPickupSearchQuery}
+                  />
+                </View>
+
+                <ScrollView nestedScrollEnabled style={{ maxHeight: verticalScale(160) }} showsVerticalScrollIndicator={true}>
+                  {stationList
+                    .filter(loc => !pickupSearchQuery.trim() || loc.name.toLowerCase().includes(pickupSearchQuery.toLowerCase()) || loc.address.toLowerCase().includes(pickupSearchQuery.toLowerCase()))
+                    .map((loc) => {
+                      const isSelected = selectedPickup.id === loc.id;
+                      return (
+                        <TouchableOpacity
+                          key={`p_drop_${loc.id}`}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: verticalScale(10),
+                            paddingHorizontal: scale(10),
+                            borderRadius: scale(8),
+                            backgroundColor: isSelected ? 'rgba(245, 197, 24, 0.15)' : 'transparent',
+                            marginBottom: 2,
+                          }}
+                          onPress={() => {
+                            setSelectedPickup(loc);
+                            setIsPickupModalOpen(false);
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), flex: 1 }}>
+                            <MaterialIcons name="trip-origin" size={scale(16)} color={isSelected ? colors.amber : colors.textMuted} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: isSelected ? colors.amber : colors.textPrimary, fontWeight: isSelected ? '800' : '600', fontSize: moderateFontScale(12.5) }}>
+                                {loc.name}
+                              </Text>
+                              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }} numberOfLines={1}>
+                                {loc.address}
+                              </Text>
+                            </View>
+                          </View>
+                          {isSelected && <MaterialIcons name="check" size={scale(18)} color={colors.amber} />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
+          {/* Drop Location Dropdown Button */}
+          <View style={{ marginBottom: verticalScale(4) }}>
+            <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '800', letterSpacing: 0.5, marginBottom: verticalScale(6) }}>
+              DROP LOCATION (END POINT)
+            </Text>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                paddingHorizontal: scale(14),
+                paddingVertical: verticalScale(12),
+                borderRadius: scale(12),
+                borderWidth: 1.5,
+                borderColor: '#EF4444',
+              }}
+              onPress={() => {
+                setIsDropModalOpen(!isDropModalOpen);
+                setIsPickupModalOpen(false);
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), flex: 1 }}>
+                <MaterialIcons name="location-on" size={scale(20)} color="#EF4444" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(13), fontWeight: '800' }}>
+                    {selectedDrop.name}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }} numberOfLines={1}>
+                    {selectedDrop.address}
+                  </Text>
+                </View>
+              </View>
+              <MaterialIcons name={isDropModalOpen ? "arrow-drop-up" : "arrow-drop-down"} size={scale(24)} color="#EF4444" />
+            </TouchableOpacity>
+
+            {/* Inline Select Dropdown List */}
+            {isDropModalOpen && (
+              <View style={{
+                marginTop: verticalScale(6),
+                backgroundColor: isDark ? '#1C1C22' : '#FFFFFF',
+                borderRadius: scale(12),
+                borderWidth: 1.5,
+                borderColor: '#EF4444',
+                padding: scale(10),
+                maxHeight: verticalScale(220),
+                elevation: 5,
+              }}>
+                <View style={[styles.searchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderColor: colors.border, marginTop: 0, marginBottom: verticalScale(8), height: scale(38) }]}>
+                  <MaterialIcons name="search" size={scale(18)} color="#EF4444" style={styles.searchIcon} />
+                  <TextInput
+                    placeholder="Search drop location..."
+                    placeholderTextColor={isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)'}
+                    style={[styles.searchInput, { color: colors.textPrimary, fontSize: moderateFontScale(12) }]}
+                    value={dropSearchQuery}
+                    onChangeText={setDropSearchQuery}
+                  />
+                </View>
+
+                <ScrollView nestedScrollEnabled style={{ maxHeight: verticalScale(160) }} showsVerticalScrollIndicator={true}>
+                  {stationList
+                    .filter(loc => !dropSearchQuery.trim() || loc.name.toLowerCase().includes(dropSearchQuery.toLowerCase()) || loc.address.toLowerCase().includes(dropSearchQuery.toLowerCase()))
+                    .map((loc) => {
+                      const isSelected = selectedDrop.id === loc.id;
+                      return (
+                        <TouchableOpacity
+                          key={`d_drop_${loc.id}`}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingVertical: verticalScale(10),
+                            paddingHorizontal: scale(10),
+                            borderRadius: scale(8),
+                            backgroundColor: isSelected ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                            marginBottom: 2,
+                          }}
+                          onPress={() => {
+                            setSelectedDrop(loc);
+                            setIsDropModalOpen(false);
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), flex: 1 }}>
+                            <MaterialIcons name="location-on" size={scale(16)} color={isSelected ? '#EF4444' : colors.textMuted} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ color: isSelected ? '#EF4444' : colors.textPrimary, fontWeight: isSelected ? '800' : '600', fontSize: moderateFontScale(12.5) }}>
+                                {loc.name}
+                              </Text>
+                              <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10) }} numberOfLines={1}>
+                                {loc.address}
+                              </Text>
+                            </View>
+                          </View>
+                          {isSelected && <MaterialIcons name="check" size={scale(18)} color="#EF4444" />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* Side-by-Side Content Container */}
         <View style={styles.sideBySideRow}>
           {/* Left Column: Route Checklist */}
           <View style={styles.leftColumn}>
             <View style={styles.columnHeader}>
               <MaterialIcons name="playlist-add-check" size={scale(18)} color={colors.amber} style={{ marginRight: scale(4) }} />
-              <Text style={[styles.columnTitle, { color: colors.amber }]} numberOfLines={1}>Route Checklist</Text>
+              <Text style={[styles.columnTitle, { color: colors.amber }]} numberOfLines={1}>Route Itinerary</Text>
             </View>
-            <Text style={[styles.columnSub, { color: colors.textMuted }]} numberOfLines={1}>Drag/reorder stops</Text>
+            <Text style={[styles.columnSub, { color: colors.textMuted }]} numberOfLines={1}>Reorder tourist places</Text>
 
             <View style={styles.itineraryWrapper}>
-              {checkpoints.map((checkpoint, index) => {
-                const isFirst = index === 0;
-                const isLast = index === checkpoints.length - 1;
+              {/* FIXED PICKUP NODE AT START */}
+              <View style={styles.timelineItem}>
+                <View style={styles.timelineLeft}>
+                  <View style={[styles.timelineNode, { backgroundColor: colors.amber }]}>
+                    <MaterialIcons name="trip-origin" size={scale(12)} color="#101014" />
+                  </View>
+                  <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />
+                </View>
 
-                let bulletColor = '#3b82f6';
-                if (isFirst) bulletColor = colors.amber;
-                if (isLast) bulletColor = '#ef4444';
+                <View style={[styles.stopCardCompact, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
+                  <View style={styles.stopInfo}>
+                    <Text style={[styles.stopName, { color: colors.amber, fontWeight: '800' }]} numberOfLines={1}>
+                      {selectedPickup.name}
+                    </Text>
+                    <Text style={[styles.stopRoleText, { color: colors.amber }]}>
+                      📌 PICKUP (START) • FIXED
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* MIDDLE TOURIST PLACES (CHECKPOINTS) */}
+              {touristCheckpoints.map((checkpoint, index) => {
+                const isFirstTourist = index === 0;
+                const isLastTourist = index === touristCheckpoints.length - 1;
 
                 return (
                   <View key={checkpoint.id} style={styles.timelineItem}>
-                    {/* Timeline connector visual line */}
                     <View style={styles.timelineLeft}>
-                      <View style={[styles.timelineNode, { backgroundColor: bulletColor }]}>
+                      <View style={[styles.timelineNode, { backgroundColor: '#3b82f6' }]}>
                         <Text style={styles.nodeChar}>{String.fromCharCode(65 + index)}</Text>
                       </View>
-                      {!isLast && <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />}
+                      <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />
                     </View>
 
-                    {/* Stop Card */}
                     <View style={[styles.stopCardCompact, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       <View style={styles.stopInfo}>
                         <Text style={[styles.stopName, { color: colors.textPrimary }]} numberOfLines={1}>
                           {checkpoint.name}
                         </Text>
-                        <Text style={[styles.stopRoleText, { color: isFirst ? colors.amber : isLast ? '#ef4444' : colors.textMuted }]}>
-                          {isFirst ? 'Start' : isLast ? 'End' : `Stop ${index}`}
+                        <Text style={[styles.stopRoleText, { color: colors.textMuted }]}>
+                          🏛️ Tourist Spot {index + 1}
                         </Text>
                       </View>
 
-                      {/* Reorder and Delete controls stacked vertically */}
+                      {/* Reorder and Delete controls for Tourist Places */}
                       <View style={styles.controlsCol}>
                         <View style={styles.arrowRow}>
                           <TouchableOpacity
-                            style={[styles.controlBtnCompact, isFirst && styles.controlBtnDisabled, { borderColor: colors.border }]}
+                            style={[styles.controlBtnCompact, isFirstTourist && styles.controlBtnDisabled, { borderColor: colors.border }]}
                             onPress={() => handleMoveUp(index)}
-                            disabled={isFirst}
+                            disabled={isFirstTourist}
                           >
-                            <MaterialIcons name="arrow-upward" size={scale(12)} color={isFirst ? colors.border : colors.textPrimary} />
+                            <MaterialIcons name="arrow-upward" size={scale(12)} color={isFirstTourist ? colors.border : colors.textPrimary} />
                           </TouchableOpacity>
 
                           <TouchableOpacity
-                            style={[styles.controlBtnCompact, isLast && styles.controlBtnDisabled, { borderColor: colors.border }]}
+                            style={[styles.controlBtnCompact, isLastTourist && styles.controlBtnDisabled, { borderColor: colors.border }]}
                             onPress={() => handleMoveDown(index)}
-                            disabled={isLast}
+                            disabled={isLastTourist}
                           >
-                            <MaterialIcons name="arrow-downward" size={scale(12)} color={isLast ? colors.border : colors.textPrimary} />
+                            <MaterialIcons name="arrow-downward" size={scale(12)} color={isLastTourist ? colors.border : colors.textPrimary} />
                           </TouchableOpacity>
                         </View>
 
                         <TouchableOpacity
-                          style={[styles.deleteBtnCompact, checkpoints.length <= 2 && styles.controlBtnDisabled]}
+                          style={[styles.deleteBtnCompact, touristCheckpoints.length <= 1 && styles.controlBtnDisabled]}
                           onPress={() => handleDelete(checkpoint.id)}
-                          disabled={checkpoints.length <= 2}
+                          disabled={touristCheckpoints.length <= 1}
                         >
-                          <MaterialIcons name="delete" size={scale(14)} color={checkpoints.length <= 2 ? colors.border : '#ef4444'} />
+                          <MaterialIcons name="delete" size={scale(14)} color={touristCheckpoints.length <= 1 ? colors.border : '#ef4444'} />
                         </TouchableOpacity>
                       </View>
                     </View>
                   </View>
                 );
               })}
+
+              {/* FIXED DROP NODE AT END */}
+              <View style={styles.timelineItem}>
+                <View style={styles.timelineLeft}>
+                  <View style={[styles.timelineNode, { backgroundColor: '#ef4444' }]}>
+                    <MaterialIcons name="location-on" size={scale(12)} color="#FFFFFF" />
+                  </View>
+                </View>
+
+                <View style={[styles.stopCardCompact, { backgroundColor: colors.surface, borderColor: '#ef4444', borderWidth: 1.5 }]}>
+                  <View style={styles.stopInfo}>
+                    <Text style={[styles.stopName, { color: '#ef4444', fontWeight: '800' }]} numberOfLines={1}>
+                      {selectedDrop.name}
+                    </Text>
+                    <Text style={[styles.stopRoleText, { color: '#ef4444' }]}>
+                      🏁 DROP (END) • FIXED
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
           </View>
         </View>
