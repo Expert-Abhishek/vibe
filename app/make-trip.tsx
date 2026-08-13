@@ -1,4 +1,10 @@
+import { adminState } from '@/constants/admin-state';
+import { bookTripApi, createTripApi, deductWalletApi, fetchDestinationsApi, fetchDriversApi, submitWalletDeductionRequestApi, validateVoucherApi } from '@/constants/api';
+import { getUserSessionSync } from '@/constants/authStore';
+import { sendLocalNotification } from '@/constants/notifications';
+import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,7 +12,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  DeviceEventEmitter,
   Image,
   Modal,
   Platform,
@@ -16,16 +21,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from '@/constants/admin-state';
-import { createTripApi, fetchDestinationsApi, fetchDriversApi, deductWalletApi, submitWalletDeductionRequestApi, bookTripApi, validateVoucherApi } from '@/constants/api';
-import { broadcastNewTripRequest } from '@/constants/tripSync';
-import { getUserSessionSync } from '@/constants/authStore';
-import { openRazorpayPayment } from '@/constants/razorpay';
-import { sendLocalNotification } from '@/constants/notifications';
-import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 
 
 
@@ -996,7 +994,7 @@ export default function MakeTripScreen() {
               <View style={styles.nodesCanvas}>
                 {checkpoints.map((c, i) => (
                   <View
-                    key={c.id}
+                    key={`canvas_${c.id || i}_${i}`}
                     style={[
                       styles.canvasNodeCircle,
                       {
@@ -1037,7 +1035,7 @@ export default function MakeTripScreen() {
 
                 return (
                   <Marker
-                    key={c.id}
+                    key={`marker_${c.id || index}_${index}`}
                     coordinate={{ latitude: c.latitude, longitude: c.longitude }}
                     title={c.name}
                     description={c.address || `Stop ${String.fromCharCode(65 + index)}`}
@@ -1262,11 +1260,11 @@ export default function MakeTripScreen() {
                 <ScrollView nestedScrollEnabled style={{ maxHeight: verticalScale(160) }} showsVerticalScrollIndicator={true}>
                   {stationList
                     .filter(loc => !pickupSearchQuery.trim() || loc.name.toLowerCase().includes(pickupSearchQuery.toLowerCase()) || loc.address.toLowerCase().includes(pickupSearchQuery.toLowerCase()))
-                    .map((loc) => {
+                    .map((loc, idx) => {
                       const isSelected = selectedPickup.id === loc.id;
                       return (
                         <TouchableOpacity
-                          key={`p_drop_${loc.id}`}
+                          key={`p_drop_${loc.id}_${idx}`}
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -1364,11 +1362,11 @@ export default function MakeTripScreen() {
                 <ScrollView nestedScrollEnabled style={{ maxHeight: verticalScale(160) }} showsVerticalScrollIndicator={true}>
                   {stationList
                     .filter(loc => !dropSearchQuery.trim() || loc.name.toLowerCase().includes(dropSearchQuery.toLowerCase()) || loc.address.toLowerCase().includes(dropSearchQuery.toLowerCase()))
-                    .map((loc) => {
+                    .map((loc, idx) => {
                       const isSelected = selectedDrop.id === loc.id;
                       return (
                         <TouchableOpacity
-                          key={`d_drop_${loc.id}`}
+                          key={`d_drop_${loc.id}_${idx}`}
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -1431,7 +1429,7 @@ export default function MakeTripScreen() {
                       {selectedPickup.name}
                     </Text>
                     <Text style={[styles.stopRoleText, { color: colors.amber }]}>
-                      📌 PICKUP (START) • FIXED
+                      PICKUP (START)
                     </Text>
                   </View>
                 </View>
@@ -1443,7 +1441,7 @@ export default function MakeTripScreen() {
                 const isLastTourist = index === touristCheckpoints.length - 1;
 
                 return (
-                  <View key={checkpoint.id} style={styles.timelineItem}>
+                  <View key={`tourist_${checkpoint.id || index}_${index}`} style={styles.timelineItem}>
                     <View style={styles.timelineLeft}>
                       <View style={[styles.timelineNode, { backgroundColor: '#3b82f6' }]}>
                         <Text style={styles.nodeChar}>{String.fromCharCode(65 + index)}</Text>
@@ -1456,9 +1454,7 @@ export default function MakeTripScreen() {
                         <Text style={[styles.stopName, { color: colors.textPrimary }]} numberOfLines={1}>
                           {checkpoint.name}
                         </Text>
-                        <Text style={[styles.stopRoleText, { color: colors.textMuted }]}>
-                          🏛️ Tourist Spot {index + 1}
-                        </Text>
+
                       </View>
 
                       {/* Reorder and Delete controls for Tourist Places */}
@@ -1508,7 +1504,7 @@ export default function MakeTripScreen() {
                       {selectedDrop.name}
                     </Text>
                     <Text style={[styles.stopRoleText, { color: '#ef4444' }]}>
-                      🏁 DROP (END) • FIXED
+                      DROP (END)
                     </Text>
                   </View>
                 </View>
@@ -2077,7 +2073,7 @@ export default function MakeTripScreen() {
                       <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), textAlign: 'center', marginTop: verticalScale(4), height: verticalScale(44) }} numberOfLines={3}>
                         {car.desc}
                       </Text>
-                      
+
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(4), marginTop: verticalScale(8), backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', paddingHorizontal: scale(8), paddingVertical: scale(4), borderRadius: scale(8) }}>
                         <MaterialIcons name="people" size={scale(13)} color={colors.textMuted} />
                         <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10), fontWeight: '700' }}>{car.capacity}</Text>
