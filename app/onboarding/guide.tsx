@@ -286,149 +286,9 @@ export default function GuideRegister() {
         >
 
           <Text style={styles.eyebrow}>GUIDE REGISTRATION</Text>
-          <Text style={styles.screenHeading}>Share your route</Text>
-          <Text style={styles.screenSubheading}>
-            Waypoint {currentStep} of 2 · {STEP_LABELS[currentStep - 1]}
-          </Text>
 
-          {/* TRAIL PROGRESS — waypoints connected by a dotted footpath */}
-          <View style={styles.trailWrapper}>
-            {STEP_LABELS.map((label, index) => {
-              const step = index + 1;
-              const isDone = currentStep > step;
-              const isActive = currentStep === step;
-              const isFilled = isDone || isActive;
-              return (
-                <React.Fragment key={label}>
-                  <View style={styles.waypointCol}>
-                    <View style={[styles.waypoint, isFilled && styles.waypointFilled]}>
-                      <Text style={[styles.waypointText, isFilled && styles.waypointTextFilled]}>
-                        {isDone ? '✓' : step}
-                      </Text>
-                    </View>
-                    <Text style={[styles.waypointLabel, isActive && styles.waypointLabelActive]}>
-                      {label}
-                    </Text>
-                  </View>
-                  {step < STEP_LABELS.length && (
-                    <View style={styles.dashRow}>
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <View key={i} style={[styles.dash, currentStep > step && styles.dashActive]} />
-                      ))}
-                    </View>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </View>
-
-          {/* STEP 1 */}
-          {currentStep === 1 && (
-            <View style={styles.formSection}>
-              <Field
-                label="Full name" required
-                placeholder="As printed on your ID"
-                value={formData.name}
-                onChangeText={(t: string) => setFormData({ ...formData, name: t })}
-                onFocus={() => scrollToInput(80)}
-                error={errors.name}
-              />
-              <Field
-                label="Phone number" required
-                placeholder="10-digit phone number"
-                keyboardType="phone-pad"
-                maxLength={10}
-                value={formData.phone}
-                onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
-                onFocus={() => scrollToInput(150)}
-                error={errors.phone}
-              />
-              <Field
-                label="Alternate phone" required
-                placeholder="10-digit backup number"
-                keyboardType="phone-pad"
-                maxLength={10}
-                value={formData.altPhone}
-                onChangeText={(t: string) => setFormData({ ...formData, altPhone: t.replace(/[^0-9]/g, '') })}
-                onFocus={() => scrollToInput(220)}
-                error={errors.altPhone}
-              />
-
-              <Field
-                label="Password" required
-                placeholder="Min 6 characters"
-                secureTextEntry
-                value={formData.password}
-                onChangeText={(t: string) => setFormData({ ...formData, password: t })}
-                onFocus={() => scrollToInput(290)}
-                error={errors.password}
-              />
-            </View>
-          )}
-
-          {/* STEP 2 */}
-          {currentStep === 2 && (
-            <View style={styles.formSection}>
-              <Field
-                label="Expertise / Specialization" required
-                placeholder="e.g. History & Heritage Walks, Trekking"
-                value={formData.expertise}
-                onChangeText={(t: string) => setFormData({ ...formData, expertise: t })}
-                onFocus={() => scrollToInput(50)}
-                error={errors.expertise}
-              />
-
-              <Field
-                label="Years of experience" required
-                placeholder="e.g. 3"
-                keyboardType="numeric"
-                value={formData.experience}
-                onChangeText={(t: string) => setFormData({ ...formData, experience: t })}
-                onFocus={() => scrollToInput(120)}
-                error={errors.experience}
-              />
-
-              <Text style={[styles.label, { marginTop: 18 }]}>Upload documents</Text>
-              <Text style={styles.helperText}>Tap each stub to attach the file</Text>
-              {errors.docs && <Text style={styles.errorText}>{errors.docs}</Text>}
-
-              {(Object.keys(docs) as DocKey[]).map((docKey) => {
-                const uri = docs[docKey];
-                return (
-                  <View key={docKey} style={[styles.ticketStub, uri && styles.ticketStubDone]}>
-                    <TouchableOpacity
-                      style={styles.ticketTapArea}
-                      onPress={() => pickDocument(docKey)}
-                      activeOpacity={0.75}
-                    >
-                      {uri ? (
-                        <Image source={{ uri }} style={styles.ticketThumb} />
-                      ) : (
-                        <View style={styles.ticketBadge}>
-                          <Text style={styles.ticketBadgeText}>＋</Text>
-                        </View>
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.ticketLabel}>{DOC_LABELS[docKey]}</Text>
-                        <Text style={styles.ticketStatus}>
-                          {uri ? 'Uploaded · tap to replace' : 'Not attached yet'}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {uri && (
-                      <TouchableOpacity style={styles.ticketRemoveBtn} onPress={() => removeDocument(docKey)}>
-                        <Text style={styles.ticketRemoveText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
-
-          {currentStep === 2 && showOtpScreen && (
-            <View style={[styles.formCard, { marginTop: verticalScale(14) }]}>
+          {showOtpScreen ? (
+            <View style={styles.formCard}>
               <TouchableOpacity
                 onPress={() => setShowOtpScreen(false)}
                 style={{ flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(14) }}
@@ -439,10 +299,10 @@ export default function GuideRegister() {
                 </Text>
               </TouchableOpacity>
 
-              <Text style={{ fontSize: moderateFontScale(18), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
+              <Text style={{ fontSize: moderateFontScale(22), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
                 Enter Verification OTP Code 🔐
               </Text>
-              <Text style={{ fontSize: moderateFontScale(13), color: colors.textMuted, marginBottom: verticalScale(16) }}>
+              <Text style={{ fontSize: moderateFontScale(13), color: colors.textMuted, marginBottom: verticalScale(20) }}>
                 We sent a 4-digit verification code to primary mobile <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {formData.phone}</Text>
               </Text>
 
@@ -468,8 +328,29 @@ export default function GuideRegister() {
               />
               {errors.otp && <Text style={styles.errorText}>{errors.otp}</Text>}
 
+              <View style={[styles.buttonRow, { marginTop: verticalScale(24) }]}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => setShowOtpScreen(false)}
+                  disabled={loading}
+                >
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                  onPress={handleNext}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color={colors.ink} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Verify & Submit</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
               <TouchableOpacity
-                style={{ marginTop: verticalScale(14), alignItems: 'center' }}
+                style={{ marginTop: verticalScale(18), alignItems: 'center' }}
                 onPress={async () => {
                   const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
                   setLoading(true);
@@ -483,36 +364,179 @@ export default function GuideRegister() {
                 }}
                 disabled={loading}
               >
-                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>Resend 4-Digit OTP via SMS</Text>
+                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>
+                  Resend 4-Digit OTP via SMS
+                </Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : (
+            <>
+              <Text style={styles.screenHeading}>Share your route</Text>
+              <Text style={styles.screenSubheading}>
+                Waypoint {currentStep} of 2 · {STEP_LABELS[currentStep - 1]}
+              </Text>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => {
-                if (showOtpScreen) {
-                  setShowOtpScreen(false);
-                } else if (currentStep > 1) {
-                  setCurrentStep(prev => prev - 1);
-                } else {
-                  router.back();
-                }
-              }}
-            >
-              <Text style={styles.secondaryButtonText}>Back</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.primaryButton} onPress={handleNext} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color={colors.ink} />
-              ) : (
-                <Text style={styles.primaryButtonText}>
-                  {currentStep === 2 ? (showOtpScreen ? 'Submit Application' : 'Finish setup') : 'Continue'}
-                </Text>
+              {/* TRAIL PROGRESS — waypoints connected by a dotted footpath */}
+              <View style={styles.trailWrapper}>
+                {STEP_LABELS.map((label, index) => {
+                  const step = index + 1;
+                  const isDone = currentStep > step;
+                  const isActive = currentStep === step;
+                  const isFilled = isDone || isActive;
+                  return (
+                    <React.Fragment key={label}>
+                      <View style={styles.waypointCol}>
+                        <View style={[styles.waypoint, isFilled && styles.waypointFilled]}>
+                          <Text style={[styles.waypointText, isFilled && styles.waypointTextFilled]}>
+                            {isDone ? '✓' : step}
+                          </Text>
+                        </View>
+                        <Text style={[styles.waypointLabel, isActive && styles.waypointLabelActive]}>
+                          {label}
+                        </Text>
+                      </View>
+                      {step < STEP_LABELS.length && (
+                        <View style={styles.dashRow}>
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <View key={i} style={[styles.dash, currentStep > step && styles.dashActive]} />
+                          ))}
+                        </View>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+
+              {/* STEP 1 */}
+              {currentStep === 1 && (
+                <View style={styles.formSection}>
+                  <Field
+                    label="Full name" required
+                    placeholder="As printed on your ID"
+                    value={formData.name}
+                    onChangeText={(t: string) => setFormData({ ...formData, name: t })}
+                    onFocus={() => scrollToInput(80)}
+                    error={errors.name}
+                  />
+                  <Field
+                    label="Phone number" required
+                    placeholder="10-digit phone number"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    value={formData.phone}
+                    onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
+                    onFocus={() => scrollToInput(150)}
+                    error={errors.phone}
+                  />
+                  <Field
+                    label="Alternate phone" required
+                    placeholder="10-digit backup number"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    value={formData.altPhone}
+                    onChangeText={(t: string) => setFormData({ ...formData, altPhone: t.replace(/[^0-9]/g, '') })}
+                    onFocus={() => scrollToInput(220)}
+                    error={errors.altPhone}
+                  />
+
+                  <Field
+                    label="Password" required
+                    placeholder="Min 6 characters"
+                    secureTextEntry
+                    value={formData.password}
+                    onChangeText={(t: string) => setFormData({ ...formData, password: t })}
+                    onFocus={() => scrollToInput(290)}
+                    error={errors.password}
+                  />
+                </View>
               )}
-            </TouchableOpacity>
-          </View>
+
+              {/* STEP 2 */}
+              {currentStep === 2 && (
+                <View style={styles.formSection}>
+                  <Field
+                    label="Expertise / Specialization" required
+                    placeholder="e.g. History & Heritage Walks, Trekking"
+                    value={formData.expertise}
+                    onChangeText={(t: string) => setFormData({ ...formData, expertise: t })}
+                    onFocus={() => scrollToInput(50)}
+                    error={errors.expertise}
+                  />
+
+                  <Field
+                    label="Years of experience" required
+                    placeholder="e.g. 3"
+                    keyboardType="numeric"
+                    value={formData.experience}
+                    onChangeText={(t: string) => setFormData({ ...formData, experience: t })}
+                    onFocus={() => scrollToInput(120)}
+                    error={errors.experience}
+                  />
+
+                  <Text style={[styles.label, { marginTop: 18 }]}>Upload documents</Text>
+                  <Text style={styles.helperText}>Tap each stub to attach the file</Text>
+                  {errors.docs && <Text style={styles.errorText}>{errors.docs}</Text>}
+
+                  {(Object.keys(docs) as DocKey[]).map((docKey) => {
+                    const uri = docs[docKey];
+                    return (
+                      <View key={docKey} style={[styles.ticketStub, uri && styles.ticketStubDone]}>
+                        <TouchableOpacity
+                          style={styles.ticketTapArea}
+                          onPress={() => pickDocument(docKey)}
+                          activeOpacity={0.75}
+                        >
+                          {uri ? (
+                            <Image source={{ uri }} style={styles.ticketThumb} />
+                          ) : (
+                            <View style={styles.ticketBadge}>
+                              <Text style={styles.ticketBadgeText}>＋</Text>
+                            </View>
+                          )}
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.ticketLabel}>{DOC_LABELS[docKey]}</Text>
+                            <Text style={styles.ticketStatus}>
+                              {uri ? 'Uploaded · tap to replace' : 'Not attached yet'}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+
+                        {uri && (
+                          <TouchableOpacity style={styles.ticketRemoveBtn} onPress={() => removeDocument(docKey)}>
+                            <Text style={styles.ticketRemoveText}>✕</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => {
+                    if (currentStep > 1) {
+                      setCurrentStep(prev => prev - 1);
+                    } else {
+                      router.back();
+                    }
+                  }}
+                >
+                  <Text style={styles.secondaryButtonText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryButton} onPress={handleNext} disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color={colors.ink} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>
+                      {currentStep === 2 ? 'Finish setup' : 'Continue'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -717,6 +741,7 @@ const styles = StyleSheet.create({
 
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(26), gap: scale(12) },
   primaryButton: { flex: 1, backgroundColor: colors.amber, padding: scale(16), borderRadius: scale(12), alignItems: 'center' },
+  buttonDisabled: { opacity: 0.6 },
   primaryButtonText: { color: colors.ink, fontSize: moderateFontScale(15), fontWeight: '800' },
   secondaryButton: {
     flex: 1, backgroundColor: 'transparent', padding: scale(16), borderRadius: scale(12),
