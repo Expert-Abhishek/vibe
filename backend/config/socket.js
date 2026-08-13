@@ -54,10 +54,15 @@ function initSocket(server) {
       }
 
       if (cat) {
-        const normCat = String(cat).toLowerCase().replace('5seater', '5_seater').replace('7seater', '7_seater');
+        const catStr = String(cat).toLowerCase().trim();
+        const normCat = catStr.replace(/ /g, '_').replace(/-/g, '_').replace('5seater', '5_seater').replace('7seater', '7_seater').replace('4*4', '4x4').replace('4x4jeep', '4x4');
         socket.join(`role:${normCat}`);
-        socket.join(`role:${cat}`);
-        console.log(`[Socket.io] Socket ${socket.id} joined targeted category rooms [role:${normCat}] & [role:${cat}]`);
+        socket.join(`role:${catStr}`);
+        if (normCat === '4x4') {
+          socket.join('role:4x4jeep');
+          socket.join('role:4*4');
+        }
+        console.log(`[Socket.io] Socket ${socket.id} joined targeted category rooms [role:${normCat}] & [role:${catStr}]`);
       }
     });
 
@@ -90,7 +95,6 @@ function initSocket(server) {
       if (!data) return;
       console.log('[Socket.io] 🟢 Received accept_ride socket event from driver:', data);
       emitTripAccepted(data);
-      emitTripStatusUpdated(data, 'Accepted');
     });
 
     // Client relay broadcast fallback
@@ -116,8 +120,6 @@ function initSocket(server) {
         timestamp: new Date().toISOString(),
       };
 
-      console.log(`[Socket.io] 📍 Broadcast location stream for trip [trip:${tripId || 'global'}] lat:${latitude} lng:${longitude}`);
-
       if (tripId) {
         io.to(`trip:${String(tripId)}`).emit('driver_location_stream', payload);
         io.to(`trip:${String(tripId)}`).emit('driver_location_update', payload);
@@ -126,10 +128,6 @@ function initSocket(server) {
         io.to(`user:${String(driverId)}`).emit('driver_location_stream', payload);
         io.to(`user:${String(driverId)}`).emit('driver_location_update', payload);
       }
-      io.to('role:tourist').emit('driver_location_stream', payload);
-      io.to('role:tourist').emit('driver_location_update', payload);
-      io.emit('driver_location_stream', payload);
-      io.emit('driver_location_update', payload);
     });
 
     socket.on('disconnect', () => {
@@ -171,14 +169,9 @@ function emitNotification(payload) {
   // Broadcast to specific user room if userId exists
   if (userId) {
     io.to(`user:${String(userId)}`).emit('notification:new', notificationItem);
-  }
-  // Broadcast to specific role room
-  if (role) {
+  } else if (role && role !== 'driver') {
+    // Only broadcast to role room if not generic driver broadcast
     io.to(`role:${role}`).emit('notification:new', notificationItem);
-  }
-  // Broadcast to admin room if role is admin
-  if (role === 'admin') {
-    io.to('role:admin').emit('notification:new', notificationItem);
   }
 }
 
@@ -203,9 +196,6 @@ function emitWalletUpdate(payload) {
     io.to(`user:${String(userId)}`).emit('wallet:updated', walletPayload);
     console.log(`[Socket.io] Emitted wallet:updated to user:${String(userId)}`);
   }
-  if (role) {
-    io.to(`role:${role}`).emit('wallet:updated', walletPayload);
-  }
 }
 
 function calculateHaversineKm(lat1, lon1, lat2, lon2) {
@@ -221,12 +211,11 @@ function calculateHaversineKm(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Emit trip request: Direct Targeted vs Vehicle Category Room vs Role Broadcast
+ * Emit trip request: Direct Targeted vs Vehicle Category Room
  */
 function emitTripRequest(tripObject) {
   if (!io || !tripObject) return;
 
-  // Extract & normalize Driver ID to String
   const rawDriverId = tripObject.selectedDriverId || tripObject.driverId || tripObject.driver_id || tripObject.assignedDriverId || tripObject.guideId || tripObject.assignedToId;
   const driverId = rawDriverId ? String(rawDriverId) : null;
   const vehicleCategory = tripObject.vehicleCategory || tripObject.vehicle_category || tripObject.vehicleType || tripObject.vehicle;
@@ -276,9 +265,9 @@ function emitTripRequest(tripObject) {
     createdAt: new Date().toISOString(),
   };
 
-  const normalizedCat = String(vehicleCategory || '5_seater').toLowerCase().replace('5seater', '5_seater').replace('7seater', '7_seater');
+  const catStr = String(vehicleCategory || '5_seater').toLowerCase().trim();
+  const normalizedCat = catStr.replace(/ /g, '_').replace(/-/g, '_').replace('5seater', '5_seater').replace('7seater', '7_seater').replace('4*4', '4x4').replace('4x4jeep', '4x4');
 
-  // Multi-event emission helper for max compatibility
   const emitRequestToRoom = (roomName) => {
     if (!io) return;
     io.to(roomName).emit('trip_request', normalizedTrip);
@@ -289,24 +278,27 @@ function emitTripRequest(tripObject) {
   };
 
   if (driverId) {
-    // TARGETED DIRECT REQUEST: Emit STRICTLY to specific driver/guide room
+    // TARGETED DIRECT REQUEST: Emit STRICTLY to specific driver room
     const targetRoom = `user:${driverId}`;
     emitRequestToRoom(targetRoom);
     console.log(`🎯 [DIRECT TARGETED REQUEST] Sent strictly to room: [${targetRoom}] for Trip ID: ${normalizedTrip.id}`);
   } else {
-    // TARGETED CATEGORY ROOM DISPATCH (e.g. role:5_seater, role:7_seater, role:4x4, role:auto)
-    emitRequestToRoom(`role:${normalizedCat}`);
-    emitRequestToRoom(`role:${vehicleCategory}`);
-    emitRequestToRoom('role:driver_online');
-    console.log(`🎯 [CATEGORY DISPATCH] Emitted trip ${normalizedTrip.id} to rooms [role:${normalizedCat}] & [role:driver_online]`);
+    // TARGETED CATEGORY DISPATCH: ONLY emit to drivers registered for requested vehicle category!
+    const targetRooms = new Set([`role:${normalizedCat}`, `role:${catStr}`]);
+    if (normalizedCat === '4x4') {
+      targetRooms.add('role:4x4jeep');
+      targetRooms.add('role:4*4');
+    }
+    for (const roomName of targetRooms) {
+      emitRequestToRoom(roomName);
+    }
+    console.log(`🎯 [CATEGORY DISPATCH] Emitted trip ${normalizedTrip.id} strictly to category rooms:`, Array.from(targetRooms));
   }
 }
 
 /**
- * Emit real-time trip acceptance event to rider, driver, and global rooms
+ * Emit real-time trip acceptance event strictly to trip participants
  */
-// File: backend/config/socket.js
-
 async function emitTripAccepted(tripObject) {
   if (!io || !tripObject) return;
 
@@ -319,7 +311,6 @@ async function emitTripAccepted(tripObject) {
   let vehicleModel = tripObject.vehicleModel || tripObject.vehicle_model || null;
   let vehicleNumber = tripObject.vehicleNumber || tripObject.vehicle_number || null;
 
-  // 1. Fetch trip record from PostgreSQL & UPDATE trips table with driver_id if missing or outdated!
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     try {
       const db = require('./db');
@@ -329,13 +320,9 @@ async function emitTripAccepted(tripObject) {
       );
       if (tRes.rows && tRes.rows.length > 0) {
         const tRow = tRes.rows[0];
-
-        // Resolve missing customerId from database
         if ((!customerId || customerId === 'null' || customerId === 'undefined') && tRow.customer_id) {
           customerId = String(tRow.customer_id).trim();
         }
-
-        // Sync driver_id into trips table in PostgreSQL if not updated yet!
         if (driverId && driverId !== 'null' && driverId !== 'undefined') {
           if (!tRow.driver_id || String(tRow.driver_id).trim() !== driverId || tRow.status !== 'Accepted') {
             await db.query(
@@ -344,12 +331,10 @@ async function emitTripAccepted(tripObject) {
                WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text`,
               [driverId, driverName || tRow.driver_or_guide_name || 'Driver Partner', tripId]
             );
-            console.log(`[SOCKET DB SYNC] 🟢 Updated trips table for trip ${tripId}: driver_id = ${driverId}`);
           }
         } else if (tRow.driver_id) {
           driverId = String(tRow.driver_id).trim();
         }
-
         if (tRow.driver_or_guide_name) driverName = driverName || tRow.driver_or_guide_name;
       }
     } catch (dbErr) {
@@ -357,7 +342,6 @@ async function emitTripAccepted(tripObject) {
     }
   }
 
-  // 2. Fetch driver profile details from users and driver_profiles table
   if (driverId && driverId !== 'null' && driverId !== 'undefined') {
     try {
       const db = require('./db');
@@ -398,38 +382,23 @@ async function emitTripAccepted(tripObject) {
     endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
   };
 
-  console.log('[DEBUG] Driver accepted trip:', tripId, 'for Customer:', customerId);
-  if (io && io.sockets && io.sockets.adapter && io.sockets.adapter.rooms) {
-    const userRoomSockets = io.sockets.adapter.rooms.get(`user:${customerId}`);
-    const tripRoomSockets = io.sockets.adapter.rooms.get(`trip:${tripId}`);
-    console.log('[DEBUG] Active Sockets in room user:' + customerId + ':', userRoomSockets ? Array.from(userRoomSockets) : 'EMPTY / NONE');
-    console.log('[DEBUG] Active Sockets in room trip:' + tripId + ':', tripRoomSockets ? Array.from(tripRoomSockets) : 'EMPTY / NONE');
-  }
-
-  // 1. Emit to Rider's personal socket room (CRITICAL FIX: Ensure customerId is valid string)
+  // Emit strictly to trip participants
   if (customerId && customerId !== 'null' && customerId !== 'undefined') {
     io.to(`user:${customerId}`).emit('trip_accepted', acceptancePayload);
     io.to(`user:${customerId}`).emit('trip_status_updated', acceptancePayload);
-    console.log(`[SOCKET] Broadcasted trip_accepted to user:${customerId}`);
   }
-
-  // 2. Emit to Trip room strictly using trip:ID format
+  if (driverId && driverId !== 'null' && driverId !== 'undefined') {
+    io.to(`user:${driverId}`).emit('trip_accepted', acceptancePayload);
+    io.to(`user:${driverId}`).emit('trip_status_updated', acceptancePayload);
+  }
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_accepted', acceptancePayload);
     io.to(`trip:${tripId}`).emit('trip_status_updated', acceptancePayload);
-    console.log(`[SOCKET] Broadcasted trip_accepted to room trip:${tripId}`);
   }
-
-  // 3. Global Broadcast Fallbacks
-  io.to('role:tourist').emit('trip_accepted', acceptancePayload);
-  io.to('role:tourist').emit('trip_status_updated', acceptancePayload);
-  io.emit('trip_accepted', acceptancePayload);
-  io.emit('trip_status_updated', acceptancePayload);
-  io.emit('RIDE_ACCEPTED', acceptancePayload);
 }
 
 /**
- * Emit real-time trip decline/rejection event to rider and global rooms
+ * Emit real-time trip decline event strictly to trip participants
  */
 function emitTripDeclined(tripObject) {
   if (!io || !tripObject) return;
@@ -449,21 +418,13 @@ function emitTripDeclined(tripObject) {
     declinedAt: new Date().toISOString(),
   };
 
-  console.log(`[Socket.io] 🛑 Emitting trip_declined & RIDE_DECLINED for trip ${tripId} by driver ${driverName}`);
-
   if (tripId) io.to(`trip:${tripId}`).emit('trip_declined', declinePayload);
   if (customerId) io.to(`user:${customerId}`).emit('trip_declined', declinePayload);
   if (driverId) io.to(`user:${driverId}`).emit('trip_declined', declinePayload);
-
-  io.to('role:driver').emit('trip_declined', declinePayload);
-  io.to('role:guide').emit('trip_declined', declinePayload);
-  io.to('role:tourist').emit('trip_declined', declinePayload);
-  io.emit('trip_declined', declinePayload);
-  io.emit('RIDE_DECLINED', declinePayload);
 }
 
 /**
- * Emit real-time trip cancellation event to rider, driver, and global rooms
+ * Emit real-time trip cancellation event strictly to trip participants
  */
 function emitTripCancelled(tripObject) {
   if (!io || !tripObject) return;
@@ -479,21 +440,13 @@ function emitTripCancelled(tripObject) {
     cancelledAt: new Date().toISOString(),
   };
 
-  console.log(`[Socket.io] ❌ Emitting trip_cancelled & RIDE_CANCELLED for trip ${tripId}`);
-
   if (tripId) io.to(`trip:${tripId}`).emit('trip_cancelled', cancelPayload);
   if (customerId) io.to(`user:${customerId}`).emit('trip_cancelled', cancelPayload);
   if (driverId) io.to(`user:${driverId}`).emit('trip_cancelled', cancelPayload);
-
-  io.to('role:driver').emit('trip_cancelled', cancelPayload);
-  io.to('role:guide').emit('trip_cancelled', cancelPayload);
-  io.to('role:tourist').emit('trip_cancelled', cancelPayload);
-  io.emit('trip_cancelled', cancelPayload);
-  io.emit('RIDE_CANCELLED', cancelPayload);
 }
 
 /**
- * Emit real-time trip completion event to rider, driver, and trip rooms
+ * Emit real-time trip completion event strictly to trip participants
  */
 function emitTripCompleted(tripObject) {
   if (!io || !tripObject) return;
@@ -513,19 +466,15 @@ function emitTripCompleted(tripObject) {
     driverId: driverId,
   };
 
-  console.log(`[Socket.io] 🏁 Emitting trip_completed to trip:${tripId} & user:${customerId}`);
+  console.log(`[Socket.io] 🏁 Emitting trip_completed to trip:${tripId}, user:${customerId}, user:${driverId}`);
 
-  if (tripId) io.to(`trip:${tripId}`).emit('trip_completed', payload);
-  if (customerId) io.to(`user:${customerId}`).emit('trip_completed', payload);
-  if (driverId) io.to(`user:${driverId}`).emit('trip_completed', payload);
-
-  io.to('role:driver').emit('trip_completed', payload);
-  io.to('role:tourist').emit('trip_completed', payload);
-  io.emit('trip_completed', payload);
+  if (tripId && tripId !== 'null' && tripId !== 'undefined') io.to(`trip:${tripId}`).emit('trip_completed', payload);
+  if (customerId && customerId !== 'null' && customerId !== 'undefined') io.to(`user:${customerId}`).emit('trip_completed', payload);
+  if (driverId && driverId !== 'null' && driverId !== 'undefined') io.to(`user:${driverId}`).emit('trip_completed', payload);
 }
 
 /**
- * Emit unified 'trip_status_updated' event to specific rider room, trip room & globally
+ * Emit unified 'trip_status_updated' event strictly to trip participants
  */
 function emitTripStatusUpdated(tripObject, statusOverride) {
   if (!io || !tripObject) return;
@@ -539,8 +488,8 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
     id: driverId,
     name: tripObject.driverName || tripObject.driver_or_guide_name || 'Captain',
     phone: tripObject.driverPhone || '+91 99000 82400',
-    vehicleModel: tripObject.vehicleModel || tripObject.vehicle_model || 'Innova / Thar 4x4',
-    vehicleNumber: tripObject.vehicleNumber || tripObject.vehicle_number || 'KA-03-EX-8240',
+    vehicleModel: tripObject.vehicleModel || tripObject.vehicle_model || 'Cab',
+    vehicleNumber: tripObject.vehicleNumber || tripObject.vehicle_number || '',
   };
 
   const payload = {
@@ -574,16 +523,17 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
       io.to(`user:${customerId}`).emit('trip_completed', payload);
     }
   }
+
   if (tripId && tripId !== 'null' && tripId !== 'undefined') {
     io.to(`trip:${tripId}`).emit('trip_status_updated', payload);
     io.to(`trip:${tripId}`).emit('trip_stage_update', stagePayload);
-
     if (stLower === 'accepted') {
       io.to(`trip:${tripId}`).emit('trip_accepted', payload);
     } else if (stLower === 'done' || stLower === 'completed') {
       io.to(`trip:${tripId}`).emit('trip_completed', payload);
     }
   }
+
   if (driverId && driverId !== 'null' && driverId !== 'undefined') {
     io.to(`user:${driverId}`).emit('trip_status_updated', payload);
     io.to(`user:${driverId}`).emit('trip_stage_update', stagePayload);
@@ -591,14 +541,6 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
       io.to(`user:${driverId}`).emit('trip_completed', payload);
     }
   }
-
-  io.emit('trip_status_updated', payload);
-
-  // Legacy helper calls for backward compatibility
-  if (status === 'Accepted') emitTripAccepted(tripObject);
-  else if (status === 'done' || status === 'Completed') emitTripCompleted(tripObject);
-  else if (status === 'Declined') emitTripDeclined(tripObject);
-  else if (status === 'CANCELLED' || status === 'Cancelled') emitTripCancelled(tripObject);
 }
 
 module.exports = {
