@@ -124,7 +124,7 @@ export default function DriverDashboardScreen() {
   const isDark = colorScheme === 'dark';
   const { showError, showSuccess } = useAppModal();
 
-  const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'profile'>('duty');
+  const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'history' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(true);
   const [appLang, setAppLang] = useLanguage();
 
@@ -2091,6 +2091,68 @@ export default function DriverDashboardScreen() {
         </View>
       )}
 
+      {activeTab === 'history' && (
+        <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.profileSectionTitle, { color: colors.amber, marginBottom: verticalScale(14) }]}>
+            {appLang === 'kn' ? 'ಟ್ರಿಪ್ ಇತಿಹಾಸ' : 'Trip History & Schedules'}
+          </Text>
+
+          {/* Scheduled Trips */}
+          <View style={{ marginBottom: verticalScale(20) }}>
+            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800', marginBottom: verticalScale(8) }}>
+              📅 {appLang === 'kn' ? 'ನಿಗದಿತ ಟ್ರಿಪ್‌ಗಳು' : 'Scheduled & Advance Bookings'} ({driverTrips.filter(t => String(t?.status || '').toLowerCase() !== 'completed').length})
+            </Text>
+            {driverTrips.filter(t => String(t?.status || '').toLowerCase() !== 'completed').length === 0 ? (
+              <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), alignItems: 'center' }]}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>No scheduled trips currently.</Text>
+              </View>
+            ) : (
+              driverTrips.filter(t => String(t?.status || '').toLowerCase() !== 'completed').map((item, idx) => (
+                <View key={item.id || idx} style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginBottom: verticalScale(10), padding: scale(14) }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                    <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>SCHEDULED</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>{item.date || 'Today'} • {item.time || 'Scheduled'}</Text>
+                  </View>
+                  <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(4) }}>👤 {item.touristName || item.customerName || 'Tourist Client'}</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12) }}>📍 {item.pickupName || item.pickup || 'Pickup'} ➔ {item.dropName || item.drop || 'Drop'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(8), paddingTop: verticalScale(8), borderTopWidth: 1, borderColor: colors.border }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Fare: ₹{item.price || item.amount || 2500}</Text>
+                    <Text style={{ color: '#10B981', fontWeight: '800', fontSize: moderateFontScale(12) }}>Est. Earnings: ₹{((item.price || item.amount || 2500) * 0.9).toFixed(0)}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Completed Trips */}
+          <View style={{ marginBottom: verticalScale(40) }}>
+            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(14), fontWeight: '800', marginBottom: verticalScale(8) }}>
+              ✅ {appLang === 'kn' ? 'ಪೂರ್ಣಗೊಂಡ ಟ್ರಿಪ್‌ಗಳು' : 'Completed Trips'} ({driverTrips.filter(t => String(t?.status || '').toLowerCase() === 'completed').length})
+            </Text>
+            {driverTrips.filter(t => String(t?.status || '').toLowerCase() === 'completed').length === 0 ? (
+              <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(16), alignItems: 'center' }]}>
+                <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>No completed trips yet.</Text>
+              </View>
+            ) : (
+              driverTrips.filter(t => String(t?.status || '').toLowerCase() === 'completed').map((item, idx) => (
+                <View key={item.id || idx} style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, marginBottom: verticalScale(10), padding: scale(14) }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: verticalScale(6) }}>
+                    <Text style={{ color: '#10B981', fontWeight: '800', fontSize: moderateFontScale(12) }}>COMPLETED</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>{item.date || 'Today'}</Text>
+                  </View>
+                  <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: moderateFontScale(14), marginBottom: verticalScale(4) }}>👤 {item.touristName || item.customerName || 'Tourist Client'}</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(12) }}>📍 {item.pickupName || item.pickup || 'Pickup'} ➔ {item.dropName || item.drop || 'Drop'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(8), paddingTop: verticalScale(8), borderTopWidth: 1, borderColor: colors.border }}>
+                    <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11) }}>Total Fare: ₹{item.price || item.amount || 2500}</Text>
+                    <Text style={{ color: colors.amber, fontWeight: '900', fontSize: moderateFontScale(13) }}>Earned: ₹{((item.price || item.amount || 2500) * 0.9).toFixed(0)}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      )}
+
       {activeTab === 'profile' && (
         <ScrollView contentContainerStyle={styles.tabScrollContent} showsVerticalScrollIndicator={false}>
 
@@ -2434,11 +2496,11 @@ export default function DriverDashboardScreen() {
         </TouchableOpacity>
 
         {/* History Tab Button */}
-        <TouchableOpacity style={styles.tabBarItem} onPress={() => router.push('/driver-history' as any)}>
-          <View style={styles.tabIconWrapper}>
-            <MaterialIcons name="history" size={scale(22)} color={colors.textMuted} />
+        <TouchableOpacity style={styles.tabBarItem} onPress={() => setActiveTab('history')}>
+          <View style={[styles.tabIconWrapper, activeTab === 'history' && styles.tabIconWrapperActive]}>
+            <MaterialIcons name="history" size={scale(22)} color={activeTab === 'history' ? '#101010' : colors.textMuted} />
           </View>
-          <Text style={[styles.tabBarLabel, { color: colors.textMuted }]}>
+          <Text style={[styles.tabBarLabel, { color: activeTab === 'history' ? colors.amber : colors.textMuted }]}>
             {appLang === 'kn' ? 'ಇತಿಹಾಸ' : 'History'}
           </Text>
         </TouchableOpacity>
