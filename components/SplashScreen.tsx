@@ -1,14 +1,14 @@
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, Image, StatusBar } from 'react-native';
+import { Image, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  useSharedValue,
+  Easing,
   useAnimatedStyle,
+  useSharedValue,
+  withSequence,
   withSpring,
   withTiming,
-  withSequence,
-  Easing,
 } from 'react-native-reanimated';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
 interface SplashScreenProps {
   onFinish?: () => void;
@@ -33,7 +33,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       // 2. Text fade & slide up
       textOpacity.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.quad) });
       textTranslateY.value = withSpring(0, { damping: 12, stiffness: 90 });
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. Continuous soft pulse
     const pulseInterval = setInterval(() => {
@@ -43,7 +43,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           withTiming(1.06, { duration: 400 }),
           withTiming(1, { duration: 400 })
         );
-      } catch (e) {}
+      } catch (e) { }
     }, 900);
 
     const timer = setTimeout(() => {
@@ -51,7 +51,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
       if (mounted && onFinish) {
         try {
           onFinish();
-        } catch (e) {}
+        } catch (e) { }
       }
     }, 2200);
 
@@ -78,7 +78,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#101014" />
-      
+
       {/* Background ambient glow circles */}
       <View style={styles.glowCircleLarge} />
       <View style={styles.glowCircleSmall} />
@@ -87,20 +87,24 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         {/* Animated App Logo Icon */}
         <Animated.View style={[styles.logoWrapper, logoAnimatedStyle]}>
           <View style={styles.logoCircle}>
-            <Text style={styles.logoEmoji}>🗺️</Text>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
         </Animated.View>
 
         {/* Animated App Branding Title */}
         <Animated.View style={[styles.textWrapper, textAnimatedStyle]}>
-          <Text style={styles.brandTitle}>VIBE</Text>
+          <Text style={styles.brandTitle}>VIBZZ</Text>
           <Text style={styles.brandSubtitle}>EXPLORE · RIDE · GUIDE</Text>
         </Animated.View>
       </View>
 
       {/* Footer Tagline */}
       <Animated.View style={[styles.footer, textAnimatedStyle]}>
-        <Text style={styles.footerText}>Powered by Vibe Tour & Cab Management</Text>
+        <Text style={styles.footerText}>Powered by Vibzz Tour & Cab Management</Text>
       </Animated.View>
     </View>
   );
@@ -148,9 +152,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 8,
+    overflow: 'hidden',
   },
-  logoEmoji: {
-    fontSize: moderateFontScale(52),
+  logoImage: {
+    width: '80%',
+    height: '80%',
   },
   textWrapper: {
     alignItems: 'center',

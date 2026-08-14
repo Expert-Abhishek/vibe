@@ -139,7 +139,11 @@ export default function HomeScreen() {
         <View style={styles.brandHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={styles.logoWrapper}>
-              <MaterialIcons name="local-taxi" size={scale(18)} color="#101014" />
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.headerLogoImage}
+                resizeMode="contain"
+              />
             </View>
             <Text style={[styles.brandName, { color: colors.textPrimary }]}>Vibzz</Text>
           </View>
@@ -598,13 +602,18 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(2),
   },
   logoWrapper: {
-    backgroundColor: '#F5C518',
-    width: scale(32),
-    height: scale(32),
+    // backgroundColor: '#F5C518',
+    width: scale(50),
+    height: scale(50),
     borderRadius: scale(10),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: scale(8),
+    overflow: 'hidden',
+  },
+  headerLogoImage: {
+    width: '100%',
+    height: '100%',
   },
   brandName: {
     fontSize: moderateFontScale(20),

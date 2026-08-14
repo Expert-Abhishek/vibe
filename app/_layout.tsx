@@ -53,7 +53,7 @@ try {
 } catch (e) { }
 
 import React, { Component, ReactNode } from 'react';
-import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Platform, View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -104,7 +104,11 @@ class RootErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
     if (this.state.hasError) {
       return (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorEmoji}>🗺️</Text>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={{ width: 64, height: 64, marginBottom: 16 }}
+            resizeMode="contain"
+          />
           <Text style={styles.errorTitle}>Vibzz App Loaded Safely</Text>
           <Text style={styles.errorSubtitle}>
             A transient loading issue occurred. Tap below to reload seamlessly.

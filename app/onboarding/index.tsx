@@ -1,7 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useState } from 'react';
-import { StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -110,7 +110,11 @@ export default function OnboardingScreen() {
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.brandBadge}>
-            <ThemedText style={styles.brandBadgeText}>V</ThemedText>
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <ThemedText type="subtitle" style={styles.brandName}>
             Vibzz
@@ -189,11 +193,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5C518',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  brandBadgeText: {
-    color: '#101010',
-    fontSize: moderateFontScale(24),
-    fontWeight: '900',
+  logoImage: {
+    width: '80%',
+    height: '80%',
   },
   brandName: {
     marginLeft: scale(14),
