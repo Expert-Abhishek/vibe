@@ -22,7 +22,7 @@ export const resources = {
       trips: 'Trips',
       history: 'History',
       profile: 'Profile',
-      driverDashboard: 'Vibe Captain',
+      driverDashboard: 'Vibzz Captain',
 
       // Home Screen Cards & Options
       quickActions: 'Quick Ride & Tour Services',

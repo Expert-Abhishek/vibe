@@ -12,17 +12,16 @@ import {
   fetchPendingRequestsApi,
   fetchUserProfileApi,
   fetchWalletBalanceApi,
+  getDeleteAccountWebUrl,
   respondDriverRequestApi,
   saveUserSettingsApi,
   submitWalletTopupRequestApi,
   submitWithdrawalApi,
   subscribeWalletChange,
   updateDriverLocationApi,
-  deleteUser,
-  getDeleteAccountWebUrl,
   updatePasswordApi,
   updateUserProfileApi,
-  verifyTripOtpApi,
+  verifyTripOtpApi
 } from '@/constants/api';
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
@@ -1524,7 +1523,7 @@ export default function DriverDashboardScreen() {
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-            <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBE CAPTAIN</Text>
+            <Text style={[styles.headerLogo, { color: colors.amber }]}>VIBZZ CAPTAIN</Text>
             <View style={{ backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.1)', borderWidth: 1, borderColor: isOnline ? '#10B981' : colors.border, paddingHorizontal: scale(8), paddingVertical: 2, borderRadius: scale(6) }}>
               <Text style={{ color: isOnline ? '#10B981' : colors.textMuted, fontSize: moderateFontScale(9), fontWeight: '900' }}>
                 {isOnline ? 'ONLINE' : 'OFFLINE'}
