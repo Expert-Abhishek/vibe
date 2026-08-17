@@ -184,19 +184,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* TOP BAR: Search Bar (100%) */}
-        <View style={styles.topActionRow}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.searchBarFull, { borderColor: colors.border }]}
-            onPress={() => router.push('/search-location' as any)}
-          >
-            <MaterialIcons name="search" size={scale(20)} color={colors.amber} style={styles.searchIcon} />
-            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), marginLeft: scale(6), flex: 1 }} numberOfLines={1}>
-              {t('searchPlaceholder')}
-            </Text>
-          </TouchableOpacity>
-        </View>
+
 
         {/* Guides & Custom Trip Side-by-Side (50% each) */}
         <View style={styles.servicesGridRow}>

@@ -52,15 +52,16 @@ try {
   }
 } catch (e) { }
 
-import React, { Component, ReactNode } from 'react';
+import React, { Component, ReactNode, useState, useEffect } from 'react';
 import { Platform, View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as ExpoSplashScreen from 'expo-splash-screen';
 
+import SplashScreen from '@/components/SplashScreen';
 import { savePushTokenApi } from '@/constants/api';
 import { getUserSessionSync, loadUserSessionAsync } from '@/constants/authStore';
 import { getExpoPushToken } from '@/constants/notifications';
@@ -69,8 +70,12 @@ import { ModalProvider } from '@src/context/ModalContext';
 import '@src/i18n';
 import { initSocketService } from '@src/services/socketService';
 
+try {
+  ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
+} catch (e) {}
+
 export const unstable_settings = {
-  anchor: '(tabs)',
+  initialRouteName: 'index',
 };
 
 interface ErrorBoundaryProps {
@@ -125,6 +130,7 @@ class RootErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -144,6 +150,19 @@ export default function RootLayout() {
       }
     })();
   }, []);
+
+  if (showSplash) {
+    return (
+      <SafeAreaProvider>
+        <SplashScreen
+          onFinish={() => {
+            setShowSplash(false);
+            ExpoSplashScreen.hideAsync().catch(() => {});
+          }}
+        />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <RootErrorBoundary>
