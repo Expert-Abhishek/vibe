@@ -1357,7 +1357,7 @@ async function sendFast2SmsOtp(phoneNumber, otpCode) {
 
     // 3. Fallback to Fast2SMS Quick SMS route ('q')
     try {
-      const qUrl = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(FAST2SMS_API_KEY)}&route=q&message=${encodeURIComponent(`Your Vibe App OTP verification code is ${otpCode}. Valid for 10 minutes.`)}&flash=0&numbers=${encodeURIComponent(cleanPhone)}`;
+      const qUrl = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(FAST2SMS_API_KEY)}&route=q&message=${encodeURIComponent(`Your Vibzz App OTP verification code is ${otpCode}. Valid for 10 minutes.`)}&flash=0&numbers=${encodeURIComponent(cleanPhone)}`;
       const qRes = await fetch(qUrl);
       const qData = await qRes.json();
       console.log('[Fast2SMS] Quick SMS Fallback Response:', qData);
@@ -1482,7 +1482,7 @@ router.post('/verify-reset-otp', async (req, res) => {
     const createdDate = record.created_at ? new Date(record.created_at) : null;
     const now = new Date();
 
-    const isExpired = expiryDate 
+    const isExpired = expiryDate
       ? (now.getTime() - expiryDate.getTime() > 15 * 60 * 1000 && now.getTime() - (createdDate ? createdDate.getTime() : 0) > 15 * 60 * 1000)
       : false;
 

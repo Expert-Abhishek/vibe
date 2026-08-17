@@ -1,20 +1,19 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
-  Trash2,
-  ShieldAlert,
-  Smartphone,
-  KeyRound,
-  CheckCircle2,
   AlertTriangle,
   ArrowLeft,
+  CheckCircle2,
+  FileText,
+  KeyRound,
   Lock,
-  HelpCircle,
-  FileText
+  ShieldAlert,
+  Smartphone,
+  Trash2
 } from 'lucide-react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import React, { Suspense, useEffect, useState } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vibe-backend-tlaw.onrender.com';
 
@@ -184,7 +183,7 @@ function DeleteAccountForm() {
                   maxLength={10}
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter 10-digit registered number"
+                  placeholder="Enter registered number"
                   className="w-full bg-dark-hover border border-dark-border focus:border-red-500 text-white rounded-xl pl-14 pr-4 py-3 text-sm font-semibold placeholder-gray-500 transition-all outline-none"
                   required
                 />

@@ -253,7 +253,7 @@ app.get('/view-db', async (req, res) => {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    service: 'Vibe App - Node.js + PostgreSQL Registration Server',
+    service: 'Vibzz App - Node.js + PostgreSQL Registration Server',
     version: '1.0.0',
     endpoints: {
       health: 'GET /health',
@@ -601,7 +601,7 @@ app.get('/delete-account', (req, res) => {
         <label>Registered Mobile Phone Number</label>
         <div class="input-wrapper">
           <span class="prefix">+91</span>
-          <input type="tel" id="phone" placeholder="Enter 10-digit phone number" maxlength="10">
+          <input type="tel" id="phone" placeholder="Enter number" maxlength="10">
         </div>
       </div>
       <button class="btn" id="btn-send" onclick="sendOtp()">Send Verification SMS Code</button>

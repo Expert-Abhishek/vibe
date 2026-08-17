@@ -1,22 +1,22 @@
+import { sendResetOtpApi } from '@/constants/api';
+import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
   ScrollView,
-  Alert,
-  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
-import { sendResetOtpApi } from '@/constants/api';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -90,7 +90,7 @@ export default function ForgotPasswordScreen() {
                 <View style={styles.separator} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter 10-digit Indian mobile number"
+                  placeholder="Enter number"
                   placeholderTextColor="rgba(255, 255, 255, 0.3)"
                   keyboardType="phone-pad"
                   maxLength={10}
