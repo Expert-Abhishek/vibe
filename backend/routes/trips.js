@@ -430,7 +430,7 @@ async function logActivityNotification(userId, role, title, body, tripId = null)
         body,
         data: { tripId: tripId ? String(tripId) : '', role: role || 'tourist' },
         collapseKey: tripId ? `trip_${tripId}` : `alert_${role || 'user'}`,
-        channelId: 'default',
+        channelId: tripId ? 'trips_v2' : 'default',
       });
     }
   } catch (err) {

@@ -247,6 +247,12 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// Ensure Database Indexes on startup for sub-millisecond user lookup
+db.query(`
+  CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
+  CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));
+`).catch((err) => console.warn('User table index initialization warning:', err.message));
+
 /**
  * POST /api/auth/login
  * Authenticate user with phone/email and password.

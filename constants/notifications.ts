@@ -134,14 +134,18 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         showBadge: true,
       });
 
-      await Notifications.setNotificationChannelAsync('trips', {
-        name: 'Vibzz Trip & Ride Alerts',
+      await Notifications.setNotificationChannelAsync('trips_v2', {
+        name: 'Vibzz Trip & Ride Loud Alerts',
         importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 500, 200, 500],
+        vibrationPattern: [0, 1000, 500, 1000, 500, 1000, 500, 1000, 500, 1000, 500, 1000],
         lightColor: '#F5C518',
-        sound: 'default',
+        sound: 'trip_alert',
         enableVibrate: true,
         showBadge: true,
+        audioAttributes: {
+          usage: Notifications.AndroidAudioUsage?.ALARM || 4,
+          contentType: Notifications.AndroidAudioContentType?.SONIFICATION || 4,
+        },
       });
     }
 
@@ -251,8 +255,8 @@ export async function sendLocalNotification(title: string, body: string, data?: 
             title: `🔔 ${cleanTitle}`,
             body,
             data: data || {},
-            sound: 'default',
-            channelId: data?.tripId ? 'trips' : 'default',
+            sound: 'trip_alert',
+            channelId: data?.tripId ? 'trips_v2' : 'default',
           },
           trigger: null,
         });

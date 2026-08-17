@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { ThemedView } from '@/components/themed-view';
 import { LogoHeader } from '@/components/auth/logo-header';
@@ -17,6 +18,18 @@ import { setAppTheme } from '@/hooks/use-color-scheme';
 export default function SignInScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+
+  const videoSource = Platform.OS === 'web'
+    ? { uri: '/assets/login.mp4' }
+    : require('../../assets/login.mp4');
+
+  const player = useVideoPlayer(videoSource, (playerInstance) => {
+    try {
+      playerInstance.loop = true;
+      playerInstance.muted = true;
+      playerInstance.play();
+    } catch (e) {}
+  });
 
   const handleLogin = async (phone: string, pass: string) => {
     if (loading) return;
@@ -43,18 +56,20 @@ export default function SignInScreen() {
           profile: apiRes.user.profile,
         });
 
-        // Register push token for real-time Firebase Cloud Messaging alerts
-        try {
-          const { getExpoPushToken } = require('@/constants/notifications');
-          const { savePushTokenApi } = require('@/constants/api');
-          const token = await getExpoPushToken();
-          if (token && apiRes.user.id) {
-            await savePushTokenApi(apiRes.user.id, token, apiRes.user.phone);
-            console.log(`🔥 [FCM] Token registered for ${apiRes.user.role} (${apiRes.user.name})`);
+        // Register push token asynchronously in background (non-blocking)
+        (async () => {
+          try {
+            const { getExpoPushToken } = require('@/constants/notifications');
+            const { savePushTokenApi } = require('@/constants/api');
+            const token = await getExpoPushToken();
+            if (token && apiRes.user.id) {
+              await savePushTokenApi(apiRes.user.id, token, apiRes.user.phone);
+              console.log(`🔥 [FCM] Token registered for ${apiRes.user.role} (${apiRes.user.name})`);
+            }
+          } catch (pushErr) {
+            // non-blocking
           }
-        } catch (pushErr) {
-          // non-blocking
-        }
+        })();
 
         // Strict status verification check
         if (apiRes.user.role === 'driver' || apiRes.user.role === 'guide') {
@@ -104,7 +119,14 @@ export default function SignInScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.backgroundGlow} />
+      <VideoView
+        style={styles.video}
+        player={player}
+        contentFit="cover"
+        nativeControls={false}
+        surfaceType="textureView"
+      />
+      <View style={styles.overlay} />
       <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -143,9 +165,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#06101d',
   },
-  backgroundGlow: {
+  video: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#06101d',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(6, 16, 29, 0.65)',
   },
   screen: {
     flex: 1,

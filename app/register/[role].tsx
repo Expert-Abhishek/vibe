@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useRef } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import {
   Alert,
   ActivityIndicator,
@@ -20,6 +21,18 @@ export default function RegisterScreen() {
   const { role } = useLocalSearchParams<{ role: 'rider' | 'driver' | 'guide' }>();
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
+
+  const videoSource = Platform.OS === 'web'
+    ? { uri: '/assets/login.mp4' }
+    : require('../../assets/login.mp4');
+
+  const player = useVideoPlayer(videoSource, (playerInstance) => {
+    try {
+      playerInstance.loop = true;
+      playerInstance.muted = true;
+      playerInstance.play();
+    } catch (e) {}
+  });
 
   const [step, setStep] = useState<'details' | 'otp'>('details');
   const [otp, setOtp] = useState('');
@@ -139,11 +152,20 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#ffffff' }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
+    <View style={{ flex: 1, backgroundColor: '#06101d' }}>
+      <VideoView
+        style={styles.video}
+        player={player}
+        contentFit="cover"
+        nativeControls={false}
+        surfaceType="textureView"
+      />
+      <View style={styles.overlay} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
       <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={styles.scrollContainer}
@@ -161,17 +183,17 @@ export default function RegisterScreen() {
         {step === 'otp' ? (
           <View style={styles.container}>
             <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <MaterialIcons name="arrow-back" size={22} color="#0d1b3e" />
-              <Text style={{ color: '#0d1b3e', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Phone</Text>
+              <MaterialIcons name="arrow-back" size={22} color="#F5C518" />
+              <Text style={{ color: '#ffffff', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Phone</Text>
             </TouchableOpacity>
 
             <Text style={styles.title}>Enter OTP Code 🔐</Text>
             <Text style={[styles.subtitle, { marginBottom: 20 }]}>
-              We sent a 4-digit verification code to <Text style={{ fontWeight: '800', color: '#0d1b3e' }}>+91 {phone}</Text>
+              We sent a 4-digit verification code to <Text style={{ fontWeight: '800', color: '#F5C518' }}>+91 {phone}</Text>
             </Text>
 
             <TextInput
-              style={[styles.input, { letterSpacing: 8, fontSize: 22, textAlign: 'center', fontWeight: '900', color: '#0d1b3e', paddingVertical: 14 }]}
+              style={[styles.input, { letterSpacing: 8, fontSize: 22, textAlign: 'center', fontWeight: '900', color: '#ffffff', paddingVertical: 14 }]}
               placeholder="4-Digit OTP Code"
               placeholderTextColor="#aaa"
               value={otp}
@@ -186,7 +208,7 @@ export default function RegisterScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#06101d" />
               ) : (
                 <Text style={styles.buttonText}>Verify OTP & Complete Registration</Text>
               )}
@@ -197,7 +219,7 @@ export default function RegisterScreen() {
               onPress={handleSendOtp}
               disabled={loading}
             >
-              <Text style={{ color: '#0d1b3e', fontWeight: '700', fontSize: 14 }}>Resend OTP via SMS</Text>
+              <Text style={{ color: '#F5C518', fontWeight: '700', fontSize: 14 }}>Resend OTP via SMS</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -274,7 +296,7 @@ export default function RegisterScreen() {
             {/* Conditional Role Inputs */}
             {role === 'driver' && (
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0d1b3e', marginBottom: 8 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff', marginBottom: 8 }}>
                   Vehicle Category / Type *
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -291,8 +313,8 @@ export default function RegisterScreen() {
                         paddingVertical: 10,
                         borderRadius: 10,
                         borderWidth: 1.5,
-                        borderColor: vehicleType === cat.id ? '#0d1b3e' : '#e0e0e0',
-                        backgroundColor: vehicleType === cat.id ? '#0d1b3e' : '#f5f5f5',
+                        borderColor: vehicleType === cat.id ? '#F5C518' : 'rgba(255, 255, 255, 0.2)',
+                        backgroundColor: vehicleType === cat.id ? '#F5C518' : 'rgba(255, 255, 255, 0.1)',
                       }}
                       onPress={() => setVehicleType(cat.id)}
                     >
@@ -300,7 +322,7 @@ export default function RegisterScreen() {
                         style={{
                           fontSize: 13,
                           fontWeight: '700',
-                          color: vehicleType === cat.id ? '#ffffff' : '#444444',
+                          color: vehicleType === cat.id ? '#06101d' : '#ffffff',
                         }}
                       >
                         {cat.label}
@@ -337,7 +359,7 @@ export default function RegisterScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#06101d" />
               ) : (
                 <Text style={styles.buttonText}>Send OTP & Register ➔</Text>
               )}
@@ -351,45 +373,64 @@ export default function RegisterScreen() {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  video: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(6, 16, 29, 0.65)',
+  },
   scrollContainer: {
     flexGrow: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: 'transparent',
     padding: 24,
     justifyContent: 'center',
   },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#0d1b3e', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 32 },
-  input: { backgroundColor: '#f5f5f5', padding: 16, borderRadius: 12, fontSize: 16, marginBottom: 16, color: '#333' },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
+  subtitle: { fontSize: 14, color: 'rgba(255, 255, 255, 0.8)', marginBottom: 24 },
+  input: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    padding: 16,
+    borderRadius: 12,
+    fontSize: 16,
+    marginBottom: 16,
+    color: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
   passwordWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 12,
     marginBottom: 16,
     paddingRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   passwordInput: {
     flex: 1,
     padding: 16,
     fontSize: 16,
-    color: '#333',
+    color: '#ffffff',
   },
   eyeBtn: {
     padding: 8,
   },
-  button: { backgroundColor: '#0d1b3e', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  button: { backgroundColor: '#F5C518', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  buttonText: { color: '#06101d', fontSize: 16, fontWeight: 'bold' },
   backButton: { marginTop: 24, alignItems: 'center' },
-  backText: { color: '#666', fontSize: 14 },
+  backText: { color: 'rgba(255, 255, 255, 0.8)', fontSize: 14 },
   toastBanner: {
     backgroundColor: '#F5C518',
     paddingHorizontal: 20,

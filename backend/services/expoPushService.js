@@ -46,7 +46,7 @@ async function sendExpoPushChunk(messages) {
       title: msg.title,
       body: msg.body,
       data: sanitizeDataPayload(msg.data || {}),
-      sound: msg.sound || 'default',
+      sound: msg.sound || (msg.channelId === 'trips_v2' ? 'trip_alert.mp3' : 'default'),
       priority: msg.priority || 'high',
       channelId: msg.channelId || 'default',
       collapseId: msg.collapseId || msg.collapseKey || 'vibe_alert',
