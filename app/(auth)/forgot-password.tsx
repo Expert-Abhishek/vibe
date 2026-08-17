@@ -90,7 +90,7 @@ export default function ForgotPasswordScreen() {
                 <View style={styles.separator} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter 10-digit mobile number"
+                  placeholder="Enter 10-digit Indian mobile number"
                   placeholderTextColor="rgba(255, 255, 255, 0.3)"
                   keyboardType="phone-pad"
                   maxLength={10}

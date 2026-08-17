@@ -109,7 +109,7 @@ export default function HistoryScreen() {
             acc.push({
               id: idStr,
               type: (item.bookingType || item.type || 'cab').toLowerCase().includes('guide') ? 'guide' : 'cab',
-              title: item.title || item.pickupName || item.pickup_name || 'Vibe Trip',
+              title: item.title || item.pickupName || item.pickup_name || 'Vibzz Trip',
               pickupName: item.pickupName || item.pickup_name || item.pickup,
               dropName: item.dropName || item.drop_name || item.drop,
               destinationId: item.destinationId || item.destination_id,

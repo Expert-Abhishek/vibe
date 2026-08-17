@@ -81,8 +81,8 @@ export default function ProfileScreen() {
   const [deductScreenshotBase64, setDeductScreenshotBase64] = useState('');
   const [isSubmittingDeduct, setIsSubmittingDeduct] = useState(false);
 
-  const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
-  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
+  const [adminUpiId, setAdminUpiId] = useState('vibzz.pay@upi');
+  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibzz.pay@upi&pn=Vibe%20Platform');
 
   const session = getUserSessionSync();
   const userId = session?.id || 'c1';

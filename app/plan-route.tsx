@@ -643,14 +643,14 @@ export default function PlanRouteScreen() {
       userId: currentUserId,
       amount: paymentAmount,
       description: isPreBooking
-        ? `Vibe Wallet Deposit (${prebookPayOption}%) for Tour: ${selectedPlan.name}`
-        : `Vibe Wallet Payment for Tour: ${selectedPlan.name}`,
+        ? `Vibzz Wallet Deposit (${prebookPayOption}%) for Tour: ${selectedPlan.name}`
+        : `Vibzz Wallet Payment for Tour: ${selectedPlan.name}`,
     });
 
     if (!walletDeductRes || !walletDeductRes.success) {
       Alert.alert(
         '💳 Insufficient Wallet Balance',
-        `Your Vibe Wallet balance is insufficient to pay ₹${paymentAmount}. Please add money to your Vibe Wallet in your Profile.`,
+        `Your Vibzz Wallet balance is insufficient to pay ₹${paymentAmount}. Please add money to your Vibzz Wallet in your Profile.`,
         [
           { text: 'Add Money to Wallet', onPress: () => router.push('/(tabs)/profile') },
           { text: 'Cancel', style: 'cancel' }

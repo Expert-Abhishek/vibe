@@ -22,9 +22,7 @@ export default function RegisterScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const videoSource = Platform.OS === 'web'
-    ? { uri: '/assets/login.mp4' }
-    : require('../../assets/login.mp4');
+  const videoSource = require('../../assets/login.mp4');
 
   const player = useVideoPlayer(videoSource, (playerInstance) => {
     try {

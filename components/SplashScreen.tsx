@@ -1,6 +1,7 @@
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
 import React, { useEffect } from 'react';
-import { Image, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -21,6 +22,16 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const textOpacity = useSharedValue(0);
   const textTranslateY = useSharedValue(20);
   const pulseScale = useSharedValue(1);
+
+  const videoSource = require('../assets/login.mp4');
+
+  const player = useVideoPlayer(videoSource, (playerInstance) => {
+    try {
+      playerInstance.loop = true;
+      playerInstance.muted = true;
+      playerInstance.play();
+    } catch (e) {}
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -53,7 +64,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           onFinish();
         } catch (e) { }
       }
-    }, 2200);
+    }, 2800);
 
     return () => {
       mounted = false;
@@ -79,6 +90,15 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#101014" />
 
+      {/* Background Video */}
+      <VideoView
+        player={player}
+        style={styles.video}
+        contentFit="cover"
+        nativeControls={false}
+      />
+      <View style={styles.overlay} />
+
       {/* Background ambient glow circles */}
       <View style={styles.glowCircleLarge} />
       <View style={styles.glowCircleSmall} />
@@ -98,6 +118,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         {/* Animated App Branding Title */}
         <Animated.View style={[styles.textWrapper, textAnimatedStyle]}>
           <Text style={styles.brandTitle}>VIBZZ</Text>
+          <Text style={styles.taglineText}>Make your own vibe with us</Text>
           <Text style={styles.brandSubtitle}>EXPLORE · RIDE · GUIDE</Text>
         </Animated.View>
       </View>
@@ -117,19 +138,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  video: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(6, 16, 29, 0.72)',
+  },
   glowCircleLarge: {
     position: 'absolute',
     width: scale(320),
     height: scale(320),
     borderRadius: scale(160),
-    backgroundColor: 'rgba(245, 197, 24, 0.06)',
+    backgroundColor: 'rgba(245, 197, 24, 0.08)',
   },
   glowCircleSmall: {
     position: 'absolute',
     width: scale(180),
     height: scale(180),
     borderRadius: scale(90),
-    backgroundColor: 'rgba(245, 197, 24, 0.12)',
+    backgroundColor: 'rgba(245, 197, 24, 0.15)',
   },
   content: {
     alignItems: 'center',
@@ -167,12 +195,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 6,
   },
+  taglineText: {
+    fontSize: moderateFontScale(16),
+    fontWeight: '700',
+    color: '#F5C518',
+    marginTop: verticalScale(6),
+    marginBottom: verticalScale(4),
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   brandSubtitle: {
     fontSize: moderateFontScale(11),
     fontWeight: '700',
-    color: '#F5C518',
+    color: 'rgba(255, 255, 255, 0.7)',
     letterSpacing: 3,
-    marginTop: verticalScale(6),
+    marginTop: verticalScale(4),
   },
   footer: {
     position: 'absolute',
@@ -180,7 +217,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: moderateFontScale(11),
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'rgba(255, 255, 255, 0.5)',
     fontWeight: '500',
   },
 });

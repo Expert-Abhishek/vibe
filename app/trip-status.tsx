@@ -220,7 +220,7 @@ export default function TripStatusScreen() {
           if (statusLower.includes('completed') || statusLower.includes('finish') || statusLower.includes('done')) {
             hasHandledTerminalStateRef.current = true;
             sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
-            Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
+            Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibzz!', [
               { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
             ]);
             return;
@@ -325,20 +325,29 @@ export default function TripStatusScreen() {
       console.log('[TripStatusScreen] 🏁 Active trip completed:', data);
       setTripStatus('Completed');
       sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
-      Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibe.', [
+      Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibzz.', [
         { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
       ]);
     };
 
     const handleDeclined = (data?: any) => {
-      // Keep searching state when 1 driver declines request
+      console.log('[TripStatusScreen] ❌ Driver declined booking:', data);
+      const dName = data?.driverName || data?.driver_or_guide_name || 'The captain';
       setTripStatus('Pending');
       setDriverInfo((prev: any) => ({
         ...prev,
         name: 'Searching Captain...',
         vehicleNumber: 'Assigning Captain...',
       }));
-      sendLocalNotification('Searching Captain...', 'A nearby captain passed this request. Re-searching next available Captain.');
+      sendLocalNotification('Booking Declined', `${dName} declined your booking request.`);
+      Alert.alert(
+        'Booking Request Declined ❌',
+        `${dName} has declined your trip request. You can re-book with a new driver.`,
+        [
+          { text: 'Book New Driver 🚕', onPress: () => router.replace('/plan-route' as any) },
+          { text: 'Keep Waiting', style: 'cancel' }
+        ]
+      );
     };
 
     const handleCancelled = () => {

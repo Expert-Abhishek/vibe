@@ -350,6 +350,32 @@ export default function RideMatchingScreen() {
 
     joinRiderRooms();
 
+    const handleDeclinedData = (data: any) => {
+      console.log('[RideMatchingScreen] ❌ Driver declined request:', data);
+      setIsDriverTimeout(true);
+      const dName = data?.driverName || data?.driver_or_guide_name || 'The driver';
+      Alert.alert(
+        'Booking Declined ❌',
+        `${dName} has declined your trip request. You can re-book or select another driver.`,
+        [
+          {
+            text: 'Book New Driver 🚕',
+            onPress: () => {
+              try {
+                router.replace('/plan-route');
+              } catch (e) {
+                router.back();
+              }
+            },
+          },
+          {
+            text: 'Dismiss',
+            style: 'cancel',
+          },
+        ]
+      );
+    };
+
     const handleTripStatusUpdated = (data: any) => {
       console.log('[RIDER] Received trip_status_updated event:', data);
       if (!data) return;
@@ -379,7 +405,8 @@ export default function RideMatchingScreen() {
       socket.on('trip_status_updated', handleTripStatusUpdated);
       socket.on('trip_accepted', handleDirectAccepted);
       socket.on('RIDE_ACCEPTED', handleDirectAccepted);
-      socket.on('trip_declined', () => setIsDriverTimeout(true));
+      socket.on('trip_declined', handleDeclinedData);
+      socket.on('trip_declined_by_driver', handleDeclinedData);
     }
 
     // 2. Backup HTTP Polling (Runs every 3 seconds)
@@ -424,7 +451,8 @@ export default function RideMatchingScreen() {
         socket.off('trip_status_updated', handleTripStatusUpdated);
         socket.off('trip_accepted', handleAcceptedData);
         socket.off('RIDE_ACCEPTED', handleAcceptedData);
-        socket.off('trip_declined');
+        socket.off('trip_declined', handleDeclinedData);
+        socket.off('trip_declined_by_driver', handleDeclinedData);
       }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);

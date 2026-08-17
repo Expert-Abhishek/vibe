@@ -1,3 +1,5 @@
+import { Linking } from 'react-native';
+import GuidelinesModal from '@/components/GuidelinesModal';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import {
@@ -175,8 +177,8 @@ export default function GuideDashboardScreen() {
   const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
   const [initiatedAt, setInitiatedAt] = useState<Date | null>(null);
 
-  const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
-  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
+  const [adminUpiId, setAdminUpiId] = useState('vibzz.pay@upi');
+  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibzz.pay@upi&pn=Vibe%20Platform');
 
   // Withdrawal state variables
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
@@ -1536,7 +1538,7 @@ export default function GuideDashboardScreen() {
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(20) }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
               <MaterialIcons name="account-balance-wallet" size={scale(18)} color={colors.amber} />
-              <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.amber, textTransform: 'uppercase', letterSpacing: 0.5 }}>Vibe Wallet</Text>
+              <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.amber, textTransform: 'uppercase', letterSpacing: 0.5 }}>Vibzz Wallet</Text>
             </View>
             <View style={{ marginBottom: verticalScale(14) }}>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
@@ -2235,6 +2237,7 @@ export default function GuideDashboardScreen() {
         </View>
       </Modal>
 
+      <GuidelinesModal role="guide" />
     </SafeAreaView>
   );
 }

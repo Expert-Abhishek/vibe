@@ -1,3 +1,4 @@
+import GuidelinesModal from '@/components/GuidelinesModal';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import { fetchActiveTripApi } from '@/constants/api';
@@ -313,6 +314,7 @@ export default function HomeScreen() {
           <Text style={styles.vibeCardCrafted}>{t('craftedInKarnataka')}</Text>
         </View>
       </ScrollView>
+      <GuidelinesModal role="tourist" />
     </SafeAreaView>
   );
 }

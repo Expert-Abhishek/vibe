@@ -1,3 +1,4 @@
+import GuidelinesModal from '@/components/GuidelinesModal';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import {
@@ -196,8 +197,8 @@ export default function DriverDashboardScreen() {
   const [screenshotBase64, setScreenshotBase64] = useState('');
   const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
   const [initiatedAt, setInitiatedAt] = useState<Date | null>(null);
-  const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
-  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
+  const [adminUpiId, setAdminUpiId] = useState('vibzz.pay@upi');
+  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibzz.pay@upi&pn=Vibe%20Platform');
 
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -2333,7 +2334,7 @@ export default function DriverDashboardScreen() {
           <View style={[styles.profileSectionCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF', borderColor: colors.border, padding: scale(20) }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
               <MaterialIcons name="account-balance-wallet" size={scale(18)} color={colors.amber} />
-              <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.amber, textTransform: 'uppercase', letterSpacing: 0.5 }}>Vibe Wallet</Text>
+              <Text style={{ fontSize: moderateFontScale(14), fontWeight: '900', color: colors.amber, textTransform: 'uppercase', letterSpacing: 0.5 }}>Vibzz Wallet</Text>
             </View>
             <View style={{ marginBottom: verticalScale(14) }}>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>
@@ -2754,7 +2755,7 @@ export default function DriverDashboardScreen() {
           <View style={styles.popupOverlay}>
             <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <Text style={[styles.otpTitle, { color: colors.textPrimary }]}>Enter Verification OTP</Text>
-              <Text style={[styles.otpSub, { color: colors.textMuted }]}>Please check with {activeTrip.touristName} for the 4-digit code (e.g. 8240)</Text>
+              <Text style={[styles.otpSub, { color: colors.textMuted }]}>Please check with {activeTrip.touristName} for the 4-digit verification code</Text>
 
               <TextInput
                 style={[styles.otpInput, { color: colors.textPrimary, borderColor: colors.amber }]}
@@ -2787,7 +2788,7 @@ export default function DriverDashboardScreen() {
             <View style={[styles.otpContentCard, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>
               <Text style={[styles.otpTitle, { color: colors.textPrimary }]}>Enter End Trip OTP</Text>
               <Text style={[styles.otpSub, { color: colors.textMuted }]}>
-                Ask passenger for the 4-digit End OTP code to complete trip & collect payment (Default: 4321)
+                Ask passenger for the 4-digit End OTP code to complete trip & collect payment
               </Text>
 
               <TextInput
@@ -3191,6 +3192,7 @@ export default function DriverDashboardScreen() {
         </TouchableOpacity>
       </Modal>
 
+      <GuidelinesModal role="driver" />
     </SafeAreaView>
   );
 }

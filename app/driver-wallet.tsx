@@ -50,8 +50,8 @@ export default function DriverWalletScreen() {
   const [isSubmittingTopup, setIsSubmittingTopup] = useState(false);
   const [initiatedAt, setInitiatedAt] = useState<Date | null>(null);
 
-  const [adminUpiId, setAdminUpiId] = useState('vibe.pay@upi');
-  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibe.pay@upi&pn=Vibe%20Platform');
+  const [adminUpiId, setAdminUpiId] = useState('vibzz.pay@upi');
+  const [adminQrCodeUrl, setAdminQrCodeUrl] = useState('https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=vibzz.pay@upi&pn=Vibe%20Platform');
 
   // Withdrawal state variables
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
@@ -248,7 +248,7 @@ export default function DriverWalletScreen() {
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.line }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), marginBottom: verticalScale(10) }}>
               <MaterialIcons name="account-balance-wallet" size={scale(18)} color={colors.amber} />
-              <Text style={[styles.cardTitle, { color: colors.amber }]}>Vibe Wallet</Text>
+              <Text style={[styles.cardTitle, { color: colors.amber }]}>Vibzz Wallet</Text>
             </View>
             <View style={{ marginBottom: verticalScale(14) }}>
               <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12) }}>Available Balance</Text>

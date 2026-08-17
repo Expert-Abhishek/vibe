@@ -461,7 +461,7 @@ export default function AdminDashboardScreen() {
       <View style={[styles.navbar, { borderBottomColor: colors.line }]}>
         <View style={styles.navLeft}>
           <FontAwesome5 name="user-shield" size={scale(18)} color={colors.amber} style={{ marginRight: scale(8) }} />
-          <Text style={[styles.navTitle, { color: colors.textPrimary }]}>Vibe Admin Panel</Text>
+          <Text style={[styles.navTitle, { color: colors.textPrimary }]}>Vibzz Admin Panel</Text>
         </View>
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <MaterialIcons name="exit-to-app" size={scale(18)} color={colors.danger} />

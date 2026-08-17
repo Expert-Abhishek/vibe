@@ -199,7 +199,7 @@ export default function TripsHistoryScreen() {
           if (statusLower.includes('completed') || statusLower.includes('finish') || statusLower === 'done') {
             hasHandledTerminalStateRef.current = true;
             sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
-            Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibe!', [
+            Alert.alert('Trip Completed 🎉', 'Your ride has finished. Thank you for riding with Vibzz!', [
               { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
             ]);
             return;
@@ -289,7 +289,7 @@ export default function TripsHistoryScreen() {
       console.log('[TripsScreen] 🏁 Active trip completed:', data);
       setTripStatus('Completed');
       sendLocalNotification('Trip Completed 🎉', 'Your ride has finished successfully.');
-      Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibe.', [
+      Alert.alert('Trip Completed 🎉', 'Your ride has finished! Thank you for choosing Vibzz.', [
         { text: 'View History', onPress: () => router.navigate('/(tabs)/history') }
       ]);
       router.navigate('/(tabs)/history');

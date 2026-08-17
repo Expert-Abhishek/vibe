@@ -2000,16 +2000,16 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     // 3. Fetch wallet balance and platform fee for driver or guide
     let dRes = { rows: [] };
     try {
-      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text", [driverId]);
+      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [driverId]);
     } catch (e) {
       try {
-        dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id::text = $1::text", [driverId]);
+        dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [driverId]);
       } catch (e2) {}
     }
 
     let gRes = { rows: [] };
     try {
-      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id::text = $1::text", [driverId]);
+      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [driverId]);
     } catch (e) {
       try {
         gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id::text = $1::text", [driverId]);

@@ -19,9 +19,7 @@ export default function SignInScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  const videoSource = Platform.OS === 'web'
-    ? { uri: '/assets/login.mp4' }
-    : require('../../assets/login.mp4');
+  const videoSource = require('../../assets/login.mp4');
 
   const player = useVideoPlayer(videoSource, (playerInstance) => {
     try {

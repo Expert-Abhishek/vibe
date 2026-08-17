@@ -110,7 +110,7 @@ export const resources = {
       walletBalance: 'Wallet Balance',
       logout: 'Logout',
       changeLanguage: 'Change App Language',
-      vibeWallet: 'Vibe Wallet',
+      vibeWallet: 'Vibzz Wallet',
       availableBalance: 'Available Balance',
       addMoney: 'Add Money',
       withdraw: 'Withdraw',
