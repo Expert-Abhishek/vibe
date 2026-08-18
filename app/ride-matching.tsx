@@ -408,37 +408,6 @@ export default function RideMatchingScreen() {
       setIsDriverDeclined(true);
       setIsDriverTimeout(false);
       setSearchingTimer(0);
-      const dName = data?.driverName || data?.driver_or_guide_name || data?.name || liveDriverInfo?.name || 'The driver';
-      Alert.alert(
-        'Booking Declined ❌',
-        `${dName} has declined your trip request. You can select another driver on the spot or broadcast to all nearby partners.`,
-        [
-          {
-            text: 'Choose Other Driver 🚕',
-            onPress: () => {
-              if (tripType === 'custom_trip') {
-                router.replace('/make-trip');
-              } else if (tripType === 'cab') {
-                router.replace('/book-cab');
-              } else {
-                try {
-                  router.replace('/plan-route');
-                } catch (e) {
-                  router.back();
-                }
-              }
-            },
-          },
-          {
-            text: 'Broadcast to All 📡',
-            onPress: handleBroadcastToAll,
-          },
-          {
-            text: 'Dismiss',
-            style: 'cancel',
-          },
-        ]
-      );
     };
 
     const handleTripStatusUpdated = (data: any) => {
