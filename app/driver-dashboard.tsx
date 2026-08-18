@@ -33,7 +33,7 @@ import LanguageSelector from '@/src/components/LanguageSelector';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useAppModal } from '@src/context/ModalContext';
 import { rideStateService } from '@src/services/rideStateService';
-import { emitAcceptRideSocket, emitDriverLocationSocket, getSocket, initSocketService } from '@src/services/socketService';
+import { emitAcceptRideSocket, emitDeclineRideSocket, emitDriverLocationSocket, getSocket, initSocketService } from '@src/services/socketService';
 import { playNotificationChime, stopNotificationChime } from '@src/utils/soundHelper';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -1316,6 +1316,7 @@ export default function DriverDashboardScreen() {
     const session = getUserSessionSync();
     const driverId = session?.id;
     const tripId = (incomingRequest as any)?.tripId || (incomingRequest as any)?.id;
+    const custId = (incomingRequest as any)?.customerId || (incomingRequest as any)?.customer_id || (incomingRequest as any)?.userId;
 
     if (tripId) {
       handledTripIdsRef.current.add(String(tripId));
@@ -1323,6 +1324,26 @@ export default function DriverDashboardScreen() {
     if (tripId && driverId) {
       await respondDriverRequestApi(tripId, driverId, 'decline');
     }
+
+    try {
+      emitDeclineRideSocket({
+        tripId,
+        id: tripId,
+        driverId,
+        driverName: session?.name || driverName,
+        status: 'Declined',
+        customerId: custId,
+        customer_id: custId,
+        ...incomingRequest,
+      });
+      DeviceEventEmitter.emit('trip_declined', {
+        tripId,
+        id: tripId,
+        driverId,
+        driverName: session?.name || driverName,
+        status: 'Declined',
+      });
+    } catch (e) {}
 
     stopNotificationChime();
     setRequestVisible(false);

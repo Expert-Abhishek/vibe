@@ -111,6 +111,13 @@ function initSocket(server) {
       emitTripAccepted(data);
     });
 
+    // Decline ride listener from driver app
+    socket.on('decline_ride', (data) => {
+      if (!data) return;
+      console.log('[Socket.io] 🔴 Received decline_ride socket event from driver:', data);
+      emitTripDeclined(data);
+    });
+
     // Client relay broadcast fallback
     socket.on('broadcast_trip_request', (tripObject) => {
       if (!tripObject) return;

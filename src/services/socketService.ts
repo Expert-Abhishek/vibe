@@ -300,6 +300,16 @@ export function emitAcceptRideSocket(tripData: any) {
 }
 
 /**
+ * Emit real-time ride decline event to backend WebSocket server
+ */
+export function emitDeclineRideSocket(tripData: any) {
+  if (socket && socket.connected) {
+    socket.emit('decline_ride', tripData);
+    console.log('[SocketService] Emitted decline_ride over WebSockets:', tripData);
+  }
+}
+
+/**
  * Emit real-time driver GPS location update to backend WebSocket server
  */
 export function emitDriverLocationSocket(locationData: { driverId: string; tripId?: string; latitude: number; longitude: number; heading?: number; speed?: number }) {
