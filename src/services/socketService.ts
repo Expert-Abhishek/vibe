@@ -78,7 +78,6 @@ export function initSocketService(userId?: string, role: string = 'tourist'): So
     socket.on('trip_request', (data: any) => {
       console.log('[SocketService] Received real-time trip request via WebSockets:', data);
       if (data) {
-        playNotificationChime();
         try {
           DeviceEventEmitter.emit('new_driver_request', data);
           DeviceEventEmitter.emit('trip_request', data);

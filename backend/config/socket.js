@@ -53,7 +53,7 @@ function initSocket(server) {
         }
       }
 
-      if (cat) {
+      if (cat && data?.isOnline !== false) {
         const catStr = String(cat).toLowerCase().trim();
         const normCat = catStr.replace(/ /g, '_').replace(/-/g, '_').replace('5seater', '5_seater').replace('7seater', '7_seater').replace('4*4', '4x4').replace('4x4jeep', '4x4');
         socket.join(`role:${normCat}`);
@@ -68,15 +68,29 @@ function initSocket(server) {
 
     // Toggle duty status handler
     socket.on('toggle_duty', (data) => {
-      const { userId, isOnline } = data || {};
+      const { userId, isOnline, vehicleCategory, vehicleType } = data || {};
+      const cat = vehicleCategory || vehicleType;
       if (isOnline) {
         socket.join('role:driver_online');
         socket.join('role:driver');
+        if (cat) {
+          const catStr = String(cat).toLowerCase().trim();
+          const normCat = catStr.replace(/ /g, '_').replace(/-/g, '_').replace('5seater', '5_seater').replace('7seater', '7_seater').replace('4*4', '4x4').replace('4x4jeep', '4x4');
+          socket.join(`role:${normCat}`);
+          socket.join(`role:${catStr}`);
+        }
         console.log(`[Socket.io] Driver ${userId || socket.id} TOGGLED DUTY ON (joined role:driver_online)`);
       } else {
         socket.leave('role:driver_online');
         socket.leave('role:driver');
-        console.log(`[Socket.io] Driver ${userId || socket.id} TOGGLED DUTY OFF (left role:driver_online)`);
+        socket.leave('role:5_seater');
+        socket.leave('role:7_seater');
+        socket.leave('role:4x4');
+        socket.leave('role:auto');
+        socket.leave('role:4x4jeep');
+        socket.leave('role:4*4');
+        socket.leave('role:guide');
+        console.log(`[Socket.io] Driver ${userId || socket.id} TOGGLED DUTY OFF (left role:driver_online & category rooms)`);
       }
     });
 

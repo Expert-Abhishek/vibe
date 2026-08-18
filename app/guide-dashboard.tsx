@@ -160,6 +160,36 @@ export default function GuideDashboardScreen() {
   const [activeTab, setActiveTab] = useState<'duty' | 'active_tour' | 'profile'>('duty');
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
+  const isOnlineRef = React.useRef(isOnline);
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    async function restoreDutyStatus() {
+      const session = getUserSessionSync();
+      const guideId = session?.id || 'g1';
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const storedStatus = await AsyncStorage.getItem(`vibe_guide_duty_status_${guideId}`);
+        if (storedStatus !== null) {
+          const onlineVal = storedStatus === 'true';
+          setIsOnline(onlineVal);
+          isOnlineRef.current = onlineVal;
+          const { dutyStatusStore } = require('@src/store/dutyStatusStore');
+          dutyStatusStore.setOnline('guide', onlineVal);
+          if (!onlineVal) {
+            const { notificationStore } = require('@src/store/notificationStore');
+            notificationStore.clearRideRequestNotifications('guide');
+          }
+        } else {
+          const { dutyStatusStore } = require('@src/store/dutyStatusStore');
+          dutyStatusStore.setOnline('guide', true);
+        }
+      } catch (e) { }
+    }
+    restoreDutyStatus();
+  }, []);
   const [appLang, setAppLang] = useLanguage();
 
 
@@ -660,6 +690,7 @@ export default function GuideDashboardScreen() {
     if (!isOnline || activeTour) return;
     let isMounted = true;
     const pollGuideRequests = async () => {
+      if (!isOnlineRef.current) return;
       try {
         const pendingList = await fetchPendingRequestsApi('guide');
         const unhandledList = (pendingList || []).filter(
@@ -741,7 +772,7 @@ export default function GuideDashboardScreen() {
       });
 
       const handleIncomingTripData = (tripData: any) => {
-        if (!tripData) return;
+        if (!isOnlineRef.current || !tripData) return;
         const payload = tripData.trip || tripData;
         const incomingTripId = String(payload.id || payload.tripId || payload.id);
 
@@ -771,6 +802,7 @@ export default function GuideDashboardScreen() {
     }
 
     const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
+      if (!isOnlineRef.current) return;
       if (data) {
         const payload = data.trip || data;
         const incId = String(payload.id || payload.tripId);
@@ -795,6 +827,7 @@ export default function GuideDashboardScreen() {
     });
 
     const unsubRequests = listenForTripRequests((tripData: any) => {
+      if (!isOnlineRef.current) return;
       if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
         setIncomingRequest({ ...tripData });
         setRequestVisible(true);

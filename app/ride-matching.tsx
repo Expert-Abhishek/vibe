@@ -86,17 +86,19 @@ export default function RideMatchingScreen() {
   // Wiggling cars coords for searching phase
   const [wiggleCars, setWiggleCars] = useState<Coordinate[]>([]);
   const [searchingTimer, setSearchingTimer] = useState(45);
+  const [isDriverDeclined, setIsDriverDeclined] = useState(false);
   const [isDriverTimeout, setIsDriverTimeout] = useState(false);
 
   // 45-second targeted searching timer countdown
   useEffect(() => {
     let interval: any = null;
-    if (status === 'searching' && searchingTimer > 0) {
+    if (status === 'searching' && searchingTimer > 0 && !isDriverDeclined) {
       interval = setInterval(() => {
         setSearchingTimer(prev => {
           if (prev <= 1) {
             clearInterval(interval!);
             setIsDriverTimeout(true);
+            setIsDriverDeclined(false);
             return 0;
           }
           return prev - 1;
@@ -106,9 +108,10 @@ export default function RideMatchingScreen() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [status, searchingTimer]);
+  }, [status, searchingTimer, isDriverDeclined]);
 
   const handleBroadcastToAll = () => {
+    setIsDriverDeclined(false);
     setIsDriverTimeout(false);
     setSearchingTimer(45);
     const broadcastObj = {
@@ -323,6 +326,56 @@ export default function RideMatchingScreen() {
     }
   };
 
+
+  // Build simulated route coordinates between checkpoints
+  useEffect(() => {
+    // Collect all nodes in sequence
+    const nodes = [
+      { latitude: pickupLat, longitude: pickupLng },
+      ...parsedStops.map(s => ({ latitude: s.latitude, longitude: s.longitude })),
+      { latitude: dropLat, longitude: dropLng }
+    ];
+
+    // Generate dense polyline (10 steps per leg to make the moving marker smooth)
+    const points: Coordinate[] = [];
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const start = nodes[i];
+      const end = nodes[i + 1];
+      for (let j = 0; j < 10; j++) {
+        const fraction = j / 10;
+        points.push({
+          latitude: start.latitude + (end.latitude - start.latitude) * fraction,
+          longitude: start.longitude + (end.longitude - start.longitude) * fraction
+        });
+      }
+    }
+    points.push(nodes[nodes.length - 1]); // Add final point
+
+    setRouteCoords(points);
+    setLoadingRoute(false);
+
+    // Set wiggle cars near the pickup coordinates
+    setWiggleCars([
+      { latitude: pickupLat + 0.003, longitude: pickupLng - 0.002 },
+      { latitude: pickupLat - 0.002, longitude: pickupLng + 0.003 },
+      { latitude: pickupLat + 0.001, longitude: pickupLng + 0.002 },
+    ]);
+  }, []);
+
+  // Wiggle cars simulator during searching
+  useEffect(() => {
+    if (status !== 'searching') return;
+    const interval = setInterval(() => {
+      setWiggleCars(prev =>
+        prev.map(c => ({
+          latitude: c.latitude + (Math.random() - 0.5) * 0.0005,
+          longitude: c.longitude + (Math.random() - 0.5) * 0.0005,
+        }))
+      );
+    }, 800);
+    return () => clearInterval(interval);
+  }, [status]);
+
   useEffect(() => {
     const session = getUserSessionSync();
     const customerIdParam = session?.id || (params.customerId as string) || (params.userId as string) || 't1';
@@ -352,21 +405,33 @@ export default function RideMatchingScreen() {
 
     const handleDeclinedData = (data: any) => {
       console.log('[RideMatchingScreen] ❌ Driver declined request:', data);
-      setIsDriverTimeout(true);
-      const dName = data?.driverName || data?.driver_or_guide_name || 'The driver';
+      setIsDriverDeclined(true);
+      setIsDriverTimeout(false);
+      setSearchingTimer(0);
+      const dName = data?.driverName || data?.driver_or_guide_name || data?.name || liveDriverInfo?.name || 'The driver';
       Alert.alert(
         'Booking Declined ❌',
-        `${dName} has declined your trip request. You can re-book or select another driver.`,
+        `${dName} has declined your trip request. You can select another driver on the spot or broadcast to all nearby partners.`,
         [
           {
-            text: 'Book New Driver 🚕',
+            text: 'Choose Other Driver 🚕',
             onPress: () => {
-              try {
-                router.replace('/plan-route');
-              } catch (e) {
-                router.back();
+              if (tripType === 'custom_trip') {
+                router.replace('/make-trip');
+              } else if (tripType === 'cab') {
+                router.replace('/book-cab');
+              } else {
+                try {
+                  router.replace('/plan-route');
+                } catch (e) {
+                  router.back();
+                }
               }
             },
+          },
+          {
+            text: 'Broadcast to All 📡',
+            onPress: handleBroadcastToAll,
           },
           {
             text: 'Dismiss',
@@ -384,12 +449,10 @@ export default function RideMatchingScreen() {
       if (currentStatus === 'accepted') {
         handleAcceptedData(data);
       } else if (currentStatus === 'declined' || currentStatus === 'rejected') {
-        setIsDriverTimeout(true);
-        Alert.alert(
-          'Driver Busy',
-          'The selected driver is currently unavailable. Please choose another driver or broadcast to all.',
-          [{ text: 'OK' }]
-        );
+        setIsDriverDeclined(true);
+        setIsDriverTimeout(false);
+        setSearchingTimer(0);
+        handleDeclinedData(data);
       }
     };
 
@@ -397,35 +460,6 @@ export default function RideMatchingScreen() {
       console.log('[RIDER] Received direct trip_accepted event:', data);
       handleAcceptedData(data);
     };
-
-    // 1. Direct Socket Event Listeners
-    if (socket) {
-      socket.on('connect', joinRiderRooms);
-      socket.on('reconnect', joinRiderRooms);
-      socket.on('trip_status_updated', handleTripStatusUpdated);
-      socket.on('trip_accepted', handleDirectAccepted);
-      socket.on('RIDE_ACCEPTED', handleDirectAccepted);
-      socket.on('trip_declined', handleDeclinedData);
-      socket.on('trip_declined_by_driver', handleDeclinedData);
-    }
-
-    // 2. Backup HTTP Polling (Runs every 3 seconds)
-    pollIntervalRef.current = setInterval(async () => {
-      if (isNavigatedRef.current) return;
-
-      try {
-        const res = await fetchLiveLocationApi(tripIdParam);
-        if (res?.data && (res.data.status === 'Accepted' || res.data.status === 'Arrived')) {
-          handleAcceptedData(res.data);
-        } else if (res?.data?.status === 'Declined' || res?.data?.status === 'Rejected') {
-          setIsDriverTimeout(true);
-        }
-      } catch (err) {
-        console.error('Polling error:', err);
-      }
-    }, 3000);
-
-    
 
     const handleLocationStream = (data: any) => {
       if (data && (data.latitude || data.lat)) {
@@ -437,20 +471,34 @@ export default function RideMatchingScreen() {
       }
     };
 
+    // 1. Direct Socket Event Listeners
+    if (socket) {
+      socket.on('connect', joinRiderRooms);
+      socket.on('reconnect', joinRiderRooms);
+      socket.on('trip_status_updated', handleTripStatusUpdated);
+      socket.on('trip_accepted', handleDirectAccepted);
+      socket.on('RIDE_ACCEPTED', handleDirectAccepted);
+      socket.on('trip_declined', handleDeclinedData);
+      socket.on('trip_declined_by_driver', handleDeclinedData);
+      socket.on('RIDE_DECLINED', handleDeclinedData);
+    }
+
     const subStatus = DeviceEventEmitter.addListener('trip_status_updated', handleTripStatusUpdated);
     const subAccepted = DeviceEventEmitter.addListener('trip_accepted', handleAcceptedData);
     const subRideAccepted = DeviceEventEmitter.addListener('RIDE_ACCEPTED', handleAcceptedData);
     const subDeclined = DeviceEventEmitter.addListener('trip_declined', handleDeclinedData);
+    const subDeclinedByDriver = DeviceEventEmitter.addListener('trip_declined_by_driver', handleDeclinedData);
     const subRideDeclined = DeviceEventEmitter.addListener('RIDE_DECLINED', handleDeclinedData);
     const subLocation = DeviceEventEmitter.addListener('driver_location_stream', handleLocationStream);
 
     return () => {
       if (socket) {
         socket.off('trip_status_updated', handleTripStatusUpdated);
-        socket.off('trip_accepted', handleAcceptedData);
-        socket.off('RIDE_ACCEPTED', handleAcceptedData);
+        socket.off('trip_accepted', handleDirectAccepted);
+        socket.off('RIDE_ACCEPTED', handleDirectAccepted);
         socket.off('trip_declined', handleDeclinedData);
         socket.off('trip_declined_by_driver', handleDeclinedData);
+        socket.off('RIDE_DECLINED', handleDeclinedData);
       }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -460,6 +508,7 @@ export default function RideMatchingScreen() {
       subAccepted.remove();
       subRideAccepted.remove();
       subDeclined.remove();
+      subDeclinedByDriver.remove();
       subRideDeclined.remove();
       subLocation.remove();
     };
@@ -645,7 +694,83 @@ export default function RideMatchingScreen() {
         {/* Searching Status Panel */}
         {status === 'searching' && (
           <View style={styles.searchingCol}>
-            {!isDriverTimeout ? (
+            {isDriverDeclined ? (
+              <View style={{ alignItems: 'center', width: '100%' }}>
+                <MaterialIcons name="cancel" size={scale(38)} color="#EF4444" style={{ marginBottom: verticalScale(6) }} />
+                <Text style={[styles.searchingTitleText, { color: '#EF4444', textAlign: 'center' }]}>
+                  {liveDriverInfo?.name ? `${liveDriverInfo.name} Declined Request ❌` : 'Request Declined by Driver ❌'}
+                </Text>
+                <Text style={[styles.searchingSubText, { color: colors.textMuted, textAlign: 'center', marginBottom: verticalScale(14) }]}>
+                  {liveDriverInfo?.name ? `${liveDriverInfo.name} declined your trip request.` : 'The driver declined your trip request.'} You can select another driver on the spot or broadcast your request to all.
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: scale(8), width: '100%' }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: colors.amber, paddingVertical: verticalScale(12), borderRadius: scale(10), alignItems: 'center' }}
+                    onPress={() => {
+                      if (tripType === 'custom_trip') {
+                        router.replace('/make-trip');
+                      } else if (tripType === 'cab') {
+                        router.replace('/book-cab');
+                      } else {
+                        try {
+                          router.replace('/plan-route');
+                        } catch (e) {
+                          router.back();
+                        }
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#101010', fontWeight: '800', fontSize: moderateFontScale(12) }}>Choose Other Driver 🚕</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: colors.surfaceCard, paddingVertical: verticalScale(12), borderRadius: scale(10), alignItems: 'center', borderWidth: 1, borderColor: colors.amber }}
+                    onPress={handleBroadcastToAll}
+                  >
+                    <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>Broadcast to All 📡</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : isDriverTimeout ? (
+              <View style={{ alignItems: 'center', width: '100%' }}>
+                <MaterialIcons name="person-off" size={scale(36)} color={colors.amber} style={{ marginBottom: verticalScale(6) }} />
+                <Text style={[styles.searchingTitleText, { color: colors.textPrimary, textAlign: 'center' }]}>
+                  Driver is busy or not responding
+                </Text>
+                <Text style={[styles.searchingSubText, { color: colors.textMuted, textAlign: 'center', marginBottom: verticalScale(14) }]}>
+                  {liveDriverInfo?.name ? `${liveDriverInfo.name} didn't respond in time.` : 'No driver accepted within the timer window.'} Please choose another driver or broadcast to all.
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: scale(8), width: '100%' }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: colors.amber, paddingVertical: verticalScale(12), borderRadius: scale(10), alignItems: 'center' }}
+                    onPress={() => {
+                      if (tripType === 'custom_trip') {
+                        router.replace('/make-trip');
+                      } else if (tripType === 'cab') {
+                        router.replace('/book-cab');
+                      } else {
+                        try {
+                          router.replace('/plan-route');
+                        } catch (e) {
+                          router.back();
+                        }
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#101010', fontWeight: '800', fontSize: moderateFontScale(12) }}>Choose Other Driver 🚕</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: colors.surfaceCard, paddingVertical: verticalScale(12), borderRadius: scale(10), alignItems: 'center', borderWidth: 1, borderColor: colors.amber }}
+                    onPress={handleBroadcastToAll}
+                  >
+                    <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(12) }}>Broadcast to All 📡</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
               <>
                 <ActivityIndicator size="large" color={colors.amber} style={{ marginBottom: verticalScale(8) }} />
                 <Text style={[styles.searchingTitleText, { color: colors.textPrimary }]}>
@@ -659,27 +784,6 @@ export default function RideMatchingScreen() {
                     : (tripType === 'guide' ? 'Contacting certified local guides...' : 'Reaching out to vehicle captains...')}
                 </Text>
               </>
-            ) : (
-              <View style={{ alignItems: 'center', width: '100%' }}>
-                <MaterialIcons name="person-off" size={scale(36)} color={colors.amber} style={{ marginBottom: verticalScale(6) }} />
-                <Text style={[styles.searchingTitleText, { color: colors.textPrimary, textAlign: 'center' }]}>
-                  Driver is busy or not responding
-                </Text>
-                <Text style={[styles.searchingSubText, { color: colors.textMuted, textAlign: 'center', marginBottom: verticalScale(14) }]}>
-                  {liveDriverInfo?.name ? `${liveDriverInfo.name} didn't respond in time.` : 'No driver accepted within the timer window.'} Please choose another driver or broadcast to all.
-                </Text>
-
-                <View style={{ flexDirection: 'row', gap: scale(8), width: '100%' }}>
-
-
-                  <TouchableOpacity
-                    style={{ flex: 1, backgroundColor: colors.surfaceCard, borderWidth: 1, borderColor: colors.border, paddingVertical: verticalScale(12), borderRadius: scale(10), alignItems: 'center' }}
-                    onPress={() => router.back()}
-                  >
-                    <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: moderateFontScale(12) }}>Choose Another</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
             )}
           </View>
         )}
@@ -696,7 +800,7 @@ export default function RideMatchingScreen() {
             <View style={[styles.partnerCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
               <View style={styles.partnerMain}>
                 <View style={[styles.avatarRound, { backgroundColor: colors.amber }]}>
-                  <Text style={styles.avatarInitials}>{demoDriver.name.split(' ').map((n: string) => n[0]).join('')}</Text>
+                  <Text style={styles.avatarInitials}>{(demoDriver.name || 'Captain').split(' ').map((n: string) => n[0]).join('')}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.pName, { color: colors.textPrimary }]}>{demoDriver.name}</Text>
@@ -741,7 +845,7 @@ export default function RideMatchingScreen() {
             <View style={[styles.partnerCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
               <View style={styles.partnerMain}>
                 <View style={[styles.avatarRound, { backgroundColor: colors.amber }]}>
-                  <Text style={styles.avatarInitials}>{demoDriver.name.split(' ').map((n: string) => n[0]).join('')}</Text>
+                  <Text style={styles.avatarInitials}>{(demoDriver.name || 'Captain').split(' ').map((n: string) => n[0]).join('')}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.pName, { color: colors.textPrimary }]}>{demoDriver.name}</Text>
@@ -788,14 +892,15 @@ export default function RideMatchingScreen() {
             </TouchableOpacity>
           </View>
         )}
+      </View>
 
-        {/* Custom Celebration "Trip Completed!" Modal */}
-        <Modal visible={completedModalVisible} transparent={true} animationType="slide">
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: scale(18) }}>
-            <View style={{ backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', borderRadius: scale(24), padding: scale(22), alignItems: 'center', borderWidth: 1.5, borderColor: '#F5C518' }}>
-              <View style={{ width: scale(64), height: scale(64), borderRadius: scale(32), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14), elevation: 6 }}>
-                <MaterialIcons name="check-circle" size={scale(38)} color="#101010" />
-              </View>
+      {/* Custom Celebration "Trip Completed!" Modal */}
+      <Modal visible={completedModalVisible} transparent={true} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: scale(18) }}>
+          <View style={{ backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', borderRadius: scale(24), padding: scale(22), alignItems: 'center', borderWidth: 1.5, borderColor: '#F5C518' }}>
+            <View style={{ width: scale(64), height: scale(64), borderRadius: scale(32), backgroundColor: '#F5C518', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14), elevation: 6 }}>
+              <MaterialIcons name="check-circle" size={scale(38)} color="#101010" />
+            </View>
 
               <Text style={{ color: '#F5C518', fontSize: moderateFontScale(18), fontWeight: '900', marginBottom: verticalScale(4), textAlign: 'center' }}>
                 🎉 Trip Completed!
@@ -844,7 +949,6 @@ export default function RideMatchingScreen() {
           </View>
         </Modal>
 
-      </View>
     </SafeAreaView>
   );
 }

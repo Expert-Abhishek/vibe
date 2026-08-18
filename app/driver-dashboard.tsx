@@ -126,6 +126,36 @@ export default function DriverDashboardScreen() {
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_trip' | 'history' | 'profile'>('duty');
   const [isOnline, setIsOnline] = useState(true);
+  const isOnlineRef = React.useRef(isOnline);
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    async function restoreDutyStatus() {
+      const session = getUserSessionSync();
+      const driverId = session?.id || 'd1';
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const storedStatus = await AsyncStorage.getItem(`vibe_driver_duty_status_${driverId}`);
+        if (storedStatus !== null) {
+          const onlineVal = storedStatus === 'true';
+          setIsOnline(onlineVal);
+          isOnlineRef.current = onlineVal;
+          const { dutyStatusStore } = require('@src/store/dutyStatusStore');
+          dutyStatusStore.setOnline('driver', onlineVal);
+          if (!onlineVal) {
+            const { notificationStore } = require('@src/store/notificationStore');
+            notificationStore.clearRideRequestNotifications('driver');
+          }
+        } else {
+          const { dutyStatusStore } = require('@src/store/dutyStatusStore');
+          dutyStatusStore.setOnline('driver', true);
+        }
+      } catch (e) { }
+    }
+    restoreDutyStatus();
+  }, []);
   const [appLang, setAppLang] = useLanguage();
 
   // Stats state
@@ -678,6 +708,7 @@ export default function DriverDashboardScreen() {
       try {
         watchId = navigator.geolocation.watchPosition(
           (pos) => {
+            if (!isOnlineRef.current) return;
             if (pos && pos.coords) {
               const { latitude, longitude, heading, speed } = pos.coords;
               emitDriverLocationSocket({
@@ -701,6 +732,7 @@ export default function DriverDashboardScreen() {
 
     // Poll live pending ride requests from backend and local state
     const pollRequests = async () => {
+      if (!isOnlineRef.current) return;
       try {
         const session = getUserSessionSync();
         const dId = session?.id || 'd1';
@@ -721,7 +753,7 @@ export default function DriverDashboardScreen() {
         const combined = [...(dbReqs || []), ...(driverReqs || []), ...memoryReqs];
         const unhandled = combined.filter((r: any) => r && r.id && !handledTripIdsRef.current.has(String(r.id)));
 
-        if (isMounted && unhandled.length > 0 && !activeTrip && !requestVisible && earningsBalance >= 300) {
+        if (isMounted && isOnlineRef.current && unhandled.length > 0 && !activeTrip && !requestVisible && earningsBalance >= 300) {
           const firstReq = unhandled[0];
           const reqIdStr = String(firstReq.id);
 
@@ -764,6 +796,7 @@ export default function DriverDashboardScreen() {
     pollRequests();
 
     const cleanupSync = listenForTripRequests((trip) => {
+      if (!isOnlineRef.current) return;
       if (trip && trip.id && earningsBalance >= 300 && !handledTripIdsRef.current.has(String(trip.id))) {
         const reqIdStr = String(trip.id);
         setIncomingRequest({
@@ -861,6 +894,7 @@ export default function DriverDashboardScreen() {
         role: session?.role || 'driver',
         vehicleType: currentCat,
         vehicleCategory: currentCat,
+        isOnline: isOnlineRef.current,
       };
 
       // Emit join_room immediately if already connected
@@ -871,6 +905,7 @@ export default function DriverDashboardScreen() {
 
       // Emit join_room and trigger HTTP fallback polling on connection/reconnection
       const onSocketConnect = async () => {
+        if (!isOnlineRef.current) return;
         console.log('[DriverDashboard] ✅ Socket Connected/Reconnected! Emitting join_room & fetching pending DB trips...');
         socket.emit('join_room', joinData);
         try {
@@ -878,7 +913,7 @@ export default function DriverDashboardScreen() {
           const unhandledList = (pendingList || []).filter(
             (req: any) => req && req.id && !handledTripIdsRef.current.has(String(req.id))
           );
-          if (unhandledList.length > 0 && !activeTrip && !incomingRequest) {
+          if (unhandledList.length > 0 && !activeTrip && !incomingRequest && isOnlineRef.current) {
             const req = unhandledList[0];
             setIncomingRequest({
               id: req.id,
@@ -905,7 +940,7 @@ export default function DriverDashboardScreen() {
 
       // Listen for targeted and broadcast trip requests
       const handleIncomingTripData = (tripData: any) => {
-        if (!isOnline || !tripData || earningsBalance < 300) return;
+        if (!isOnlineRef.current || !tripData || earningsBalance < 300) return;
         const payload = tripData.trip || tripData;
         const incomingTripId = String(payload.id || payload.tripId || payload.id);
 
@@ -1003,7 +1038,7 @@ export default function DriverDashboardScreen() {
     }
 
     const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
-      if (!isOnline) return;
+      if (!isOnlineRef.current) return;
       console.log('[DriverDashboard] 🔔 DeviceEventEmitter new_driver_request:', data);
       if (data) {
         const payload = data.trip || data;
@@ -1033,7 +1068,7 @@ export default function DriverDashboardScreen() {
 
     // Fallback sync listener
     const unsubRequests = listenForTripRequests((tripData) => {
-      if (!isOnline) return;
+      if (!isOnlineRef.current) return;
       if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
         setIncomingRequest({
           ...tripData,
@@ -1597,14 +1632,30 @@ export default function DriverDashboardScreen() {
                 value={isOnline}
                 onValueChange={(val) => {
                   setIsOnline(val);
+                  isOnlineRef.current = val;
+                  const session = getUserSessionSync();
+                  const dId = session?.id || 'd1';
+                  try {
+                    const { dutyStatusStore } = require('@src/store/dutyStatusStore');
+                    dutyStatusStore.setOnline('driver', val);
+                    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                    AsyncStorage.setItem(`vibe_driver_duty_status_${dId}`, String(val)).catch(() => { });
+                  } catch (e) { }
+
                   const socket = getSocket();
                   if (socket && socket.connected) {
-                    const session = getUserSessionSync();
-                    socket.emit('toggle_duty', { userId: session?.id, isOnline: val });
+                    const currentCat = vehicleCategory || (session as any)?.profile?.vehicle_category || (session as any)?.profile?.vehicleCategory || '5_seater';
+                    socket.emit('toggle_duty', { userId: dId, isOnline: val, vehicleCategory: currentCat });
+                  }
+                  if (dId) {
+                    updateDriverLocationApi(dId, 12.9716, 77.5946, val).catch(() => { });
                   }
                   if (!val) {
+                    stopNotificationChime();
                     setIncomingRequest(null);
                     setRequestVisible(false);
+                    const { notificationStore } = require('@src/store/notificationStore');
+                    notificationStore.clearRideRequestNotifications('driver');
                   }
                 }}
                 trackColor={{ false: '#2C2C34', true: colors.amber }}

@@ -1,6 +1,6 @@
 import React, { Component, forwardRef, useRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import MapView, { Marker, Polyline, Circle, Callout, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import MapView, { Marker as NativeMarker, Polyline as NativePolyline, Circle as NativeCircle, Callout as NativeCallout, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
 
 class MapErrorBoundary extends Component {
   state = { hasError: false };
@@ -31,6 +31,7 @@ const SafeMapView = forwardRef((props, ref) => {
 
   useImperativeHandle(ref, () => ({
     fitToCoordinates: (coordinates, options) => {
+      if (Platform.OS === 'web') return;
       setTimeout(() => {
         try {
           if (innerRef.current && typeof innerRef.current.fitToCoordinates === 'function') {
@@ -42,6 +43,7 @@ const SafeMapView = forwardRef((props, ref) => {
       }, 400);
     },
     animateToRegion: (region, duration) => {
+      if (Platform.OS === 'web') return;
       setTimeout(() => {
         try {
           if (innerRef.current && typeof innerRef.current.animateToRegion === 'function') {
@@ -53,6 +55,7 @@ const SafeMapView = forwardRef((props, ref) => {
       }, 400);
     },
     fitToElements: (animated) => {
+      if (Platform.OS === 'web') return;
       setTimeout(() => {
         try {
           if (innerRef.current && typeof innerRef.current.fitToElements === 'function') {
@@ -64,6 +67,7 @@ const SafeMapView = forwardRef((props, ref) => {
       }, 400);
     },
     fitToSuppliedMarkers: (markers, options) => {
+      if (Platform.OS === 'web') return;
       setTimeout(() => {
         try {
           if (innerRef.current && typeof innerRef.current.fitToSuppliedMarkers === 'function') {
@@ -75,6 +79,7 @@ const SafeMapView = forwardRef((props, ref) => {
       }, 400);
     },
     animateCamera: (camera, options) => {
+      if (Platform.OS === 'web') return;
       setTimeout(() => {
         try {
           if (innerRef.current && typeof innerRef.current.animateCamera === 'function') {
@@ -86,6 +91,7 @@ const SafeMapView = forwardRef((props, ref) => {
       }, 400);
     },
     setCamera: (camera) => {
+      if (Platform.OS === 'web') return;
       setTimeout(() => {
         try {
           if (innerRef.current && typeof innerRef.current.setCamera === 'function') {
@@ -97,6 +103,15 @@ const SafeMapView = forwardRef((props, ref) => {
       }, 400);
     },
   }));
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.fallbackContainer, props.style]}>
+        <Text style={styles.fallbackTitle}>📍 Map View</Text>
+        <Text style={styles.fallbackSub}>Interactive location map</Text>
+      </View>
+    );
+  }
 
   const { provider, ...restProps } = props;
 
@@ -133,6 +148,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 });
+
+const WebDummyComponent = (props) => null;
+
+const Marker = Platform.OS === 'web' ? WebDummyComponent : NativeMarker;
+const Polyline = Platform.OS === 'web' ? WebDummyComponent : NativePolyline;
+const Circle = Platform.OS === 'web' ? WebDummyComponent : NativeCircle;
+const Callout = Platform.OS === 'web' ? WebDummyComponent : NativeCallout;
 
 export { Marker, Polyline, Circle, Callout, PROVIDER_GOOGLE, PROVIDER_DEFAULT };
 export default SafeMapView;

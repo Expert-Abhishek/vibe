@@ -66,16 +66,42 @@ function loadStateLocally() {
 // Load initial state on module load
 loadStateLocally();
 
+import { dutyStatusStore } from './dutyStatusStore';
+
+export function isRideRequestNotification(item: Partial<NotificationItem>): boolean {
+  const title = String(item.title || '').toLowerCase();
+  const body = String(item.body || '').toLowerCase();
+  return (
+    title.includes('ride') ||
+    title.includes('trip request') ||
+    title.includes('booking') ||
+    title.includes('cab') ||
+    title.includes('tour request') ||
+    body.includes('requested a trip') ||
+    body.includes('requested a guided tour') ||
+    body.includes('new ride request')
+  );
+}
+
 export const notificationStore = {
   getState(): NotificationState {
     return state;
   },
 
-  setNotifications(list: NotificationItem[]): void {
-    const formatted = list.map((item) => ({
-      ...item,
-      isRead: Boolean(item.isRead),
-    }));
+  setNotifications(list: NotificationItem[], role: string = 'tourist'): void {
+    const formatted = list
+      .map((item) => ({
+        ...item,
+        isRead: Boolean(item.isRead),
+      }))
+      .filter((item) => {
+        const itemRole = item.role || role;
+        if ((itemRole === 'driver' || itemRole === 'guide') && !dutyStatusStore.isOnline(itemRole)) {
+          if (isRideRequestNotification(item)) return false;
+        }
+        return true;
+      });
+
     if (JSON.stringify(state.notifications) === JSON.stringify(formatted)) {
       return;
     }
@@ -92,7 +118,15 @@ export const notificationStore = {
    * If badge is hidden (unreadCount is 0), this increments unreadCount by 1
    * and re-renders the red badge.
    */
-  addNotification(item: Partial<NotificationItem>): NotificationItem {
+  addNotification(item: Partial<NotificationItem>): NotificationItem | null {
+    const itemRole = item.role || 'tourist';
+    if ((itemRole === 'driver' || itemRole === 'guide') && !dutyStatusStore.isOnline(itemRole)) {
+      if (isRideRequestNotification(item)) {
+        console.log(`[NotificationStore] 🛡️ Suppressed ride request notification for offline ${itemRole}`);
+        return null;
+      }
+    }
+
     const newItem: NotificationItem = {
       id: item.id || `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title: item.title || 'New Notification',
@@ -113,6 +147,26 @@ export const notificationStore = {
     persistStateLocally();
     notifyListeners();
     return newItem;
+  },
+
+  /**
+   * Remove ride request notifications when driver/guide goes offline
+   */
+  clearRideRequestNotifications(role: string = 'driver'): void {
+    const filtered = state.notifications.filter((n) => {
+      const itemRole = n.role || role;
+      if (itemRole === role && isRideRequestNotification(n)) {
+        return false;
+      }
+      return true;
+    });
+
+    state = {
+      notifications: filtered,
+      unreadCount: computeUnreadCount(filtered),
+    };
+    persistStateLocally();
+    notifyListeners();
   },
 
   /**

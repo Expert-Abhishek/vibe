@@ -1459,12 +1459,19 @@ router.post('/book', async (req, res) => {
     newTrip.customer_id = validCustomerId;
     emitTripRequest(newTrip);
 
-    // Query all driver / guide tokens to send push notification!
+    // Query only ACTIVE driver / guide tokens to send push notification!
     const targetRole = tripType === 'guide' ? 'guide' : 'driver';
     const tokensRes = await db.query(
-      `SELECT DISTINCT push_token FROM users 
-       WHERE (LOWER(role::text) = LOWER($1) OR (LOWER($1) = 'driver' AND LOWER(role::text) IN ('driver', 'captain'))) 
-         AND push_token IS NOT NULL AND push_token != ''`,
+      `SELECT DISTINCT u.push_token 
+       FROM users u
+       LEFT JOIN driver_profiles d ON (u.id::text = d.user_id::text OR CAST(u.id AS VARCHAR) = CAST(d.user_id AS VARCHAR))
+       LEFT JOIN guide_profiles g ON (u.id::text = g.user_id::text OR CAST(u.id AS VARCHAR) = CAST(g.user_id AS VARCHAR))
+       WHERE (LOWER(u.role::text) = LOWER($1) OR (LOWER($1) = 'driver' AND LOWER(u.role::text) IN ('driver', 'captain'))) 
+         AND u.push_token IS NOT NULL AND u.push_token != ''
+         AND (
+           (LOWER($1) = 'driver' AND (d.is_active IS NULL OR d.is_active = TRUE)) OR
+           (LOWER($1) = 'guide' AND (g.is_active IS NULL OR g.is_active = TRUE))
+         )`,
       [targetRole]
     );
 

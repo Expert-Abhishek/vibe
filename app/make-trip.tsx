@@ -322,8 +322,8 @@ export default function MakeTripScreen() {
 
   // Select place from Google Suggestions & fetch Lat/Lng
   const handleSelectSuggestion = async (placeId: string, description: string) => {
-    if (checkpoints.length >= 5) {
-      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 places to visit in a customer trip.');
+    if (touristCheckpoints.length >= 4) {
+      Alert.alert('Limit Reached ⚠️', 'You can only add up to 4 tourist places in a customer trip.');
       return;
     }
     setSearchText('');
@@ -344,7 +344,7 @@ export default function MakeTripScreen() {
           longitude: lng,
           address: description,
         };
-        setCheckpoints(prev => [...prev, newPoint]);
+        setTouristCheckpoints(prev => [...prev, newPoint]);
       }
     } catch (e) {
       console.error('Error fetching place details:', e);
@@ -355,12 +355,12 @@ export default function MakeTripScreen() {
   };
 
   const handleSelectPreset = (preset: Checkpoint) => {
-    if (checkpoints.length >= 5) {
-      Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 places to visit in a customer trip.');
+    if (touristCheckpoints.length >= 4) {
+      Alert.alert('Limit Reached ⚠️', 'You can only add up to 4 tourist places in a customer trip.');
       return;
     }
     // Prevent duplicate entries of the same preset
-    if (checkpoints.find(c => c.name === preset.name)) {
+    if (touristCheckpoints.find(c => c.name === preset.name)) {
       Alert.alert('Checkpoint Exists', `${preset.name} is already in your itinerary.`);
       return;
     }
@@ -368,7 +368,7 @@ export default function MakeTripScreen() {
       ...preset,
       id: Math.random().toString(),
     };
-    setCheckpoints(prev => [...prev, newPoint]);
+    setTouristCheckpoints(prev => [...prev, newPoint]);
     setSearchText('');
     setSuggestions([]);
   };
@@ -384,8 +384,8 @@ export default function MakeTripScreen() {
         prev.filter(c => (c.name || '').toLowerCase().trim() !== destName && String(c.id) !== String(dest.id))
       );
     } else {
-      if (touristCheckpoints.length >= 5) {
-        Alert.alert('Limit Reached ⚠️', 'You can only add up to 5 tourist places in a customer trip.');
+      if (touristCheckpoints.length >= 4) {
+        Alert.alert('Limit Reached ⚠️', 'You can only add up to 4 tourist places in a customer trip.');
         return;
       }
       const newPoint: Checkpoint = {
@@ -1139,7 +1139,7 @@ export default function MakeTripScreen() {
                   (d.location && d.location.toLowerCase().includes(searchText.toLowerCase()))
                 );
                 if (matched.length > 0) {
-                  handleSelectLiveDestination(matched[0]);
+                  handleToggleLiveDestination(matched[0]);
                 } else {
                   Alert.alert(
                     'Restricted Location',
@@ -1546,7 +1546,7 @@ export default function MakeTripScreen() {
               >
                 <MaterialIcons name="add-circle-outline" size={scale(20)} color={colors.amber} />
                 <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(13) }}>
-                  Add Places to Visit {touristCheckpoints.length > 0 ? `(${touristCheckpoints.length}/5)` : ''}
+                  Add Places to Visit {touristCheckpoints.length > 0 ? `(${touristCheckpoints.length}/4)` : ''}
                 </Text>
               </TouchableOpacity>
 
