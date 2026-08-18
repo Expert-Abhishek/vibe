@@ -39,6 +39,8 @@ export default function RideMatchingScreen() {
   const [status, setStatus] = useState<'searching' | 'matched' | 'started' | 'completed'>('searching');
   const [progressIndex, setProgressIndex] = useState(0);
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
+  const [declineModalVisible, setDeclineModalVisible] = useState(false);
+  const [declinedDriverName, setDeclinedDriverName] = useState('');
 
   // Parse location nodes passed via search params
   const pickupName = (params.pickupName as string) || 'Bengaluru Palace';
@@ -408,6 +410,9 @@ export default function RideMatchingScreen() {
       setIsDriverDeclined(true);
       setIsDriverTimeout(false);
       setSearchingTimer(0);
+      const dName = data?.driverName || data?.driver_or_guide_name || data?.name || liveDriverInfo?.name || 'The driver';
+      setDeclinedDriverName(dName);
+      setDeclineModalVisible(true);
     };
 
     const handleTripStatusUpdated = (data: any) => {
@@ -917,6 +922,64 @@ export default function RideMatchingScreen() {
             </View>
           </View>
         </Modal>
+
+      {/* Booking Declined Modal */}
+      <Modal visible={declineModalVisible} transparent={true} animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: scale(18) }}>
+          <View style={{ backgroundColor: isDark ? '#1C1C22' : '#FFFFFF', width: '90%', borderRadius: scale(22), padding: scale(22), alignItems: 'center', borderWidth: 1.5, borderColor: '#EF4444' }}>
+            <View style={{ width: scale(60), height: scale(60), borderRadius: scale(30), backgroundColor: 'rgba(239, 68, 68, 0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: verticalScale(14) }}>
+              <MaterialIcons name="cancel" size={scale(36)} color="#EF4444" />
+            </View>
+
+            <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(18), fontWeight: '900', marginBottom: verticalScale(6), textAlign: 'center' }}>
+              Booking Declined ❌
+            </Text>
+
+            <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(13), textAlign: 'center', marginBottom: verticalScale(20), lineHeight: moderateFontScale(18) }}>
+              {declinedDriverName ? `${declinedDriverName} has declined your trip request.` : 'The driver has declined your trip request.'} You can select another driver on the spot or broadcast to all nearby partners.
+            </Text>
+
+            <View style={{ width: '100%', gap: verticalScale(10) }}>
+              <TouchableOpacity
+                style={{ width: '100%', height: verticalScale(46), borderRadius: scale(12), backgroundColor: colors.amber, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => {
+                  setDeclineModalVisible(false);
+                  if (tripType === 'custom_trip') {
+                    router.replace('/make-trip');
+                  } else if (tripType === 'cab') {
+                    router.replace('/book-cab');
+                  } else {
+                    try {
+                      router.replace('/plan-route');
+                    } catch (e) {
+                      router.back();
+                    }
+                  }
+                }}
+              >
+                <Text style={{ color: '#101010', fontWeight: '800', fontSize: moderateFontScale(13) }}>Choose Other Driver 🚕</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ width: '100%', height: verticalScale(46), borderRadius: scale(12), backgroundColor: colors.surfaceCard, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.amber }}
+                onPress={() => {
+                  setDeclineModalVisible(false);
+                  handleBroadcastToAll();
+                }}
+              >
+                <Text style={{ color: colors.amber, fontWeight: '800', fontSize: moderateFontScale(13) }}>Broadcast to All 📡</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ paddingVertical: verticalScale(8), alignItems: 'center' }}
+                onPress={() => setDeclineModalVisible(false)}
+              >
+                <Text style={{ color: colors.textMuted, fontWeight: '600', fontSize: moderateFontScale(12) }}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );
