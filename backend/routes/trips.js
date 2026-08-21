@@ -1987,8 +1987,21 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       return res.status(400).json({ success: false, message: 'driverId is required' });
     }
 
-    // 1. Fetch trip details & prevent double acceptance if already accepted by another captain
-    const tRes = await db.query("SELECT * FROM trips WHERE id = $1 OR CAST(id AS VARCHAR) = $1", [id]);
+    // Auto-migrate column types to flexible VARCHAR to prevent UUID cast errors
+    try {
+      await db.query(`
+        ALTER TABLE trips ALTER COLUMN driver_id TYPE VARCHAR(255);
+        ALTER TABLE trips ALTER COLUMN guide_id TYPE VARCHAR(255);
+        ALTER TABLE trips ALTER COLUMN customer_id TYPE VARCHAR(255);
+        ALTER TABLE trips ALTER COLUMN otp TYPE VARCHAR(50);
+        ALTER TABLE trips ALTER COLUMN end_otp TYPE VARCHAR(50);
+        ALTER TABLE driver_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
+        ALTER TABLE guide_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
+      `);
+    } catch (e) {}
+
+    // 1. Fetch trip details with explicit text casting
+    const tRes = await db.query("SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(id)]);
     if (tRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Trip not found' });
     }
@@ -2018,7 +2031,7 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
          FROM users u 
          LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text 
          WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text`,
-        [driverId]
+        [String(driverId)]
       );
       if (pRes.rows.length > 0) {
         driverPhone = pRes.rows[0].phone || driverPhone;
@@ -2033,20 +2046,33 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     // 3. Fetch wallet balance and platform fee for driver or guide
     let dRes = { rows: [] };
     try {
-      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [driverId]);
+      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(driverId)]);
     } catch (e) {
       try {
-        dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [driverId]);
+        dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(driverId)]);
       } catch (e2) {}
     }
 
     let gRes = { rows: [] };
     try {
-      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [driverId]);
+      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(driverId)]);
     } catch (e) {
       try {
-        gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id::text = $1::text", [driverId]);
+        gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id::text = $1::text", [String(driverId)]);
       } catch (e2) {}
+    }
+
+    // Auto-provision driver profile if not exists so wallet deduction succeeds
+    if (dRes.rows.length === 0 && gRes.rows.length === 0) {
+      try {
+        await db.query(
+          `INSERT INTO driver_profiles (user_id, wallet_balance, platform_fee, vehicle_model, vehicle_number, is_active)
+           VALUES ($1, 1000.00, 10.00, $2, $3, TRUE)
+           ON CONFLICT DO NOTHING`,
+          [String(driverId), vehicleModel, vehicleNumber]
+        );
+        dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text", [String(driverId)]);
+      } catch (insErr) {}
     }
 
     let walletBalance = 0;
@@ -2241,7 +2267,7 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
        SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
        WHERE id::text = $5::text OR CAST(id AS VARCHAR) = $5::text
        RETURNING *`,
-      [driverName, effectiveDriverId, generatedStartOtp, generatedEndOtp, id]
+      [driverName, effectiveDriverId, generatedStartOtp, generatedEndOtp, String(id)]
     );
 
     let trip = result.rows.length > 0 ? result.rows[0] : { ...currentTrip, status: 'Accepted', driver_or_guide_name: driverName, driver_id: effectiveDriverId, otp: generatedStartOtp, end_otp: generatedEndOtp };

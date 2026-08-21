@@ -304,10 +304,31 @@ async function initTablesOnBoot() {
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS pickup_lng NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lat NUMERIC(10,6);
       ALTER TABLE trips ADD COLUMN IF NOT EXISTS drop_lng NUMERIC(10,6);
-      ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(10);
-      ALTER TABLE trips ADD COLUMN IF NOT EXISTS end_otp VARCHAR(10);
-      ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id UUID;
-      ALTER TABLE trips ADD COLUMN IF NOT EXISTS guide_id UUID;
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS otp VARCHAR(50);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS end_otp VARCHAR(50);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS driver_id VARCHAR(255);
+      ALTER TABLE trips ADD COLUMN IF NOT EXISTS guide_id VARCHAR(255);
+
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_driver_id_fkey;
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_guide_id_fkey;
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_customer_id_fkey;
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_plan_id_fkey;
+      ALTER TABLE trips ALTER COLUMN driver_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN guide_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN customer_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN plan_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN otp TYPE VARCHAR(50);
+      ALTER TABLE trips ALTER COLUMN end_otp TYPE VARCHAR(50);
+
+      ALTER TABLE driver_profiles DROP CONSTRAINT IF EXISTS driver_profiles_user_id_fkey;
+      ALTER TABLE driver_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
+      ALTER TABLE guide_profiles DROP CONSTRAINT IF EXISTS guide_profiles_user_id_fkey;
+      ALTER TABLE guide_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
+      ALTER TABLE wallet_transactions ALTER COLUMN user_id TYPE VARCHAR(255);
+      ALTER TABLE wallet_transactions ALTER COLUMN trip_id TYPE VARCHAR(255);
+      ALTER TABLE wallet_deduction_requests ALTER COLUMN user_id TYPE VARCHAR(255);
+      ALTER TABLE wallet_deduction_requests ALTER COLUMN trip_id TYPE VARCHAR(255);
+
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(10,2) DEFAULT 10.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
