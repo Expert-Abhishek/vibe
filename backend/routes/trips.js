@@ -2364,7 +2364,98 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     });
   } catch (error) {
     console.error('Error accepting trip:', error);
-    res.status(500).json({ success: false, message: 'Failed to accept trip', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to accept trip', error: error.message, stack: error.stack });
+  }
+});
+
+router.all(['/debug-accept/:id', '/test-accept/:id'], async (req, res) => {
+  const { id } = req.params;
+  const driverId = req.body?.driverId || req.query?.driverId || 'd1';
+  const driverName = req.body?.driverName || req.query?.driverName || 'Suresh Driver';
+  const steps = [];
+
+  try {
+    // Step 1: Select trip
+    try {
+      const t = await db.query("SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(id)]);
+      steps.push({ step: '1_select_trip', status: 'OK', rows: t.rows.length });
+    } catch(e) {
+      steps.push({ step: '1_select_trip', status: 'FAIL', error: e.message });
+    }
+
+    // Step 2: Select user/driver
+    try {
+      const u = await db.query(
+        `SELECT u.phone, u.name, d.vehicle_model, d.vehicle_number 
+         FROM users u 
+         LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text 
+         WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text`,
+        [String(driverId)]
+      );
+      steps.push({ step: '2_select_user_driver', status: 'OK', rows: u.rows.length });
+    } catch(e) {
+      steps.push({ step: '2_select_user_driver', status: 'FAIL', error: e.message });
+    }
+
+    // Step 3: Select driver profile
+    try {
+      const d = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text", [String(driverId)]);
+      steps.push({ step: '3_select_driver_profile', status: 'OK', rows: d.rows.length });
+    } catch(e) {
+      steps.push({ step: '3_select_driver_profile', status: 'FAIL', error: e.message });
+    }
+
+    // Step 4: Update driver profile wallet
+    try {
+      const dUp = await db.query(
+        "UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - 10 WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text RETURNING wallet_balance",
+        [String(driverId)]
+      );
+      steps.push({ step: '4_update_driver_wallet', status: 'OK', balance: dUp.rows[0]?.wallet_balance });
+    } catch(e) {
+      steps.push({ step: '4_update_driver_wallet', status: 'FAIL', error: e.message });
+    }
+
+    // Step 5: Insert wallet transaction
+    try {
+      await db.query(
+        "INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', 10, 'Test Platform Fee', $2)",
+        [String(driverId), String(id)]
+      );
+      steps.push({ step: '5_insert_wallet_tx', status: 'OK' });
+    } catch(e) {
+      steps.push({ step: '5_insert_wallet_tx', status: 'FAIL', error: e.message });
+    }
+
+    // Step 6: Insert deduction request
+    try {
+      await db.query(`
+        INSERT INTO wallet_deduction_requests (
+          user_id, user_name, role, amount, description, status, trip_id, requested_at, reviewed_at
+        ) VALUES ($1, $2, 'driver', 10, 'Test deduction', 'Approved', $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [String(driverId), driverName, String(id)]);
+      steps.push({ step: '6_insert_deduction_req', status: 'OK' });
+    } catch(e) {
+      steps.push({ step: '6_insert_deduction_req', status: 'FAIL', error: e.message });
+    }
+
+    // Step 7: Update trip
+    try {
+      const tUp = await db.query(
+        `UPDATE trips 
+         SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2 
+         WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text
+         RETURNING *`,
+        [driverName, String(driverId), String(id)]
+      );
+      steps.push({ step: '7_update_trip', status: 'OK', rows: tUp.rows.length });
+    } catch(e) {
+      steps.push({ step: '7_update_trip', status: 'FAIL', error: e.message });
+    }
+
+    res.json({ success: true, steps });
+  } catch(err) {
+    res.status(500).json({ success: false, error: err.message, steps });
   }
 });
 
