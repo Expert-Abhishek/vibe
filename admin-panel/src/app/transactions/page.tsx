@@ -547,8 +547,31 @@ function TransactionsContent() {
               {selectedTx.type === 'deduction' && (
                 <div className="space-y-3">
                   <div className="p-4 bg-dark-bg rounded-xl border border-dark-border space-y-2 text-xs text-gray-300">
-                    <div className="font-bold text-white uppercase text-[11px]">Deduction Payment Description</div>
-                    <p className="text-gray-300 leading-relaxed">{selectedTx.description || 'Customer payment from wallet balance.'}</p>
+                    <div className="font-bold text-amber-400 uppercase text-[11px] flex items-center justify-between">
+                      <span>Platform Fee / Deduction Details</span>
+                      {(selectedTx.rawItem as any)?.current_wallet_balance !== undefined && (
+                        <span className="text-gray-400 font-mono lowercase text-[10px]">
+                          wallet bal: ₹{Number((selectedTx.rawItem as any).current_wallet_balance).toLocaleString('en-IN')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-300 leading-relaxed font-medium">{selectedTx.description || 'Platform Fee deduction for accepted trip.'}</p>
+                    
+                    {/* Driver & Vehicle Metadata */}
+                    <div className="pt-2 border-t border-dark-border/50 grid grid-cols-2 gap-2 text-[11px]">
+                      {(selectedTx.rawItem as any)?.user_phone && (
+                        <div>
+                          <span className="text-dark-textMuted font-bold">Driver Phone: </span>
+                          <span className="text-white font-mono">{(selectedTx.rawItem as any).user_phone}</span>
+                        </div>
+                      )}
+                      {(selectedTx.rawItem as any)?.vehicle_number && (
+                        <div>
+                          <span className="text-dark-textMuted font-bold">Vehicle: </span>
+                          <span className="text-white">{(selectedTx.rawItem as any).vehicle_number} ({(selectedTx.rawItem as any).vehicle_model || 'Cab'})</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {selectedTx.screenshot_url && (
@@ -572,8 +595,8 @@ function TransactionsContent() {
               <div className="p-3 bg-dark-bg rounded-xl border border-dark-border space-y-1 text-xs text-gray-300">
                 <div><span className="text-dark-textMuted font-bold">User Name:</span> {selectedTx.user_name}</div>
                 <div><span className="text-dark-textMuted font-bold">User ID:</span> <span className="font-mono">{selectedTx.user_id}</span></div>
-                <div><span className="text-dark-textMuted font-bold">Role:</span> <span className="capitalize">{selectedTx.role}</span></div>
-                <div><span className="text-dark-textMuted font-bold">Amount:</span> ₹{selectedTx.amount}</div>
+                <div><span className="text-dark-textMuted font-bold">Role:</span> <span className="capitalize font-bold text-white">{selectedTx.role}</span></div>
+                <div><span className="text-dark-textMuted font-bold">Amount to Deduct:</span> <span className="text-amber-400 font-bold font-mono">₹{selectedTx.amount}</span></div>
                 <div><span className="text-dark-textMuted font-bold">Status:</span> {selectedTx.status}</div>
                 {selectedTx.reject_reason && (
                   <div className="text-red-400"><span className="font-bold">Rejection Reason:</span> {selectedTx.reject_reason}</div>

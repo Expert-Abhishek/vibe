@@ -38,6 +38,8 @@ app.use((req, res, next) => {
     req.url = req.url.replace('/api/admin/wallet/topup-requests', '/api/wallet/admin/topup-requests');
   } else if (req.url.startsWith('/api/admin/wallet/deduction-requests')) {
     req.url = req.url.replace('/api/admin/wallet/deduction-requests', '/api/wallet/admin/deduction-requests');
+  } else if (req.url.startsWith('/api/admin/deduction-requests')) {
+    req.url = req.url.replace('/api/admin/deduction-requests', '/api/wallet/admin/deduction-requests');
   } else if (req.url.startsWith('/api/admin/wallet/reconciliation')) {
     req.url = req.url.replace('/api/admin/wallet/reconciliation', '/api/wallet/admin/reconciliation');
   } else if (req.url.startsWith('/api/admin/users/') && req.url.includes('/wallet-history')) {
@@ -277,6 +279,7 @@ async function initTablesOnBoot() {
     // Auto-migrate missing columns for existing PostgreSQL tables
     await db.query(`
       ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS trip_id UUID REFERENCES trips(id) ON DELETE SET NULL;
+      ALTER TABLE wallet_deduction_requests ADD COLUMN IF NOT EXISTS trip_id UUID REFERENCES trips(id) ON DELETE SET NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
       ALTER TABLE users ALTER COLUMN push_token TYPE TEXT;

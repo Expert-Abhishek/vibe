@@ -625,10 +625,12 @@ router.get('/pending-requests', async (req, res) => {
     const { role, vehicleCategory, driverId } = req.query;
 
     const result = await db.query(
-      `SELECT * FROM trips 
-       WHERE LOWER(status) IN ('pending', 'dispatched', 'requested')
-         AND ($1::text IS NULL OR NOT ($1::text = ANY(COALESCE(declined_driver_ids, '{}'))))
-       ORDER BY created_at DESC LIMIT 50`,
+      `SELECT t.*, u.name as user_real_name, u.phone as user_phone
+       FROM trips t
+       LEFT JOIN users u ON (t.customer_id = u.id)
+       WHERE LOWER(t.status) IN ('pending', 'dispatched', 'requested')
+         AND ($1::text IS NULL OR NOT ($1::text = ANY(COALESCE(t.declined_driver_ids, '{}'))))
+       ORDER BY t.created_at DESC LIMIT 50`,
       [driverId || null]
     );
 
@@ -636,13 +638,17 @@ router.get('/pending-requests', async (req, res) => {
       const rawCps = (Array.isArray(t.destination_ids) && t.destination_ids.length > 0) ? t.destination_ids : (t.checkpoints || []);
       const resolvedCps = await resolveDestinationCheckpoints(rawCps);
       const checkpointNames = resolvedCps.map(cp => (typeof cp === 'object' && cp !== null ? (cp.name || cp.checkpoint_name || cp.title || 'Checkpoint') : String(cp)));
+      const resolvedCustomerName = (t.customer_name && t.customer_name !== 'Tourist Client' && t.customer_name !== 'Tourist Customer' && t.customer_name.trim() !== '')
+        ? t.customer_name
+        : (t.user_real_name || t.customer_name || 'Tourist Customer');
 
       return {
         id: t.id,
         tripId: t.id,
         title: t.title,
-        customerName: t.customer_name || 'Tourist Client',
-        touristName: t.customer_name || 'Tourist Client',
+        customerName: resolvedCustomerName,
+        touristName: resolvedCustomerName,
+        customerPhone: t.user_phone || null,
         customerId: t.customer_id,
         customer_id: t.customer_id,
         pickup: t.pickup_name || 'Pickup Location',
@@ -2043,24 +2049,56 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     // Calculate platform fee based on % of trip amount (min ₹10)
     const platformFee = Math.max(10, Math.round((tripAmount * feePercent) / 100));
 
-    // Safely attempt platform fee deduction from profile
+    // Create Pending Deduction Request for Admin approval & Notify Admin
     try {
-      if (isDriver) {
-        await db.query(`
-          UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $2 WHERE user_id::text = $1::text
-        `, [driverId, platformFee]);
-      } else {
-        await db.query(`
-          UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $2 WHERE user_id::text = $1::text
-        `, [driverId, platformFee]);
-      }
+      const roleType = isDriver ? 'driver' : (isGuide ? 'guide' : 'driver');
+      const tripTitle = currentTrip.title || currentTrip.drop_name || 'Ride Booking';
+      const dedDesc = `Platform Fee (${feePercent}%) for Accepted Trip #${id} (${tripTitle})`;
+      const validTripUuid = toValidUuidOrNull(id);
 
-      await db.query(
-        "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
-        [driverId, 'debit', platformFee, `Platform Fee (${feePercent}%) for Booking #${id}`]
-      );
+      await db.query(`
+        INSERT INTO wallet_deduction_requests (
+          user_id, user_name, role, amount, description, status, trip_id, requested_at
+        ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
+      `, [
+        validDriverUuid || driverId,
+        driverName || 'Driver Partner',
+        roleType,
+        platformFee,
+        dedDesc,
+        validTripUuid
+      ]);
+
+      // Create Activity Notification for Admin in database
+      await db.query(`
+        INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
+        VALUES (NULL, 'admin', '🔔 Platform Fee Deduction Request', $1, $2, CURRENT_TIMESTAMP)
+      `, [
+        `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee deduction of ₹${platformFee} (${feePercent}%) is pending your approval.`,
+        validTripUuid
+      ]);
+
+      // Emit real-time Socket Alert to Admin Panel
+      emitNotification({
+        role: 'admin',
+        title: '🔔 Platform Fee Deduction Request',
+        body: `Driver ${driverName} accepted ride #${id}. Platform fee ₹${platformFee} pending deduction approval.`,
+        tripId: id,
+      });
+
+      emitWalletUpdate({
+        role: 'admin',
+        type: 'deduction_pending',
+        userId: driverId,
+        userName: driverName,
+        amount: platformFee,
+        tripId: id,
+        description: dedDesc,
+      });
+
+      console.log(`[Platform Fee] 📋 Created pending deduction request of ₹${platformFee} for ${driverName} on Trip #${id}`);
     } catch (feeErr) {
-      console.warn('Platform fee deduction warning:', feeErr.message);
+      console.warn('Platform fee deduction request creation warning:', feeErr.message);
     }
 
     const generatedStartOtp = Math.floor(1000 + Math.random() * 9000).toString();
@@ -2317,37 +2355,45 @@ router.get('/driver/:driverId', async (req, res) => {
 
   try {
     const dbRes = await db.query(
-      `SELECT * FROM trips 
-       WHERE (trip_type = 'cab' OR trip_type = 'custom_trip' OR LOWER(trip_type) LIKE '%cab%' OR LOWER(trip_type) LIKE '%trip%')
-          AND (CAST(driver_id AS VARCHAR) = $1 OR driver_id IS NULL OR status = 'Pending' OR status = 'Pending Driver Confirmation')
-       ORDER BY created_at DESC`,
+      `SELECT t.*, u.name as user_real_name, u.phone as user_phone
+       FROM trips t
+       LEFT JOIN users u ON (t.customer_id = u.id)
+       WHERE (t.trip_type = 'cab' OR t.trip_type = 'custom_trip' OR LOWER(t.trip_type) LIKE '%cab%' OR LOWER(t.trip_type) LIKE '%trip%')
+          AND (CAST(t.driver_id AS VARCHAR) = $1 OR t.driver_id IS NULL OR t.status = 'Pending' OR t.status = 'Pending Driver Confirmation')
+       ORDER BY t.created_at DESC`,
       [driverId]
     );
 
-    const formattedTrips = dbRes.rows.map(row => ({
-      id: row.id,
-      type: row.trip_type,
-      title: row.title || `${row.pickup_name || 'Pickup'} ➔ ${row.drop_name || 'Destination'}`,
-      touristName: row.customer_name || 'Tourist Client',
-      customerName: row.customer_name || 'Tourist Client',
-      pickupName: row.pickup_name || 'Pickup Location',
-      dropName: row.drop_name || 'Drop Destination',
-      pickup: row.pickup_name || 'Pickup Location',
-      price: parseFloat(row.amount || 0),
-      amount: parseFloat(row.amount || 0),
-      paymentMode: row.payment_mode || 'Wallet',
-      status: row.status || 'Pending',
-      bookingType: row.booking_type || 'INSTANT',
-      scheduledTime: row.scheduled_time,
-      date: row.scheduled_time ? new Date(row.scheduled_time).toISOString().split('T')[0] : (row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : 'Today'),
-      time: row.scheduled_time ? new Date(row.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible',
-      advanceDepositPaid: parseFloat(row.advance_deposit_paid || 0),
-      remainingCashBalance: parseFloat(row.remaining_cash_balance || 0),
-      otp: row.otp,
-      endOtp: row.end_otp,
-      createdAt: row.created_at,
-    }));
+    const formattedTrips = dbRes.rows.map(row => {
+      const resolvedName = (row.customer_name && row.customer_name !== 'Tourist Client' && row.customer_name !== 'Tourist Customer' && row.customer_name.trim() !== '')
+        ? row.customer_name
+        : (row.user_real_name || row.customer_name || 'Tourist Customer');
 
+      return {
+        id: row.id,
+        type: row.trip_type,
+        title: row.title || `${row.pickup_name || 'Pickup'} ➔ ${row.drop_name || 'Destination'}`,
+        touristName: resolvedName,
+        customerName: resolvedName,
+        customerPhone: row.user_phone || null,
+        pickupName: row.pickup_name || 'Pickup Location',
+        dropName: row.drop_name || 'Drop Destination',
+        pickup: row.pickup_name || 'Pickup Location',
+        price: parseFloat(row.amount || 0),
+        amount: parseFloat(row.amount || 0),
+        paymentMode: row.payment_mode || 'Wallet',
+        status: row.status || 'Pending',
+        bookingType: row.booking_type || 'INSTANT',
+        scheduledTime: row.scheduled_time,
+        date: row.scheduled_time ? new Date(row.scheduled_time).toISOString().split('T')[0] : (row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : 'Today'),
+        time: row.scheduled_time ? new Date(row.scheduled_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible',
+        advanceDepositPaid: parseFloat(row.advance_deposit_paid || 0),
+        remainingCashBalance: parseFloat(row.remaining_cash_balance || 0),
+        otp: row.otp,
+        endOtp: row.end_otp,
+        createdAt: row.created_at,
+      };
+    });
     return res.json({
       success: true,
       data: formattedTrips,

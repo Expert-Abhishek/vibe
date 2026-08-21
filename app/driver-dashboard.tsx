@@ -96,6 +96,51 @@ function generateRoadCurvePolyline(points: Array<{ latitude: number; longitude: 
   return result.length > 0 ? result : points;
 }
 
+function resolveTouristName(payload: any, existingRequest: any = null): string {
+  const possibleNames = [
+    payload?.customerName,
+    payload?.customer_name,
+    payload?.touristName,
+    payload?.user_real_name,
+    payload?.userName,
+    payload?.user_name,
+    payload?.name,
+  ];
+
+  for (const n of possibleNames) {
+    if (n && typeof n === 'string') {
+      const trimmed = n.trim();
+      if (
+        trimmed &&
+        trimmed.toLowerCase() !== 'tourist client' &&
+        trimmed.toLowerCase() !== 'tourist customer' &&
+        trimmed.toLowerCase() !== 'client' &&
+        trimmed !== 'null' &&
+        trimmed !== 'undefined'
+      ) {
+        return trimmed;
+      }
+    }
+  }
+
+  if (existingRequest) {
+    const existingName = existingRequest.touristName || existingRequest.customerName;
+    if (existingName && typeof existingName === 'string') {
+      const trimmed = existingName.trim();
+      if (
+        trimmed &&
+        trimmed.toLowerCase() !== 'tourist client' &&
+        trimmed.toLowerCase() !== 'tourist customer' &&
+        trimmed.toLowerCase() !== 'client'
+      ) {
+        return trimmed;
+      }
+    }
+  }
+
+  return 'Tourist Client';
+}
+
 interface ActiveRequest {
   touristName: string;
   touristPhone?: string;
@@ -756,9 +801,11 @@ export default function DriverDashboardScreen() {
         if (isMounted && isOnlineRef.current && unhandled.length > 0 && !activeTrip && !requestVisible && earningsBalance >= 300) {
           const firstReq = unhandled[0];
           const reqIdStr = String(firstReq.id);
+          const resolvedName = resolveTouristName(firstReq, incomingRequest);
 
           setIncomingRequest({
-            touristName: firstReq.touristName || firstReq.customerName || 'Tourist Customer',
+            touristName: resolvedName,
+            touristPhone: firstReq.touristPhone || firstReq.customerPhone || firstReq.customer_phone || firstReq.phone || firstReq.user_phone,
             pickup: firstReq.pickup || firstReq.pickupName || firstReq.title || 'Bengaluru Pickup',
             pickupLat: firstReq.pickupLat || 12.9716,
             pickupLng: firstReq.pickupLng || 77.5946,
@@ -784,7 +831,7 @@ export default function DriverDashboardScreen() {
             lastNotifiedReqIdRef.current = reqIdStr;
             sendLocalNotification(
               '🚕 New Cab / Custom Trip Request!',
-              `Tourist ${firstReq.touristName || firstReq.customerName || 'Client'} requested a trip: ${firstReq.pickup || firstReq.pickupName || 'Pickup'} ➔ ${firstReq.drop || firstReq.dropName || 'Drop'}`
+              `Tourist ${resolvedName} requested a trip: ${firstReq.pickup || firstReq.pickupName || 'Pickup'} ➔ ${firstReq.drop || firstReq.dropName || 'Drop'}`
             );
           }
         }
@@ -795,47 +842,8 @@ export default function DriverDashboardScreen() {
 
     pollRequests();
 
-    const cleanupSync = listenForTripRequests((trip) => {
-      if (!isOnlineRef.current) return;
-      if (trip && trip.id && earningsBalance >= 300 && !handledTripIdsRef.current.has(String(trip.id))) {
-        const reqIdStr = String(trip.id);
-        setIncomingRequest({
-          touristName: trip.touristName || trip.customerName || 'Tourist Customer',
-          pickup: trip.pickup || trip.pickupName || trip.title || 'Bengaluru Pickup',
-          pickupLat: trip.pickupLat || 12.9716,
-          pickupLng: trip.pickupLng || 77.5946,
-          drop: trip.drop || trip.dropName || 'Destination Point',
-          dropLat: trip.dropLat || 12.3053,
-          dropLng: trip.dropLng || 76.6552,
-          distanceKm: trip.durationHrs ? trip.durationHrs * 30 : 45,
-          durationMins: trip.durationHrs ? trip.durationHrs * 60 : 60,
-          estimatedFare: Number(trip.estimatedFare || trip.price || trip.amount || 2500),
-          paymentMode: trip.paymentMode || 'Wallet',
-          otp: trip.otp || '8240',
-          endOtp: trip.endOtp || '4321',
-          tripId: trip.id,
-          id: trip.id,
-          bookingType: trip.bookingType || 'INSTANT',
-          scheduledTime: trip.scheduledTime,
-          checkpoints: trip.checkpoints || trip.stops || trip.route || trip.destinations || [],
-        } as any);
-        setTimerSeconds(30);
-        setRequestVisible(true);
-
-        if (lastNotifiedReqIdRef.current !== reqIdStr) {
-          lastNotifiedReqIdRef.current = reqIdStr;
-          sendLocalNotification(
-            '🚕 Real-Time Ride / Pre-Booking Request!',
-            `Tourist ${trip.touristName || trip.customerName || 'Client'} requested a trip: ${trip.pickup || trip.pickupName || 'Pickup'} ➔ ${trip.drop || trip.dropName || 'Drop'}`
-          );
-        }
-      }
-      pollRequests();
-    });
-
     return () => {
       isMounted = false;
-      cleanupSync();
       if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
         try {
           navigator.geolocation.clearWatch(watchId);
@@ -914,21 +922,7 @@ export default function DriverDashboardScreen() {
             (req: any) => req && req.id && !handledTripIdsRef.current.has(String(req.id))
           );
           if (unhandledList.length > 0 && !activeTrip && !incomingRequest && isOnlineRef.current) {
-            const req = unhandledList[0];
-            setIncomingRequest({
-              id: req.id,
-              tripId: req.id,
-              touristName: req.touristName || 'Tourist Client',
-              pickup: req.pickup || 'Pickup Location',
-              drop: req.drop || 'Drop Location',
-              estimatedFare: parseFloat(req.estimatedFare || req.amount || 0),
-              checkpoints: req.checkpoints || req.stops || [],
-              scheduledTime: req.scheduledTime,
-              bookingType: req.bookingType || 'INSTANT',
-              otp: req.otp || '8240',
-              endOtp: req.endOtp || '4321',
-            });
-            setRequestVisible(true);
+            handleIncomingTripData(unhandledList[0]);
           }
         } catch (e) {
           console.warn('[DriverDashboard] Reconnect polling fallback error:', e);
@@ -942,15 +936,34 @@ export default function DriverDashboardScreen() {
       const handleIncomingTripData = (tripData: any) => {
         if (!isOnlineRef.current || !tripData || earningsBalance < 300) return;
         const payload = tripData.trip || tripData;
-        const incomingTripId = String(payload.id || payload.tripId || payload.id);
+        const incomingTripId = String(payload.id || payload.tripId || '');
+        if (!incomingTripId) return;
 
-        console.log('[DriverDashboard] 🔔 Socket trip_request received:', payload);
+        if (handledTripIdsRef.current.has(incomingTripId)) return;
 
-        if (payload && incomingTripId && !handledTripIdsRef.current.has(incomingTripId)) {
-          setIncomingRequest({
+        console.log('[DriverDashboard] 🔔 Trip request received:', incomingTripId, payload);
+
+        const resolvedName = resolveTouristName(payload);
+
+        setIncomingRequest(prev => {
+          // If this same trip is already showing on screen, update details without resetting timer or re-triggering sound/popup
+          if (prev && (String(prev.id) === incomingTripId || String(prev.tripId) === incomingTripId)) {
+            return {
+              ...prev,
+              touristName: resolveTouristName(payload, prev),
+              touristPhone: payload.customerPhone || payload.customer_phone || payload.phone || payload.driverPhone || prev.touristPhone,
+              pickup: payload.pickupName || payload.pickup || prev.pickup,
+              drop: payload.dropName || payload.drop || payload.title || prev.drop,
+              estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || prev.estimatedFare),
+            };
+          }
+
+          setTimerSeconds(45);
+          setRequestVisible(true);
+          return {
             id: incomingTripId,
             tripId: incomingTripId,
-            touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
+            touristName: resolvedName,
             touristPhone: payload.customerPhone || payload.customer_phone || payload.phone || payload.driverPhone,
             pickup: payload.pickupName || payload.pickup || 'Pickup Point',
             drop: payload.dropName || payload.drop || payload.title || 'Drop Location',
@@ -962,10 +975,8 @@ export default function DriverDashboardScreen() {
             bookingType: payload.bookingType || 'INSTANT',
             otp: payload.otp || '1234',
             endOtp: payload.endOtp || '4321',
-          });
-          setTimerSeconds(45);
-          setRequestVisible(true);
-        }
+          };
+        });
       };
 
       const handleTripAcceptedByOther = (data: any) => {
@@ -1021,7 +1032,6 @@ export default function DriverDashboardScreen() {
           Alert.alert(
             '⚠️ Trip Cancelled ',
             'Your active trip has been cancelled by Tourist / Admin.\n\nYour active trip has been cleared. You are returned to the Home page and ready for new ride requests!',
-            // [{ text: 'OK', onPress: () => setActiveTab('duty') }]
           );
         }
       };
@@ -1041,57 +1051,23 @@ export default function DriverDashboardScreen() {
       if (!isOnlineRef.current) return;
       console.log('[DriverDashboard] 🔔 DeviceEventEmitter new_driver_request:', data);
       if (data) {
-        const payload = data.trip || data;
-        const incId = String(payload.id || payload.tripId);
-        if (incId && !handledTripIdsRef.current.has(incId)) {
-          setIncomingRequest({
-            id: incId,
-            tripId: incId,
-            touristName: payload.customerName || payload.customer_name || payload.touristName || 'Tourist Client',
-            touristPhone: payload.customerPhone || payload.customer_phone || payload.phone || payload.driverPhone,
-            pickup: payload.pickupName || payload.pickup || 'Pickup Point',
-            drop: payload.dropName || payload.drop || payload.title || 'Drop Location',
-            distanceKm: parseFloat(payload.distanceKm || payload.distance_km || payload.distance || 35.0),
-            durationMins: parseFloat(payload.durationMins || payload.duration_mins || (payload.durationHours ? payload.durationHours * 60 : 45)),
-            estimatedFare: parseFloat(payload.amount || payload.price || payload.estimatedFare || 0),
-            checkpoints: payload.checkpoints || payload.stops || [],
-            scheduledTime: payload.scheduledTime,
-            bookingType: payload.bookingType || 'INSTANT',
-            otp: payload.otp || '1234',
-            endOtp: payload.endOtp || '4321',
-          });
-          setTimerSeconds(45);
-          setRequestVisible(true);
-        }
-      }
-    });
-
-    // Fallback sync listener
-    const unsubRequests = listenForTripRequests((tripData) => {
-      if (!isOnlineRef.current) return;
-      if (tripData && !handledTripIdsRef.current.has(String(tripData.id || tripData.tripId))) {
-        setIncomingRequest({
-          ...tripData,
-          distanceKm: parseFloat((tripData as any).distanceKm || (tripData as any).distance_km || 35.0),
-          durationMins: parseFloat((tripData as any).durationMins || (tripData as any).duration_mins || 45),
-        });
-        setTimerSeconds(45);
-        setRequestVisible(true);
+        handleIncomingTripData(data);
       }
     });
 
     return () => {
       subReq1.remove();
-      unsubRequests();
       if (socket) {
         socket.off('connect');
         socket.off('trip_request');
         socket.off('trip_requested');
         socket.off('new_driver_request');
         socket.off('RIDE_REQUESTED');
-        socket.off('notification:new');
+        socket.off('trip_accepted');
+        socket.off('RIDE_ACCEPTED');
         socket.off('trip_cancelled');
         socket.off('RIDE_CANCELLED');
+        socket.off('trip_declined');
       }
     };
   }, []);

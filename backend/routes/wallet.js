@@ -1198,14 +1198,30 @@ router.post('/deduction-request', async (req, res) => {
 
 /**
  * GET /api/wallet/admin/deduction-requests
- * Admin Queue for pending/approved/rejected deduction requests
+ * Admin Queue for pending/approved/rejected deduction requests with full driver details
  */
 router.get('/admin/deduction-requests', async (req, res) => {
   try {
     const { status = 'Pending' } = req.query;
 
     const result = await db.query(
-      `SELECT * FROM wallet_deduction_requests WHERE status = $1 ORDER BY requested_at DESC`,
+      `SELECT 
+         wdr.*,
+         u.phone AS user_phone,
+         u.email AS user_email,
+         COALESCE(dp.wallet_balance, gp.wallet_balance, 0) AS current_wallet_balance,
+         dp.vehicle_number,
+         dp.vehicle_model,
+         t.title AS trip_title,
+         t.pickup_name,
+         t.drop_name
+       FROM wallet_deduction_requests wdr
+       LEFT JOIN users u ON wdr.user_id = u.id
+       LEFT JOIN driver_profiles dp ON wdr.user_id = dp.user_id
+       LEFT JOIN guide_profiles gp ON wdr.user_id = gp.user_id
+       LEFT JOIN trips t ON wdr.trip_id = t.id
+       WHERE wdr.status = $1 
+       ORDER BY wdr.requested_at DESC`,
       [status]
     );
 
@@ -1218,7 +1234,7 @@ router.get('/admin/deduction-requests', async (req, res) => {
 
 /**
  * POST /api/wallet/admin/deduction-requests/:id/approve
- * Admin approves deduction request & deducts from user wallet_balance
+ * Admin approves deduction request & deducts platform fee from driver wallet_balance in real-time
  */
 router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
   const client = await db.pool.connect();
@@ -1241,6 +1257,7 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
     }
 
     const numAmount = parseFloat(deduction.amount);
+    const role = deduction.role || 'driver';
 
     // 1. Update deduction request status
     await client.query(
@@ -1250,25 +1267,63 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
 
     // 2. Record wallet transaction
     await client.query(
-      `INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)`,
-      [deduction.user_id, numAmount, `Wallet Deduction Approved: ${deduction.description || 'Manual payment'}`]
+      `INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)`,
+      [deduction.user_id, numAmount, `Platform Fee Deducted: ${deduction.description || 'Booking Platform Fee'}`, deduction.trip_id || null]
     );
 
-    // 3. Deduct from driver / guide balance if applicable
-    await client.query('UPDATE driver_profiles SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE user_id = $2', [numAmount, deduction.user_id]);
-    await client.query('UPDATE guide_profiles SET wallet_balance = GREATEST(0, wallet_balance - $1) WHERE user_id = $2', [numAmount, deduction.user_id]);
+    // 3. Deduct from driver / guide balance
+    let newBalance = 0;
+    if (role === 'guide') {
+      const gUp = await client.query(
+        'UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id = $2 RETURNING wallet_balance',
+        [numAmount, deduction.user_id]
+      );
+      if (gUp.rows.length > 0) newBalance = parseFloat(gUp.rows[0].wallet_balance);
+    } else {
+      const dUp = await client.query(
+        'UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id = $2 RETURNING wallet_balance',
+        [numAmount, deduction.user_id]
+      );
+      if (dUp.rows.length > 0) newBalance = parseFloat(dUp.rows[0].wallet_balance);
+    }
+
+    // 4. Record in platform_fee_revenue table for admin accounting
+    try {
+      await client.query(
+        `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, created_at)
+         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+        [deduction.user_id, deduction.user_name || 'Driver', role, deduction.trip_id || null, numAmount]
+      );
+    } catch (revErr) {
+      console.warn('Platform fee revenue recording error:', revErr.message);
+    }
 
     await client.query('COMMIT');
 
-    // 4. Notify user & emit real-time wallet update over socket
+    // 5. Notify user & emit real-time wallet update over socket
     await logWalletNotification(
       deduction.user_id,
-      deduction.role || 'tourist',
-      '📉 Wallet Deduction Processed',
-      `₹${numAmount} was successfully deducted/paid from your wallet.`
+      role,
+      '📉 Platform Fee Deducted',
+      `₹${numAmount} platform fee has been deducted from your wallet for booking ${deduction.trip_id ? `#${deduction.trip_id}` : ''}. Updated Balance: ₹${newBalance}`
     );
 
-    res.json({ success: true, message: `Successfully approved and processed deduction of ₹${numAmount}` });
+    emitWalletUpdate({
+      userId: deduction.user_id,
+      role: role,
+      type: 'debit',
+      amount: numAmount,
+      balance: newBalance,
+      description: `Platform Fee Deduction: ₹${numAmount}`,
+    });
+
+    console.log(`[Platform Fee] ✅ Admin approved ₹${numAmount} deduction for ${deduction.user_name} (${deduction.user_id}). New balance: ₹${newBalance}`);
+
+    res.json({
+      success: true,
+      message: `Successfully approved and processed deduction of ₹${numAmount}`,
+      balance: newBalance
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Error approving deduction request:', error);
@@ -1301,10 +1356,11 @@ router.post('/admin/deduction-requests/:id/reject', async (req, res) => {
 
     // Notify user
     try {
-      await db.query(
-        `INSERT INTO activity_notifications (user_id, role, title, body, created_at)
-         VALUES ($1, $2, '❌ Wallet Deduction Rejected', $3, CURRENT_TIMESTAMP)`,
-        [deduction.user_id, deduction.role || 'tourist', `Deduction of ₹${deduction.amount} was rejected. Reason: ${rejectReason}`]
+      await logWalletNotification(
+        deduction.user_id,
+        deduction.role || 'driver',
+        '❌ Platform Fee Deduction Rejected',
+        `Platform fee deduction of ₹${deduction.amount} was rejected by Admin. Reason: ${rejectReason}`
       );
     } catch (nErr) {
       console.warn('Failed to notify user:', nErr);

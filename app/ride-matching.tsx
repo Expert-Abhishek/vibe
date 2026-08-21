@@ -116,6 +116,9 @@ export default function RideMatchingScreen() {
     setIsDriverDeclined(false);
     setIsDriverTimeout(false);
     setSearchingTimer(45);
+    const session = getUserSessionSync();
+    const resolvedName = session?.name || (params.customerName as string) || (params.touristName as string) || 'Tourist Customer';
+
     const broadcastObj = {
       id: tripIdParam || `trip_${Date.now()}`,
       tripId: tripIdParam || `trip_${Date.now()}`,
@@ -128,14 +131,15 @@ export default function RideMatchingScreen() {
       price: price,
       paymentMode: paymentMode,
       passengerCount: passengerCount,
-      customerName: 'Tourist Client',
+      customerName: resolvedName,
+      touristName: resolvedName,
       status: 'Pending',
       bookingType: 'INSTANT',
       otp: (params.otp as string) || '8240',
       endOtp: (params.endOtp as string) || '4321',
       createdAt: new Date().toISOString(),
     };
-    broadcastNewTripRequest(broadcastObj);
+    broadcastNewTripRequest(broadcastObj, true);
     Alert.alert('Broadcast Dispatched!', 'Your ride request has been broadcasted to all nearby available drivers.');
   };
 
@@ -150,55 +154,6 @@ export default function RideMatchingScreen() {
     success: '#10B981',
     blue: '#3b82f6',
   };
-
-  // Build simulated route coordinates between checkpoints
-  useEffect(() => {
-    // Collect all nodes in sequence
-    const nodes = [
-      { latitude: pickupLat, longitude: pickupLng },
-      ...parsedStops.map(s => ({ latitude: s.latitude, longitude: s.longitude })),
-      { latitude: dropLat, longitude: dropLng }
-    ];
-
-    // Generate dense polyline (10 steps per leg to make the moving marker smooth)
-    const points: Coordinate[] = [];
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const start = nodes[i];
-      const end = nodes[i + 1];
-      for (let j = 0; j < 10; j++) {
-        const fraction = j / 10;
-        points.push({
-          latitude: start.latitude + (end.latitude - start.latitude) * fraction,
-          longitude: start.longitude + (end.longitude - start.longitude) * fraction
-        });
-      }
-    }
-    points.push(nodes[nodes.length - 1]); // Add final point
-
-    setRouteCoords(points);
-    setLoadingRoute(false);
-
-    // Set wiggle cars near the pickup coordinates
-    setWiggleCars([
-      { latitude: pickupLat + 0.003, longitude: pickupLng - 0.002 },
-      { latitude: pickupLat - 0.002, longitude: pickupLng + 0.003 },
-      { latitude: pickupLat + 0.001, longitude: pickupLng + 0.002 },
-    ]);
-  }, []);
-
-  // Wiggle cars simulator during searching
-  useEffect(() => {
-    if (status !== 'searching') return;
-    const interval = setInterval(() => {
-      setWiggleCars(prev =>
-        prev.map(c => ({
-          latitude: c.latitude + (Math.random() - 0.5) * 0.0005,
-          longitude: c.longitude + (Math.random() - 0.5) * 0.0005,
-        }))
-      );
-    }, 800);
-    return () => clearInterval(interval);
-  }, [status]);
 
   // Fetch real matching driver/guide from API & dispatch targeted ride request ONLY if user selected a driver
   useEffect(() => {
@@ -247,6 +202,9 @@ export default function RideMatchingScreen() {
       }
     }
 
+    const session = getUserSessionSync();
+    const resolvedCustomerName = session?.name || (params.customerName as string) || (params.touristName as string) || 'Tourist Customer';
+
     function dispatchTargetedRequest(targetDriverId: string, driverObj: any) {
       const tripObj = {
         id: tripIdParam || `trip_${Date.now()}`,
@@ -270,8 +228,8 @@ export default function RideMatchingScreen() {
         price: price,
         paymentMode: paymentMode,
         passengerCount: passengerCount,
-        touristName: 'Tourist Client',
-        customerName: 'Tourist Client',
+        touristName: resolvedCustomerName,
+        customerName: resolvedCustomerName,
         status: 'Pending',
         bookingType: 'INSTANT',
         otp: (params.otp as string) || '8240',
@@ -279,8 +237,8 @@ export default function RideMatchingScreen() {
         createdAt: new Date().toISOString(),
       };
 
-      console.log(`[RideMatching] 🚀 Dispatching targeted ride request to driver ${targetDriverId} (${driverObj.name})`);
-      broadcastNewTripRequest(tripObj);
+      console.log(`[RideMatching] 🚀 Dispatching targeted ride request to driver ${targetDriverId} (${driverObj.name}) for customer ${resolvedCustomerName}`);
+      broadcastNewTripRequest(tripObj, true);
     }
 
     resolveSpecificDriver();

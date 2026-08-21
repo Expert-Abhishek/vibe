@@ -907,7 +907,7 @@ export default function MakeTripScreen() {
       endOtp: generatedEndOtp,
     };
 
-    broadcastNewTripRequest(instantTripObject);
+    broadcastNewTripRequest(instantTripObject, true);
 
     if (!Array.isArray(adminState.userTrips)) {
       adminState.userTrips = [];
@@ -936,6 +936,8 @@ export default function MakeTripScreen() {
         vehicle: selectedRide || '5seater',
         paymentMode: paymentLabel,
         passengerCount: passengerCount.toString(),
+        customerName: customerName,
+        touristName: customerName,
         date: finalDate,
         time: finalTime,
         driverId: selectedDriver?.id || '',
