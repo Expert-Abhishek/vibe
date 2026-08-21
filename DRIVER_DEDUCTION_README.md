@@ -248,14 +248,42 @@ Backend `backend/config/socket.js` se real-time updates bhejta hai:
 
 ---
 
-## 9. Edge Cases & Error Handling
+## 9. Enterprise Reliability & Failure Safeguards (ACID Architecture)
 
-1. **UUID vs String ID Compatibility:**
-   - Sabhi database queries explicit text cast `user_id::text = $1::text` aur `CAST(id AS VARCHAR)` use karti hain, jisse numeric IDs, custom string IDs (`d1`), ya UUIDs (`660aa253-...`) bina kisi SQL crash ke smoothly execute hote hain.
-2. **Double Acceptance Protection:**
-   - Agar do drivers ek hi time par same ride accept karne ki koshish karein, toh database check karta hai `WHERE LOWER(status) IN ('pending', 'requested')`. Pehla driver accept karega aur doosre ko `"Trip already accepted by another Captain"` return hoga.
-3. **Zero / Low Wallet Balance:**
-   - Agar driver ka balance ₹0 ho, tab bhi deduction transaction record hota hai aur wallet negative balance show karta hai (Credit Line), jise driver baad me recharge kar sakta hai.
+Humne code ko production-grade banane ke liye 5 critical fail-safe mechanisms implement kiye hain:
+
+### 🛡️ 1. True Atomic ACID Database Transactions (`BEGIN` / `COMMIT` / `ROLLBACK`)
+- Trip accept karte waqt single connection `client = await db.pool.connect()` allocate hota hai aur `BEGIN` command chalti hai.
+- Agar wallet debit, revenue insert, deduction ledger, ya trip status update me se koi bhi step fail hota hai, toh `ROLLBACK` execute hota hai — jisse **kabhi bhi aisi condition nahi aati ki ride accept ho gayi lekin wallet deduct na hua ho**.
+
+### 🛡️ 2. Double-Booking & Race-Condition Lock (`FOR UPDATE`)
+- `SELECT * FROM trips WHERE id = $1 FOR UPDATE` trip row ko lock kar deta hai. Agar 2 drivers exact same millisecond par "Accept" click karein, toh pehla driver process karega aur doosre ko cleanly `Trip already accepted by another Captain` message milega.
+
+### 🛡️ 3. Safe `UPDATE` Execution & `rowCount` Verification
+- Driver wallet update query me explicit casting aur multiple ID fallbacks hain:
+  ```sql
+  UPDATE driver_profiles 
+  SET wallet_balance = COALESCE(wallet_balance, 0) - $1 
+  WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text
+  RETURNING wallet_balance;
+  ```
+- Backend check karta hai `debitQuery.rows.length > 0`. Agar driver ID alias mismatch ho toh fallback update chalta hai taaki debit 100% guarantee execute ho.
+
+### 🛡️ 4. Guaranteed Non-Null / Non-NaN Fee Calculation
+- Platform fee calculation me `Number.isFinite()` aur fallback defaults hain:
+  ```javascript
+  const tripAmount = Number.isFinite(parseFloat(currentTrip.amount)) ? parseFloat(currentTrip.amount) : 2000;
+  const feePercent = Number.isFinite(parseFloat(profileRes.rows[0]?.platform_fee)) ? parseFloat(profileRes.rows[0].platform_fee) : 10;
+  const platformFee = Math.max(10, Math.round((tripAmount * feePercent) / 100));
+  ```
+- Platform fee kabhi `NULL` ya `NaN` nahi hoti — minimum ₹10 hamesha evaluate hota hai.
+
+### 🛡️ 5. Clean Status Normalization
+- Status check karne se pehle string ko normalize kiya jaata hai:
+  ```javascript
+  const rawStatus = String(currentTrip.status || '').toLowerCase().trim().replace(/_/g, ' ');
+  ```
+- `pending`, `dispatched`, `requested`, `pending guide confirmation` sabhi seamlessly accept flow me proceed karte hain.
 
 ---
 
