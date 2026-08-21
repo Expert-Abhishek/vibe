@@ -84,6 +84,16 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Deployment version & timestamp endpoint
+app.get('/api/version', (req, res) => {
+  res.json({
+    version: '2.0.0-platform-fee-instant-deduction',
+    deployedAt: '2026-08-21T20:20:00Z',
+    commit: 'vibe-fee-deduct-fixed',
+    features: ['instant_driver_wallet_deduction', 'dynamic_cryptographic_otps', 'admin_deduction_ledger']
+  });
+});
+
 // Chrome Browser Database Viewer UI Endpoint (/view-db)
 app.get('/view-db', async (req, res) => {
   try {
