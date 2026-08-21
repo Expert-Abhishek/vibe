@@ -389,7 +389,7 @@ router.get('/admin/all', async (req, res) => {
     const result = await db.query(
       `SELECT t.*, u.phone as customer_phone
        FROM trips t
-       LEFT JOIN users u ON u.id = t.customer_id
+       LEFT JOIN users u ON u.id::text = t.customer_id::text
        ORDER BY t.created_at DESC
        LIMIT 200`
     );

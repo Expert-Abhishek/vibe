@@ -887,7 +887,7 @@ router.get('/admin/reconciliation', async (req, res) => {
     const result = await db.query(
       `SELECT wt.*, u.name AS user_name, u.role AS user_role 
        FROM wallet_transactions wt
-       LEFT JOIN users u ON wt.user_id = u.id
+       LEFT JOIN users u ON wt.user_id::text = u.id::text
        ORDER BY wt.created_at DESC LIMIT 100`
     );
 
@@ -936,9 +936,9 @@ router.get('/admin/users/:userId/wallet-history', async (req, res) => {
       `SELECT u.id, u.name, u.phone, u.email, u.role, u.status,
               COALESCE(d.wallet_balance, g.wallet_balance, 0.00) AS wallet_balance
        FROM users u
-       LEFT JOIN driver_profiles d ON u.id = d.user_id
-       LEFT JOIN guide_profiles g ON u.id = g.user_id
-       WHERE u.id = $1 OR u.phone = $1 OR d.id = $1 OR g.id = $1`,
+       LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text
+       LEFT JOIN guide_profiles g ON u.id::text = g.user_id::text
+       WHERE u.id::text = $1::text OR u.phone = $1::text OR d.id::text = $1::text OR g.id::text = $1::text`,
       [userId]
     );
 

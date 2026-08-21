@@ -276,8 +276,8 @@ router.post('/login', async (req, res) => {
         d.id as d_id, d.vehicle_type, d.vehicle_model, d.vehicle_number, d.license_number, d.alternate_phone as d_alt_phone, d.is_active as d_active, d.wallet_balance as d_wallet, d.daily_rate as d_daily_rate, d.hourly_addon_rate as d_hourly_rate, d.upi_id as d_upi, d.photo_url as d_photo,
         g.id as g_id, g.expertise, g.license_id, g.bio, g.alternate_phone as g_alt_phone, g.is_active as g_active, g.wallet_balance as g_wallet, g.daily_rate as g_daily_rate, g.upi_id as g_upi, g.photo_url as g_photo
       FROM users u
-      LEFT JOIN driver_profiles d ON d.user_id = u.id
-      LEFT JOIN guide_profiles g ON g.user_id = u.id
+      LEFT JOIN driver_profiles d ON d.user_id::text = u.id::text
+      LEFT JOIN guide_profiles g ON g.user_id::text = u.id::text
       WHERE u.phone = $1 OR LOWER(u.email) = LOWER($1)
       LIMIT 1
     `;
@@ -709,7 +709,7 @@ router.get('/drivers', async (req, res) => {
     const query = `
       SELECT ${selectColumns}
       FROM users u
-      LEFT JOIN driver_profiles d ON u.id = d.user_id
+      LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text
       WHERE u.role = 'driver'
       ORDER BY u.created_at DESC
     `;
@@ -744,8 +744,8 @@ router.get('/drivers/:id', async (req, res) => {
         d.*,
         u.id AS user_id, u.name, u.phone, COALESCE(d.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
       FROM users u
-      LEFT JOIN driver_profiles d ON u.id = d.user_id
-      WHERE u.id = $1 AND u.role = 'driver'
+      LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text
+      WHERE (u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text) AND u.role = 'driver'
     `;
     const result = await db.query(query, [id]);
     if (result.rows.length === 0) {
@@ -769,7 +769,7 @@ router.get('/guides', async (req, res) => {
         g.*,
         u.id AS user_id, u.name, u.phone, COALESCE(g.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
       FROM users u
-      LEFT JOIN guide_profiles g ON u.id = g.user_id
+      LEFT JOIN guide_profiles g ON u.id::text = g.user_id::text
       WHERE u.role = 'guide'
       ORDER BY u.created_at DESC
     `;
@@ -797,8 +797,8 @@ router.get('/guides/:id', async (req, res) => {
         g.*,
         u.id AS user_id, u.name, u.phone, COALESCE(g.alternate_phone, u.alternate_phone, '') AS alternate_phone, u.email, u.status, u.created_at
       FROM users u
-      LEFT JOIN guide_profiles g ON u.id = g.user_id
-      WHERE u.id = $1 AND u.role = 'guide'
+      LEFT JOIN guide_profiles g ON u.id::text = g.user_id::text
+      WHERE (u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text) AND u.role = 'guide'
     `;
 
     const result = await db.query(query, [id]);
@@ -822,10 +822,10 @@ router.get('/users-list', async (req, res) => {
       'SELECT id, name, phone, email, role, status, created_at FROM users ORDER BY created_at DESC'
     );
     const driversRes = await db.query(
-      'SELECT d.*, u.name, u.phone FROM driver_profiles d JOIN users u ON d.user_id = u.id'
+      'SELECT d.*, u.name, u.phone FROM driver_profiles d JOIN users u ON d.user_id::text = u.id::text'
     );
     const guidesRes = await db.query(
-      'SELECT g.*, u.name, u.phone FROM guide_profiles g JOIN users u ON g.user_id = u.id'
+      'SELECT g.*, u.name, u.phone FROM guide_profiles g JOIN users u ON g.user_id::text = u.id::text'
     );
 
     return res.json({

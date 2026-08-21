@@ -20,7 +20,7 @@ async function viewDatabaseUsers() {
 
     // 2. Fetch Driver Profiles
     const driversRes = await db.query(
-      'SELECT d.id, u.name, u.phone, d.vehicle_type, d.vehicle_number, d.license_number, d.is_active FROM driver_profiles d JOIN users u ON d.user_id = u.id'
+      'SELECT d.id, u.name, u.phone, d.vehicle_type, d.vehicle_number, d.license_number, d.is_active FROM driver_profiles d JOIN users u ON d.user_id::text = u.id::text'
     );
     if (driversRes.rows.length > 0) {
       console.log('\n🚗 Driver Profiles:');
@@ -29,7 +29,7 @@ async function viewDatabaseUsers() {
 
     // 3. Fetch Guide Profiles
     const guidesRes = await db.query(
-      'SELECT g.id, u.name, u.phone, g.expertise, g.license_id, g.is_active FROM guide_profiles g JOIN users u ON g.user_id = u.id'
+      'SELECT g.id, u.name, u.phone, g.expertise, g.license_id, g.is_active FROM guide_profiles g JOIN users u ON g.user_id::text = u.id::text'
     );
     if (guidesRes.rows.length > 0) {
       console.log('\n🧭 Guide Profiles:');

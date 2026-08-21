@@ -101,10 +101,10 @@ app.get('/view-db', async (req, res) => {
       'SELECT id, name, phone, email, role, status, created_at FROM users ORDER BY created_at DESC'
     );
     const driversRes = await db.query(
-      'SELECT d.id, u.name, u.phone, d.vehicle_type, d.vehicle_model, d.vehicle_number, d.license_number FROM driver_profiles d JOIN users u ON d.user_id = u.id'
+      'SELECT d.id, u.name, u.phone, d.vehicle_type, d.vehicle_model, d.vehicle_number, d.license_number FROM driver_profiles d JOIN users u ON d.user_id::text = u.id::text'
     );
     const guidesRes = await db.query(
-      'SELECT g.id, u.name, u.phone, g.expertise, g.license_id FROM guide_profiles g JOIN users u ON g.user_id = u.id'
+      'SELECT g.id, u.name, u.phone, g.expertise, g.license_id FROM guide_profiles g JOIN users u ON g.user_id::text = u.id::text'
     );
 
     const usersHtml = usersRes.rows.length === 0
