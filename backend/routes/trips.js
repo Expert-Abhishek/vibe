@@ -2243,8 +2243,8 @@ router.post(['/accept-trip/:id', '/:id/accept', '/:id/respond'], async (req, res
     `);
     await client.query(
       `INSERT INTO wallet_deduction_requests (
-        user_id, user_name, role, amount, description, status, trip_id, requested_at, reviewed_at
-      ) VALUES ($1, $2, $3, $4, $5, 'Approved', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        user_id, user_name, role, amount, description, status, trip_id, requested_at
+      ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)`,
       [effectiveDriverId, driverName, roleType, platformFee, dedDesc, String(id)]
     );
 

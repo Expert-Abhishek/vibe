@@ -1290,13 +1290,10 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
 
     // 2. Record wallet transaction safely
     try {
-      const validUserUuid = toValidUuidOrNull(userIdStr);
-      if (validUserUuid) {
-        await client.query(
-          `INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)`,
-          [validUserUuid, numAmount, `Platform Fee Deducted: ${deduction.description || 'Booking Platform Fee'}`, toValidUuidOrNull(deduction.trip_id) || null]
-        );
-      }
+      await client.query(
+        `INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id, created_at) VALUES ($1, 'debit', $2, $3, $4, CURRENT_TIMESTAMP)`,
+        [userIdStr, numAmount, `Platform Fee Deducted: ${deduction.description || 'Booking Platform Fee'}`, String(deduction.trip_id || '')]
+      );
     } catch (txErr) {
       console.warn('Wallet transaction logging warning:', txErr.message);
     }
@@ -1319,10 +1316,22 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
 
     // 4. Record in platform_fee_revenue table for admin accounting
     try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id VARCHAR(255),
+          user_name VARCHAR(255),
+          user_role VARCHAR(50) NOT NULL,
+          trip_id VARCHAR(255),
+          amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+          description TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
       await client.query(
-        `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, created_at)
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-        [toValidUuidOrNull(userIdStr), deduction.user_name || 'Driver', role, toValidUuidOrNull(deduction.trip_id), numAmount]
+        `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+        [userIdStr, deduction.user_name || 'Driver', role, String(deduction.trip_id || ''), numAmount, deduction.description || 'Platform Fee']
       );
     } catch (revErr) {
       console.warn('Platform fee revenue recording error:', revErr.message);
