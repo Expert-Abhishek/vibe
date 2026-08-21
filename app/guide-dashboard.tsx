@@ -27,7 +27,7 @@ import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constan
 import { useLanguage } from '@/hooks/use-language';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useAppModal } from '@src/context/ModalContext';
 import * as ImagePicker from 'expo-image-picker';
@@ -154,8 +154,7 @@ export default function GuideDashboardScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const { showError, showSuccess } = useAppModal();
-  const [appTheme, setAppTheme] = useState<'dark' | 'light'>(colorScheme === 'light' ? 'light' : 'dark');
-  const isDark = appTheme === 'dark';
+  const isDark = colorScheme === 'dark';
 
   const [activeTab, setActiveTab] = useState<'duty' | 'active_tour' | 'profile'>('duty');
   const [updateTrigger, setUpdateTrigger] = useState(0);
@@ -1633,7 +1632,7 @@ export default function GuideDashboardScreen() {
               </View>
               <Switch
                 value={isDark}
-                onValueChange={(val) => setAppTheme(val ? 'dark' : 'light')}
+                onValueChange={toggleAppTheme}
                 trackColor={{ false: '#2C2C34', true: colors.amber }}
                 thumbColor={isDark ? '#FFFFFF' : '#f4f3f4'}
               />

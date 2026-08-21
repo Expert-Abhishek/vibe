@@ -597,7 +597,7 @@ router.get('/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     const userResult = await db.query(
-      'SELECT id, name, phone, email, role, status, created_at FROM users WHERE id = $1',
+      'SELECT id, name, phone, email, role, status, photo_url, theme, language, created_at FROM users WHERE id = $1',
       [userId]
     );
 
@@ -1008,7 +1008,10 @@ router.post('/driver-location', async (req, res) => {
 router.get('/users/:id/profile', async (req, res) => {
   try {
     const { id } = req.params;
-    const uRes = await db.query('SELECT id, name, phone, alternate_phone, email, role, status, created_at FROM users WHERE id = $1', [id]);
+    const uRes = await db.query(
+      'SELECT id, name, phone, alternate_phone, email, role, status, photo_url, theme, language, created_at FROM users WHERE id = $1',
+      [id]
+    );
 
     if (uRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'User not found' });

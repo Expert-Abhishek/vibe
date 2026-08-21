@@ -62,10 +62,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as ExpoSplashScreen from 'expo-splash-screen';
 
 import SplashScreen from '@/components/SplashScreen';
-import { savePushTokenApi } from '@/constants/api';
-import { getUserSessionSync, loadUserSessionAsync } from '@/constants/authStore';
+import { fetchUserProfileApi, savePushTokenApi } from '@/constants/api';
+import { getUserSessionSync, loadUserSessionAsync, saveUserSession } from '@/constants/authStore';
 import { getExpoPushToken } from '@/constants/notifications';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { loadAppThemeAsync, setAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
+import { AppLanguage, loadAppLanguageAsync, setAppLanguage } from '@/hooks/use-language';
 import { ModalProvider } from '@src/context/ModalContext';
 import '@src/i18n';
 import { initSocketService } from '@src/services/socketService';
@@ -135,15 +136,51 @@ export default function RootLayout() {
   useEffect(() => {
     (async () => {
       try {
-        const session = await loadUserSessionAsync();
-        if (session?.id) {
-          initSocketService(session.id, session.role || 'tourist');
-          if (Platform.OS !== 'web') {
-            const token = await getExpoPushToken();
-            if (token) {
-              await savePushTokenApi(session.id, token);
+        const [session, savedTheme, savedLang] = await Promise.all([
+          loadUserSessionAsync(),
+          loadAppThemeAsync(),
+          loadAppLanguageAsync(),
+        ]);
+
+        if (session) {
+          const activeTheme = session.theme === 'light' || session.theme === 'dark' ? session.theme : savedTheme;
+          const activeLang = session.language === 'kn' || session.language === 'en' ? (session.language as AppLanguage) : savedLang;
+          setAppTheme(activeTheme, false);
+          setAppLanguage(activeLang, false);
+
+          if (session.id) {
+            initSocketService(session.id, session.role || 'tourist');
+            if (Platform.OS !== 'web') {
+              const token = await getExpoPushToken();
+              if (token) {
+                await savePushTokenApi(session.id, token);
+              }
             }
+
+            // Sync user settings from backend in background
+            fetchUserProfileApi(session.id).then((profileRes) => {
+              if (profileRes?.success && profileRes.user) {
+                const u = profileRes.user;
+                let sessionNeedsUpdate = false;
+                if ((u.theme === 'light' || u.theme === 'dark') && u.theme !== session.theme) {
+                  session.theme = u.theme;
+                  setAppTheme(u.theme, false);
+                  sessionNeedsUpdate = true;
+                }
+                if ((u.language === 'kn' || u.language === 'en') && u.language !== session.language) {
+                  session.language = u.language;
+                  setAppLanguage(u.language as AppLanguage, false);
+                  sessionNeedsUpdate = true;
+                }
+                if (sessionNeedsUpdate) {
+                  saveUserSession(session);
+                }
+              }
+            }).catch(() => {});
           }
+        } else {
+          if (savedTheme) setAppTheme(savedTheme, false);
+          if (savedLang) setAppLanguage(savedLang, false);
         }
       } catch (err) {
         // silent in dev

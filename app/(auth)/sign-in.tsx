@@ -13,7 +13,8 @@ import { scale, verticalScale, moderateFontScale } from '@/constants/responsive'
 import { loginUserApi } from '@/constants/api';
 import { saveUserSession } from '@/constants/authStore';
 
-import { setAppTheme } from '@/hooks/use-color-scheme';
+import { getAppTheme, setAppTheme } from '@/hooks/use-color-scheme';
+import { AppLanguage, getAppLanguage, setAppLanguage } from '@/hooks/use-language';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -37,9 +38,15 @@ export default function SignInScreen() {
     try {
       const apiRes = await loginUserApi({ identifier: cleanPhone, password: pass });
       if (apiRes.success && apiRes.user) {
-        if (apiRes.user.theme === 'light' || apiRes.user.theme === 'dark') {
-          setAppTheme(apiRes.user.theme);
-        }
+        const userTheme = (apiRes.user.theme === 'light' || apiRes.user.theme === 'dark')
+          ? apiRes.user.theme
+          : getAppTheme();
+        const userLang = (apiRes.user.language === 'kn' || apiRes.user.language === 'en')
+          ? (apiRes.user.language as AppLanguage)
+          : getAppLanguage();
+
+        setAppTheme(userTheme);
+        setAppLanguage(userLang);
 
         await saveUserSession({
           id: apiRes.user.id,
@@ -48,8 +55,8 @@ export default function SignInScreen() {
           email: apiRes.user.email,
           role: apiRes.user.role,
           status: apiRes.user.status,
-          theme: apiRes.user.theme || 'dark',
-          language: apiRes.user.language || 'en',
+          theme: userTheme,
+          language: userLang,
           token: apiRes.token,
           profile: apiRes.user.profile,
         });
