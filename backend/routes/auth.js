@@ -1559,7 +1559,7 @@ router.post('/delete-account', async (req, res) => {
       [cleanPhone, `%${cleanPhone}`, cleanOtp]
     );
 
-    if (otpRes.rows.length === 0 && cleanOtp !== '8240' && cleanOtp !== '1234') {
+    if (otpRes.rows.length === 0) {
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP code. Please request a new code.' });
     }
 

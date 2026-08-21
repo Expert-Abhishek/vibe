@@ -20,6 +20,13 @@ function toValidUuidOrNull(val) {
   }
 }
 
+const crypto = require('crypto');
+
+// Cryptographically secure 4-digit numeric OTP generator (1000 - 9999)
+function generateSecureOtp() {
+  return String(crypto.randomInt(1000, 10000));
+}
+
 // Helper to sanitize payment_mode string to standard PostgreSQL enum values
 function sanitizePaymentMode(pm) {
   const str = String(pm || 'cash').toLowerCase().trim();
@@ -1348,7 +1355,11 @@ router.post('/book', async (req, res) => {
       }
     }
 
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const otpCode = generateSecureOtp();
+    let endOtpCode = generateSecureOtp();
+    while (endOtpCode === otpCode) {
+      endOtpCode = generateSecureOtp();
+    }
 
     const isUuid = customerId && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(customerId));
     let validCustomerId = isUuid ? customerId : null;
@@ -1383,6 +1394,7 @@ router.post('/book', async (req, res) => {
       parseFloat(amount),
       sanitizedPaymentMode,
       otpCode,
+      endOtpCode,
       bookingType,
       scheduledTime ? new Date(scheduledTime) : null,
       advanceDepositPaid,
@@ -1394,9 +1406,9 @@ router.post('/book', async (req, res) => {
     const insertSql = `INSERT INTO trips (
       trip_type, title, customer_id, customer_name, pickup_name, drop_name,
       pickup_lat, pickup_lng, drop_lat, drop_lng, amount, payment_mode,
-      status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, destination_ids, created_at
+      status, otp, end_otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, destination_ids, created_at
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, $19, CURRENT_TIMESTAMP)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP)
      RETURNING *`;
 
     try {
@@ -1407,9 +1419,9 @@ router.post('/book', async (req, res) => {
         const safeSql = `INSERT INTO trips (
           trip_type, title, customer_id, customer_name, pickup_name, drop_name,
           pickup_lat, pickup_lng, drop_lat, drop_lng, amount,
-          status, otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
+          status, otp, end_otp, booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, vehicle_category, created_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Pending', $12, $13, $14, $15, $16, $17, CURRENT_TIMESTAMP)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Pending', $12, $13, $14, $15, $16, $17, $18, CURRENT_TIMESTAMP)
          RETURNING *`;
         const safeParams = [
           tripType,
@@ -1424,6 +1436,7 @@ router.post('/book', async (req, res) => {
           dropLng,
           parseFloat(amount),
           otpCode,
+          endOtpCode,
           bookingType,
           scheduledTime ? new Date(scheduledTime) : null,
           advanceDepositPaid,
@@ -1443,10 +1456,10 @@ router.post('/book', async (req, res) => {
       } catch (fallbackErr) {
         console.warn('Safe insert failed, running minimal fallback:', fallbackErr.message);
         result = await db.query(
-          `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, created_at)
-           VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
+          `INSERT INTO trips (trip_type, title, customer_id, customer_name, amount, status, otp, end_otp, created_at)
+           VALUES ($1, $2, $3, $4, $5, 'Pending', $6, $7, CURRENT_TIMESTAMP)
            RETURNING *`,
-          [tripType, title || `${pickupName} ➔ ${dropName}`, validCustomerId, customerName, parseFloat(amount), otpCode]
+          [tripType, title || `${pickupName} ➔ ${dropName}`, validCustomerId, customerName, parseFloat(amount), otpCode, endOtpCode]
         );
       }
     }
@@ -1768,7 +1781,12 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
     if (dropLat === null || isNaN(dropLat)) dropLat = 12.9455178;
     if (dropLng === null || isNaN(dropLng)) dropLng = 75.7789167;
 
-    const otpCode = null; // Hidden initially
+    const otpCode = generateSecureOtp();
+    let endOtpCode = generateSecureOtp();
+    while (endOtpCode === otpCode) {
+      endOtpCode = generateSecureOtp();
+    }
+
     const totalAmount = parseFloat(amount || 0);
     const sanitizedBookingType = sanitizeBookingType(bookingType);
     const isPreBooked = sanitizedBookingType === 'prebook';
@@ -1817,11 +1835,11 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
     const insertSql = `INSERT INTO trips (
       trip_type, title, customer_id, customer_name, driver_or_guide_name,
       plan_id, destination_ids, amount, payment_mode, status,
-      duration_hours, extra_hours, addon_charge, otp, pickup_name, drop_name,
+      duration_hours, extra_hours, addon_charge, otp, end_otp, pickup_name, drop_name,
       booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category,
       pickup_id, drop_id, station_id, pickup_lat, pickup_lng, drop_lat, drop_lng
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
      RETURNING *`;
 
     const queryParams = [
@@ -1839,6 +1857,7 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       parseFloat(extraHours),
       parseFloat(addonCharge),
       otpCode,
+      endOtpCode,
       pickupName,
       dropName,
       sanitizedBookingType,
@@ -1864,11 +1883,11 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
       const safeSql = `INSERT INTO trips (
         trip_type, title, customer_id, customer_name, driver_or_guide_name,
         plan_id, destination_ids, amount, status,
-        duration_hours, extra_hours, addon_charge, otp, pickup_name, drop_name,
+        duration_hours, extra_hours, addon_charge, otp, end_otp, pickup_name, drop_name,
         booking_type, scheduled_time, advance_deposit_paid, remaining_cash_balance, driver_id, vehicle_category,
         pickup_id, drop_id, station_id, pickup_lat, pickup_lng, drop_lat, drop_lng
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
        RETURNING *`;
       const safeParams = [
         tripType,
@@ -1884,6 +1903,7 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
         parseFloat(extraHours),
         parseFloat(addonCharge),
         otpCode,
+        endOtpCode,
         pickupName,
         dropName,
         sanitizedBookingType,
@@ -2048,14 +2068,61 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
 
     // Calculate platform fee based on % of trip amount (min ₹10)
     const platformFee = Math.max(10, Math.round((tripAmount * feePercent) / 100));
+    const roleType = isDriver ? 'driver' : (isGuide ? 'guide' : 'driver');
+    const tripTitle = currentTrip.title || currentTrip.drop_name || 'Ride Booking';
+    const dedDesc = `Platform Fee (${feePercent}%) for Accepted Trip #${id} (${tripTitle})`;
 
-    // Create Pending Deduction Request for Admin approval & Notify Admin
+    // 1. DEDUCT PLATFORM FEE FROM DRIVER WALLET IMMEDIATELY
+    let newDriverBal = 0;
     try {
-      const roleType = isDriver ? 'driver' : (isGuide ? 'guide' : 'driver');
-      const tripTitle = currentTrip.title || currentTrip.drop_name || 'Ride Booking';
-      const dedDesc = `Platform Fee (${feePercent}%) for Accepted Trip #${id} (${tripTitle})`;
+      if (isDriver) {
+        const dUp = await db.query(
+          "UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance",
+          [platformFee, String(driverId)]
+        );
+        if (dUp.rows.length > 0) newDriverBal = parseFloat(dUp.rows[0].wallet_balance);
+      } else if (isGuide) {
+        const gUp = await db.query(
+          "UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance",
+          [platformFee, String(driverId)]
+        );
+        if (gUp.rows.length > 0) newDriverBal = parseFloat(gUp.rows[0].wallet_balance);
+      }
 
-      // Ensure wallet_deduction_requests table exists with flexible text columns
+      // Record wallet transaction as debit
+      const validDriverUuid = toValidUuidOrNull(driverId);
+      const validTripUuid = toValidUuidOrNull(id);
+      if (validDriverUuid) {
+        try {
+          await db.query(
+            "INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)",
+            [validDriverUuid, platformFee, `Platform Fee for Accepted Trip #${id}`, validTripUuid]
+          );
+        } catch (txErr) {}
+      }
+
+      // Record in platform_fee_revenue table
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(255),
+            user_name VARCHAR(255),
+            user_role VARCHAR(50) NOT NULL,
+            trip_id VARCHAR(255),
+            amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+            description TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        await db.query(
+          `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [String(driverId), driverName || 'Driver Partner', roleType, String(id), platformFee, dedDesc]
+        );
+      } catch (pErr) {}
+
+      // Ensure wallet_deduction_requests table exists
       try {
         await db.query(`
           CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
@@ -2066,7 +2133,7 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
             amount NUMERIC(10,2) NOT NULL,
             description TEXT,
             screenshot_url TEXT,
-            status VARCHAR(20) DEFAULT 'Pending',
+            status VARCHAR(20) DEFAULT 'Approved',
             trip_id VARCHAR(255),
             requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             reviewed_by VARCHAR(255),
@@ -2076,10 +2143,11 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
         `);
       } catch (e) {}
 
+      // Record in wallet_deduction_requests (Approved status for Admin Ledger)
       await db.query(`
         INSERT INTO wallet_deduction_requests (
-          user_id, user_name, role, amount, description, status, trip_id, requested_at
-        ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
+          user_id, user_name, role, amount, description, status, trip_id, requested_at, reviewed_at
+        ) VALUES ($1, $2, $3, $4, $5, 'Approved', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `, [
         String(driverId),
         driverName || 'Driver Partner',
@@ -2108,9 +2176,9 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       // Create Activity Notification for Admin in database
       await db.query(`
         INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
-        VALUES (NULL, 'admin', '🔔 Platform Fee Deduction Request', $1, $2, CURRENT_TIMESTAMP)
+        VALUES (NULL, 'admin', '🚕 Platform Fee Collected', $1, $2, CURRENT_TIMESTAMP)
       `, [
-        `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee deduction of ₹${platformFee} (${feePercent}%) is pending your approval.`,
+        `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee ₹${platformFee} (${feePercent}%) collected successfully.`,
         String(id)
       ]);
 
@@ -2118,31 +2186,40 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       if (typeof emitNotification === 'function') {
         emitNotification({
           role: 'admin',
-          title: '🔔 Platform Fee Deduction Request',
-          body: `Driver ${driverName} accepted ride #${id}. Platform fee ₹${platformFee} pending deduction approval.`,
+          title: '🚕 Platform Fee Collected',
+          body: `Driver ${driverName} accepted ride #${id}. Platform fee ₹${platformFee} collected successfully.`,
           tripId: String(id),
         });
       }
 
+      // Emit real-time wallet update to Driver app & Admin
       if (typeof emitWalletUpdate === 'function') {
         emitWalletUpdate({
-          role: 'admin',
-          type: 'deduction_pending',
           userId: String(driverId),
-          userName: driverName,
+          role: roleType,
+          type: 'debit',
           amount: platformFee,
+          balance: newDriverBal,
           tripId: String(id),
-          description: dedDesc,
+          description: `Platform Fee Deducted: ₹${platformFee}`,
         });
       }
 
-      console.log(`[Platform Fee] 📋 Created pending deduction request of ₹${platformFee} for ${driverName} on Trip #${id}`);
+      console.log(`[Platform Fee] ✅ Deducted ₹${platformFee} from ${driverName} (${driverId}) for Trip #${id}. New balance: ₹${newDriverBal}`);
     } catch (feeErr) {
-      console.warn('Platform fee deduction request creation warning:', feeErr.message);
+      console.warn('Platform fee deduction error:', feeErr.message);
     }
 
-    const generatedStartOtp = Math.floor(1000 + Math.random() * 9000).toString();
-    const generatedEndOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    // 2. GENERATE SECURE DYNAMIC START & END OTPS
+    const generatedStartOtp = (currentTrip && currentTrip.otp && String(currentTrip.otp).length === 4) 
+      ? String(currentTrip.otp) 
+      : generateSecureOtp();
+    let generatedEndOtp = (currentTrip && (currentTrip.end_otp || currentTrip.endOtp) && String(currentTrip.end_otp || currentTrip.endOtp).length === 4) 
+      ? String(currentTrip.end_otp || currentTrip.endOtp) 
+      : generateSecureOtp();
+    while (generatedEndOtp === generatedStartOtp) {
+      generatedEndOtp = generateSecureOtp();
+    }
 
     if (validDriverUuid) {
       try {
@@ -2620,9 +2697,9 @@ router.post('/:id/verify-end-otp', async (req, res) => {
     }
 
     const trip = tripRes.rows[0];
-    const validEndOtp = trip.end_otp || trip.endOtp || '4321';
-    if (otp && String(otp) !== String(validEndOtp)) {
-      return res.status(400).json({ success: false, message: 'Invalid End OTP code.' });
+    const validEndOtp = String(trip.end_otp || trip.endOtp || '').trim();
+    if (!validEndOtp || !otp || String(otp).trim() !== validEndOtp) {
+      return res.status(400).json({ success: false, message: 'Invalid End OTP code. Please ask the tourist for the 4-digit End OTP code.' });
     }
 
     const updateRes = await db.query(
@@ -2825,11 +2902,58 @@ router.post('/:id/respond', async (req, res) => {
         });
       }
 
-      // 2. Create Pending Deduction Request for Admin approval & Notify Admin
+      // 2. DEDUCT PLATFORM FEE FROM DRIVER WALLET IMMEDIATELY
+      let newDriverBal = 0;
       try {
         const roleType = isDriver ? 'driver' : (isGuide ? 'guide' : 'driver');
-        const tripTitle = `Accepted Trip #${id}`;
         const dedDesc = `Platform Fee for Accepted Trip #${id}`;
+
+        if (isDriver) {
+          const dUp = await db.query(
+            "UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance",
+            [platformFee, String(driverId)]
+          );
+          if (dUp.rows.length > 0) newDriverBal = parseFloat(dUp.rows[0].wallet_balance);
+        } else if (isGuide) {
+          const gUp = await db.query(
+            "UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance",
+            [platformFee, String(driverId)]
+          );
+          if (gUp.rows.length > 0) newDriverBal = parseFloat(gUp.rows[0].wallet_balance);
+        }
+
+        // Record in wallet_transactions
+        const validDriverUuid = toValidUuidOrNull(driverId);
+        const validTripUuid = toValidUuidOrNull(id);
+        if (validDriverUuid) {
+          try {
+            await db.query(
+              "INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)",
+              [validDriverUuid, platformFee, `Platform Fee for Accepted Trip #${id}`, validTripUuid]
+            );
+          } catch (txErr) {}
+        }
+
+        // Record in platform_fee_revenue
+        try {
+          await db.query(`
+            CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id VARCHAR(255),
+              user_name VARCHAR(255),
+              user_role VARCHAR(50) NOT NULL,
+              trip_id VARCHAR(255),
+              amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+              description TEXT,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+          await db.query(
+            `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [String(driverId), driverName || 'Driver Partner', roleType, String(id), platformFee, dedDesc]
+          );
+        } catch (pErr) {}
 
         // Ensure wallet_deduction_requests table exists
         try {
@@ -2842,7 +2966,7 @@ router.post('/:id/respond', async (req, res) => {
               amount NUMERIC(10,2) NOT NULL,
               description TEXT,
               screenshot_url TEXT,
-              status VARCHAR(20) DEFAULT 'Pending',
+              status VARCHAR(20) DEFAULT 'Approved',
               trip_id VARCHAR(255),
               requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
               reviewed_by VARCHAR(255),
@@ -2854,8 +2978,8 @@ router.post('/:id/respond', async (req, res) => {
 
         await db.query(`
           INSERT INTO wallet_deduction_requests (
-            user_id, user_name, role, amount, description, status, trip_id, requested_at
-          ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
+            user_id, user_name, role, amount, description, status, trip_id, requested_at, reviewed_at
+          ) VALUES ($1, $2, $3, $4, $5, 'Approved', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `, [
           String(driverId),
           driverName || 'Driver Partner',
@@ -2883,30 +3007,30 @@ router.post('/:id/respond', async (req, res) => {
 
         await db.query(`
           INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
-          VALUES (NULL, 'admin', '🔔 Platform Fee Deduction Request', $1, $2, CURRENT_TIMESTAMP)
+          VALUES (NULL, 'admin', '🚕 Platform Fee Collected', $1, $2, CURRENT_TIMESTAMP)
         `, [
-          `Driver ${driverName || 'Partner'} accepted ride #${id}. Platform fee deduction of ₹${platformFee} is pending your approval.`,
+          `Driver ${driverName || 'Partner'} accepted ride #${id}. Platform fee ₹${platformFee} collected successfully.`,
           String(id)
         ]);
 
         if (typeof emitNotification === 'function') {
           emitNotification({
             role: 'admin',
-            title: '🔔 Platform Fee Deduction Request',
-            body: `Driver ${driverName || 'Partner'} accepted ride #${id}. Platform fee ₹${platformFee} pending deduction approval.`,
+            title: '🚕 Platform Fee Collected',
+            body: `Driver ${driverName || 'Partner'} accepted ride #${id}. Platform fee ₹${platformFee} collected successfully.`,
             tripId: String(id),
           });
         }
 
         if (typeof emitWalletUpdate === 'function') {
           emitWalletUpdate({
-            role: 'admin',
-            type: 'deduction_pending',
             userId: String(driverId),
-            userName: driverName || 'Partner',
+            role: roleType,
+            type: 'debit',
             amount: platformFee,
+            balance: newDriverBal,
             tripId: String(id),
-            description: dedDesc,
+            description: `Platform Fee Deducted: ₹${platformFee}`,
           });
         }
       } catch (dErr) {
@@ -2929,7 +3053,7 @@ router.post('/:id/respond', async (req, res) => {
       if (updateRes.rows.length > 0) {
         emitTripStatusUpdated(updateRes.rows[0], 'Accepted');
       }
-      return res.json({ success: true, message: 'Ride Accepted successfully!' });
+      return res.json({ success: true, message: 'Ride Accepted successfully!', balance: newDriverBal });
     } else if (action === 'complete') {
       let updateRes = await db.query(
         "UPDATE trips SET status = 'Completed', status_code = 3 WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text RETURNING *",

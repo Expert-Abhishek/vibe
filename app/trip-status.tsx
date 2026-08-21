@@ -113,8 +113,8 @@ export default function TripStatusScreen() {
   const [advanceDepositPaid, setAdvanceDepositPaid] = useState<number>(initialLocalTrip?.advanceDepositPaid || 0);
   const [remainingCashBalance, setRemainingCashBalance] = useState<number>(initialLocalTrip?.remainingCashBalance || (initialLocalTrip?.price || initialLocalTrip?.amount || 1200));
   const [tripCheckpoints, setTripCheckpoints] = useState<any[]>(initialLocalTrip?.checkpoints || initialLocalTrip?.route || []);
-  const [startOtp, setStartOtp] = useState(initialLocalTrip?.otp || '8240');
-  const [endOtp, setEndOtp] = useState(initialLocalTrip?.endOtp || '4321');
+  const [startOtp, setStartOtp] = useState(initialLocalTrip?.otp || initialLocalTrip?.startOtp || '');
+  const [endOtp, setEndOtp] = useState(initialLocalTrip?.endOtp || initialLocalTrip?.end_otp || '');
   const [planName, setPlanName] = useState<string>(initialLocalTrip?.title || 'Tour Plan Package');
   const [durationHours, setDurationHours] = useState<number>(initialLocalTrip?.durationHours || 8);
   const [distanceKm, setDistanceKm] = useState<number>(initialLocalTrip?.distanceKm || 120);
@@ -769,12 +769,12 @@ export default function TripStatusScreen() {
             <View style={styles.otpRowGrid}>
               <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
                 <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('startOtp')}</Text>
-                <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '8240'}</Text>
+                <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '----'}</Text>
               </View>
 
               <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
                 <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('endOtp')}</Text>
-                <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '4321'}</Text>
+                <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '----'}</Text>
               </View>
             </View>
           </View>

@@ -399,8 +399,8 @@ async function emitTripAccepted(tripObject) {
     driverPhone: driverPhone || '',
     vehicleModel: vehicleModel || 'Cab',
     vehicleNumber: vehicleNumber || '',
-    otp: tripObject.otp || '8240',
-    endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
+    otp: tripObject.otp || tripObject.startOtp || null,
+    endOtp: tripObject.endOtp || tripObject.end_otp || null,
   };
 
   // Emit strictly to trip participants
@@ -524,8 +524,8 @@ function emitTripStatusUpdated(tripObject, statusOverride) {
     driverPhone: driverDetails.phone,
     vehicleModel: driverDetails.vehicleModel,
     vehicleNumber: driverDetails.vehicleNumber,
-    otp: tripObject.otp || '8240',
-    endOtp: tripObject.endOtp || tripObject.end_otp || '4321',
+    otp: tripObject.otp || tripObject.startOtp || null,
+    endOtp: tripObject.endOtp || tripObject.end_otp || null,
     updatedAt: new Date().toISOString(),
   };
 

@@ -930,10 +930,10 @@ export default function GuideDashboardScreen() {
 
   const handleVerifyOtp = async () => {
     if (!activeTour) return;
-    const expectedOtp = String((activeTour as any).otp || '8240').trim();
+    const expectedOtp = String((activeTour as any).otp || (activeTour as any).startOtp || '').trim();
     const entered = String(enteredOtp).trim();
 
-    if (entered === expectedOtp || entered === '8240') {
+    if (expectedOtp && entered === expectedOtp) {
       setOtpVisible(false);
       setEnteredOtp('');
       setTourPhase('tour');

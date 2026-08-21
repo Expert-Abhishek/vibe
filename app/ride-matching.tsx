@@ -135,8 +135,8 @@ export default function RideMatchingScreen() {
       touristName: resolvedName,
       status: 'Pending',
       bookingType: 'INSTANT',
-      otp: (params.otp as string) || '8240',
-      endOtp: (params.endOtp as string) || '4321',
+      otp: (params.otp as string) || (params.startOtp as string) || '',
+      endOtp: (params.endOtp as string) || '',
       createdAt: new Date().toISOString(),
     };
     broadcastNewTripRequest(broadcastObj, true);
@@ -232,8 +232,8 @@ export default function RideMatchingScreen() {
         customerName: resolvedCustomerName,
         status: 'Pending',
         bookingType: 'INSTANT',
-        otp: (params.otp as string) || '8240',
-        endOtp: (params.endOtp as string) || '4321',
+        otp: (params.otp as string) || (params.startOtp as string) || '',
+        endOtp: (params.endOtp as string) || '',
         createdAt: new Date().toISOString(),
       };
 
@@ -744,12 +744,12 @@ export default function RideMatchingScreen() {
               <View style={[styles.otpLine, { borderTopColor: colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
                 <View style={styles.otpBox}>
                   <Text style={styles.otpLabel}>START OTP</Text>
-                  <Text style={[styles.otpCode, { color: colors.amber }]}>{(params.otp as string) || demoDriver.otp || '8240'}</Text>
+                  <Text style={[styles.otpCode, { color: colors.amber }]}>{(params.otp as string) || (params.startOtp as string) || demoDriver.otp || '----'}</Text>
                 </View>
 
                 <View style={styles.otpBox}>
                   <Text style={styles.otpLabel}>END OTP</Text>
-                  <Text style={[styles.otpCode, { color: '#10B981' }]}>{(params.endOtp as string) || '4321'}</Text>
+                  <Text style={[styles.otpCode, { color: '#10B981' }]}>{(params.endOtp as string) || demoDriver.endOtp || '----'}</Text>
                 </View>
 
                 <View style={styles.fareSummary}>
