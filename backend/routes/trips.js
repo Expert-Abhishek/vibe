@@ -671,7 +671,7 @@ router.get('/pending-requests', async (req, res) => {
     const result = await db.query(
       `SELECT t.*, u.name as user_real_name, u.phone as user_phone
        FROM trips t
-       LEFT JOIN users u ON (t.customer_id = u.id)
+       LEFT JOIN users u ON (t.customer_id::text = u.id::text)
        WHERE LOWER(t.status) IN ('pending', 'dispatched', 'requested')
          AND ($1::text IS NULL OR NOT ($1::text = ANY(COALESCE(t.declined_driver_ids, '{}'))))
        ORDER BY t.created_at DESC LIMIT 50`,
@@ -706,8 +706,8 @@ router.get('/pending-requests', async (req, res) => {
         vehicle_category: t.vehicle_category || '5_seater',
         status: t.status,
         bookingType: t.booking_type || 'INSTANT',
-        otp: t.otp || '8240',
-        endOtp: t.end_otp || '4321',
+        otp: t.otp || null,
+        endOtp: t.end_otp || null,
         checkpoints: checkpointNames,
         trip_checkpoints: resolvedCps,
         scheduledTime: t.scheduled_time,
