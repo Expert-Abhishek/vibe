@@ -2015,18 +2015,43 @@ router.post(['/create-trip', '/', '/book'], async (req, res) => {
  * POST /api/trips/accept-trip/:id (Alias: /:id/accept)
  * Driver / Guide accepts booking, updates database & sends push notification to Tourist!
  */
-router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { driverId, driverName = 'Verified Partner' } = req.body;
+/**
+ * POST /api/trips/accept-trip/:id (Aliases: /:id/accept, /:id/respond)
+ * Driver / Guide accepts booking with Atomic ACID PostgreSQL Transaction
+ */
+router.post(['/accept-trip/:id', '/:id/accept', '/:id/respond'], async (req, res) => {
+  const { id } = req.params;
+  const rawDriverId = req.body.driverId || req.body.driver_id || req.body.captainId;
+  const action = req.body.action || 'accept';
+  let driverName = (req.body.driverName || req.body.driver_name || 'Verified Partner').trim();
 
-    if (!driverId) {
-      return res.status(400).json({ success: false, message: 'driverId is required' });
-    }
-
-    // Auto-migrate column types to flexible VARCHAR to prevent UUID cast errors
+  // If action is decline/reject, redirect to decline handler
+  if (action === 'decline' || action === 'reject') {
     try {
-      await db.query(`
+      const result = await db.query(
+        `UPDATE trips
+         SET declined_driver_ids = array_append(COALESCE(declined_driver_ids, '{}'), $1::text)
+         WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text
+         RETURNING *`,
+        [String(rawDriverId), String(id)]
+      );
+      return res.json({ success: true, message: 'Trip request declined successfully' });
+    } catch (dErr) {
+      return res.status(500).json({ success: false, message: 'Failed to decline trip', error: dErr.message });
+    }
+  }
+
+  if (!rawDriverId) {
+    return res.status(400).json({ success: false, message: 'driverId is required to accept trip' });
+  }
+
+  const effectiveDriverId = String(rawDriverId).trim();
+  const client = await db.pool.connect();
+
+  try {
+    // 1. Auto-migrate schema safety
+    try {
+      await client.query(`
         ALTER TABLE trips ALTER COLUMN driver_id TYPE VARCHAR(255);
         ALTER TABLE trips ALTER COLUMN guide_id TYPE VARCHAR(255);
         ALTER TABLE trips ALTER COLUMN customer_id TYPE VARCHAR(255);
@@ -2035,291 +2060,251 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
         ALTER TABLE driver_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
         ALTER TABLE guide_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
       `);
-    } catch (e) {}
+    } catch (mErr) {}
 
-    // 1. Fetch trip details with explicit text casting
-    const tRes = await db.query("SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(id)]);
+    // START ATOMIC DATABASE TRANSACTION
+    await client.query('BEGIN');
+
+    // 2. Fetch and Lock Trip Row (FOR UPDATE prevents race conditions if multiple drivers click accept)
+    const tRes = await client.query(
+      `SELECT * FROM trips 
+       WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text 
+       FOR UPDATE`,
+      [String(id)]
+    );
+
     if (tRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Trip not found' });
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Trip booking not found' });
     }
 
     const currentTrip = tRes.rows[0];
-    const currentStatus = String(currentTrip.status || '').toLowerCase().trim();
-    if (currentStatus === 'accepted' || currentStatus === 'in_progress' || currentStatus === 'arrived' || currentStatus === 'completed') {
+    const rawStatus = String(currentTrip.status || '').toLowerCase().trim().replace(/_/g, ' ');
+
+    if (['accepted', 'in progress', 'arrived', 'completed', 'finished'].includes(rawStatus)) {
+      await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        message: `Trip already accepted by another Captain (${currentTrip.driver_or_guide_name || 'Partner'}).`,
+        message: `Trip is already accepted by another Captain (${currentTrip.driver_or_guide_name || 'Partner'}).`,
         data: currentTrip,
       });
     }
 
-    let tripAmount = parseFloat(currentTrip.amount || 2000);
-
-    // 2. Fetch driver profile details & vehicle info
+    // 3. Fetch Driver / Guide Contact & Vehicle Details
     let driverPhone = '+91 99000 82400';
     let vehicleModel = 'AC Cab 5-Seater';
     let vehicleNumber = 'KA-03-EX-8240';
 
-    const validDriverUuid = toValidUuidOrNull(driverId) || driverId;
-
     try {
-      const pRes = await db.query(
+      const uRes = await client.query(
         `SELECT u.phone, u.name, d.vehicle_model, d.vehicle_number 
          FROM users u 
          LEFT JOIN driver_profiles d ON u.id::text = d.user_id::text 
-         WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text`,
-        [String(driverId)]
+         WHERE u.id::text = $1::text OR CAST(u.id AS VARCHAR) = $1::text OR u.phone = $1::text`,
+        [effectiveDriverId]
       );
-      if (pRes.rows.length > 0) {
-        driverPhone = pRes.rows[0].phone || driverPhone;
-        vehicleModel = pRes.rows[0].vehicle_model || vehicleModel;
-        vehicleNumber = pRes.rows[0].vehicle_number || vehicleNumber;
+      if (uRes.rows.length > 0) {
+        const uRow = uRes.rows[0];
+        driverPhone = uRow.phone || driverPhone;
+        vehicleModel = uRow.vehicle_model || vehicleModel;
+        vehicleNumber = uRow.vehicle_number || vehicleNumber;
         if (!driverName || driverName === 'Verified Partner') {
-          driverName = pRes.rows[0].name || driverName;
+          driverName = uRow.name || driverName;
         }
       }
-    } catch (e) {}
+    } catch (uErr) {}
 
-    // 3. Fetch wallet balance and platform fee for driver or guide
-    let dRes = { rows: [] };
-    try {
-      dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(driverId)]);
-    } catch (e) {
-      try {
-        dRes = await db.query("SELECT wallet_balance FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(driverId)]);
-      } catch (e2) {}
-    }
+    // 4. Ensure Driver / Guide Profile exists (Auto-provisioning inside transaction)
+    let profileRes = await client.query(
+      `SELECT wallet_balance, platform_fee, 'driver' AS role 
+       FROM driver_profiles 
+       WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text`,
+      [effectiveDriverId]
+    );
 
-    let gRes = { rows: [] };
-    try {
-      gRes = await db.query("SELECT wallet_balance, platform_fee FROM guide_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text OR CAST(id AS VARCHAR) = $1::text", [String(driverId)]);
-    } catch (e) {
-      try {
-        gRes = await db.query("SELECT wallet_balance FROM guide_profiles WHERE user_id::text = $1::text", [String(driverId)]);
-      } catch (e2) {}
-    }
-
-    // Auto-provision driver profile if not exists so wallet deduction succeeds
-    if (dRes.rows.length === 0 && gRes.rows.length === 0) {
-      try {
-        await db.query(
-          `INSERT INTO driver_profiles (user_id, wallet_balance, platform_fee, vehicle_model, vehicle_number, is_active)
-           VALUES ($1, 1000.00, 10.00, $2, $3, TRUE)
-           ON CONFLICT DO NOTHING`,
-          [String(driverId), vehicleModel, vehicleNumber]
-        );
-        dRes = await db.query("SELECT wallet_balance, platform_fee FROM driver_profiles WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text", [String(driverId)]);
-      } catch (insErr) {}
-    }
-
-    let walletBalance = 0;
-    let feePercent = 10; // Default 10% platform fee
-    let isDriver = false;
     let isGuide = false;
-
-    if (dRes.rows.length > 0) {
-      walletBalance = parseFloat(dRes.rows[0].wallet_balance || 0);
-      feePercent = parseFloat(dRes.rows[0].platform_fee || 10);
-      isDriver = true;
-    } else if (gRes.rows.length > 0) {
-      walletBalance = parseFloat(gRes.rows[0].wallet_balance || 0);
-      feePercent = parseFloat(gRes.rows[0].platform_fee || 10);
-      isGuide = true;
-    } else {
-      isDriver = true;
+    if (profileRes.rows.length === 0) {
+      profileRes = await client.query(
+        `SELECT wallet_balance, platform_fee, 'guide' AS role 
+         FROM guide_profiles 
+         WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text OR id::text = $1::text`,
+        [effectiveDriverId]
+      );
+      if (profileRes.rows.length > 0) isGuide = true;
     }
 
-    // Calculate platform fee based on % of trip amount (min ₹10)
+    if (profileRes.rows.length === 0) {
+      // Auto-create driver profile with ₹1000 default balance and 10% platform fee
+      await client.query(
+        `INSERT INTO driver_profiles (user_id, wallet_balance, platform_fee, vehicle_model, vehicle_number, is_active)
+         VALUES ($1, 1000.00, 10.00, $2, $3, TRUE)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [effectiveDriverId, vehicleModel, vehicleNumber]
+      );
+      profileRes = await client.query(
+        `SELECT wallet_balance, platform_fee, 'driver' AS role 
+         FROM driver_profiles 
+         WHERE user_id::text = $1::text OR CAST(user_id AS VARCHAR) = $1::text`,
+        [effectiveDriverId]
+      );
+    }
+
+    // 5. Calculate Guaranteed Non-Null Platform Fee
+    const rawTripAmt = parseFloat(currentTrip.amount);
+    const tripAmount = Number.isFinite(rawTripAmt) && rawTripAmt > 0 ? rawTripAmt : 2000;
+    
+    const rawFeePercent = parseFloat(profileRes.rows[0]?.platform_fee);
+    const feePercent = Number.isFinite(rawFeePercent) && rawFeePercent > 0 ? rawFeePercent : 10;
+
     const platformFee = Math.max(10, Math.round((tripAmount * feePercent) / 100));
-    const roleType = isDriver ? 'driver' : (isGuide ? 'guide' : 'driver');
+    const roleType = isGuide ? 'guide' : 'driver';
     const tripTitle = currentTrip.title || currentTrip.drop_name || 'Ride Booking';
     const dedDesc = `Platform Fee (${feePercent}%) for Accepted Trip #${id} (${tripTitle})`;
 
-    // 1. DEDUCT PLATFORM FEE FROM DRIVER WALLET IMMEDIATELY
+    // 6. ATOMIC WALLET DEBIT WITH ROWCOUNT VERIFICATION
     let newDriverBal = 0;
-    try {
-      if (isDriver) {
-        const dUp = await db.query(
-          "UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance",
-          [platformFee, String(driverId)]
-        );
-        if (dUp.rows.length > 0) newDriverBal = parseFloat(dUp.rows[0].wallet_balance);
-      } else if (isGuide) {
-        const gUp = await db.query(
-          "UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance",
-          [platformFee, String(driverId)]
-        );
-        if (gUp.rows.length > 0) newDriverBal = parseFloat(gUp.rows[0].wallet_balance);
-      }
+    let debitQuery;
 
-      // Record wallet transaction as debit
-      try {
-        await db.query(
-          "INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)",
-          [String(driverId), platformFee, `Platform Fee for Accepted Trip #${id}`, String(id)]
-        );
-      } catch (txErr) {}
-
-      // Record in platform_fee_revenue table
-      try {
-        await db.query(`
-          CREATE TABLE IF NOT EXISTS platform_fee_revenue (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id VARCHAR(255),
-            user_name VARCHAR(255),
-            user_role VARCHAR(50) NOT NULL,
-            trip_id VARCHAR(255),
-            amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-            description TEXT,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        await db.query(
-          `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [String(driverId), driverName || 'Driver Partner', roleType, String(id), platformFee, dedDesc]
-        );
-      } catch (pErr) {}
-
-      // Ensure wallet_deduction_requests table exists
-      try {
-        await db.query(`
-          CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id VARCHAR(255),
-            user_name VARCHAR(255),
-            role VARCHAR(20) DEFAULT 'driver',
-            amount NUMERIC(10,2) NOT NULL,
-            description TEXT,
-            screenshot_url TEXT,
-            status VARCHAR(20) DEFAULT 'Approved',
-            trip_id VARCHAR(255),
-            requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            reviewed_by VARCHAR(255),
-            reviewed_at TIMESTAMP WITH TIME ZONE,
-            reject_reason TEXT
-          );
-        `);
-      } catch (e) {}
-
-      // Record in wallet_deduction_requests (Approved status for Admin Ledger)
-      await db.query(`
-        INSERT INTO wallet_deduction_requests (
-          user_id, user_name, role, amount, description, status, trip_id, requested_at, reviewed_at
-        ) VALUES ($1, $2, $3, $4, $5, 'Approved', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [
-        String(driverId),
-        driverName || 'Driver Partner',
-        roleType,
-        platformFee,
-        dedDesc,
-        String(id)
-      ]);
-
-      // Ensure activity_notifications table exists
-      try {
-        await db.query(`
-          CREATE TABLE IF NOT EXISTS activity_notifications (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id VARCHAR(255),
-            role VARCHAR(20) DEFAULT 'admin',
-            title VARCHAR(255) NOT NULL,
-            body TEXT NOT NULL,
-            trip_id VARCHAR(255),
-            is_read BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-      } catch (e) {}
-
-      // Create Activity Notification for Admin in database
-      await db.query(`
-        INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
-        VALUES (NULL, 'admin', '🚕 Platform Fee Collected', $1, $2, CURRENT_TIMESTAMP)
-      `, [
-        `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee ₹${platformFee} (${feePercent}%) collected successfully.`,
-        String(id)
-      ]);
-
-      // Emit real-time Socket Alert to Admin Panel
-      if (typeof emitNotification === 'function') {
-        emitNotification({
-          role: 'admin',
-          title: '🚕 Platform Fee Collected',
-          body: `Driver ${driverName} accepted ride #${id}. Platform fee ₹${platformFee} collected successfully.`,
-          tripId: String(id),
-        });
-      }
-
-      // Emit real-time wallet update to Driver app & Admin
-      if (typeof emitWalletUpdate === 'function') {
-        emitWalletUpdate({
-          userId: String(driverId),
-          role: roleType,
-          type: 'debit',
-          amount: platformFee,
-          balance: newDriverBal,
-          tripId: String(id),
-          description: `Platform Fee Deducted: ₹${platformFee}`,
-        });
-      }
-
-      console.log(`[Platform Fee] ✅ Deducted ₹${platformFee} from ${driverName} (${driverId}) for Trip #${id}. New balance: ₹${newDriverBal}`);
-    } catch (feeErr) {
-      console.warn('Platform fee deduction error:', feeErr.message);
+    if (isGuide) {
+      debitQuery = await client.query(
+        `UPDATE guide_profiles 
+         SET wallet_balance = COALESCE(wallet_balance, 0) - $1 
+         WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text
+         RETURNING wallet_balance`,
+        [platformFee, effectiveDriverId]
+      );
+    } else {
+      debitQuery = await client.query(
+        `UPDATE driver_profiles 
+         SET wallet_balance = COALESCE(wallet_balance, 0) - $1 
+         WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text
+         RETURNING wallet_balance`,
+        [platformFee, effectiveDriverId]
+      );
     }
 
-    // 2. GENERATE SECURE DYNAMIC START & END OTPS
-    const generatedStartOtp = (currentTrip && currentTrip.otp && String(currentTrip.otp).length === 4) 
+    if (debitQuery.rows.length > 0) {
+      newDriverBal = parseFloat(debitQuery.rows[0].wallet_balance);
+    } else {
+      console.warn(`[Wallet Debit] ⚠️ RowCount 0 for driver ${effectiveDriverId}, updating by id`);
+      const fallbackDebit = await client.query(
+        `UPDATE driver_profiles 
+         SET wallet_balance = COALESCE(wallet_balance, 0) - $1 
+         WHERE user_id::text = $2::text 
+         RETURNING wallet_balance`,
+        [platformFee, effectiveDriverId]
+      );
+      if (fallbackDebit.rows.length > 0) newDriverBal = parseFloat(fallbackDebit.rows[0].wallet_balance);
+    }
+
+    // 7. Insert Debit Transaction Log (wallet_transactions)
+    await client.query(
+      `INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id, created_at) 
+       VALUES ($1, 'debit', $2, $3, $4, CURRENT_TIMESTAMP)`,
+      [effectiveDriverId, platformFee, dedDesc, String(id)]
+    );
+
+    // 8. Insert Company Revenue Log (platform_fee_revenue)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255),
+        user_name VARCHAR(255),
+        user_role VARCHAR(50) NOT NULL,
+        trip_id VARCHAR(255),
+        amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(
+      `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+      [effectiveDriverId, driverName, roleType, String(id), platformFee, dedDesc]
+    );
+
+    // 9. Insert Admin Panel Deduction Ledger Entry (wallet_deduction_requests)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255),
+        user_name VARCHAR(255),
+        role VARCHAR(20) DEFAULT 'driver',
+        amount NUMERIC(10,2) NOT NULL,
+        description TEXT,
+        screenshot_url TEXT,
+        status VARCHAR(20) DEFAULT 'Approved',
+        trip_id VARCHAR(255),
+        requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by VARCHAR(255),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        reject_reason TEXT
+      );
+    `);
+    await client.query(
+      `INSERT INTO wallet_deduction_requests (
+        user_id, user_name, role, amount, description, status, trip_id, requested_at, reviewed_at
+      ) VALUES ($1, $2, $3, $4, $5, 'Approved', $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [effectiveDriverId, driverName, roleType, platformFee, dedDesc, String(id)]
+    );
+
+    // 10. Insert Admin Activity Notification
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activity_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255),
+        role VARCHAR(20) DEFAULT 'admin',
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        trip_id VARCHAR(255),
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.query(
+      `INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
+       VALUES (NULL, 'admin', '🚕 Platform Fee Collected', $1, $2, CURRENT_TIMESTAMP)`,
+      [
+        `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee ₹${platformFee} (${feePercent}%) collected successfully.`,
+        String(id)
+      ]
+    );
+
+    // 11. Generate Cryptographic Dynamic Start & End OTPs
+    const generatedStartOtp = (currentTrip.otp && String(currentTrip.otp).length === 4) 
       ? String(currentTrip.otp) 
       : generateSecureOtp();
-    let generatedEndOtp = (currentTrip && (currentTrip.end_otp || currentTrip.endOtp) && String(currentTrip.end_otp || currentTrip.endOtp).length === 4) 
-      ? String(currentTrip.end_otp || currentTrip.endOtp) 
+    let generatedEndOtp = (currentTrip.end_otp && String(currentTrip.end_otp).length === 4) 
+      ? String(currentTrip.end_otp) 
       : generateSecureOtp();
     while (generatedEndOtp === generatedStartOtp) {
       generatedEndOtp = generateSecureOtp();
     }
 
-    const isRealUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(driverId));
-    if (isRealUuid) {
-      try {
-        const dCheck = await db.query('SELECT id FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [String(driverId)]);
-        if (dCheck.rows.length === 0) {
-          await db.query(
-            `INSERT INTO users (id, name, role)
-             VALUES ($1, $2, 'driver')
-             ON CONFLICT (id) DO NOTHING`,
-            [String(driverId), driverName || 'Verified Partner']
-          );
-        }
-      } catch (e) {}
-    }
+    // 12. Update Trip Status to 'Accepted'
+    const tripUpdateRes = await client.query(
+      `UPDATE trips 
+       SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4, updated_at = CURRENT_TIMESTAMP 
+       WHERE id::text = $5::text OR CAST(id AS VARCHAR) = $5::text
+       RETURNING *`,
+      [driverName, effectiveDriverId, generatedStartOtp, generatedEndOtp, String(id)]
+    );
 
-    const effectiveDriverId = String(driverId).trim();
-    let result = { rows: [] };
-    try {
-      result = await db.query(
-        `UPDATE trips 
-         SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
-         WHERE id::text = $5::text OR CAST(id AS VARCHAR) = $5::text
-         RETURNING *`,
-        [driverName, effectiveDriverId, generatedStartOtp, generatedEndOtp, String(id)]
-      );
-    } catch (upErr) {
-      console.warn('First accept UPDATE attempt failed, trying fallback update without typed driver_id:', upErr.message);
-      try {
-        result = await db.query(
-          `UPDATE trips 
-           SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, otp = $2, end_otp = $3 
-           WHERE id::text = $4::text OR CAST(id AS VARCHAR) = $4::text
-           RETURNING *`,
-          [driverName, generatedStartOtp, generatedEndOtp, String(id)]
-        );
-      } catch (e2) {}
-    }
+    const trip = tripUpdateRes.rows[0] || {
+      ...currentTrip,
+      status: 'Accepted',
+      driver_or_guide_name: driverName,
+      driver_id: effectiveDriverId,
+      otp: generatedStartOtp,
+      end_otp: generatedEndOtp,
+    };
 
-    let trip = result.rows.length > 0 ? result.rows[0] : { ...currentTrip, status: 'Accepted', driver_or_guide_name: driverName, driver_id: effectiveDriverId, otp: generatedStartOtp, end_otp: generatedEndOtp };
+    // COMMIT ATOMIC TRANSACTION
+    await client.query('COMMIT');
 
+    console.log(`[Platform Fee] ✅ Atomic transaction committed: ₹${platformFee} debited from ${driverName} (${effectiveDriverId}) for Trip #${id}. New balance: ₹${newDriverBal}`);
+
+    // 13. POST-COMMIT REAL-TIME BROADCASTS & NOTIFICATIONS
     const acceptedPayload = {
       ...trip,
       id: trip.id,
@@ -2337,10 +2322,32 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       startOtp: generatedStartOtp,
     };
 
+    // Sockets
     emitTripAccepted(acceptedPayload);
     emitTripStatusUpdated(acceptedPayload, 'Accepted');
 
-    // Notify tourist
+    if (typeof emitWalletUpdate === 'function') {
+      emitWalletUpdate({
+        userId: effectiveDriverId,
+        role: roleType,
+        type: 'debit',
+        amount: platformFee,
+        balance: newDriverBal,
+        tripId: String(id),
+        description: `Platform Fee Deducted: ₹${platformFee}`,
+      });
+    }
+
+    if (typeof emitNotification === 'function') {
+      emitNotification({
+        role: 'admin',
+        title: '🚕 Platform Fee Collected',
+        body: `Driver ${driverName} accepted ride #${id}. Platform fee ₹${platformFee} collected successfully.`,
+        tripId: String(id),
+      });
+    }
+
+    // Push notification to Tourist
     if (trip.customer_id) {
       sendPushToUser(trip.customer_id, {
         title: '🎉 Partner Confirmed Your Booking!',
@@ -2357,14 +2364,19 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Trip accepted successfully!',
       data: acceptedPayload,
     });
   } catch (error) {
-    console.error('Error accepting trip:', error);
-    res.status(500).json({ success: false, message: 'Failed to accept trip', error: error.message });
+    try {
+      await client.query('ROLLBACK');
+    } catch (rbErr) {}
+    console.error('Error in atomic accept-trip transaction:', error);
+    return res.status(500).json({ success: false, message: 'Failed to accept trip', error: error.message });
+  } finally {
+    client.release();
   }
 });
 
