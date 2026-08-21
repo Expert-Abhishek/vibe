@@ -1229,7 +1229,7 @@ router.get('/admin/deduction-requests', async (req, res) => {
       `SELECT 
          wdr.*,
          COALESCE(u.name, wdr.user_name, 'Driver Partner') AS user_name,
-         COALESCE(u.phone, dp.phone, '') AS user_phone,
+         COALESCE(u.phone, '') AS user_phone,
          COALESCE(u.email, '') AS user_email,
          COALESCE(dp.wallet_balance, gp.wallet_balance, 0) AS current_wallet_balance,
          dp.vehicle_number,

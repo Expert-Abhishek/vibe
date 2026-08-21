@@ -245,12 +245,12 @@ function TransactionsContent() {
         <div className="p-4 rounded-2xl bg-dark-card border border-dark-border flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-              <FileText className="w-4 h-4" /> Pending Deductions (Customer Pay)
+              <FileText className="w-4 h-4" /> Pending Deductions (Driver Platform Fee)
             </span>
             <div className="text-xl font-black text-white font-mono">
               ₹{stats.pendingDeductionsSum.toLocaleString('en-IN')}
             </div>
-            <p className="text-[10px] text-dark-textMuted">{stats.pendingDeductionsCount} payment deductions pending</p>
+            <p className="text-[10px] text-dark-textMuted">{stats.pendingDeductionsCount} platform fee deductions pending approval</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-sm">
             ₹
@@ -307,7 +307,7 @@ function TransactionsContent() {
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Deductions (Customer Pay)</span>
+            <span>Deductions (Platform Fee)</span>
           </button>
         </div>
 
