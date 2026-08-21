@@ -2262,13 +2262,27 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
     }
 
     const effectiveDriverId = String(driverId).trim();
-    const result = await db.query(
-      `UPDATE trips 
-       SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
-       WHERE id::text = $5::text OR CAST(id AS VARCHAR) = $5::text
-       RETURNING *`,
-      [driverName, effectiveDriverId, generatedStartOtp, generatedEndOtp, String(id)]
-    );
+    let result = { rows: [] };
+    try {
+      result = await db.query(
+        `UPDATE trips 
+         SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, driver_id = $2, otp = $3, end_otp = $4 
+         WHERE id::text = $5::text OR CAST(id AS VARCHAR) = $5::text
+         RETURNING *`,
+        [driverName, effectiveDriverId, generatedStartOtp, generatedEndOtp, String(id)]
+      );
+    } catch (upErr) {
+      console.warn('First accept UPDATE attempt failed, trying fallback update without typed driver_id:', upErr.message);
+      try {
+        result = await db.query(
+          `UPDATE trips 
+           SET status = 'Accepted', status_code = 1, driver_or_guide_name = $1, otp = $2, end_otp = $3 
+           WHERE id::text = $4::text OR CAST(id AS VARCHAR) = $4::text
+           RETURNING *`,
+          [driverName, generatedStartOtp, generatedEndOtp, String(id)]
+        );
+      } catch (e2) {}
+    }
 
     let trip = result.rows.length > 0 ? result.rows[0] : { ...currentTrip, status: 'Accepted', driver_or_guide_name: driverName, driver_id: effectiveDriverId, otp: generatedStartOtp, end_otp: generatedEndOtp };
 
@@ -3063,17 +3077,36 @@ router.post('/:id/respond', async (req, res) => {
         console.warn('Deduction request creation warning in respond:', dErr.message);
       }
 
-      let updateRes = await db.query(
-        "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text RETURNING *",
-        [String(driverId), driverName || 'Verified Partner', String(id)]
-      );
+      let updateRes = { rows: [] };
+      try {
+        updateRes = await db.query(
+          "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id::text = $3::text OR CAST(id AS VARCHAR) = $3::text RETURNING *",
+          [String(driverId), driverName || 'Verified Partner', String(id)]
+        );
+      } catch (e1) {
+        try {
+          updateRes = await db.query(
+            "UPDATE trips SET status = 'Accepted', driver_or_guide_name = $1 WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text RETURNING *",
+            [driverName || 'Verified Partner', String(id)]
+          );
+        } catch (e2) {}
+      }
 
       // Fallback: If exact ID match wasn't found (e.g. plan_book_178...), accept the latest pending trip in DB
       if (updateRes.rows.length === 0) {
-        updateRes = await db.query(
-          "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id IN (SELECT id FROM trips WHERE LOWER(status) = 'pending' ORDER BY created_at DESC LIMIT 1) RETURNING *",
-          [String(driverId), driverName || 'Verified Partner']
-        );
+        try {
+          updateRes = await db.query(
+            "UPDATE trips SET status = 'Accepted', driver_id = $1, driver_or_guide_name = $2 WHERE id IN (SELECT id FROM trips WHERE LOWER(status) = 'pending' ORDER BY created_at DESC LIMIT 1) RETURNING *",
+            [String(driverId), driverName || 'Verified Partner']
+          );
+        } catch (e3) {
+          try {
+            updateRes = await db.query(
+              "UPDATE trips SET status = 'Accepted', driver_or_guide_name = $1 WHERE id IN (SELECT id FROM trips WHERE LOWER(status) = 'pending' ORDER BY created_at DESC LIMIT 1) RETURNING *",
+              [driverName || 'Verified Partner']
+            );
+          } catch (e4) {}
+        }
       }
 
       if (updateRes.rows.length > 0) {
