@@ -22,6 +22,43 @@ function toValidUuidOrNull(val) {
 
 const crypto = require('crypto');
 
+// Auto-migrate tables to flexible types immediately on load
+(async function autoMigrateTripsTable() {
+  try {
+    const db = require('../config/db');
+    await db.query(`
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_driver_id_fkey;
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_guide_id_fkey;
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_customer_id_fkey;
+      ALTER TABLE trips DROP CONSTRAINT IF EXISTS trips_plan_id_fkey;
+      ALTER TABLE trips ALTER COLUMN driver_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN guide_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN customer_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN plan_id TYPE VARCHAR(255);
+      ALTER TABLE trips ALTER COLUMN otp TYPE VARCHAR(50);
+      ALTER TABLE trips ALTER COLUMN end_otp TYPE VARCHAR(50);
+
+      ALTER TABLE driver_profiles DROP CONSTRAINT IF EXISTS driver_profiles_user_id_fkey;
+      ALTER TABLE driver_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
+      ALTER TABLE guide_profiles DROP CONSTRAINT IF EXISTS guide_profiles_user_id_fkey;
+      ALTER TABLE guide_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
+
+      ALTER TABLE wallet_transactions DROP CONSTRAINT IF EXISTS wallet_transactions_user_id_fkey;
+      ALTER TABLE wallet_transactions DROP CONSTRAINT IF EXISTS wallet_transactions_trip_id_fkey;
+      ALTER TABLE wallet_transactions ALTER COLUMN user_id TYPE VARCHAR(255);
+      ALTER TABLE wallet_transactions ALTER COLUMN trip_id TYPE VARCHAR(255);
+
+      ALTER TABLE wallet_deduction_requests DROP CONSTRAINT IF EXISTS wallet_deduction_requests_user_id_fkey;
+      ALTER TABLE wallet_deduction_requests DROP CONSTRAINT IF EXISTS wallet_deduction_requests_trip_id_fkey;
+      ALTER TABLE wallet_deduction_requests ALTER COLUMN user_id TYPE VARCHAR(255);
+      ALTER TABLE wallet_deduction_requests ALTER COLUMN trip_id TYPE VARCHAR(255);
+    `);
+    console.log('✅ Trips & Wallet tables auto-migrated successfully');
+  } catch (err) {
+    console.warn('Trips autoMigrate warning:', err.message);
+  }
+})();
+
 // Cryptographically secure 4-digit numeric OTP generator (1000 - 9999)
 function generateSecureOtp() {
   return String(crypto.randomInt(1000, 10000));
@@ -2116,16 +2153,12 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       }
 
       // Record wallet transaction as debit
-      const validDriverUuid = toValidUuidOrNull(driverId);
-      const validTripUuid = toValidUuidOrNull(id);
-      if (validDriverUuid) {
-        try {
-          await db.query(
-            "INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)",
-            [validDriverUuid, platformFee, `Platform Fee for Accepted Trip #${id}`, validTripUuid]
-          );
-        } catch (txErr) {}
-      }
+      try {
+        await db.query(
+          "INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)",
+          [String(driverId), platformFee, `Platform Fee for Accepted Trip #${id}`, String(id)]
+        );
+      } catch (txErr) {}
 
       // Record in platform_fee_revenue table
       try {
@@ -2247,15 +2280,16 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       generatedEndOtp = generateSecureOtp();
     }
 
-    if (validDriverUuid) {
+    const isRealUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(driverId));
+    if (isRealUuid) {
       try {
-        const dCheck = await db.query('SELECT id FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [validDriverUuid]);
+        const dCheck = await db.query('SELECT id FROM users WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text', [String(driverId)]);
         if (dCheck.rows.length === 0) {
           await db.query(
             `INSERT INTO users (id, name, role)
              VALUES ($1, $2, 'driver')
              ON CONFLICT (id) DO NOTHING`,
-            [validDriverUuid, driverName || 'Verified Partner']
+            [String(driverId), driverName || 'Verified Partner']
           );
         }
       } catch (e) {}
