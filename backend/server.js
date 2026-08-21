@@ -339,6 +339,22 @@ async function initTablesOnBoot() {
       ALTER TABLE wallet_deduction_requests ALTER COLUMN user_id TYPE VARCHAR(255);
       ALTER TABLE wallet_deduction_requests ALTER COLUMN trip_id TYPE VARCHAR(255);
 
+      CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR(255),
+        user_name VARCHAR(255),
+        user_role VARCHAR(50) NOT NULL,
+        trip_id VARCHAR(255),
+        amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS trip_id VARCHAR(255);
+      ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS user_name VARCHAR(255);
+      ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS user_role VARCHAR(50);
+      ALTER TABLE platform_fee_revenue ALTER COLUMN user_id TYPE VARCHAR(255);
+
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS hourly_addon_rate NUMERIC(10,2) DEFAULT 200.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS platform_fee NUMERIC(10,2) DEFAULT 10.00;
       ALTER TABLE driver_profiles ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);

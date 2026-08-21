@@ -2205,23 +2205,32 @@ router.post(['/accept-trip/:id', '/:id/accept', '/:id/respond'], async (req, res
     );
 
     // 8. Insert Company Revenue Log (platform_fee_revenue)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS platform_fee_revenue (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id VARCHAR(255),
-        user_name VARCHAR(255),
-        user_role VARCHAR(50) NOT NULL,
-        trip_id VARCHAR(255),
-        amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-        description TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id VARCHAR(255),
+          user_name VARCHAR(255),
+          user_role VARCHAR(50) NOT NULL,
+          trip_id VARCHAR(255),
+          amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+          description TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS description TEXT;
+        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS trip_id VARCHAR(255);
+        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS user_name VARCHAR(255);
+        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS user_role VARCHAR(50);
+        ALTER TABLE platform_fee_revenue ALTER COLUMN user_id TYPE VARCHAR(255);
+      `);
+      await client.query(
+        `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+        [effectiveDriverId, driverName, roleType, String(id), platformFee, dedDesc]
       );
-    `);
-    await client.query(
-      `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
-      [effectiveDriverId, driverName, roleType, String(id), platformFee, dedDesc]
-    );
+    } catch (revErr) {
+      console.warn('Revenue log warning (non-fatal):', revErr.message);
+    }
 
     // 9. Insert Admin Panel Deduction Ledger Entry (wallet_deduction_requests)
     await client.query(`
