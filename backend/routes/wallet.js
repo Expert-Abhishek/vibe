@@ -1204,23 +1204,45 @@ router.get('/admin/deduction-requests', async (req, res) => {
   try {
     const { status = 'Pending' } = req.query;
 
+    // Ensure table exists
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id VARCHAR(255),
+          user_name VARCHAR(255),
+          role VARCHAR(20) DEFAULT 'driver',
+          amount NUMERIC(10,2) NOT NULL,
+          description TEXT,
+          screenshot_url TEXT,
+          status VARCHAR(20) DEFAULT 'Pending',
+          trip_id VARCHAR(255),
+          requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          reviewed_by VARCHAR(255),
+          reviewed_at TIMESTAMP WITH TIME ZONE,
+          reject_reason TEXT
+        );
+      `);
+    } catch (e) {}
+
     const result = await db.query(
       `SELECT 
          wdr.*,
-         u.phone AS user_phone,
-         u.email AS user_email,
+         COALESCE(u.name, wdr.user_name, 'Driver Partner') AS user_name,
+         COALESCE(u.phone, dp.phone, '') AS user_phone,
+         COALESCE(u.email, '') AS user_email,
          COALESCE(dp.wallet_balance, gp.wallet_balance, 0) AS current_wallet_balance,
          dp.vehicle_number,
          dp.vehicle_model,
-         t.title AS trip_title,
+         COALESCE(t.title, t.drop_name, wdr.description, 'Ride Booking') AS trip_title,
          t.pickup_name,
          t.drop_name
        FROM wallet_deduction_requests wdr
-       LEFT JOIN users u ON wdr.user_id = u.id
-       LEFT JOIN driver_profiles dp ON wdr.user_id = dp.user_id
-       LEFT JOIN guide_profiles gp ON wdr.user_id = gp.user_id
-       LEFT JOIN trips t ON wdr.trip_id = t.id
-       WHERE wdr.status = $1 
+       LEFT JOIN users u ON (CAST(wdr.user_id AS VARCHAR) = CAST(u.id AS VARCHAR))
+       LEFT JOIN driver_profiles dp ON (CAST(wdr.user_id AS VARCHAR) = CAST(dp.user_id AS VARCHAR) OR CAST(wdr.user_id AS VARCHAR) = CAST(dp.id AS VARCHAR))
+       LEFT JOIN guide_profiles gp ON (CAST(wdr.user_id AS VARCHAR) = CAST(gp.user_id AS VARCHAR) OR CAST(wdr.user_id AS VARCHAR) = CAST(gp.id AS VARCHAR))
+       LEFT JOIN trips t ON (CAST(wdr.trip_id AS VARCHAR) = CAST(t.id AS VARCHAR))
+       WHERE ($1 = 'All' OR $1 = 'all' OR LOWER(wdr.status) = LOWER($1))
        ORDER BY wdr.requested_at DESC`,
       [status]
     );
@@ -1244,7 +1266,7 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
 
     await client.query('BEGIN');
 
-    const reqRes = await client.query('SELECT * FROM wallet_deduction_requests WHERE id = $1 FOR UPDATE', [id]);
+    const reqRes = await client.query('SELECT * FROM wallet_deduction_requests WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text FOR UPDATE', [String(id)]);
     if (reqRes.rows.length === 0) {
       client.release();
       return res.status(404).json({ success: false, message: 'Deduction request not found' });
@@ -1258,31 +1280,39 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
 
     const numAmount = parseFloat(deduction.amount);
     const role = deduction.role || 'driver';
+    const userIdStr = String(deduction.user_id);
 
     // 1. Update deduction request status
     await client.query(
-      `UPDATE wallet_deduction_requests SET status = 'Approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP WHERE id = $2`,
-      [adminId || null, id]
+      `UPDATE wallet_deduction_requests SET status = 'Approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP WHERE id::text = $2::text OR CAST(id AS VARCHAR) = $2::text`,
+      [adminId || null, String(id)]
     );
 
-    // 2. Record wallet transaction
-    await client.query(
-      `INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)`,
-      [deduction.user_id, numAmount, `Platform Fee Deducted: ${deduction.description || 'Booking Platform Fee'}`, deduction.trip_id || null]
-    );
+    // 2. Record wallet transaction safely
+    try {
+      const validUserUuid = toValidUuidOrNull(userIdStr);
+      if (validUserUuid) {
+        await client.query(
+          `INSERT INTO wallet_transactions (user_id, type, amount, description, trip_id) VALUES ($1, 'debit', $2, $3, $4)`,
+          [validUserUuid, numAmount, `Platform Fee Deducted: ${deduction.description || 'Booking Platform Fee'}`, toValidUuidOrNull(deduction.trip_id) || null]
+        );
+      }
+    } catch (txErr) {
+      console.warn('Wallet transaction logging warning:', txErr.message);
+    }
 
     // 3. Deduct from driver / guide balance
     let newBalance = 0;
     if (role === 'guide') {
       const gUp = await client.query(
-        'UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id = $2 RETURNING wallet_balance',
-        [numAmount, deduction.user_id]
+        'UPDATE guide_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance',
+        [numAmount, userIdStr]
       );
       if (gUp.rows.length > 0) newBalance = parseFloat(gUp.rows[0].wallet_balance);
     } else {
       const dUp = await client.query(
-        'UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id = $2 RETURNING wallet_balance',
-        [numAmount, deduction.user_id]
+        'UPDATE driver_profiles SET wallet_balance = COALESCE(wallet_balance, 0) - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text OR id::text = $2::text RETURNING wallet_balance',
+        [numAmount, userIdStr]
       );
       if (dUp.rows.length > 0) newBalance = parseFloat(dUp.rows[0].wallet_balance);
     }
@@ -1292,7 +1322,7 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
       await client.query(
         `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, created_at)
          VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-        [deduction.user_id, deduction.user_name || 'Driver', role, deduction.trip_id || null, numAmount]
+        [toValidUuidOrNull(userIdStr), deduction.user_name || 'Driver', role, toValidUuidOrNull(deduction.trip_id), numAmount]
       );
     } catch (revErr) {
       console.warn('Platform fee revenue recording error:', revErr.message);
@@ -1301,23 +1331,27 @@ router.post('/admin/deduction-requests/:id/approve', async (req, res) => {
     await client.query('COMMIT');
 
     // 5. Notify user & emit real-time wallet update over socket
-    await logWalletNotification(
-      deduction.user_id,
-      role,
-      '📉 Platform Fee Deducted',
-      `₹${numAmount} platform fee has been deducted from your wallet for booking ${deduction.trip_id ? `#${deduction.trip_id}` : ''}. Updated Balance: ₹${newBalance}`
-    );
+    try {
+      await logWalletNotification(
+        userIdStr,
+        role,
+        '📉 Platform Fee Deducted',
+        `₹${numAmount} platform fee has been deducted from your wallet for booking ${deduction.trip_id ? `#${deduction.trip_id}` : ''}. Updated Balance: ₹${newBalance}`
+      );
+    } catch (nErr) {}
 
-    emitWalletUpdate({
-      userId: deduction.user_id,
-      role: role,
-      type: 'debit',
-      amount: numAmount,
-      balance: newBalance,
-      description: `Platform Fee Deduction: ₹${numAmount}`,
-    });
+    try {
+      emitWalletUpdate({
+        userId: userIdStr,
+        role: role,
+        type: 'debit',
+        amount: numAmount,
+        balance: newBalance,
+        description: `Platform Fee Deduction: ₹${numAmount}`,
+      });
+    } catch (sErr) {}
 
-    console.log(`[Platform Fee] ✅ Admin approved ₹${numAmount} deduction for ${deduction.user_name} (${deduction.user_id}). New balance: ₹${newBalance}`);
+    console.log(`[Platform Fee] ✅ Admin approved ₹${numAmount} deduction for ${deduction.user_name} (${userIdStr}). New balance: ₹${newBalance}`);
 
     res.json({
       success: true,

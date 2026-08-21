@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Search, RefreshCw, X, ArrowUpRight, Image as ImageIcon } from 'lucide-react';
+import { Bell, Search, RefreshCw, X, ArrowUpRight, Image as ImageIcon, FileText } from 'lucide-react';
 import Link from 'next/link';
-import { fetchTopupRequestsApi, fetchWithdrawalsApi } from '@/lib/api';
+import { fetchTopupRequestsApi, fetchWithdrawalsApi, fetchDeductionRequestsApi } from '@/lib/api';
 
 interface NavbarProps {
   onRefresh?: () => void;
@@ -12,37 +12,53 @@ interface NavbarProps {
 export default function Navbar({ onRefresh }: NavbarProps) {
   const [pendingTopups, setPendingTopups] = useState<any[]>([]);
   const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+  const [pendingDeductions, setPendingDeductions] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [newAlert, setNewAlert] = useState<{ id: string; text: string; link: string } | null>(null);
   
   const prevTopupsRef = useRef<string[]>([]);
+  const prevDeductionsRef = useRef<string[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchAlerts = async () => {
     try {
       const topups = await fetchTopupRequestsApi('Pending');
       const withdrawals = await fetchWithdrawalsApi('Pending');
+      const deductions = await fetchDeductionRequestsApi('Pending');
       
       setPendingTopups(topups || []);
       setPendingWithdrawals(withdrawals || []);
+      setPendingDeductions(deductions || []);
 
-      // Check if there are new topups that weren't there in the previous poll
-      const currentIds = topups.map((t: any) => t.id);
-      const newTopups = topups.filter((t: any) => !prevTopupsRef.current.includes(t.id));
+      // Check if there are new topups
+      const currentTopupIds = (topups || []).map((t: any) => t.id);
+      const newTopups = (topups || []).filter((t: any) => !prevTopupsRef.current.includes(t.id));
       
       if (newTopups.length > 0 && prevTopupsRef.current.length > 0) {
-        // Trigger a banner notification for the latest one
         const latest = newTopups[0];
         setNewAlert({
           id: latest.id,
-          text: `🔔 Top-Up Request: ${latest.user_name} (ID: ${latest.user_id}) uploaded a payment screenshot for ₹${latest.amount}!`,
-          link: '/topup-requests'
+          text: `🔔 Top-Up Request: ${latest.user_name} uploaded payment proof for ₹${latest.amount}!`,
+          link: '/transactions?type=topup'
         });
-        // Clear alert after 8 seconds
         setTimeout(() => setNewAlert(null), 8000);
       }
-      
-      prevTopupsRef.current = currentIds;
+      prevTopupsRef.current = currentTopupIds;
+
+      // Check if there are new deductions (Driver accepted ride)
+      const currentDedIds = (deductions || []).map((d: any) => d.id);
+      const newDeductions = (deductions || []).filter((d: any) => !prevDeductionsRef.current.includes(d.id));
+
+      if (newDeductions.length > 0 && prevDeductionsRef.current.length > 0) {
+        const latestDed = newDeductions[0];
+        setNewAlert({
+          id: latestDed.id,
+          text: `🚕 Driver Accepted Trip: ${latestDed.user_name} platform fee deduction of ₹${latestDed.amount} is pending approval!`,
+          link: '/transactions?type=deduction'
+        });
+        setTimeout(() => setNewAlert(null), 8000);
+      }
+      prevDeductionsRef.current = currentDedIds;
     } catch (e) {
       console.warn('Error fetching alerts in Navbar:', e);
     }
@@ -50,8 +66,8 @@ export default function Navbar({ onRefresh }: NavbarProps) {
 
   useEffect(() => {
     fetchAlerts();
-    // Poll every 10 seconds for real-time notifications
-    const interval = setInterval(fetchAlerts, 10000);
+    // Poll every 8 seconds for real-time notifications
+    const interval = setInterval(fetchAlerts, 8000);
     return () => clearInterval(interval);
   }, []);
 
@@ -66,7 +82,7 @@ export default function Navbar({ onRefresh }: NavbarProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const totalNotifications = pendingTopups.length + pendingWithdrawals.length;
+  const totalNotifications = pendingTopups.length + pendingWithdrawals.length + pendingDeductions.length;
 
   return (
     <header className="h-16 bg-dark-card/90 backdrop-blur-md border-b border-dark-border px-6 flex items-center justify-between sticky top-0 z-20">
@@ -90,7 +106,7 @@ export default function Navbar({ onRefresh }: NavbarProps) {
               onClick={() => setNewAlert(null)} 
               className="mt-2 inline-block px-3 py-1 bg-black text-brand-500 text-[10px] uppercase font-black tracking-wider rounded-lg"
             >
-              Verify Now
+              Review Now
             </Link>
           </div>
           <button onClick={() => setNewAlert(null)} className="p-1 hover:bg-black/10 rounded-lg text-black">
@@ -142,10 +158,29 @@ export default function Navbar({ onRefresh }: NavbarProps) {
               </div>
 
               <div className="max-h-72 overflow-y-auto divide-y divide-dark-border/40">
+                {pendingDeductions.map((item) => (
+                  <Link 
+                    key={item.id} 
+                    href="/transactions?type=deduction"
+                    onClick={() => setShowDropdown(false)}
+                    className="flex items-start gap-3 p-3.5 hover:bg-dark-hover/40 transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-white block">🚕 Driver Trip Platform Fee</span>
+                      <span className="text-[10px] text-dark-textMuted mt-0.5 block">
+                        {item.user_name} ({item.role}) • ₹{item.amount} pending approval
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+
                 {pendingTopups.map((item) => (
                   <Link 
                     key={item.id} 
-                    href="/topup-requests"
+                    href="/transactions?type=topup"
                     onClick={() => setShowDropdown(false)}
                     className="flex items-start gap-3 p-3.5 hover:bg-dark-hover/40 transition-colors"
                   >
@@ -164,7 +199,7 @@ export default function Navbar({ onRefresh }: NavbarProps) {
                 {pendingWithdrawals.map((item) => (
                   <Link 
                     key={item.id} 
-                    href="/withdrawals"
+                    href="/transactions?type=withdrawal"
                     onClick={() => setShowDropdown(false)}
                     className="flex items-start gap-3 p-3.5 hover:bg-dark-hover/40 transition-colors"
                   >

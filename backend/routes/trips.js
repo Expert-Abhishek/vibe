@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../config/db');
-const { emitNotification, emitTripRequest, emitTripAccepted, emitTripDeclined, emitTripCancelled, emitTripStatusUpdated } = require('../config/socket');
+const { emitNotification, emitWalletUpdate, emitTripRequest, emitTripAccepted, emitTripDeclined, emitTripCancelled, emitTripStatusUpdated } = require('../config/socket');
 
 const router = express.Router();
 
@@ -2054,20 +2054,56 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
       const roleType = isDriver ? 'driver' : (isGuide ? 'guide' : 'driver');
       const tripTitle = currentTrip.title || currentTrip.drop_name || 'Ride Booking';
       const dedDesc = `Platform Fee (${feePercent}%) for Accepted Trip #${id} (${tripTitle})`;
-      const validTripUuid = toValidUuidOrNull(id);
+
+      // Ensure wallet_deduction_requests table exists with flexible text columns
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(255),
+            user_name VARCHAR(255),
+            role VARCHAR(20) DEFAULT 'driver',
+            amount NUMERIC(10,2) NOT NULL,
+            description TEXT,
+            screenshot_url TEXT,
+            status VARCHAR(20) DEFAULT 'Pending',
+            trip_id VARCHAR(255),
+            requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            reviewed_by VARCHAR(255),
+            reviewed_at TIMESTAMP WITH TIME ZONE,
+            reject_reason TEXT
+          );
+        `);
+      } catch (e) {}
 
       await db.query(`
         INSERT INTO wallet_deduction_requests (
           user_id, user_name, role, amount, description, status, trip_id, requested_at
         ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
       `, [
-        validDriverUuid || driverId,
+        String(driverId),
         driverName || 'Driver Partner',
         roleType,
         platformFee,
         dedDesc,
-        validTripUuid
+        String(id)
       ]);
+
+      // Ensure activity_notifications table exists
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS activity_notifications (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id VARCHAR(255),
+            role VARCHAR(20) DEFAULT 'admin',
+            title VARCHAR(255) NOT NULL,
+            body TEXT NOT NULL,
+            trip_id VARCHAR(255),
+            is_read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+      } catch (e) {}
 
       // Create Activity Notification for Admin in database
       await db.query(`
@@ -2075,26 +2111,30 @@ router.post(['/accept-trip/:id', '/:id/accept'], async (req, res) => {
         VALUES (NULL, 'admin', '🔔 Platform Fee Deduction Request', $1, $2, CURRENT_TIMESTAMP)
       `, [
         `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee deduction of ₹${platformFee} (${feePercent}%) is pending your approval.`,
-        validTripUuid
+        String(id)
       ]);
 
       // Emit real-time Socket Alert to Admin Panel
-      emitNotification({
-        role: 'admin',
-        title: '🔔 Platform Fee Deduction Request',
-        body: `Driver ${driverName} accepted ride #${id}. Platform fee ₹${platformFee} pending deduction approval.`,
-        tripId: id,
-      });
+      if (typeof emitNotification === 'function') {
+        emitNotification({
+          role: 'admin',
+          title: '🔔 Platform Fee Deduction Request',
+          body: `Driver ${driverName} accepted ride #${id}. Platform fee ₹${platformFee} pending deduction approval.`,
+          tripId: String(id),
+        });
+      }
 
-      emitWalletUpdate({
-        role: 'admin',
-        type: 'deduction_pending',
-        userId: driverId,
-        userName: driverName,
-        amount: platformFee,
-        tripId: id,
-        description: dedDesc,
-      });
+      if (typeof emitWalletUpdate === 'function') {
+        emitWalletUpdate({
+          role: 'admin',
+          type: 'deduction_pending',
+          userId: String(driverId),
+          userName: driverName,
+          amount: platformFee,
+          tripId: String(id),
+          description: dedDesc,
+        });
+      }
 
       console.log(`[Platform Fee] 📋 Created pending deduction request of ₹${platformFee} for ${driverName} on Trip #${id}`);
     } catch (feeErr) {
@@ -2785,53 +2825,92 @@ router.post('/:id/respond', async (req, res) => {
         });
       }
 
-      // 2. Deduct platform fee
-      if (isDriver) {
-        try {
-          await db.query("UPDATE driver_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text", [platformFee, String(driverId)]);
-        } catch (e) {}
-      } else if (isGuide) {
-        try {
-          await db.query("UPDATE guide_profiles SET wallet_balance = wallet_balance - $1 WHERE user_id::text = $2::text OR CAST(user_id AS VARCHAR) = $2::text", [platformFee, String(driverId)]);
-        } catch (e) {}
-      }
-
-      // 3. Log transaction safely
+      // 2. Create Pending Deduction Request for Admin approval & Notify Admin
       try {
-        const validUserUuid = toValidUuidOrNull(driverId);
-        if (validUserUuid) {
-          await db.query(
-            "INSERT INTO wallet_transactions (user_id, type, amount, description) VALUES ($1, 'debit', $2, $3)",
-            [validUserUuid, 'debit', platformFee, `Platform Fee for Booking #${id}`]
-          );
-        }
-      } catch (wErr) {
-        console.warn('Wallet transaction logging warning:', wErr.message);
-      }
+        const roleType = isDriver ? 'driver' : (isGuide ? 'guide' : 'driver');
+        const tripTitle = `Accepted Trip #${id}`;
+        const dedDesc = `Platform Fee for Accepted Trip #${id}`;
 
-      // 4. Log Platform Fee Revenue for Admin Dashboard safely
-      try {
-        await db.query(`
-          CREATE TABLE IF NOT EXISTS platform_fee_revenue (
+        // Ensure wallet_deduction_requests table exists
+        try {
+          await db.query(`
+            CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
               id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+              user_id VARCHAR(255),
               user_name VARCHAR(255),
-              user_role VARCHAR(50) NOT NULL,
-              trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
-              amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
+              role VARCHAR(20) DEFAULT 'driver',
+              amount NUMERIC(10,2) NOT NULL,
               description TEXT,
+              screenshot_url TEXT,
+              status VARCHAR(20) DEFAULT 'Pending',
+              trip_id VARCHAR(255),
+              requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+              reviewed_by VARCHAR(255),
+              reviewed_at TIMESTAMP WITH TIME ZONE,
+              reject_reason TEXT
+            );
+          `);
+        } catch (e) {}
+
+        await db.query(`
+          INSERT INTO wallet_deduction_requests (
+            user_id, user_name, role, amount, description, status, trip_id, requested_at
+          ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)
+        `, [
+          String(driverId),
+          driverName || 'Driver Partner',
+          roleType,
+          platformFee,
+          dedDesc,
+          String(id)
+        ]);
+
+        // Ensure activity_notifications table exists
+        try {
+          await db.query(`
+            CREATE TABLE IF NOT EXISTS activity_notifications (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              user_id VARCHAR(255),
+              role VARCHAR(20) DEFAULT 'admin',
+              title VARCHAR(255) NOT NULL,
+              body TEXT NOT NULL,
+              trip_id VARCHAR(255),
+              is_read BOOLEAN DEFAULT FALSE,
               created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-        const validUserUuid = toValidUuidOrNull(driverId);
-        const validTripUuid = toValidUuidOrNull(id);
-        await db.query(
-          `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [validUserUuid, driverName || 'Verified Partner', isGuide ? 'guide' : 'driver', validTripUuid, platformFee, `Platform Fee for Booking #${id}`]
-        );
-      } catch (pErr) {
-        console.warn('Failed to log platform fee revenue:', pErr.message);
+            );
+          `);
+        } catch (e) {}
+
+        await db.query(`
+          INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
+          VALUES (NULL, 'admin', '🔔 Platform Fee Deduction Request', $1, $2, CURRENT_TIMESTAMP)
+        `, [
+          `Driver ${driverName || 'Partner'} accepted ride #${id}. Platform fee deduction of ₹${platformFee} is pending your approval.`,
+          String(id)
+        ]);
+
+        if (typeof emitNotification === 'function') {
+          emitNotification({
+            role: 'admin',
+            title: '🔔 Platform Fee Deduction Request',
+            body: `Driver ${driverName || 'Partner'} accepted ride #${id}. Platform fee ₹${platformFee} pending deduction approval.`,
+            tripId: String(id),
+          });
+        }
+
+        if (typeof emitWalletUpdate === 'function') {
+          emitWalletUpdate({
+            role: 'admin',
+            type: 'deduction_pending',
+            userId: String(driverId),
+            userName: driverName || 'Partner',
+            amount: platformFee,
+            tripId: String(id),
+            description: dedDesc,
+          });
+        }
+      } catch (dErr) {
+        console.warn('Deduction request creation warning in respond:', dErr.message);
       }
 
       let updateRes = await db.query(
