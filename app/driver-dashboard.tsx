@@ -26,7 +26,7 @@ import {
 import { clearUserSession, getUserSessionSync, saveUserSession } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
-import { getPendingTripRequestsSync, listenForTripRequests, updateTripStatusGlobally } from '@/constants/tripSync';
+import { getPendingTripRequestsSync, updateTripStatusGlobally } from '@/constants/tripSync';
 import { toggleAppTheme, useColorScheme } from '@/hooks/use-color-scheme';
 import { useLanguage } from '@/hooks/use-language';
 import LanguageSelector from '@/src/components/LanguageSelector';
@@ -1202,24 +1202,33 @@ export default function DriverDashboardScreen() {
       handledTripIdsRef.current.add(String(tripId));
 
       try {
-        // 1. Call API POST /api/trips/:id/accept
+        // Single source of truth: POST /api/trips/accept-trip/:id (atomic, ROLLBACK-safe)
         const apiRes = await acceptTripApi(String(tripId), driverId, session?.name || driverName);
         console.log('[DriverDashboard] 🟢 acceptTripApi response:', apiRes);
-        if (apiRes && apiRes.success === false && String(apiRes.message || '').toLowerCase().includes('already accepted')) {
+
+        // CRITICAL: Any success:false response must stop the flow — not just "already accepted"
+        if (!apiRes || apiRes.success !== true) {
           setRequestVisible(false);
           setIncomingRequest(null);
-          Alert.alert('Trip Already Taken', apiRes.message || 'Another captain accepted this booking request first.');
-          return;
+          handledTripIdsRef.current.delete(String(tripId)); // allow retry / re-poll
+          showError(
+            '⚠️ Accept Failed',
+            apiRes?.message || 'Could not accept this trip. Please try again — your wallet was not charged.'
+          );
+          return; // STOP — do not show "Accepted" UI, do not set activeTrip
         }
       } catch (e) {
-        console.warn('[DriverDashboard] acceptTripApi error:', e);
+        console.warn('[DriverDashboard] acceptTripApi network error:', e);
+        setRequestVisible(false);
+        setIncomingRequest(null);
+        handledTripIdsRef.current.delete(String(tripId));
+        showError('⚠️ Network Error', 'Could not reach the server to accept this trip. Please check your connection and try again.');
+        return; // STOP here too — don't proceed to show accepted state on network failure
       }
 
-      try {
-        await respondDriverRequestApi(String(tripId), driverId, 'accept', session?.name || driverName);
-      } catch (e) {
-        console.warn('respondDriverRequestApi error:', e);
-      }
+      // NOTE: respondDriverRequestApi call removed — it hit the SAME backend route
+      // (/api/trips/:id/respond === /api/trips/accept-trip/:id), causing a redundant
+      // duplicate call on every accept. acceptTripApi above is the single source of truth.
 
       try {
         const custId = (incomingRequest as any)?.customerId || (incomingRequest as any)?.customer_id || (incomingRequest as any)?.userId;
@@ -1319,7 +1328,7 @@ export default function DriverDashboardScreen() {
         driverName: session?.name || driverName,
         status: 'Declined',
       });
-    } catch (e) {}
+    } catch (e) { }
 
     stopNotificationChime();
     setRequestVisible(false);
