@@ -2049,19 +2049,6 @@ router.post(['/accept-trip/:id', '/:id/accept', '/:id/respond'], async (req, res
   const client = await db.pool.connect();
 
   try {
-    // 1. Auto-migrate schema safety
-    try {
-      await client.query(`
-        ALTER TABLE trips ALTER COLUMN driver_id TYPE VARCHAR(255);
-        ALTER TABLE trips ALTER COLUMN guide_id TYPE VARCHAR(255);
-        ALTER TABLE trips ALTER COLUMN customer_id TYPE VARCHAR(255);
-        ALTER TABLE trips ALTER COLUMN otp TYPE VARCHAR(50);
-        ALTER TABLE trips ALTER COLUMN end_otp TYPE VARCHAR(50);
-        ALTER TABLE driver_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
-        ALTER TABLE guide_profiles ALTER COLUMN user_id TYPE VARCHAR(255);
-      `);
-    } catch (mErr) { }
-
     // START ATOMIC DATABASE TRANSACTION
     await client.query('BEGIN');
 
@@ -2215,23 +2202,6 @@ router.post(['/accept-trip/:id', '/:id/accept', '/:id/respond'], async (req, res
 
     // 8. Insert Company Revenue Log (platform_fee_revenue)
     try {
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS platform_fee_revenue (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id VARCHAR(255),
-          user_name VARCHAR(255),
-          user_role VARCHAR(50) NOT NULL,
-          trip_id VARCHAR(255),
-          amount NUMERIC(10,2) NOT NULL DEFAULT 10.00,
-          description TEXT,
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS description TEXT;
-        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS trip_id VARCHAR(255);
-        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS user_name VARCHAR(255);
-        ALTER TABLE platform_fee_revenue ADD COLUMN IF NOT EXISTS user_role VARCHAR(50);
-        ALTER TABLE platform_fee_revenue ALTER COLUMN user_id TYPE VARCHAR(255);
-      `);
       await client.query(
         `INSERT INTO platform_fee_revenue (user_id, user_name, user_role, trip_id, amount, description, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
@@ -2242,51 +2212,30 @@ router.post(['/accept-trip/:id', '/:id/accept', '/:id/respond'], async (req, res
     }
 
     // 9. Insert Admin Panel Deduction Ledger Entry (wallet_deduction_requests)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS wallet_deduction_requests (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id VARCHAR(255),
-        user_name VARCHAR(255),
-        role VARCHAR(20) DEFAULT 'driver',
-        amount NUMERIC(10,2) NOT NULL,
-        description TEXT,
-        screenshot_url TEXT,
-        status VARCHAR(20) DEFAULT 'Approved',
-        trip_id VARCHAR(255),
-        requested_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        reviewed_by VARCHAR(255),
-        reviewed_at TIMESTAMP WITH TIME ZONE,
-        reject_reason TEXT
+    try {
+      await client.query(
+        `INSERT INTO wallet_deduction_requests (
+          user_id, user_name, role, amount, description, status, trip_id, requested_at
+        ) VALUES ($1, $2, $3, $4, $5, 'Approved', $6, CURRENT_TIMESTAMP)`,
+        [effectiveDriverId, driverName, roleType, platformFee, dedDesc, String(id)]
       );
-    `);
-    await client.query(
-      `INSERT INTO wallet_deduction_requests (
-        user_id, user_name, role, amount, description, status, trip_id, requested_at
-      ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, CURRENT_TIMESTAMP)`,
-      [effectiveDriverId, driverName, roleType, platformFee, dedDesc, String(id)]
-    );
+    } catch (wdrErr) {
+      console.warn('wallet_deduction_requests insert warning:', wdrErr.message);
+    }
 
     // 10. Insert Admin Activity Notification
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS activity_notifications (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id VARCHAR(255),
-        role VARCHAR(20) DEFAULT 'admin',
-        title VARCHAR(255) NOT NULL,
-        body TEXT NOT NULL,
-        trip_id VARCHAR(255),
-        is_read BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    try {
+      await client.query(
+        `INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
+         VALUES (NULL, 'admin', '🚕 Platform Fee Collected', $1, $2, CURRENT_TIMESTAMP)`,
+        [
+          `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee ₹${platformFee} (${feePercent}%) collected successfully.`,
+          String(id)
+        ]
       );
-    `);
-    await client.query(
-      `INSERT INTO activity_notifications (user_id, role, title, body, trip_id, created_at)
-       VALUES (NULL, 'admin', '🚕 Platform Fee Collected', $1, $2, CURRENT_TIMESTAMP)`,
-      [
-        `Driver ${driverName} (${driverPhone}) accepted ride #${id} (₹${tripAmount}). Platform fee ₹${platformFee} (${feePercent}%) collected successfully.`,
-        String(id)
-      ]
-    );
+    } catch (actErr) {
+      console.warn('activity_notifications insert warning:', actErr.message);
+    }
 
     // 11. Generate Cryptographic Dynamic Start & End OTPs
     const generatedStartOtp = (currentTrip.otp && String(currentTrip.otp).length === 4)
