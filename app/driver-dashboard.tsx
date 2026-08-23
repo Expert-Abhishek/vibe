@@ -37,7 +37,7 @@ import { emitAcceptRideSocket, emitDeclineRideSocket, emitDriverLocationSocket, 
 import { playNotificationChime, stopNotificationChime } from '@src/utils/soundHelper';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -60,7 +60,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-import { fetchRoadRoute, LatLng, snapToRoadRoute } from '@/src/services/roadRoutingService';
+import { calculateRoadHeading, fetchRoadRoute, LatLng, snapToRoadRoute } from '@/src/services/roadRoutingService';
 
 function resolveTouristName(payload: any, existingRequest: any = null): string {
   const possibleNames = [
@@ -197,6 +197,9 @@ export default function DriverDashboardScreen() {
   const [activeTrip, setActiveTrip] = useState<ActiveRequest | null>(null);
   const [tripPhase, setTripPhase] = useState<'pickup' | 'trip'>('pickup');
   const [driverActiveRoadRoute, setDriverActiveRoadRoute] = useState<LatLng[]>([]);
+  const [driverLivePos, setDriverLivePos] = useState<LatLng & { heading: number }>({ latitude: 12.9716, longitude: 77.5946, heading: 0 });
+  const [navStepIndex, setNavStepIndex] = useState<number>(0);
+  const driverMapRef = useRef<any>(null);
   const [otpVisible, setOtpVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [endOtpVisible, setEndOtpVisible] = useState(false);
@@ -241,6 +244,70 @@ export default function DriverDashboardScreen() {
         });
     }
   }, [activeTrip?.id, activeTrip?.pickupLat, activeTrip?.pickupLng, activeTrip?.dropLat, activeTrip?.dropLng, activeTrip?.checkpoints]);
+
+  // Turn-by-turn road tracking and continuous vehicle movement simulation along the route
+  useEffect(() => {
+    if (!activeTrip || driverActiveRoadRoute.length < 2) return;
+
+    // Initialize car at first road node
+    setNavStepIndex(0);
+    const startPt = driverActiveRoadRoute[0];
+    const secondPt = driverActiveRoadRoute[1] || startPt;
+    const initialHeading = calculateRoadHeading(startPt, secondPt);
+
+    setDriverLivePos({
+      latitude: startPt.latitude,
+      longitude: startPt.longitude,
+      heading: initialHeading,
+    });
+
+    const moveTimer = setInterval(() => {
+      setNavStepIndex(prev => {
+        if (prev >= driverActiveRoadRoute.length - 1) return prev;
+        const next = prev + 1;
+        const currPt = driverActiveRoadRoute[next];
+        const nextPt = driverActiveRoadRoute[Math.min(next + 1, driverActiveRoadRoute.length - 1)];
+        const heading = calculateRoadHeading(currPt, nextPt);
+
+        setDriverLivePos({
+          latitude: currPt.latitude,
+          longitude: currPt.longitude,
+          heading: heading !== 0 ? heading : 0,
+        });
+
+        // Broadcast to Tourist App and Admin in real-time
+        try {
+          const session = getUserSessionSync();
+          const dId = session?.id || 'd1';
+          const activeTripId = (activeTrip as any)?.tripId || (activeTrip as any)?.id;
+          emitDriverLocationSocket({
+            driverId: String(dId),
+            tripId: activeTripId ? String(activeTripId) : undefined,
+            latitude: currPt.latitude,
+            longitude: currPt.longitude,
+            heading: heading,
+            speed: 45,
+          });
+        } catch (e) {}
+
+        // Keep camera focused smoothly on car
+        if (driverMapRef.current && driverMapRef.current.animateToRegion) {
+          try {
+            driverMapRef.current.animateToRegion({
+              latitude: currPt.latitude,
+              longitude: currPt.longitude,
+              latitudeDelta: 0.025,
+              longitudeDelta: 0.025,
+            }, 800);
+          } catch (e) {}
+        }
+
+        return next;
+      });
+    }, 1800);
+
+    return () => clearInterval(moveTimer);
+  }, [activeTrip?.id, tripPhase, driverActiveRoadRoute]);
 
   // Loading triggers
   const [payoutLoading, setPayoutLoading] = useState(false);
@@ -1918,77 +1985,147 @@ export default function DriverDashboardScreen() {
         <View style={styles.activeTourTabPanel}>
           {activeTrip ? (
             <View style={{ flex: 1 }}>
-              <View style={[styles.activeTourMapFrame, { borderBottomColor: colors.border }]}>
-                {Platform.OS === 'web' || !MapView ? (
-                  <View style={styles.webMapVisual}>
-                    <View style={styles.gridCanvasOverlay} />
-                    <View style={styles.hudNavBox}>
-                      <Text style={styles.hudNavTitle}>CAB NAVIGATION ACTIVE</Text>
-                      <Text style={styles.hudNavText}>Phase: {tripPhase.toUpperCase()}</Text>
-                      {tripPhase === 'pickup' ? (
-                        <Text style={styles.hudNavText}>Go to Pickup: {activeTrip.pickup}</Text>
-                      ) : (
-                        <Text style={styles.hudNavText}>Go to Drop: {activeTrip.drop}</Text>
-                      )}
-                    </View>
+              <View style={[styles.activeTourMapFrame, { borderBottomColor: colors.border, position: 'relative' }]}>
+                {/* Google Maps Style Navigation HUD Banner */}
+                <View style={{
+                  position: 'absolute',
+                  top: scale(10),
+                  left: scale(10),
+                  right: scale(10),
+                  zIndex: 999,
+                  backgroundColor: '#0F172A',
+                  borderRadius: scale(14),
+                  paddingHorizontal: scale(14),
+                  paddingVertical: scale(10),
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.4,
+                  shadowRadius: 8,
+                  elevation: 9,
+                  borderWidth: 1.5,
+                  borderColor: 'rgba(245, 197, 24, 0.35)',
+                }}>
+                  <View style={{
+                    width: scale(38),
+                    height: scale(38),
+                    borderRadius: scale(10),
+                    backgroundColor: colors.amber,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: scale(10),
+                  }}>
+                    <MaterialIcons
+                      name="navigation"
+                      size={scale(24)}
+                      color="#000000"
+                      style={{ transform: [{ rotate: `${driverLivePos.heading}deg` }] }}
+                    />
                   </View>
-                ) : (
-                  <MapView
-                    provider="google"
-                    style={StyleSheet.absoluteFillObject}
-                    initialRegion={{
-                      latitude: activeTrip.pickupLat || 12.9716,
-                      longitude: activeTrip.pickupLng || 77.5946,
-                      latitudeDelta: 0.1,
-                      longitudeDelta: 0.1,
-                    }}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: moderateFontScale(13), fontWeight: '900' }} numberOfLines={1}>
+                      {tripPhase === 'pickup'
+                        ? `To Pickup: ${activeTrip.pickup}`
+                        : `To Destination: ${activeTrip.drop}`}
+                    </Text>
+                    <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700', marginTop: 2 }}>
+                      {tripPhase === 'pickup' ? '🟢 Driving to Pickup Spot' : '🚖 Trip In Progress • Following Road'}
+                    </Text>
+                  </View>
+                  <View style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: scale(8),
+                    paddingHorizontal: scale(8),
+                    paddingVertical: scale(4),
+                    alignItems: 'center',
+                  }}>
+                    <Text style={{ color: '#10B981', fontSize: moderateFontScale(13), fontWeight: '900' }}>45</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: moderateFontScale(8), fontWeight: '700' }}>km/h</Text>
+                  </View>
+                </View>
+
+                <MapView
+                  ref={driverMapRef}
+                  provider="google"
+                  style={StyleSheet.absoluteFillObject}
+                  initialRegion={{
+                    latitude: driverLivePos.latitude || activeTrip.pickupLat || 12.9716,
+                    longitude: driverLivePos.longitude || activeTrip.pickupLng || 77.5946,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }}
+                >
+                  {/* Real-World Road Polyline */}
+                  {Polyline && (() => {
+                    const pts = [
+                      { latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 },
+                      ...(Array.isArray(activeTrip.checkpoints) ? activeTrip.checkpoints.map((c: any) => ({ latitude: parseFloat(c.latitude || c.lat), longitude: parseFloat(c.longitude || c.lng) })).filter((c: any) => !isNaN(c.latitude) && !isNaN(c.longitude)) : []),
+                      { latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }
+                    ];
+                    if (pts.length < 2 && driverActiveRoadRoute.length < 2) return null;
+                    const roadCoordsToRender = driverActiveRoadRoute.length >= 2 ? driverActiveRoadRoute : pts;
+                    return (
+                      <>
+                        <Polyline coordinates={roadCoordsToRender} strokeColor="rgba(0,0,0,0.45)" strokeWidth={7} />
+                        <Polyline coordinates={roadCoordsToRender} strokeColor="#F5C518" strokeWidth={4} />
+                      </>
+                    );
+                  })()}
+
+                  {/* Pickup Marker */}
+                  <Marker
+                    coordinate={{ latitude: activeTrip.pickupLat || (activeTrip as any).pickup_lat || 12.9716, longitude: activeTrip.pickupLng || (activeTrip as any).pickup_lng || 77.5946 }}
+                    title="Pickup Location"
+                    description={activeTrip.pickup}
+                    pinColor="#10B981"
+                  />
+
+                  {/* Checkpoints / Intermediate Stops */}
+                  {Array.isArray(activeTrip.checkpoints) && activeTrip.checkpoints.map((cp: any, idx: number) => {
+                    const lat = parseFloat(cp.latitude || cp.lat);
+                    const lng = parseFloat(cp.longitude || cp.lng);
+                    if (isNaN(lat) || isNaN(lng)) return null;
+                    return (
+                      <Marker
+                        key={idx}
+                        coordinate={{ latitude: lat, longitude: lng }}
+                        title={`Stop #${idx + 1}`}
+                        description={typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp)}
+                        pinColor="#3B82F6"
+                      />
+                    );
+                  })}
+
+                  {/* Destination / Dropoff Marker */}
+                  <Marker
+                    coordinate={{ latitude: activeTrip.dropLat || (activeTrip as any).drop_lat || 12.3053, longitude: activeTrip.dropLng || (activeTrip as any).drop_lng || 76.6552 }}
+                    title="Dropoff Location"
+                    description={activeTrip.drop}
+                    pinColor="#EF4444"
+                  />
+
+                  {/* Live Vehicle Marker Following Road Coordinates */}
+                  <Marker
+                    coordinate={{ latitude: driverLivePos.latitude, longitude: driverLivePos.longitude }}
+                    title={`Captain ${driverName}`}
+                    description={`${vehicleModel} • ${vehicleNumber}`}
+                    rotation={driverLivePos.heading}
+                    flat={true}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                    pinColor="#F5C518"
                   >
-                    <Marker
-                      coordinate={{ latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 }}
-                      title="Pickup Location"
-                      description={activeTrip.pickup}
-                      pinColor={colors.amber}
-                    />
-
-                    <Marker
-                      coordinate={{ latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }}
-                      title="Dropoff Location"
-                      description={activeTrip.drop}
-                      pinColor="#ef4444"
-                    />
-
-                    {Array.isArray(activeTrip.checkpoints) && activeTrip.checkpoints.map((cp: any, idx: number) => {
-                      const lat = parseFloat(cp.latitude || cp.lat);
-                      const lng = parseFloat(cp.longitude || cp.lng);
-                      if (isNaN(lat) || isNaN(lng)) return null;
-                      return (
-                        <Marker
-                          key={idx}
-                          coordinate={{ latitude: lat, longitude: lng }}
-                          title={`Stop #${idx + 1}`}
-                          description={typeof cp === 'object' ? (cp.checkpoint_name || cp.name || `Stop ${idx + 1}`) : String(cp)}
-                          pinColor="#3B82F6"
-                        />
-                      );
-                    })}
-
-                    {Polyline && (() => {
-                      const pts = [
-                        { latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 },
-                        ...(Array.isArray(activeTrip.checkpoints) ? activeTrip.checkpoints.map((c: any) => ({ latitude: parseFloat(c.latitude || c.lat), longitude: parseFloat(c.longitude || c.lng) })).filter((c: any) => !isNaN(c.latitude) && !isNaN(c.longitude)) : []),
-                        { latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }
-                      ];
-                      if (pts.length < 2 && driverActiveRoadRoute.length < 2) return null;
-                      const roadCoordsToRender = driverActiveRoadRoute.length >= 2 ? driverActiveRoadRoute : pts;
-                      return (
-                        <>
-                          <Polyline coordinates={roadCoordsToRender} strokeColor="rgba(0,0,0,0.45)" strokeWidth={7} />
-                          <Polyline coordinates={roadCoordsToRender} strokeColor="#F5C518" strokeWidth={4} />
-                        </>
-                      );
-                    })()}
-                  </MapView>
-                )}
+                    <View style={{
+                      width: scale(38),
+                      height: scale(38),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transform: [{ rotate: `${driverLivePos.heading}deg` }],
+                    }}>
+                      <FontAwesome5 name="car" size={scale(22)} color="#F5C518" />
+                    </View>
+                  </Marker>
+                </MapView>
               </View>
 
               <View style={[styles.navDrawerBlock, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>

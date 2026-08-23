@@ -61,7 +61,7 @@ const MapView = forwardRef((props, ref) => {
         try {
           const map = L.map(containerRef.current, {
             center: [initialLat, initialLng],
-            zoom: 13,
+            zoom: 14,
             zoomControl: true,
             attributionControl: false,
           });
@@ -94,7 +94,7 @@ const MapView = forwardRef((props, ref) => {
   useEffect(() => {
     if (mapInstanceRef.current && props.region && props.region.latitude && props.region.longitude) {
       try {
-        mapInstanceRef.current.setView([props.region.latitude, props.region.longitude], mapInstanceRef.current.getZoom() || 13);
+        mapInstanceRef.current.setView([props.region.latitude, props.region.longitude], mapInstanceRef.current.getZoom() || 14);
       } catch (e) {}
     }
   }, [props.region?.latitude, props.region?.longitude]);
@@ -107,7 +107,7 @@ const MapView = forwardRef((props, ref) => {
           coordinates.map((c) => [c.latitude, c.longitude])
         );
         mapInstanceRef.current.fitBounds(bounds, {
-          padding: [options?.edgePadding?.top || 40, options?.edgePadding?.right || 40],
+          padding: [options?.edgePadding?.top || 50, options?.edgePadding?.right || 50],
           animate: options?.animated !== false,
         });
       } catch (e) {}
@@ -115,12 +115,21 @@ const MapView = forwardRef((props, ref) => {
     animateToRegion: (region, duration) => {
       if (!mapInstanceRef.current || !region) return;
       try {
-        mapInstanceRef.current.flyTo([region.latitude, region.longitude], 13, { duration: (duration || 1000) / 1000 });
+        mapInstanceRef.current.flyTo([region.latitude, region.longitude], mapInstanceRef.current.getZoom() || 15, {
+          duration: (duration || 800) / 1000,
+        });
+      } catch (e) {}
+    },
+    animateCamera: (camera) => {
+      if (!mapInstanceRef.current || !camera?.center) return;
+      try {
+        mapInstanceRef.current.flyTo([camera.center.latitude, camera.center.longitude], camera.zoom || 15, {
+          duration: (camera.duration || 800) / 1000,
+        });
       } catch (e) {}
     },
     fitToElements: () => {},
     fitToSuppliedMarkers: () => {},
-    animateCamera: () => {},
     setCamera: () => {},
   }));
 
@@ -160,43 +169,75 @@ export const Marker = (props) => {
     if (isNaN(latitude) || isNaN(longitude)) return;
 
     const color = props.pinColor || '#F5C518';
+    const isCar = props.isCar ||
+      String(props.title || '').toLowerCase().includes('driver') ||
+      String(props.title || '').toLowerCase().includes('captain') ||
+      String(props.title || '').toLowerCase().includes('car') ||
+      String(props.title || '').toLowerCase().includes('vehicle');
+
+    const heading = props.rotation || props.heading || 0;
+
+    const iconHtml = isCar
+      ? `<div style="
+          transform: rotate(${heading}deg);
+          transition: transform 0.3s ease;
+          width: 42px;
+          height: 42px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          filter: drop-shadow(0px 3px 6px rgba(0,0,0,0.6));
+        ">
+          <svg viewBox="0 0 24 24" width="36" height="36" fill="#F5C518" stroke="#101014" stroke-width="1.2">
+            <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-4.66l.12-.34h13.77l.11.34V17z"/>
+            <circle cx="7.5" cy="14.5" r="1.5" fill="#FFFFFF"/>
+            <circle cx="16.5" cy="14.5" r="1.5" fill="#FFFFFF"/>
+          </svg>
+        </div>`
+      : `<div style="
+          background-color: ${color};
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: 2.5px solid #FFFFFF;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #000000;
+          font-weight: 800;
+          font-size: 11px;
+        ">📍</div>`;
+
     const customIcon = L.divIcon({
       className: 'vibe-custom-pin',
-      html: `<div style="
-        background-color: ${color};
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        border: 2.5px solid #FFFFFF;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #000000;
-        font-weight: 800;
-        font-size: 12px;
-      ">📍</div>`,
-      iconSize: [26, 26],
-      iconAnchor: [13, 13],
+      html: iconHtml,
+      iconSize: isCar ? [42, 42] : [26, 26],
+      iconAnchor: isCar ? [21, 21] : [13, 13],
     });
 
-    const m = L.marker([latitude, longitude], { icon: customIcon }).addTo(map);
-
-    if (props.title || props.description) {
-      m.bindPopup(`<b>${props.title || ''}</b><br/>${props.description || ''}`);
+    if (markerRef.current) {
+      markerRef.current.setLatLng([latitude, longitude]);
+      markerRef.current.setIcon(customIcon);
+    } else {
+      const m = L.marker([latitude, longitude], { icon: customIcon }).addTo(map);
+      if (props.title || props.description) {
+        m.bindPopup(`<b>${props.title || ''}</b><br/>${props.description || ''}`);
+      }
+      markerRef.current = m;
     }
+  }, [ctx, props.coordinate?.latitude, props.coordinate?.longitude, props.pinColor, props.rotation, props.heading, props.isCar, props.title, props.description]);
 
-    markerRef.current = m;
-
+  useEffect(() => {
     return () => {
-      if (markerRef.current) {
+      if (markerRef.current && ctx?.map) {
         try {
-          map.removeLayer(markerRef.current);
+          ctx.map.removeLayer(markerRef.current);
           markerRef.current = null;
         } catch (e) {}
       }
     };
-  }, [ctx, props.coordinate?.latitude, props.coordinate?.longitude, props.pinColor, props.title, props.description]);
+  }, []);
 
   return null;
 };
@@ -215,25 +256,35 @@ export const Polyline = (props) => {
 
     if (latLngs.length < 2) return;
 
-    const poly = L.polyline(latLngs, {
-      color: props.strokeColor || '#F5C518',
-      weight: props.strokeWidth || 4,
-      opacity: 0.9,
-      lineJoin: 'round',
-      lineCap: 'round',
-    }).addTo(map);
+    if (polylineRef.current) {
+      polylineRef.current.setLatLngs(latLngs);
+      polylineRef.current.setStyle({
+        color: props.strokeColor || '#F5C518',
+        weight: props.strokeWidth || 4,
+      });
+    } else {
+      const poly = L.polyline(latLngs, {
+        color: props.strokeColor || '#F5C518',
+        weight: props.strokeWidth || 4,
+        opacity: 0.95,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(map);
 
-    polylineRef.current = poly;
+      polylineRef.current = poly;
+    }
+  }, [ctx, props.coordinates, props.strokeColor, props.strokeWidth]);
 
+  useEffect(() => {
     return () => {
-      if (polylineRef.current) {
+      if (polylineRef.current && ctx?.map) {
         try {
-          map.removeLayer(polylineRef.current);
+          ctx.map.removeLayer(polylineRef.current);
           polylineRef.current = null;
         } catch (e) {}
       }
     };
-  }, [ctx, props.coordinates, props.strokeColor, props.strokeWidth]);
+  }, []);
 
   return null;
 };
