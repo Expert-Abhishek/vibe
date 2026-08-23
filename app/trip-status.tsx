@@ -27,41 +27,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
+import { fetchRoadRoute, LatLng, snapToRoadRoute } from '@/src/services/roadRoutingService';
 
-function generateRoadCurvePolyline(points: Array<{ latitude: number; longitude: number }>) {
-  if (!points || points.length < 2) return points || [];
-  const result: Array<{ latitude: number; longitude: number }> = [];
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
-
-    if (isNaN(p1.latitude) || isNaN(p1.longitude) || isNaN(p2.latitude) || isNaN(p2.longitude)) continue;
-
-    const steps = 14;
-    const dLat = p2.latitude - p1.latitude;
-    const dLng = p2.longitude - p1.longitude;
-    const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-
-    const perpLat = -dLng;
-    const perpLng = dLat;
-    const curveAmp = (i % 2 === 0 ? 0.12 : -0.12) * dist;
-
-    for (let s = 0; s <= steps; s++) {
-      const t = s / steps;
-      const tLat = p1.latitude + dLat * t;
-      const tLng = p1.longitude + dLng * t;
-
-      const offsetFactor = Math.sin(t * Math.PI) * Math.sin(t * Math.PI * 2 + (i * 0.5));
-      const lat = tLat + perpLat * curveAmp * offsetFactor;
-      const lng = tLng + perpLng * curveAmp * offsetFactor;
-
-      result.push({ latitude: lat, longitude: lng });
-    }
-  }
-
-  return result.length > 0 ? result : points;
-}
 
 export default function TripStatusScreen() {
   const { t } = useTranslation();
@@ -118,6 +85,47 @@ export default function TripStatusScreen() {
   const [planName, setPlanName] = useState<string>(initialLocalTrip?.title || 'Tour Plan Package');
   const [durationHours, setDurationHours] = useState<number>(initialLocalTrip?.durationHours || 8);
   const [distanceKm, setDistanceKm] = useState<number>(initialLocalTrip?.distanceKm || 120);
+  const [roadCoords, setRoadCoords] = useState<LatLng[]>([]);
+
+  // Fetch real-world road route connecting Driver -> Pickup -> Checkpoints -> Destination
+  useEffect(() => {
+    const waypoints: LatLng[] = [];
+
+    const hasValidDriverLoc = driverInfo.latitude && driverInfo.latitude !== 12.9716 && driverInfo.latitude !== 0;
+    if (hasValidDriverLoc) {
+      waypoints.push({ latitude: driverInfo.latitude, longitude: driverInfo.longitude });
+    }
+
+    if (pickupLat && pickupLat !== 0) {
+      waypoints.push({ latitude: pickupLat, longitude: pickupLng });
+    }
+
+    if (Array.isArray(tripCheckpoints)) {
+      tripCheckpoints.forEach((cp: any) => {
+        const cLat = parseFloat(cp.latitude || cp.lat);
+        const cLng = parseFloat(cp.longitude || cp.lng);
+        if (!isNaN(cLat) && !isNaN(cLng) && (cLat !== 0 || cLng !== 0)) {
+          waypoints.push({ latitude: cLat, longitude: cLng });
+        }
+      });
+    }
+
+    if (dropLat && dropLat !== 0) {
+      waypoints.push({ latitude: dropLat, longitude: dropLng });
+    }
+
+    if (waypoints.length >= 2) {
+      fetchRoadRoute(waypoints)
+        .then(res => {
+          if (res && res.coordinates && res.coordinates.length >= 2) {
+            setRoadCoords(res.coordinates);
+          }
+        })
+        .catch(err => {
+          console.warn('[TripStatus] Error fetching real road route:', err);
+        });
+    }
+  }, [pickupLat, pickupLng, dropLat, dropLng, tripCheckpoints, driverInfo.latitude, driverInfo.longitude]);
 
   const colors = {
     bg: isDark ? '#101014' : '#F5F5F7',
@@ -691,24 +699,21 @@ export default function TripStatusScreen() {
                   pinColor="#EF4444"
                 />
 
-                {/* Connected Uber/Rapido Style Road Polyline */}
-                {Polyline && connectedPoints.length >= 2 && (() => {
-                  const curvedRoadPoints = generateRoadCurvePolyline(connectedPoints);
-                  return (
-                    <>
-                      <Polyline
-                        coordinates={curvedRoadPoints}
-                        strokeColor="rgba(0, 0, 0, 0.4)"
-                        strokeWidth={7}
-                      />
-                      <Polyline
-                        coordinates={curvedRoadPoints}
-                        strokeColor="#F5C518"
-                        strokeWidth={4}
-                      />
-                    </>
-                  );
-                })()}
+                {/* Connected Real-World Road Polyline */}
+                {Polyline && (roadCoords.length >= 2 || connectedPoints.length >= 2) && (
+                  <>
+                    <Polyline
+                      coordinates={roadCoords.length >= 2 ? roadCoords : connectedPoints}
+                      strokeColor="rgba(0, 0, 0, 0.45)"
+                      strokeWidth={7}
+                    />
+                    <Polyline
+                      coordinates={roadCoords.length >= 2 ? roadCoords : connectedPoints}
+                      strokeColor="#F5C518"
+                      strokeWidth={4}
+                    />
+                  </>
+                )}
               </MapView>
             );
           })()}

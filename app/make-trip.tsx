@@ -8,7 +8,7 @@ import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
+import { fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
 
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
@@ -493,47 +494,19 @@ export default function MakeTripScreen() {
     const fetchRoute = async () => {
       setLoadingRoute(true);
       try {
-        const origin = `${checkpoints[0].latitude},${checkpoints[0].longitude}`;
-        const destination = `${checkpoints[checkpoints.length - 1].latitude},${checkpoints[checkpoints.length - 1].longitude}`;
-
-        let waypoints = '';
-        if (checkpoints.length > 2) {
-          const middlePoints = checkpoints.slice(1, -1);
-          waypoints = `&waypoints=optimize:false|${middlePoints.map(c => `${c.latitude},${c.longitude}`).join('|')}`;
-        }
-
-        const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypoints}&key=${GOOGLE_MAPS_KEY}`;
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.status === 'OK' && data.routes && data.routes[0]) {
-          const route = data.routes[0];
-          // Set Decoded Polyline
-          if (route.overview_polyline && route.overview_polyline.points) {
-            const decoded = decodePolyline(route.overview_polyline.points);
-            setRouteCoords(decoded);
-          }
-
-          // Calculate total distance & duration
-          let metersSum = 0;
-          let secondsSum = 0;
-          route.legs.forEach((leg: any) => {
-            metersSum += leg.distance.value;
-            secondsSum += leg.duration.value;
-          });
-
-          setDistance(`${(metersSum / 1000).toFixed(1)} km`);
-          const h = Math.floor(secondsSum / 3600);
-          const m = Math.floor((secondsSum % 3600) / 60);
+        const roadResult = await fetchRoadRoute(checkpoints);
+        if (roadResult && roadResult.coordinates && roadResult.coordinates.length >= 2) {
+          setRouteCoords(roadResult.coordinates);
+          setDistance(`${roadResult.distanceKm.toFixed(1)} km`);
+          const h = Math.floor(roadResult.durationMinutes / 60);
+          const m = Math.floor(roadResult.durationMinutes % 60);
           setDuration(`${h > 0 ? `${h}h ` : ''}${m}m`);
-          setTravelHours(secondsSum / 3600);
+          setTravelHours(roadResult.durationMinutes / 60);
         } else {
-          // If directions fail, fall back to straight line paths
-          console.warn('Google Directions failed with status:', data.status);
           calculateHaversineFallback();
         }
       } catch (e) {
-        console.error('Directions API error:', e);
+        console.error('fetchRoadRoute error in make-trip:', e);
         calculateHaversineFallback();
       } finally {
         setLoadingRoute(false);
@@ -542,6 +515,38 @@ export default function MakeTripScreen() {
 
     fetchRoute();
   }, [checkpoints]);
+
+  const mapRef = useRef<any>(null);
+
+  // Dynamic Map Camera framing as destinations/checkpoints are added or removed
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const timer = setTimeout(() => {
+      const allCoords = routeCoords.length > 0
+        ? routeCoords
+        : checkpoints.map(c => ({ latitude: c.latitude, longitude: c.longitude })).filter(c => c && !isNaN(c.latitude) && !isNaN(c.longitude));
+
+      if (allCoords.length >= 2 && mapRef.current.fitToCoordinates) {
+        try {
+          mapRef.current.fitToCoordinates(allCoords, {
+            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            animated: true,
+          });
+        } catch (e) {}
+      } else if (allCoords.length === 1 && mapRef.current.animateToRegion) {
+        try {
+          mapRef.current.animateToRegion({
+            latitude: allCoords[0].latitude,
+            longitude: allCoords[0].longitude,
+            latitudeDelta: 0.08,
+            longitudeDelta: 0.08,
+          }, 800);
+        } catch (e) {}
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [checkpoints, routeCoords]);
 
   // Quote polling effect
   useEffect(() => {
@@ -992,97 +997,57 @@ export default function MakeTripScreen() {
 
         {/* Map Container */}
         <View style={[styles.mapContainer, { borderColor: colors.border }]}>
-          {Platform.OS === 'web' || !MapView ? (
-            // Premium Web / Fallback visual map panel
-            <View style={styles.webMapPlaceholder}>
-              <View style={styles.mapGridLines} />
+          <MapView
+            ref={mapRef}
+            provider="google"
+            style={StyleSheet.absoluteFillObject}
+            customMapStyle={isDark ? [] : darkMapStyle}
+            initialRegion={{
+              latitude: checkpoints[0]?.latitude || 12.9716,
+              longitude: checkpoints[0]?.longitude || 77.5946,
+              latitudeDelta: 0.8,
+              longitudeDelta: 0.8,
+            }}
+          >
+            {/* Dynamic Checkpoint Markers */}
+            {checkpoints.map((c, index) => {
+              let pinColor = '#3B82F6'; // Middle Stop (Blue)
+              let stopLetter = String.fromCharCode(65 + index);
+              if (index === 0) pinColor = '#10B981'; // Start / Pickup (Green)
+              if (index === checkpoints.length - 1 && checkpoints.length > 1) pinColor = '#EF4444'; // End / Drop (Red)
 
-              {/* Draw connected checkpoints in a visual panel */}
-              <View style={styles.hudTelemetry}>
-                <Text style={styles.hudTitle}>GPS LINK ACTIVE</Text>
-                <View style={styles.telemetryRow}>
-                  <Text style={styles.telemetryLabel}>Stops:</Text>
-                  <Text style={styles.telemetryVal}>{checkpoints.length}</Text>
-                </View>
-                <View style={styles.telemetryRow}>
-                  <Text style={styles.telemetryLabel}>Dist:</Text>
-                  <Text style={styles.telemetryVal}>{distance}</Text>
-                </View>
-                <View style={styles.telemetryRow}>
-                  <Text style={styles.telemetryLabel}>Time:</Text>
-                  <Text style={styles.telemetryVal}>{duration}</Text>
-                </View>
-              </View>
+              return (
+                <Marker
+                  key={`marker_${c.id || index}_${c.latitude}_${c.longitude}`}
+                  coordinate={{ latitude: c.latitude, longitude: c.longitude }}
+                  title={`${stopLetter}. ${c.name}`}
+                  description={c.address || `Stop ${stopLetter}`}
+                  pinColor={pinColor}
+                />
+              );
+            })}
 
-              {/* Central Map Canvas Nodes */}
-              <View style={styles.nodesCanvas}>
-                {checkpoints.map((c, i) => (
-                  <View
-                    key={`canvas_${c.id || i}_${i}`}
-                    style={[
-                      styles.canvasNodeCircle,
-                      {
-                        backgroundColor: i === 0 ? colors.amber : i === checkpoints.length - 1 ? '#E63946' : '#2a2a35',
-                        left: scale(40 + (i * 25) % 180),
-                        top: verticalScale(30 + (i * 45) % 110),
-                      }
-                    ]}
-                  >
-                    <Text style={styles.canvasNodeText}>{String.fromCharCode(65 + i)}</Text>
-                    <Text style={styles.canvasNodeLabel} numberOfLines={1}>{c.name}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <Text style={styles.webFallbackFootnote}>
-                Interactive Map renders on Android & iOS device screens
-              </Text>
-            </View>
-          ) : (
-            // Native Map View
-            <MapView
-              provider="google"
-              style={StyleSheet.absoluteFillObject}
-              customMapStyle={isDark ? [] : darkMapStyle}
-              initialRegion={{
-                latitude: 12.9716,
-                longitude: 77.5946,
-                latitudeDelta: 1.5,
-                longitudeDelta: 1.5,
-              }}
-            >
-              {/* Checkpoint Markers */}
-              {checkpoints.map((c, index) => {
-                let pinColor = '#3b82f6'; // Middle
-                if (index === 0) pinColor = colors.amber; // Start
-                if (index === checkpoints.length - 1) pinColor = '#ef4444'; // End
-
-                return (
-                  <Marker
-                    key={`marker_${c.id || index}_${index}`}
-                    coordinate={{ latitude: c.latitude, longitude: c.longitude }}
-                    title={c.name}
-                    description={c.address || `Stop ${String.fromCharCode(65 + index)}`}
-                    pinColor={pinColor}
-                  />
-                );
-              })}
-
-              {/* Encoded Path Polyline */}
-              {routeCoords.length > 0 && (
+            {/* Dynamic Real-World Road Polyline */}
+            {routeCoords.length > 0 && (
+              <>
+                <Polyline
+                  coordinates={routeCoords}
+                  strokeColor="rgba(0, 0, 0, 0.45)"
+                  strokeWidth={scale(6.5)}
+                />
                 <Polyline
                   coordinates={routeCoords}
                   strokeColor={colors.amber}
-                  strokeWidth={scale(4)}
-                  lineDashPattern={Platform.OS === 'android' ? [10, 10] : undefined}
+                  strokeWidth={scale(3.5)}
                 />
-              )}
-            </MapView>
-          )}
+              </>
+            )}
+          </MapView>
+
           {loadingRoute && (
             <View style={styles.mapLoadingOverlay}>
-              <ActivityIndicator size="large" color={colors.amber} />
-              <Text style={styles.loadingRouteText}>Updating Map Route...</Text>
+              <ActivityIndicator size="small" color={colors.amber} />
+              <Text style={styles.loadingRouteText}>Updating Road Route...</Text>
             </View>
           )}
         </View>

@@ -26,6 +26,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
+import { fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
 
 import { useTranslation } from 'react-i18next';
 
@@ -89,6 +90,46 @@ export default function TripsHistoryScreen() {
   const [planName, setPlanName] = useState<string>(initialLocalTrip?.title || 'Tour Plan Package');
   const [durationHours, setDurationHours] = useState<number>(initialLocalTrip?.durationHours || 8);
   const [distanceKm, setDistanceKm] = useState<number>(initialLocalTrip?.distanceKm || 120);
+  const [roadCoords, setRoadCoords] = useState<LatLng[]>([]);
+
+  useEffect(() => {
+    const waypoints: LatLng[] = [];
+
+    const hasValidDriverLoc = driverInfo.latitude && driverInfo.latitude !== 12.9716 && driverInfo.latitude !== 0;
+    if (hasValidDriverLoc) {
+      waypoints.push({ latitude: driverInfo.latitude, longitude: driverInfo.longitude });
+    }
+
+    if (pickupLat && pickupLat !== 0) {
+      waypoints.push({ latitude: pickupLat, longitude: pickupLng });
+    }
+
+    if (Array.isArray(tripCheckpoints)) {
+      tripCheckpoints.forEach((cp: any) => {
+        const cLat = parseFloat(cp.latitude || cp.lat);
+        const cLng = parseFloat(cp.longitude || cp.lng);
+        if (!isNaN(cLat) && !isNaN(cLng) && (cLat !== 0 || cLng !== 0)) {
+          waypoints.push({ latitude: cLat, longitude: cLng });
+        }
+      });
+    }
+
+    if (dropLat && dropLat !== 0) {
+      waypoints.push({ latitude: dropLat, longitude: dropLng });
+    }
+
+    if (waypoints.length >= 2) {
+      fetchRoadRoute(waypoints)
+        .then(res => {
+          if (res && res.coordinates && res.coordinates.length >= 2) {
+            setRoadCoords(res.coordinates);
+          }
+        })
+        .catch(err => {
+          console.warn('[TripsHistory] Error fetching road route:', err);
+        });
+    }
+  }, [pickupLat, pickupLng, dropLat, dropLng, tripCheckpoints, driverInfo.latitude, driverInfo.longitude]);
 
   const colors = {
     bg: isDark ? '#101014' : '#F5F5F7',
@@ -633,12 +674,20 @@ export default function TripsHistoryScreen() {
                   pinColor="#EF4444"
                 />
 
-                {Polyline && connectedPoints.length >= 2 && (
-                  <Polyline
-                    coordinates={connectedPoints}
-                    strokeColor="#F5C518"
-                    strokeWidth={4}
-                  />
+                {/* Connected Real-World Road Polyline */}
+                {Polyline && (roadCoords.length >= 2 || connectedPoints.length >= 2) && (
+                  <>
+                    <Polyline
+                      coordinates={roadCoords.length >= 2 ? roadCoords : connectedPoints}
+                      strokeColor="rgba(0, 0, 0, 0.45)"
+                      strokeWidth={7}
+                    />
+                    <Polyline
+                      coordinates={roadCoords.length >= 2 ? roadCoords : connectedPoints}
+                      strokeColor="#F5C518"
+                      strokeWidth={4}
+                    />
+                  </>
                 )}
               </MapView>
             );

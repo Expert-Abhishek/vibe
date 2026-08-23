@@ -23,11 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-
-interface Coordinate {
-  latitude: number;
-  longitude: number;
-}
+import { fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
 
 export default function RideMatchingScreen() {
   const router = useRouter();
@@ -72,6 +68,8 @@ export default function RideMatchingScreen() {
   const isNavigatedRef = useRef(false);
   const [liveDriverInfo, setLiveDriverInfo] = useState<any>(null);
 
+type Coordinate = LatLng;
+
   // Live / Server driver information (null by default until matched with a real driver)
   const demoDriver = {
     name: liveDriverInfo?.name || null,
@@ -79,6 +77,7 @@ export default function RideMatchingScreen() {
     vehicleName: liveDriverInfo?.vehicleModel || null,
     vehicleNumber: liveDriverInfo?.vehicleNumber || null,
     otp: (params.otp as string) || null,
+    endOtp: (params.endOtp as string) || (liveDriverInfo as any)?.endOtp || null,
   };
 
   // Generate route coordinates list connecting pickup -> stops -> drop
@@ -287,32 +286,32 @@ export default function RideMatchingScreen() {
   };
 
 
-  // Build simulated route coordinates between checkpoints
+  // Build real-world road route coordinates between checkpoints
   useEffect(() => {
     // Collect all nodes in sequence
-    const nodes = [
+    const nodes: LatLng[] = [
       { latitude: pickupLat, longitude: pickupLng },
       ...parsedStops.map(s => ({ latitude: s.latitude, longitude: s.longitude })),
       { latitude: dropLat, longitude: dropLng }
-    ];
+    ].filter(n => n && !isNaN(n.latitude) && !isNaN(n.longitude) && (n.latitude !== 0 || n.longitude !== 0));
 
-    // Generate dense polyline (10 steps per leg to make the moving marker smooth)
-    const points: Coordinate[] = [];
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const start = nodes[i];
-      const end = nodes[i + 1];
-      for (let j = 0; j < 10; j++) {
-        const fraction = j / 10;
-        points.push({
-          latitude: start.latitude + (end.latitude - start.latitude) * fraction,
-          longitude: start.longitude + (end.longitude - start.longitude) * fraction
+    if (nodes.length >= 2) {
+      setLoadingRoute(true);
+      fetchRoadRoute(nodes)
+        .then(result => {
+          if (result && result.coordinates && result.coordinates.length >= 2) {
+            setRouteCoords(result.coordinates);
+          } else {
+            setRouteCoords(nodes);
+          }
+          setLoadingRoute(false);
+        })
+        .catch(err => {
+          console.warn('[RideMatching] Failed to load road route:', err);
+          setRouteCoords(nodes);
+          setLoadingRoute(false);
         });
-      }
     }
-    points.push(nodes[nodes.length - 1]); // Add final point
-
-    setRouteCoords(points);
-    setLoadingRoute(false);
 
     // Set wiggle cars near the pickup coordinates
     setWiggleCars([
@@ -320,7 +319,7 @@ export default function RideMatchingScreen() {
       { latitude: pickupLat - 0.002, longitude: pickupLng + 0.003 },
       { latitude: pickupLat + 0.001, longitude: pickupLng + 0.002 },
     ]);
-  }, []);
+  }, [pickupLat, pickupLng, dropLat, dropLng]);
 
   // Wiggle cars simulator during searching
   useEffect(() => {
@@ -539,6 +538,7 @@ export default function RideMatchingScreen() {
                 <View
                   style={[
                     styles.progressBarFill,
+
                     {
                       backgroundColor: colors.amber,
                       width: status === 'started' ? `${(progressIndex / (routeCoords.length - 1)) * 100}%` : status === 'completed' ? '100%' : '0%'
@@ -566,13 +566,20 @@ export default function RideMatchingScreen() {
               longitudeDelta: Math.abs(pickupLng - dropLng) * 1.8 || 0.05,
             }}
           >
-            {/* Draw Path Polyline */}
+            {/* Draw Real-World Road Polyline */}
             {routeCoords.length > 0 && (
-              <Polyline
-                coordinates={routeCoords}
-                strokeColor={colors.amber}
-                strokeWidth={scale(4)}
-              />
+              <>
+                <Polyline
+                  coordinates={routeCoords}
+                  strokeColor="rgba(0, 0, 0, 0.45)"
+                  strokeWidth={scale(6.5)}
+                />
+                <Polyline
+                  coordinates={routeCoords}
+                  strokeColor={colors.amber}
+                  strokeWidth={scale(3.5)}
+                />
+              </>
             )}
 
             {/* Pickup Marker */}

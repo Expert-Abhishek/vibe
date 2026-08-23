@@ -60,41 +60,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-
-function generateRoadCurvePolyline(points: Array<{ latitude: number; longitude: number }>) {
-  if (!points || points.length < 2) return points || [];
-  const result: Array<{ latitude: number; longitude: number }> = [];
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
-
-    if (isNaN(p1.latitude) || isNaN(p1.longitude) || isNaN(p2.latitude) || isNaN(p2.longitude)) continue;
-
-    const steps = 14;
-    const dLat = p2.latitude - p1.latitude;
-    const dLng = p2.longitude - p1.longitude;
-    const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-
-    const perpLat = -dLng;
-    const perpLng = dLat;
-    const curveAmp = (i % 2 === 0 ? 0.12 : -0.12) * dist;
-
-    for (let s = 0; s <= steps; s++) {
-      const t = s / steps;
-      const tLat = p1.latitude + dLat * t;
-      const tLng = p1.longitude + dLng * t;
-
-      const offsetFactor = Math.sin(t * Math.PI) * Math.sin(t * Math.PI * 2 + (i * 0.5));
-      const lat = tLat + perpLat * curveAmp * offsetFactor;
-      const lng = tLng + perpLng * curveAmp * offsetFactor;
-
-      result.push({ latitude: lat, longitude: lng });
-    }
-  }
-
-  return result.length > 0 ? result : points;
-}
+import { fetchRoadRoute, LatLng, snapToRoadRoute } from '@/src/services/roadRoutingService';
 
 function resolveTouristName(payload: any, existingRequest: any = null): string {
   const possibleNames = [
@@ -230,10 +196,51 @@ export default function DriverDashboardScreen() {
   // Active trip state
   const [activeTrip, setActiveTrip] = useState<ActiveRequest | null>(null);
   const [tripPhase, setTripPhase] = useState<'pickup' | 'trip'>('pickup');
+  const [driverActiveRoadRoute, setDriverActiveRoadRoute] = useState<LatLng[]>([]);
   const [otpVisible, setOtpVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [endOtpVisible, setEndOtpVisible] = useState(false);
   const [enteredEndOtp, setEnteredEndOtp] = useState('');
+
+  // Real-world road route fetching for active trip on driver map
+  useEffect(() => {
+    if (!activeTrip) {
+      setDriverActiveRoadRoute([]);
+      return;
+    }
+
+    const waypoints: LatLng[] = [];
+    const pLat = activeTrip.pickupLat || (activeTrip as any).pickup_lat;
+    const pLng = activeTrip.pickupLng || (activeTrip as any).pickup_lng;
+    const dLat = activeTrip.dropLat || (activeTrip as any).drop_lat;
+    const dLng = activeTrip.dropLng || (activeTrip as any).drop_lng;
+
+    if (pLat && pLng) waypoints.push({ latitude: pLat, longitude: pLng });
+
+    if (Array.isArray(activeTrip.checkpoints)) {
+      activeTrip.checkpoints.forEach((cp: any) => {
+        const cLat = parseFloat(cp.latitude || cp.lat);
+        const cLng = parseFloat(cp.longitude || cp.lng);
+        if (!isNaN(cLat) && !isNaN(cLng) && (cLat !== 0 || cLng !== 0)) {
+          waypoints.push({ latitude: cLat, longitude: cLng });
+        }
+      });
+    }
+
+    if (dLat && dLng) waypoints.push({ latitude: dLat, longitude: dLng });
+
+    if (waypoints.length >= 2) {
+      fetchRoadRoute(waypoints)
+        .then(res => {
+          if (res && res.coordinates && res.coordinates.length >= 2) {
+            setDriverActiveRoadRoute(res.coordinates);
+          }
+        })
+        .catch(err => {
+          console.warn('[DriverDashboard] Error fetching active road route:', err);
+        });
+    }
+  }, [activeTrip?.id, activeTrip?.pickupLat, activeTrip?.pickupLng, activeTrip?.dropLat, activeTrip?.dropLng, activeTrip?.checkpoints]);
 
   // Loading triggers
   const [payoutLoading, setPayoutLoading] = useState(false);
@@ -984,16 +991,34 @@ export default function DriverDashboardScreen() {
         if (!data) return;
 
         const session = getUserSessionSync();
-        const currentDriverId = String(session?.id || (session as any)?.userId || session?.profile?.id || '').toLowerCase().trim();
+        const currentDriverId = String(session?.id || (session as any)?.userId || session?.profile?.id || (session as any)?.driverId || '').toLowerCase().trim();
+        const currentDriverName = String(session?.name || driverName || '').toLowerCase().trim();
+        const currentDriverPhone = String(session?.phone || '').trim();
+
         const acceptedDriverId = String(data.driverId || data.driver_id || data.assignedToId || '').toLowerCase().trim();
+        const acceptedDriverName = String(data.driverName || data.driver_or_guide_name || '').toLowerCase().trim();
+        const acceptedDriverPhone = String(data.driverPhone || data.phone || '').trim();
         const accTripId = String(data.tripId || data.id || '').toLowerCase().trim();
+
+        // Check if accepted by THIS driver (by ID, Name, Phone, or active tracking)
+        const isAcceptedByMe =
+          (acceptedDriverId && currentDriverId && (acceptedDriverId === currentDriverId || acceptedDriverId.includes(currentDriverId) || currentDriverId.includes(acceptedDriverId))) ||
+          (acceptedDriverName && currentDriverName && (acceptedDriverName === currentDriverName || acceptedDriverName.includes(currentDriverName) || currentDriverName.includes(acceptedDriverName))) ||
+          (acceptedDriverPhone && currentDriverPhone && acceptedDriverPhone === currentDriverPhone) ||
+          (accTripId && handledTripIdsRef.current.has(accTripId)) ||
+          (activeTrip && String(activeTrip.id || activeTrip.tripId || '').toLowerCase().trim() === accTripId);
+
+        if (isAcceptedByMe) {
+          console.log('[DriverDashboard] ✅ trip_accepted event belongs to current driver. Ignoring "claimed by other" alert.');
+          return;
+        }
 
         // CASE 1: Another driver accepted this ride request!
         if (acceptedDriverId && currentDriverId && acceptedDriverId !== currentDriverId) {
           stopNotificationChime();
           setIncomingRequest(null);
           setRequestVisible(false);
-          showError('Trip Claimed ✋', 'Another captain accepted this booking request first.');
+          showError('Trip Claimed ✋', `Another captain (${data.driverName || data.driver_or_guide_name || 'Partner'}) accepted this booking request first.`);
         }
       };
 
@@ -1045,19 +1070,17 @@ export default function DriverDashboardScreen() {
       socket.on('trip_cancelled', handleTripCancelled);
       socket.on('RIDE_CANCELLED', handleTripCancelled);
       socket.on('trip_declined', handleTripCancelled);
-    }
 
-    const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
-      if (!isOnlineRef.current) return;
-      console.log('[DriverDashboard] 🔔 DeviceEventEmitter new_driver_request:', data);
-      if (data) {
-        handleIncomingTripData(data);
-      }
-    });
+      const subReq1 = DeviceEventEmitter.addListener('new_driver_request', (data: any) => {
+        if (!isOnlineRef.current) return;
+        console.log('[DriverDashboard] 🔔 DeviceEventEmitter new_driver_request:', data);
+        if (data) {
+          handleIncomingTripData(data);
+        }
+      });
 
-    return () => {
-      subReq1.remove();
-      if (socket) {
+      return () => {
+        subReq1.remove();
         socket.off('connect');
         socket.off('trip_request');
         socket.off('trip_requested');
@@ -1068,8 +1091,8 @@ export default function DriverDashboardScreen() {
         socket.off('trip_cancelled');
         socket.off('RIDE_CANCELLED');
         socket.off('trip_declined');
-      }
-    };
+      };
+    }
   }, []);
 
   // Real-Time GPS Location Streaming over Socket.io
@@ -1955,12 +1978,12 @@ export default function DriverDashboardScreen() {
                         ...(Array.isArray(activeTrip.checkpoints) ? activeTrip.checkpoints.map((c: any) => ({ latitude: parseFloat(c.latitude || c.lat), longitude: parseFloat(c.longitude || c.lng) })).filter((c: any) => !isNaN(c.latitude) && !isNaN(c.longitude)) : []),
                         { latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 }
                       ];
-                      if (pts.length < 2) return null;
-                      const curved = generateRoadCurvePolyline(pts);
+                      if (pts.length < 2 && driverActiveRoadRoute.length < 2) return null;
+                      const roadCoordsToRender = driverActiveRoadRoute.length >= 2 ? driverActiveRoadRoute : pts;
                       return (
                         <>
-                          <Polyline coordinates={curved} strokeColor="rgba(0,0,0,0.4)" strokeWidth={7} />
-                          <Polyline coordinates={curved} strokeColor="#F5C518" strokeWidth={4} />
+                          <Polyline coordinates={roadCoordsToRender} strokeColor="rgba(0,0,0,0.45)" strokeWidth={7} />
+                          <Polyline coordinates={roadCoordsToRender} strokeColor="#F5C518" strokeWidth={4} />
                         </>
                       );
                     })()}

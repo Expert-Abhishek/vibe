@@ -24,6 +24,7 @@ import { adminState } from '@/constants/admin-state';
 import { broadcastNewTripRequest } from '@/constants/tripSync';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
+import { fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
 
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
@@ -208,42 +209,17 @@ export default function BookCabScreen() {
     const fetchRoute = async () => {
       setLoadingRoute(true);
       try {
-        const origin = `${pickup.latitude},${pickup.longitude}`;
-        const destination = `${drop.latitude},${drop.longitude}`;
-
-        let waypointsQuery = '';
-        if (stops.length > 0) {
-          const coords = stops.map(s => `${s.latitude},${s.longitude}`).join('|');
-          waypointsQuery = `&waypoints=${coords}`;
-        }
-
-        const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsQuery}&key=${GOOGLE_MAPS_KEY}`;
-
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.status === 'OK' && data.routes && data.routes[0]) {
-          const route = data.routes[0];
-          // Polyline decoding
-          if (route.overview_polyline && route.overview_polyline.points) {
-            const points = decodePolyline(route.overview_polyline.points);
-            setRouteCoords(points);
-          }
-
-          let metersSum = 0;
-          let secondsSum = 0;
-          route.legs.forEach((leg: any) => {
-            metersSum += leg.distance.value;
-            secondsSum += leg.duration.value;
-          });
-
-          setDistanceKm(metersSum / 1000);
-          setDurationMins(Math.ceil(secondsSum / 60));
+        const fullPath = [pickup, ...stops, drop];
+        const roadResult = await fetchRoadRoute(fullPath);
+        if (roadResult && roadResult.coordinates && roadResult.coordinates.length >= 2) {
+          setRouteCoords(roadResult.coordinates);
+          setDistanceKm(roadResult.distanceKm);
+          setDurationMins(roadResult.durationMinutes);
         } else {
           calculateStraightLineFallback();
         }
       } catch (e) {
-        console.error('Directions route error:', e);
+        console.error('fetchRoadRoute error in book-cab:', e);
         calculateStraightLineFallback();
       } finally {
         setLoadingRoute(false);

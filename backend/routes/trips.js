@@ -2069,6 +2069,25 @@ router.post(['/accept-trip/:id', '/:id/accept', '/:id/respond'], async (req, res
     const rawStatus = String(currentTrip.status || '').toLowerCase().trim().replace(/_/g, ' ');
 
     if (['accepted', 'in progress', 'arrived', 'completed', 'finished'].includes(rawStatus)) {
+      const currentAssignedDriverId = String(currentTrip.driver_id || '').toLowerCase().trim();
+      const requestingDriverId = String(effectiveDriverId).toLowerCase().trim();
+      const currentAssignedDriverName = String(currentTrip.driver_or_guide_name || '').toLowerCase().trim();
+      const requestingDriverName = String(driverName || '').toLowerCase().trim();
+
+      // If already accepted by THIS SAME driver, return success idempotently
+      const isAlreadyMine =
+        (currentAssignedDriverId && requestingDriverId && (currentAssignedDriverId === requestingDriverId || String(currentTrip.driver_id) === String(effectiveDriverId))) ||
+        (currentAssignedDriverName && requestingDriverName && (currentAssignedDriverName === requestingDriverName || currentAssignedDriverName.includes(requestingDriverName)));
+
+      if (isAlreadyMine) {
+        await client.query('COMMIT');
+        return res.json({
+          success: true,
+          message: 'Trip accepted successfully!',
+          data: currentTrip,
+        });
+      }
+
       await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
