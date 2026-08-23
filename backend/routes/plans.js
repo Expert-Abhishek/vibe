@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
       SELECT 
         pc.id AS plan_checkpoint_id,
         pc.plan_id,
-        COALESCE(pc.destination_id, pc.checkpoint_id) AS destination_id,
+        pc.destination_id,
         pc.is_active AS plan_checkpoint_active,
         pc.order_index,
         d.name AS destination_name,
@@ -66,7 +66,7 @@ router.get('/', async (req, res) => {
         d.longitude AS destination_longitude,
         d.is_active AS master_destination_active
       FROM plan_checkpoints pc
-      JOIN destinations d ON COALESCE(pc.destination_id, pc.checkpoint_id) = d.id
+      JOIN destinations d ON pc.destination_id = d.id
       ORDER BY pc.order_index ASC, pc.created_at ASC
     `;
 
