@@ -87,10 +87,9 @@ app.get('/health', async (req, res) => {
 // Deployment version & timestamp endpoint
 app.get('/api/version', (req, res) => {
   res.json({
-    version: '2.1.0-pending-admin-deduction-flow',
-    deployedAt: '2026-08-21T21:16:00Z',
-    commit: 'd6aff92',
-    features: ['pending_admin_deduction_approval', 'atomic_acid_transactions', 'dynamic_cryptographic_otps', 'admin_deduction_ledger']
+    version: '2.1.1-customer-uuid-fix',
+    deployedAt: new Date().toISOString(),
+    features: ['customer_uuid_fix', 'pending_admin_deduction_approval', 'atomic_acid_transactions', 'dynamic_cryptographic_otps', 'admin_deduction_ledger']
   });
 });
 
