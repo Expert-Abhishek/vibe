@@ -1,8 +1,9 @@
-import { bookTripApi, createTripApi, deductWalletApi, fetchActiveTripApi, fetchDestinationsApi, submitWalletDeductionRequestApi } from '@/constants/api';
+import { adminState } from '@/constants/admin-state';
+import { bookTripApi, deductWalletApi, fetchActiveTripApi, fetchDestinationsApi, submitWalletDeductionRequestApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { sendLocalNotification } from '@/constants/notifications';
-import { openRazorpayPayment } from '@/constants/razorpay';
 import { moderateFontScale, scale, verticalScale } from '@/constants/responsive';
+import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -20,11 +21,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { adminState } from '@/constants/admin-state';
-import { broadcastNewTripRequest } from '@/constants/tripSync';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-import { fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
+import { fetchRoadRoute } from '@/src/services/roadRoutingService';
 
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
@@ -1153,10 +1152,10 @@ export default function BookCabScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-
+              {/* 
               <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '700', marginBottom: verticalScale(8) }}>
                 💳 Pre-booking automatically deducts deposit from your Tourist Wallet.
-              </Text>
+              </Text> */}
 
               <View style={styles.datePickerInputRow}>
                 <View style={{ flex: 1 }}>

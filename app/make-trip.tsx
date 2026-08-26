@@ -8,13 +8,12 @@ import { broadcastNewTripRequest } from '@/constants/tripSync';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
   Modal,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -28,7 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-import { fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
+import { fetchRoadRoute } from '@/src/services/roadRoutingService';
 
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
@@ -532,7 +531,7 @@ export default function MakeTripScreen() {
             edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
             animated: true,
           });
-        } catch (e) {}
+        } catch (e) { }
       } else if (allCoords.length === 1 && mapRef.current.animateToRegion) {
         try {
           mapRef.current.animateToRegion({
@@ -541,7 +540,7 @@ export default function MakeTripScreen() {
             latitudeDelta: 0.08,
             longitudeDelta: 0.08,
           }, 800);
-        } catch (e) {}
+        } catch (e) { }
       }
     }, 350);
 
@@ -1988,9 +1987,9 @@ export default function MakeTripScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '700' }}>
+                {/* <Text style={{ color: colors.amber, fontSize: moderateFontScale(10), fontWeight: '700' }}>
                   💳 Pre-booking automatically deducts deposit from your Tourist Wallet.
-                </Text>
+                </Text> */}
               </View>
             ) : (
               <View style={{ marginTop: verticalScale(10), marginBottom: verticalScale(12) }}>
@@ -2051,8 +2050,8 @@ export default function MakeTripScreen() {
               <MaterialIcons name="payment" size={scale(20)} color="#101014" />
               <Text style={styles.confirmBtnText}>
                 {bookingMode === 'prebook'
-                  ? `Confirm Pre-Booking (Wallet Deposit ₹${prebookPayOption === '20' ? Math.round(computedTripPrice * 0.20) : computedTripPrice})`
-                  : `Confirm & Pay Instant Ride (₹${computedTripPrice})`}
+                  ? `Confirm Pre-Booking ( ₹${prebookPayOption === '20' ? Math.round(computedTripPrice * 0.20) : computedTripPrice})`
+                  : `Confirm & Pay  (₹${computedTripPrice})`}
               </Text>
             </TouchableOpacity>
           </View>
