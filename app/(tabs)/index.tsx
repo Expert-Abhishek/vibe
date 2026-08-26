@@ -187,6 +187,55 @@ export default function HomeScreen() {
 
 
 
+        {/* INSTANT VS PRE-BOOKING SWITCH TOGGLE */}
+        <View style={[styles.bookingTypeRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={[
+              styles.bookingTab,
+              instantEnabled ? [styles.bookingTabActive, { backgroundColor: colors.amber }] : { backgroundColor: 'transparent' }
+            ]}
+            onPress={() => handleToggle(true)}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons
+              name="bolt"
+              size={scale(16)}
+              color={instantEnabled ? '#101010' : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.bookingLabel,
+                { color: instantEnabled ? '#101010' : colors.textMuted }
+              ]}
+            >
+              Instant Booking
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.bookingTab,
+              !instantEnabled ? [styles.bookingTabActive, { backgroundColor: colors.amber }] : { backgroundColor: 'transparent' }
+            ]}
+            onPress={() => handleToggle(false)}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons
+              name="schedule"
+              size={scale(16)}
+              color={!instantEnabled ? '#101010' : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.bookingLabel,
+                { color: !instantEnabled ? '#101010' : colors.textMuted }
+              ]}
+            >
+              Pre-Booking
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Guides & Custom Trip Side-by-Side (50% each) */}
         <View style={styles.servicesGridRow}>
           {/* Guide Card (50%) */}
@@ -674,5 +723,37 @@ const styles = StyleSheet.create({
   bookingModeText: {
     fontSize: moderateFontScale(10),
     fontWeight: '800',
+  },
+  bookingTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: verticalScale(12),
+    marginBottom: verticalScale(14),
+    borderRadius: scale(25),
+    borderWidth: 1.2,
+    padding: scale(4),
+    height: verticalScale(46),
+  },
+  bookingTab: {
+    flex: 1,
+    height: '100%',
+    borderRadius: scale(20),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(6),
+  },
+  bookingTabActive: {
+    shadowColor: '#F5C518',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  bookingLabel: {
+    fontSize: moderateFontScale(12.5),
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });
