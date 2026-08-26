@@ -2546,7 +2546,7 @@ router.get('/driver/:driverId', async (req, res) => {
     const dbRes = await db.query(
       `SELECT t.*, u.name as user_real_name, u.phone as user_phone
        FROM trips t
-       LEFT JOIN users u ON (t.customer_id = u.id)
+       LEFT JOIN users u ON (t.customer_id::text = u.id::text)
        WHERE (t.trip_type = 'cab' OR t.trip_type = 'custom_trip' OR LOWER(t.trip_type) LIKE '%cab%' OR LOWER(t.trip_type) LIKE '%trip%')
           AND (CAST(t.driver_id AS VARCHAR) = $1 OR t.driver_id IS NULL OR t.status = 'Pending' OR t.status = 'Pending Driver Confirmation')
        ORDER BY t.created_at DESC`,
@@ -2671,8 +2671,8 @@ router.post('/:tripId/cancel', async (req, res) => {
            SET status = $1, updated_at = CURRENT_TIMESTAMP 
            WHERE id IN (
              SELECT id FROM trips 
-             WHERE (customer_id = $2 OR customer_id IS NULL) 
-               AND status NOT LIKE 'Cancelled%'
+             WHERE (customer_id::text = $2::text OR CAST(customer_id AS VARCHAR) = $2::text OR customer_id IS NULL) 
+             AND status NOT LIKE 'Cancelled%'
              ORDER BY created_at DESC 
              LIMIT 1
            )

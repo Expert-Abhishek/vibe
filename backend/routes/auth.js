@@ -640,7 +640,7 @@ router.get('/customers', async (req, res) => {
          COALESCE((
            SELECT SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END)
            FROM wallet_transactions
-           WHERE user_id = users.id
+           WHERE user_id::text = users.id::text
          ), 0.00) AS wallet_balance
        FROM users
        WHERE role = $1
@@ -670,10 +670,10 @@ router.get('/customers/:id', async (req, res) => {
          COALESCE((
            SELECT SUM(CASE WHEN type = 'topup' OR type = 'refund' THEN amount WHEN type = 'withdrawal' OR type = 'debit' THEN -amount ELSE 0 END)
            FROM wallet_transactions
-           WHERE user_id = users.id
+           WHERE user_id::text = users.id::text
          ), 0.00) AS wallet_balance
        FROM users
-       WHERE id = $1 AND role = $2`,
+       WHERE (id::text = $1::text OR CAST(id AS VARCHAR) = $1::text) AND role = $2`,
       [id, 'tourist']
     );
     if (result.rows.length === 0) {
