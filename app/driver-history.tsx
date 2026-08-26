@@ -260,7 +260,7 @@ export default function DriverHistoryScreen() {
         </View>
       ) : (
         <View style={styles.splitLayoutContainer}>
-          {/* SCHEDULED TRIPS SECTION COMMENTED OUT AS ALL RIDES ARE INSTANT
+          {/* ================= TOP SECTION: SCHEDULED / PRE-BOOKED TRIPS ================= */}
           <View style={[styles.topSection, { borderBottomColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <MaterialIcons name="event-available" size={scale(18)} color={colors.blue} />
@@ -290,7 +290,6 @@ export default function DriverHistoryScreen() {
               }
             />
           </View>
-          */}
 
           {/* ================= BOTTOM SECTION: COMPLETED TRIPS (60% Height) ================= */}
           <View style={styles.bottomSection}>

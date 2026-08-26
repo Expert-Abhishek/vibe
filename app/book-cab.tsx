@@ -62,8 +62,11 @@ export default function BookCabScreen() {
   const [selectedRide, setSelectedRide] = useState<string>('5seater');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('cash');
   const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingMode, setBookingMode] = useState<'now' | 'advance'>('now');
-  const [advanceDate, setAdvanceDate] = useState('2026-07-20');
+  const [advanceDate, setAdvanceDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
   const [advanceTime, setAdvanceTime] = useState('10:00 AM');
   const [prebookPayOption, setPrebookPayOption] = useState<'20' | '100'>('20');
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
@@ -1068,7 +1071,6 @@ export default function BookCabScreen() {
               <Text style={[styles.modeBtnText, { color: bookingMode === 'now' ? '#101010' : colors.textPrimary }]}>Book Now (Instant)</Text>
             </TouchableOpacity>
 
-            {/* PRE-BOOKING COMMENTED OUT TEMPORARILY FOR NOW
             <TouchableOpacity
               style={[styles.modeBtn, bookingMode === 'advance' && styles.modeBtnActive, { borderColor: colors.border }]}
               onPress={() => setBookingMode('advance')}
@@ -1076,7 +1078,6 @@ export default function BookCabScreen() {
               <MaterialIcons name="schedule" size={scale(14)} color={bookingMode === 'advance' ? '#101010' : colors.textPrimary} />
               <Text style={[styles.modeBtnText, { color: bookingMode === 'advance' ? '#101010' : colors.textPrimary }]}>Book in Advance</Text>
             </TouchableOpacity>
-            */}
           </View>
 
           {/* INSTANT MODE: Payment Mode Options (Cash / UPI) */}
