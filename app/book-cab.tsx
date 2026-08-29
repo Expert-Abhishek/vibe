@@ -25,6 +25,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
 import { fetchRoadRoute } from '@/src/services/roadRoutingService';
 
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
+
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
 interface LocationNode {
@@ -37,6 +40,7 @@ interface LocationNode {
 import { PRESET_PICKUP_DROP_LOCATIONS } from '@/constants/preset-locations';
 
 export default function BookCabScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   const colorScheme = useColorScheme();
@@ -615,8 +619,8 @@ export default function BookCabScreen() {
           <TouchableOpacity style={styles.iconBack} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>Cab Despatch Center</Text>
-          <View style={{ width: scale(40) }} />
+          <Text style={[styles.panelTitle, { color: colors.textPrimary }]}>{t('bookCab')}</Text>
+          <LanguageSelector compact />
         </View>
 
         {/* Inputs Column */}

@@ -17,11 +17,14 @@ import NotificationIcon from '@src/components/NotificationIcon';
 import { notificationStore, useNotificationStore } from '@src/store/notificationStore';
 import { initSocketService } from '@src/services/socketService';
 
+import { useTranslation } from 'react-i18next';
+
 interface Props {
   role?: 'tourist' | 'driver' | 'guide';
 }
 
 export default function NotificationModal({ role = 'tourist' }: Props) {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const colors = {
@@ -83,12 +86,12 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
             <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
                 <MaterialIcons name="notifications-active" size={scale(22)} color={colors.amber} />
-                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Activity & Booking Alerts</Text>
+                <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('activityBookingAlerts') || 'Activity Alerts'}</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10) }}>
                 {notifications.length > 0 && (
                   <TouchableOpacity onPress={handleClose} style={{ paddingHorizontal: scale(8), paddingVertical: verticalScale(4), borderRadius: scale(6), backgroundColor: 'rgba(239, 68, 68, 0.12)' }}>
-                    <Text style={{ color: '#EF4444', fontSize: moderateFontScale(11), fontWeight: '700' }}>Clear All</Text>
+                    <Text style={{ color: '#EF4444', fontSize: moderateFontScale(11), fontWeight: '700' }}>{t('clearAll') || 'Clear All'}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
@@ -102,7 +105,7 @@ export default function NotificationModal({ role = 'tourist' }: Props) {
                 <View style={{ padding: scale(30), alignItems: 'center', justifyContent: 'center' }}>
                   <MaterialIcons name="notifications-none" size={scale(36)} color={colors.textMuted} />
                   <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(12), marginTop: verticalScale(8), textAlign: 'center' }}>
-                    No activity notifications yet.
+                    {t('noActivityNotifications') || 'No activity notifications yet.'}
                   </Text>
                 </View>
               ) : (

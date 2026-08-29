@@ -25,7 +25,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
 import { fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
 
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
+
 export default function RideMatchingScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
   const colorScheme = useColorScheme();
@@ -499,12 +503,12 @@ type Coordinate = LatLng;
             <MaterialIcons name="arrow-back" size={scale(20)} color={status === 'started' ? colors.textMuted : colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-            {status === 'searching' && 'Locating Services...'}
-            {status === 'matched' && 'Match Confirmed'}
-            {status === 'started' && 'Ride in Progress'}
-            {status === 'completed' && 'Trip Completed'}
+            {status === 'searching' && (t('searchingNearbyDriver') || 'Finding Your Captain...')}
+            {status === 'matched' && (t('partnerAssigned') || 'Match Confirmed')}
+            {status === 'started' && (t('tripInProgress') || 'Ride in Progress')}
+            {status === 'completed' && (t('tripCompleted') || 'Trip Completed')}
           </Text>
-          <View style={{ width: scale(20) }} />
+          <LanguageSelector compact />
         </View>
 
         <View style={styles.itineraryLine}>

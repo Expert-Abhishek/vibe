@@ -1,6 +1,7 @@
 import { Linking } from 'react-native';
 import GuidelinesModal from '@/components/GuidelinesModal';
 import NotificationModal from '@/components/NotificationModal';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import { adminState } from '@/constants/admin-state';
 import {
   acceptTripApi,
@@ -1091,6 +1092,7 @@ export default function GuideDashboardScreen() {
               {isOnline ? 'ONLINE' : 'OFFLINE'}
             </Text>
           </View>
+          <LanguageSelector compact />
           <NotificationModal role="guide" />
         </View>
       </View>

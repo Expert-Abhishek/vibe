@@ -32,6 +32,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker } from '@/components/react-native-maps';
 
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
+
 interface Guide {
   id: string;
   name: string;
@@ -50,6 +53,7 @@ interface Guide {
 const mockGuides: Guide[] = [];
 
 export default function GuidesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams();
   const initialInstantParam = params.instantBooking === 'true';
@@ -438,8 +442,8 @@ export default function GuidesScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.navTitle, { color: colors.textPrimary }]}>Hire Local Guides</Text>
-        <View style={{ width: scale(40) }} />
+        <Text style={[styles.navTitle, { color: colors.textPrimary }]}>{t('hireLocalGuideHeader')}</Text>
+        <LanguageSelector compact />
       </View>
 
       {/* TOP SEARCH BAR */}

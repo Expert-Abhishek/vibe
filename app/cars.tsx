@@ -15,22 +15,24 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchDriversApi } from '@/constants/api';
-import { adminState } from '@/constants/admin-state';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
 
 interface CategoryInfo {
   key: string;
-  label: string;
+  labelKey: string;
   pax: number;
 }
 
 const categories: CategoryInfo[] = [
-  { key: '5seater', label: '5 Seater', pax: 5 },
-  { key: '7seater', label: '7 Seater', pax: 7 },
-  { key: '4x4jeep', label: '4x4 Off-Road', pax: 4 },
-  { key: 'auto', label: 'Eco Auto', pax: 3 },
+  { key: '5seater', labelKey: 'fiveSeaterTab', pax: 5 },
+  { key: '7seater', labelKey: 'sevenSeaterTab', pax: 7 },
+  { key: '4x4jeep', labelKey: 'fourByFourOffRoadTab', pax: 4 },
+  { key: 'auto', labelKey: 'ecoAutoTab', pax: 3 },
 ];
 
 export default function FleetCatalogScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useLocalSearchParams();
   
@@ -203,9 +205,9 @@ export default function FleetCatalogScreen() {
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-          Vehicle Fleet Showcase
+          {t('vehicleFleetShowcase')}
         </Text>
-        <View style={{ width: scale(40) }} />
+        <LanguageSelector compact />
       </View>
 
       {/* Categories Tab Bar */}
@@ -220,7 +222,7 @@ export default function FleetCatalogScreen() {
                 onPress={() => setActiveTab(cat.key)}
               >
                 <Text style={[styles.tabItemText, { color: isSelected ? colors.amber : colors.textMuted }]}>
-                  {cat.label}
+                  {t(cat.labelKey)}
                 </Text>
               </TouchableOpacity>
             );
@@ -232,12 +234,12 @@ export default function FleetCatalogScreen() {
         {/* Intro */}
         <View style={styles.introBlock}>
           <Text style={styles.introTitle}>
-            {mode === 'plan' ? 'Select Car for Tour Plan' : 'Select Car for Custom Trip'}
+            {mode === 'plan' ? t('selectCarForTourPlan') : t('selectCarForCustomTrip')}
           </Text>
           <Text style={[styles.introSub, { color: colors.textMuted }]}>
             {mode === 'plan'
-              ? 'Vehicle fare is covered in your Plan package. Pick a registered car below. Only extra add-on time (if any) is charged per hour.'
-              : 'Browse active registered drivers and cars. Tap to pick a car and calculate your custom trip checkout bill.'}
+              ? t('fleetPlanSub')
+              : t('fleetCustomSub')}
           </Text>
         </View>
 
@@ -245,7 +247,7 @@ export default function FleetCatalogScreen() {
           <View style={{ padding: scale(40), alignItems: 'center' }}>
             <ActivityIndicator size="large" color={colors.amber} />
             <Text style={{ color: colors.textMuted, marginTop: verticalScale(10), fontSize: moderateFontScale(12) }}>
-              Loading registered cars & driver fleet...
+              {t('loadingFleet')}
             </Text>
           </View>
         ) : (
@@ -254,9 +256,9 @@ export default function FleetCatalogScreen() {
               const frontPic = driver.car_front_url || driver.photo_url;
               const dayRate = driver.daily_rate ? Number(driver.daily_rate) : 1800;
               const hrRate = driver.hourly_addon_rate ? Number(driver.hourly_addon_rate) : 150;
-              const carModel = driver.vehicle_model || driver.name || 'Standard Cab';
-              const driverName = driver.name || 'Registered Partner';
-              const vehicleNo = driver.vehicle_number || 'Registered';
+              const carModel = driver.vehicle_model || driver.name || t('standardCab');
+              const driverName = driver.name || t('verifiedPartner');
+              const vehicleNo = driver.vehicle_number || t('registered');
 
               return (
                 <View
@@ -306,7 +308,7 @@ export default function FleetCatalogScreen() {
                       </View>
 
                       <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11.5), marginTop: verticalScale(3) }}>
-                        Driver: <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{driverName}</Text> ({vehicleNo})
+                        {t('driver')}: <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>{driverName}</Text> ({vehicleNo})
                       </Text>
 
                       {/* Pricing Tag */}
@@ -314,19 +316,19 @@ export default function FleetCatalogScreen() {
                         {mode === 'plan' ? (
                           <View>
                             <Text style={{ color: '#10B981', fontSize: moderateFontScale(13), fontWeight: '900' }}>
-                              Included in Plan Package
+                              {t('includedInPlan')}
                             </Text>
                             <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5), marginTop: 1 }}>
-                              (+ ₹{hrRate}/hr for extra add-on time)
+                              {t('extraAddonTime', { rate: hrRate })}
                             </Text>
                           </View>
                         ) : (
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
                             <Text style={{ color: colors.amber, fontSize: moderateFontScale(14), fontWeight: '900' }}>
-                              ₹{dayRate}/Day
+                              {t('perDay', { rate: dayRate })}
                             </Text>
                             <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(10.5) }}>
-                              (+ ₹{hrRate}/hr addon)
+                              {t('perHrAddon', { rate: hrRate })}
                             </Text>
                           </View>
                         )}
@@ -350,7 +352,7 @@ export default function FleetCatalogScreen() {
                   >
                     <MaterialIcons name="check-circle" size={scale(18)} color="#101014" />
                     <Text style={{ color: '#101014', fontWeight: '900', fontSize: moderateFontScale(13) }}>
-                      {mode === 'plan' ? 'Select Car for Tour Plan' : 'Book Car for Custom Trip'}
+                      {mode === 'plan' ? t('selectCarForTourPlan') : t('bookCarForCustomTrip')}
                     </Text>
                   </TouchableOpacity>
                 </View>

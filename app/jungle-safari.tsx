@@ -3,6 +3,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { FontAwesome5, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import {
   Alert,
   Image,
@@ -225,6 +227,7 @@ const checkpointDetailsData: Record<string, { address: string; images: string[] 
 };
 
 export default function JungleSafariScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -284,8 +287,8 @@ export default function JungleSafariScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>4×4 Off Roading</Text>
-        <View style={{ width: scale(40) }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('jungleSafariHeader')}</Text>
+        <LanguageSelector compact />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

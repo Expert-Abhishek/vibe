@@ -58,11 +58,14 @@ interface TourPackage {
   destinationId?: string;
 }
 
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
 import { createTripApi, deductWalletApi, fetchActiveTripApi, fetchDriversApi, fetchPlansApi, validateVoucherApi } from '@/constants/api';
 import { getUserSessionSync } from '@/constants/authStore';
 import { PRESET_PICKUP_DROP_LOCATIONS, PresetLocation } from '@/constants/preset-locations';
 
 export default function PlanRouteScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -754,8 +757,8 @@ export default function PlanRouteScreen() {
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
               <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Karnataka Tour Packages</Text>
-            <View style={{ width: scale(40) }} />
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('curatedTourPackages')}</Text>
+            <LanguageSelector compact />
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

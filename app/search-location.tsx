@@ -19,6 +19,9 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { fetchDestinationsApi } from '@/constants/api';
 import { PRESET_PICKUP_DROP_LOCATIONS } from '@/constants/preset-locations';
 
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
+
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
 interface PresetDestination {
@@ -29,6 +32,7 @@ interface PresetDestination {
 }
 
 export default function SearchLocationScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -134,8 +138,8 @@ export default function SearchLocationScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="close" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Choose Destination</Text>
-        <View style={{ width: scale(40) }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('selectDrop') || 'Choose Destination'}</Text>
+        <LanguageSelector compact />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

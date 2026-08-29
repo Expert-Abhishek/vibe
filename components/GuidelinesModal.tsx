@@ -106,11 +106,21 @@ const NOTES_DATA = {
   },
 };
 
+// In-memory session tracking: persists while app is running / in memory / in background.
+// Resets automatically whenever the app is cold-started (completely closed and reopened).
+const sessionGuidelinesShown: Record<string, boolean> = {};
+
 export default function GuidelinesModal({ role = 'tourist' }: GuidelinesModalProps) {
   const colorScheme = useColorScheme();
   const [appLang] = useLanguage();
   const isDark = colorScheme === 'dark';
-  const [visible, setVisible] = useState(true);
+
+  const session = getUserSessionSync();
+  const currentRole = (session?.role || role) as 'driver' | 'guide' | 'tourist';
+  const roleCategory = currentRole === 'driver' ? 'driver' : currentRole === 'guide' ? 'guide' : 'tourist';
+
+  // Only show if not already displayed/acknowledged during this app session
+  const [visible, setVisible] = useState(() => !sessionGuidelinesShown[roleCategory]);
 
   const colors = {
     surface: isDark ? '#1C1C22' : '#FFFFFF',
@@ -122,12 +132,10 @@ export default function GuidelinesModal({ role = 'tourist' }: GuidelinesModalPro
   };
 
   const handleAccept = () => {
+    sessionGuidelinesShown[roleCategory] = true;
     setVisible(false);
   };
 
-  const session = getUserSessionSync();
-  const currentRole = (session?.role || role) as 'driver' | 'guide' | 'tourist';
-  const roleCategory = currentRole === 'driver' ? 'driver' : currentRole === 'guide' ? 'guide' : 'tourist';
   const langKey = appLang === 'kn' ? 'kn' : 'en';
 
   const roleNotesData = NOTES_DATA[roleCategory] || NOTES_DATA.tourist;

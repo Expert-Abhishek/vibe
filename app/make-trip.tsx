@@ -29,6 +29,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
 import { fetchRoadRoute } from '@/src/services/roadRoutingService';
 
+import { useTranslation } from 'react-i18next';
+import LanguageSelector from '@/src/components/LanguageSelector';
+
 const GOOGLE_MAPS_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
 
 interface Checkpoint {
@@ -40,6 +43,7 @@ interface Checkpoint {
 }
 
 export default function MakeTripScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const mainScrollViewRef = React.useRef<ScrollView>(null);
   const searchParams = useLocalSearchParams();
@@ -973,8 +977,8 @@ export default function MakeTripScreen() {
         }}>
           <MaterialIcons name="arrow-back" size={scale(24)} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Custom Trip Builder</Text>
-        <View style={{ width: scale(40) }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('customTripBuilder')}</Text>
+        <LanguageSelector compact />
       </View>
 
       <ScrollView
@@ -989,7 +993,7 @@ export default function MakeTripScreen() {
           <View style={[styles.selectedRideBadge, { backgroundColor: 'rgba(245,197,24,0.08)', borderColor: colors.border }]}>
             <MaterialIcons name="local-taxi" size={scale(16)} color={colors.amber} style={{ marginRight: scale(6) }} />
             <Text style={[styles.selectedRideText, { color: colors.textPrimary }]}>
-              Selected Vehicle: <Text style={{ color: colors.amber, fontWeight: '800' }}>{getRideLabel(selectedRide)}</Text>
+              {t('selectedVehicle')}: <Text style={{ color: colors.amber, fontWeight: '800' }}>{getRideLabel(selectedRide)}</Text>
             </Text>
           </View>
         )}
