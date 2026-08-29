@@ -530,27 +530,42 @@ export default function TripStatusScreen() {
 
   if (!tripIdParam && !initialLocalTrip) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center', padding: scale(20) }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top']}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <MaterialIcons name="directions-car" size={scale(64)} color={colors.amber} style={{ marginBottom: 16 }} />
-        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(22), fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
-          {t('noActiveTripFound')}
-        </Text>
-        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
-          {t('noActiveTripSub')}
-        </Text>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.amber, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
-          onPress={() => router.navigate('/(tabs)')}
-        >
-          <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>{t('bookNewTrip')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, width: '100%', alignItems: 'center' }}
-          onPress={() => router.navigate('/(tabs)/history')}
-        >
-          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>{t('viewTripHistory')}</Text>
-        </TouchableOpacity>
+
+        {/* Header */}
+        <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.navigate('/(tabs)'); } }} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('noActiveTrip') || 'No Active Trip'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+            <LanguageSelector compact />
+            <NotificationModal role="tourist" />
+          </View>
+        </View>
+
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: scale(20) }}>
+          <MaterialIcons name="directions-car" size={scale(64)} color={colors.amber} style={{ marginBottom: 16 }} />
+          <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(22), fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+            {t('noActiveTrip') || t('noActiveTripFound') || 'No Active Trip'}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
+            {t('noActiveTripSub') || "You don't have any ongoing or scheduled trip right now. Book a new trip or view your ride history."}
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.amber, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
+            onPress={() => router.navigate('/(tabs)')}
+          >
+            <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>{t('bookNewTrip') || 'Book a New Trip'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, width: '100%', alignItems: 'center' }}
+            onPress={() => router.navigate('/(tabs)/history')}
+          >
+            <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>{t('viewTripHistory') || 'View Trip History'}</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }

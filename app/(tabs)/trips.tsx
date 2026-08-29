@@ -518,27 +518,42 @@ export default function TripsHistoryScreen() {
 
   if (!effectiveTripId && !tripIdParam && !initialLocalTrip) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg, justifyContent: 'center', alignItems: 'center', padding: scale(20) }]} edges={['top']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]} edges={['top']}>
         <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <MaterialIcons name="directions-car" size={scale(64)} color={colors.amber} style={{ marginBottom: 16 }} />
-        <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(22), fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
-          No Active Trip
-        </Text>
-        <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
-          You don't have any ongoing or scheduled trip right now. Book a new trip or view your ride history.
-        </Text>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.amber, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
-          onPress={() => router.navigate('/(tabs)')}
-        >
-          <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>Book a New Trip</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, width: '100%', alignItems: 'center' }}
-          onPress={() => router.navigate('/(tabs)/history')}
-        >
-          <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>View Trip History</Text>
-        </TouchableOpacity>
+
+        {/* Header */}
+        <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.navigate('/(tabs)'); } }} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back" size={scale(22)} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('noActiveTrip') || 'No Active Trip'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+            <LanguageSelector compact />
+            <NotificationModal role="tourist" />
+          </View>
+        </View>
+
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: scale(20) }}>
+          <MaterialIcons name="directions-car" size={scale(64)} color={colors.amber} style={{ marginBottom: 16 }} />
+          <Text style={{ color: colors.textPrimary, fontSize: moderateFontScale(22), fontWeight: '700', marginBottom: 8, textAlign: 'center' }}>
+            {t('noActiveTrip') || t('noActiveTripFound') || 'No Active Trip'}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(14), textAlign: 'center', marginBottom: 24, paddingHorizontal: 16 }}>
+            {t('noActiveTripSub') || "You don't have any ongoing or scheduled trip right now. Book a new trip or view your ride history."}
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.amber, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, marginBottom: 12, width: '100%', alignItems: 'center' }}
+            onPress={() => router.navigate('/(tabs)')}
+          >
+            <Text style={{ color: '#101014', fontWeight: '800', fontSize: moderateFontScale(15) }}>{t('bookNewTrip') || 'Book a New Trip'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 12, width: '100%', alignItems: 'center' }}
+            onPress={() => router.navigate('/(tabs)/history')}
+          >
+            <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: moderateFontScale(14) }}>{t('viewTripHistory') || 'View Trip History'}</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -740,19 +755,19 @@ export default function TripsHistoryScreen() {
         {/* Start OTP & End OTP Share Card - Only shown when driver accepts trip */}
         {isDriverAccepted && (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1.5 }]}>
-            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🔐 TRIP VERIFICATION CODES</Text>
+            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>{t('verificationCodes') || '🔐 TRIP VERIFICATION CODES'}</Text>
             <Text style={{ color: colors.textMuted, fontSize: moderateFontScale(11), marginBottom: verticalScale(10) }}>
               Share Start OTP with driver to begin ride, and End OTP at destination.
             </Text>
 
             <View style={styles.otpRowGrid}>
               <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(245,197,24,0.1)' : '#FFFBEB', borderColor: colors.amber }]}>
-                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>START TRIP OTP</Text>
+                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('startOtp') || 'START TRIP OTP'}</Text>
                 <Text style={[styles.otpValue, { color: colors.amber }]}>{startOtp || '8240'}</Text>
               </View>
 
               <View style={[styles.otpBox, { backgroundColor: isDark ? 'rgba(16,185,129,0.1)' : '#ECFDF5', borderColor: colors.success }]}>
-                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>END TRIP OTP</Text>
+                <Text style={[styles.otpLabel, { color: colors.textMuted }]}>{t('endOtp') || 'END TRIP OTP'}</Text>
                 <Text style={[styles.otpValue, { color: colors.success }]}>{endOtp || '4321'}</Text>
               </View>
             </View>
@@ -762,7 +777,7 @@ export default function TripsHistoryScreen() {
         {/* Package Plan Details & Waypoints Card */}
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.amber, borderWidth: 1 }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: verticalScale(10) }}>
-            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>🗺️ TOUR PACKAGE & ITINERARY</Text>
+            <Text style={[styles.cardHeaderTitle, { color: colors.amber }]}>{t('tourPackageItinerary') || '🗺️ TOUR PACKAGE & ITINERARY'}</Text>
             <View style={{ backgroundColor: 'rgba(245, 197, 24, 0.15)', paddingHorizontal: scale(8), paddingVertical: verticalScale(2), borderRadius: scale(12) }}>
               <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700' }}>
                 {durationHours} HOURS TOUR
@@ -870,11 +885,11 @@ export default function TripsHistoryScreen() {
           {/* Payment Breakdown */}
           <View style={[styles.fareRow, { borderTopColor: colors.border, marginTop: verticalScale(14) }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Payment Mode</Text>
+              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>{t('paymentMode') || 'Payment Mode'}</Text>
               <Text style={[styles.paymentModeText, { color: colors.textPrimary }]}>{paymentMode}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>Total Fare</Text>
+              <Text style={[styles.fareLabel, { color: colors.textMuted }]}>{t('totalFare') || 'Total Fare'}</Text>
               <Text style={[styles.fareVal, { color: colors.amber }]}>₹{fareAmount.toLocaleString('en-IN')}</Text>
             </View>
           </View>
@@ -882,11 +897,11 @@ export default function TripsHistoryScreen() {
           {advanceDepositPaid > 0 && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: verticalScale(8), paddingTop: verticalScale(8), borderTopWidth: 1, borderTopColor: colors.border }}>
               <View>
-                <Text style={{ fontSize: moderateFontScale(11), color: colors.success }}>Advance Deposit Paid</Text>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.success }}>{t('advanceDepositPaid') || 'Advance Deposit Paid'}</Text>
                 <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.success }}>₹{advanceDepositPaid.toLocaleString('en-IN')}</Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>Remaining Cash Balance</Text>
+                <Text style={{ fontSize: moderateFontScale(11), color: colors.textMuted }}>{t('remainingCashBalance') || 'Remaining Cash Balance'}</Text>
                 <Text style={{ fontSize: moderateFontScale(13), fontWeight: '700', color: colors.textPrimary }}>₹{remainingCashBalance.toLocaleString('en-IN')}</Text>
               </View>
             </View>
@@ -906,7 +921,7 @@ export default function TripsHistoryScreen() {
               ) : (
                 <>
                   <MaterialIcons name="cancel" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
-                  <Text style={styles.cancelBtnText}>Cancel Booking</Text>
+                  <Text style={styles.cancelBtnText}>{t('cancelBooking') || 'Cancel Booking'}</Text>
                 </>
               )}
             </TouchableOpacity>
