@@ -95,9 +95,11 @@ function generateDenseFallbackRoute(waypoints: LatLng[]): RoadRouteResult {
   };
 }
 
+const GOOGLE_MAPS_API_KEY = 'AIzaSyBDo89INLAVgmvmjCJHR9ZP66gNeE5uy7o';
+
 /**
  * Fetch 100% Real-World Road Route matching actual streets, highways, and turns
- * Uses OSRM Driving Engine with high-precision road geometry
+ * Uses OSRM Driving Engine with Google Directions API fallback
  */
 export async function fetchRoadRoute(waypoints: LatLng[]): Promise<RoadRouteResult> {
   const validWaypoints = (waypoints || []).filter(
@@ -118,13 +120,13 @@ export async function fetchRoadRoute(waypoints: LatLng[]): Promise<RoadRouteResu
     return routeCache.get(cacheKey)!;
   }
 
-  // 1. Try OSRM Free OpenStreetMap Turn-by-Turn Road Routing
+  // 1. Try OSRM OpenStreetMap Turn-by-Turn Road Routing
   try {
     const coordString = validWaypoints.map(w => `${w.longitude},${w.latitude}`).join(';');
     const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson&steps=false`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     const response = await fetch(osrmUrl, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -157,17 +159,68 @@ export async function fetchRoadRoute(waypoints: LatLng[]): Promise<RoadRouteResu
       }
     }
   } catch (err: any) {
-    console.warn('[RoadRouting] OSRM query failed or timed out:', err?.message || err);
+    // Fallthrough to Google Directions API
   }
 
-  // 2. Fallback: High-density smooth road interpolation
+  // 2. Try Google Directions API Fallback (Supports multi-stop waypoints)
+  try {
+    const origin = `${validWaypoints[0].latitude},${validWaypoints[0].longitude}`;
+    const destination = `${validWaypoints[validWaypoints.length - 1].latitude},${validWaypoints[validWaypoints.length - 1].longitude}`;
+    
+    let waypointsParam = '';
+    if (validWaypoints.length > 2) {
+      const middlePoints = validWaypoints.slice(1, -1).map(w => `${w.latitude},${w.longitude}`).join('|');
+      waypointsParam = `&waypoints=optimize:false|${middlePoints}`;
+    }
+
+    const gUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&key=${GOOGLE_MAPS_API_KEY}`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const gRes = await fetch(gUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (gRes.ok) {
+      const gData = await gRes.json();
+      if (gData.status === 'OK' && gData.routes && gData.routes.length > 0) {
+        const gRoute = gData.routes[0];
+        let totalMeters = 0;
+        let totalSeconds = 0;
+
+        if (Array.isArray(gRoute.legs)) {
+          gRoute.legs.forEach((leg: any) => {
+            totalMeters += leg.distance?.value || 0;
+            totalSeconds += leg.duration?.value || 0;
+          });
+        }
+
+        const encodedPoints = gRoute.overview_polyline?.points;
+        const decodedCoords = encodedPoints ? decodeGooglePolyline(encodedPoints) : [];
+
+        if (decodedCoords.length >= 2) {
+          const result: RoadRouteResult = {
+            coordinates: decodedCoords,
+            distanceKm: Math.round((totalMeters / 1000) * 10) / 10,
+            durationMinutes: Math.round(totalSeconds / 60),
+            isRealRoad: true,
+          };
+          routeCache.set(cacheKey, result);
+          return result;
+        }
+      }
+    }
+  } catch (gErr) {
+    // Fallthrough to dense spline interpolation
+  }
+
+  // 3. Fallback: High-density smooth curved road interpolation
   const fallback = generateDenseFallbackRoute(validWaypoints);
   routeCache.set(cacheKey, fallback);
   return fallback;
 }
 
 /**
- * Snap a moving coordinate to the closest point along a road route
+ * Snap a moving coordinate to the closest point along a road route (Map Matching)
  */
 export function snapToRoadRoute(
   pos: LatLng,
@@ -210,4 +263,15 @@ export function calculateRoadHeading(from: LatLng, to: LatLng): number {
   const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
   const bearing = (Math.atan2(y, x) * 180) / Math.PI;
   return (bearing + 360) % 360;
+}
+
+/**
+ * Linear Interpolation (LERP) between two GPS points for smooth 60fps vehicle animation
+ */
+export function interpolatePosition(from: LatLng, to: LatLng, fraction: number): LatLng {
+  const f = Math.max(0, Math.min(1, fraction));
+  return {
+    latitude: from.latitude + (to.latitude - from.latitude) * f,
+    longitude: from.longitude + (to.longitude - from.longitude) * f,
+  };
 }
