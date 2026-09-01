@@ -378,7 +378,7 @@ export default function PlanRouteScreen() {
 
   const dateOptions = Array.from({ length: 15 }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() + i);
+    d.setDate(d.getDate() + i + 1);
     return {
       dateStr: d.toISOString().split('T')[0],
       dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),

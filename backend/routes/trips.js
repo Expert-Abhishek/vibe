@@ -602,6 +602,98 @@ router.get(['/check-has-trip/:customerId', '/active-trip/:customerId'], async (r
 });
 
 /**
+ * Helper to process pre-booking cancellation refunds & deductions
+ */
+async function processTripCancellationAndRefund(trip, options = {}) {
+  const { cancelledBy = 'user', role = 'tourist', reason = 'Cancelled' } = options;
+  if (!trip) return { refundAmount: 0, deductionAmount: 0, refundNote: '' };
+
+  const customerId = trip.customer_id;
+  const advancePaid = parseFloat(trip.advance_deposit_paid || 0);
+  const totalAmount = parseFloat(trip.amount || 0);
+  const bType = String(trip.booking_type || '').toUpperCase();
+  const isPreBooking = bType.includes('PRE') || bType.includes('ADVANCE') || String(trip.scheduled_time || '').trim() !== '';
+
+  let refundAmount = 0;
+  let deductionAmount = 0;
+  let refundNote = '';
+
+  if (advancePaid > 0 && customerId) {
+    const isCancelledByPartnerOrAdmin =
+      cancelledBy === 'driver' || role === 'driver' ||
+      cancelledBy === 'guide' || role === 'guide' ||
+      cancelledBy === 'admin' || role === 'admin' ||
+      cancelledBy === 'system';
+
+    if (isCancelledByPartnerOrAdmin) {
+      // 100% full refund if driver / guide / admin / system cancels
+      refundAmount = advancePaid;
+      deductionAmount = 0;
+      refundNote = `Full refund of ₹${refundAmount} for booking #${trip.id} cancelled by ${cancelledBy || role || 'Partner'}`;
+    } else if (isPreBooking) {
+      // Cancelled by tourist / customer for a pre-booking
+      // Compare creation date vs current date in IST (Asia/Kolkata)
+      const istCreatedAt = new Date(new Date(trip.created_at || Date.now()).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const istNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+
+      const isSameDay =
+        istCreatedAt.getFullYear() === istNow.getFullYear() &&
+        istCreatedAt.getMonth() === istNow.getMonth() &&
+        istCreatedAt.getDate() === istNow.getDate();
+
+      if (isSameDay) {
+        // Same day cancel: 0% deduction -> 100% refund of advance deposit paid
+        refundAmount = advancePaid;
+        deductionAmount = 0;
+        refundNote = `Same-day cancellation refund for pre-booking #${trip.id} (No deduction: ₹${refundAmount})`;
+      } else {
+        // After same day: 20% of total trip fare is deducted as cancellation charge
+        const fee20Percent = Math.round(totalAmount * 0.20);
+        deductionAmount = fee20Percent;
+        refundAmount = Math.max(0, advancePaid - fee20Percent);
+        refundNote = `Pre-booking cancellation refund for booking #${trip.id} (20% cancellation fee: ₹${fee20Percent}, Refund: ₹${refundAmount})`;
+      }
+    } else {
+      // Non-prebooking / Instant trip cancelled by user before trip start
+      refundAmount = advancePaid;
+      deductionAmount = 0;
+      refundNote = `Cancellation refund for trip #${trip.id} (₹${refundAmount})`;
+    }
+
+    if (refundAmount > 0) {
+      try {
+        await db.query(
+          `INSERT INTO wallet_transactions (user_id, type, amount, description)
+           VALUES ($1, 'refund', $2, $3)`,
+          [customerId, refundAmount, refundNote]
+        );
+
+        // Fetch updated balance
+        const balRes = await db.query(
+          `SELECT COALESCE(SUM(CASE WHEN LOWER(type) IN ('topup', 'refund') THEN amount WHEN LOWER(type) IN ('withdrawal', 'debit') THEN -amount ELSE 0 END), 0) AS total FROM wallet_transactions WHERE user_id = $1`,
+          [customerId]
+        );
+        const newBal = parseFloat(balRes.rows[0]?.total || 0);
+
+        emitWalletUpdate({ userId: customerId, balance: newBal, description: refundNote });
+        
+        await logActivityNotification(
+          customerId,
+          'tourist',
+          '💰 Wallet Refund Processed',
+          `₹${refundAmount} has been refunded to your wallet for cancelled booking #${trip.id}.`,
+          trip.id
+        );
+      } catch (refundErr) {
+        console.error('Error processing cancellation refund:', refundErr);
+      }
+    }
+  }
+
+  return { refundAmount, deductionAmount, refundNote };
+}
+
+/**
  * POST /api/trips/cancel-trip/:id (Alias: /:id/cancel, /cancel/:id)
  * Cancel trip, update status strictly to CANCELLED in DB & emit socket event
  */
@@ -612,7 +704,7 @@ router.post(['/cancel-trip/:id', '/:id/cancel', '/cancel/:id'], async (req, res)
 
     // Guard: Prevent cancelling a trip that is already completed in database
     const tripCheck = await db.query(
-      `SELECT status FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text`,
+      `SELECT * FROM trips WHERE id::text = $1::text OR CAST(id AS VARCHAR) = $1::text`,
       [id]
     );
 
@@ -623,6 +715,12 @@ router.post(['/cancel-trip/:id', '/:id/cancel', '/cancel/:id'], async (req, res)
           success: false,
           code: 'TRIP_ALREADY_COMPLETED',
           message: 'Cannot cancel a trip that is already completed.',
+        });
+      }
+      if (currentSt.includes('cancel')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Trip is already cancelled.',
         });
       }
     }
@@ -642,7 +740,11 @@ router.post(['/cancel-trip/:id', '/:id/cancel', '/cancel/:id'], async (req, res)
       [statusText, actor, reason, id]
     );
 
-    const trip = result.rows.length > 0 ? result.rows[0] : { id, status: statusText, cancelled_by: actor };
+    const trip = result.rows.length > 0 ? result.rows[0] : (tripCheck.rows[0] || { id, status: statusText, cancelled_by: actor });
+    
+    // Process wallet refund & cancellation fee deduction
+    const refundResult = await processTripCancellationAndRefund(trip, { cancelledBy, role, reason });
+
     if (trip && trip.customer_id) {
       await setUserHasTrip(trip.customer_id, false);
     }
@@ -654,6 +756,7 @@ router.post(['/cancel-trip/:id', '/:id/cancel', '/cancel/:id'], async (req, res)
       success: true,
       message: `Trip status updated to ${statusText}`,
       data: trip,
+      refund: refundResult,
     });
   } catch (error) {
     console.error('Error cancelling trip:', error);

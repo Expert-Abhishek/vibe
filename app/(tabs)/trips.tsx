@@ -464,7 +464,7 @@ export default function TripsHistoryScreen() {
             setCancelling(true);
             const session = getUserSessionSync();
             try {
-              await cancelTripApi(targetId, { cancelledBy: 'tourist', role: 'tourist' });
+              const res = await cancelTripApi(targetId, { cancelledBy: 'tourist', role: 'tourist' });
               const socket = getSocket();
               if (socket && socket.connected) {
                 socket.emit('trip_cancelled', { tripId: targetId, userId: session?.id, cancelledBy: 'tourist' });
@@ -473,7 +473,13 @@ export default function TripsHistoryScreen() {
               sendLocalNotification('Trip Cancelled', 'Your trip has been cancelled successfully.');
               router.navigate('/(tabs)/history');
               setTimeout(() => {
-                Alert.alert('Trip Cancelled', 'Your ride request was cancelled and recorded in your History ledger.');
+                let msg = 'Your ride request was cancelled and recorded in your History ledger.';
+                if (res?.refund?.refundAmount > 0) {
+                  msg = `Trip Cancelled.\n\n₹${res.refund.refundAmount} has been refunded to your wallet.`;
+                } else if (res?.refund?.deductionAmount > 0) {
+                  msg = `Trip Cancelled.\n\n20% cancellation fee (₹${res.refund.deductionAmount}) applied as per pre-booking policy.`;
+                }
+                Alert.alert('Trip Cancelled', msg);
               }, 300);
             } catch (e) {
               console.warn('Cancel error:', e);

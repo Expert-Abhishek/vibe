@@ -352,6 +352,30 @@ router.post('/topup', async (req, res) => {
   }
 });
 
+function isWithinWithdrawalHours() {
+  try {
+    const now = new Date();
+    const istFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+    const parts = istFormatter.formatToParts(now);
+    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+    const timeInMinutes = hour * 60 + minute;
+    // 5:00 AM (300 mins) to 11:00 PM (1380 mins)
+    return timeInMinutes >= 300 && timeInMinutes <= 1380;
+  } catch (e) {
+    const d = new Date();
+    const utcHours = d.getUTCHours();
+    const utcMinutes = d.getUTCMinutes();
+    const istMinutes = ((utcHours * 60 + utcMinutes) + 330) % 1440;
+    return istMinutes >= 300 && istMinutes <= 1380;
+  }
+}
+
 /**
  * POST /api/wallet/withdraw
  * Submit withdrawal request for Driver / Guide / Tourist
@@ -360,6 +384,14 @@ router.post('/withdraw', async (req, res) => {
   const client = await db.pool.connect();
   try {
     const { userId, userName = 'Partner', role = 'driver', amount, upiId, accountNumber, ifscCode } = req.body;
+
+    if (!isWithinWithdrawalHours()) {
+      client.release();
+      return res.status(400).json({
+        success: false,
+        message: 'Wallet withdrawals are only processed between 5:00 AM and 11:00 PM (IST). Please try again during operating hours.',
+      });
+    }
 
     if (!userId || !amount || amount <= 0) {
       client.release();

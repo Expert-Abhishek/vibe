@@ -518,9 +518,25 @@ export default function GuideWalletScreen() {
                 autoCapitalize="none"
               />
 
+              <View style={{ marginTop: verticalScale(12), padding: scale(10), backgroundColor: 'rgba(245, 197, 24, 0.1)', borderRadius: scale(8), borderWidth: 1, borderColor: 'rgba(245, 197, 24, 0.3)', flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                <MaterialIcons name="access-time" size={scale(16)} color={colors.amber} />
+                <Text style={{ color: colors.amber, fontSize: moderateFontScale(11), fontWeight: '700', flex: 1 }}>
+                  Note: Withdrawals are only processed between 5:00 AM and 11:00 PM daily.
+                </Text>
+              </View>
+
               <TouchableOpacity
-                style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(20) }]}
+                style={[styles.primaryButton, { backgroundColor: colors.amber, marginTop: verticalScale(16) }]}
                 onPress={async () => {
+                  const now = new Date();
+                  const utcHours = now.getUTCHours();
+                  const utcMinutes = now.getUTCMinutes();
+                  const istMinutes = ((utcHours * 60 + utcMinutes) + 330) % 1440;
+                  if (istMinutes < 300 || istMinutes > 1380) {
+                    Alert.alert('Operating Hours Notice', 'Wallet withdrawals can only be requested between 5:00 AM and 11:00 PM (IST). Please submit during operating hours.');
+                    return;
+                  }
+
                   const amt = parseFloat(withdrawAmount);
                   if (!amt || amt <= 0) {
                     Alert.alert('Error', 'Please enter a valid amount');
@@ -537,14 +553,14 @@ export default function GuideWalletScreen() {
                   setIsSubmittingWithdraw(true);
                   const res = await submitWithdrawalApi({ userId, userName: name, role: 'guide', amount: amt, upiId: withdrawUpi });
                   setIsSubmittingWithdraw(false);
-                  if (res.success) {
+                  if (res && res.success) {
                     Alert.alert('Success', res.message || 'Withdrawal request submitted');
                     setWithdrawModalVisible(false);
                     setWithdrawAmount('');
                     setWithdrawUpi('');
                     loadWalletData();
                   } else {
-                    Alert.alert('Error', res.message || 'Withdrawal failed');
+                    Alert.alert('Error', res?.message || 'Withdrawal failed');
                   }
                 }}
                 disabled={isSubmittingWithdraw}
