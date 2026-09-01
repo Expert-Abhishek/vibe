@@ -632,26 +632,24 @@ async function processTripCancellationAndRefund(trip, options = {}) {
       refundNote = `Full refund of ₹${refundAmount} for booking #${trip.id} cancelled by ${cancelledBy || role || 'Partner'}`;
     } else if (isPreBooking) {
       // Cancelled by tourist / customer for a pre-booking
-      // Compare creation date vs current date in IST (Asia/Kolkata)
-      const istCreatedAt = new Date(new Date(trip.created_at || Date.now()).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-      const istNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      // Check elapsed time from booking creation
+      const createdAtMs = new Date(trip.created_at || Date.now()).getTime();
+      const nowMs = Date.now();
+      const diffHours = (nowMs - createdAtMs) / (1000 * 60 * 60);
 
-      const isSameDay =
-        istCreatedAt.getFullYear() === istNow.getFullYear() &&
-        istCreatedAt.getMonth() === istNow.getMonth() &&
-        istCreatedAt.getDate() === istNow.getDate();
+      const isWithin4Hours = !isNaN(diffHours) && diffHours <= 4;
 
-      if (isSameDay) {
-        // Same day cancel: 0% deduction -> 100% refund of advance deposit paid
+      if (isWithin4Hours) {
+        // Within 4 hours: 100% refund of amount paid (0% deduction)
         refundAmount = advancePaid;
         deductionAmount = 0;
-        refundNote = `Same-day cancellation refund for pre-booking #${trip.id} (No deduction: ₹${refundAmount})`;
+        refundNote = `Cancellation refund within 4 hours for pre-booking #${trip.id} (100% refund: ₹${refundAmount})`;
       } else {
-        // After same day: 20% of total trip fare is deducted as cancellation charge
+        // After 4 hours: 20% of total trip fare is deducted as cancellation charge
         const fee20Percent = Math.round(totalAmount * 0.20);
         deductionAmount = fee20Percent;
         refundAmount = Math.max(0, advancePaid - fee20Percent);
-        refundNote = `Pre-booking cancellation refund for booking #${trip.id} (20% cancellation fee: ₹${fee20Percent}, Refund: ₹${refundAmount})`;
+        refundNote = `Pre-booking cancellation refund after 4 hours for booking #${trip.id} (20% cancellation fee: ₹${fee20Percent}, Refund: ₹${refundAmount})`;
       }
     } else {
       // Non-prebooking / Instant trip cancelled by user before trip start
