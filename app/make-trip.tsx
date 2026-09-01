@@ -27,7 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-import { fetchRoadRoute } from '@/src/services/roadRoutingService';
+import { fetchRoadRoute, openGoogleMapsMultiStop } from '@/src/services/roadRoutingService';
 
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '@/src/components/LanguageSelector';
@@ -1046,6 +1046,41 @@ export default function MakeTripScreen() {
               </>
             )}
           </MapView>
+
+          {/* Google Maps Multi-Stop Launch Overlay Button */}
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: verticalScale(10),
+              right: scale(10),
+              backgroundColor: '#1E1E24',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: scale(6),
+              paddingHorizontal: scale(12),
+              paddingVertical: verticalScale(6),
+              borderRadius: scale(20),
+              borderWidth: 1.5,
+              borderColor: '#4285F4',
+              elevation: 4,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.35,
+              shadowRadius: 3,
+            }}
+            activeOpacity={0.8}
+            onPress={() => {
+              const validPoints = checkpoints
+                .map(c => ({ latitude: c.latitude, longitude: c.longitude }))
+                .filter(c => c && !isNaN(c.latitude) && !isNaN(c.longitude));
+              openGoogleMapsMultiStop(validPoints, { navigate: true });
+            }}
+          >
+            <MaterialIcons name="navigation" size={scale(15)} color="#4285F4" />
+            <Text style={{ color: '#FFFFFF', fontSize: moderateFontScale(11), fontWeight: '800' }}>
+              Google Maps ({checkpoints.length} Stops)
+            </Text>
+          </TouchableOpacity>
 
           {loadingRoute && (
             <View style={styles.mapLoadingOverlay}>

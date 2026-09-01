@@ -27,7 +27,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-import { fetchRoadRoute, LatLng, snapToRoadRoute } from '@/src/services/roadRoutingService';
+import { fetchRoadRoute, LatLng, openGoogleMapsMultiStop, snapToRoadRoute } from '@/src/services/roadRoutingService';
 
 
 export default function TripStatusScreen() {
@@ -668,8 +668,9 @@ export default function TripStatusScreen() {
             }
 
             return (
-              <MapView
-                ref={mapRef}
+              <View style={{ flex: 1, position: 'relative' }}>
+                <MapView
+                  ref={mapRef}
                 provider="google"
                 style={StyleSheet.absoluteFillObject}
                 initialRegion={{
@@ -739,6 +740,39 @@ export default function TripStatusScreen() {
                   </>
                 )}
               </MapView>
+
+              {/* Google Maps Multi-Stop Navigation Action Button */}
+              <TouchableOpacity
+                style={{
+                  position: 'absolute',
+                  top: verticalScale(10),
+                  right: scale(10),
+                  backgroundColor: '#1E1E24',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: scale(6),
+                  paddingHorizontal: scale(12),
+                  paddingVertical: verticalScale(6),
+                  borderRadius: scale(20),
+                  borderWidth: 1.5,
+                  borderColor: '#4285F4',
+                  elevation: 4,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.35,
+                  shadowRadius: 3,
+                }}
+                activeOpacity={0.8}
+                onPress={() => {
+                  openGoogleMapsMultiStop(connectedPoints, { navigate: true });
+                }}
+              >
+                <MaterialIcons name="navigation" size={scale(14)} color="#4285F4" />
+                <Text style={{ color: '#FFFFFF', fontSize: moderateFontScale(11), fontWeight: '800' }}>
+                  Google Maps
+                </Text>
+              </TouchableOpacity>
+              </View>
             );
           })()}
         </View>

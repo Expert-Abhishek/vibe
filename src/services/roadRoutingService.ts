@@ -275,3 +275,69 @@ export function interpolatePosition(from: LatLng, to: LatLng, fraction: number):
     longitude: from.longitude + (to.longitude - from.longitude) * f,
   };
 }
+
+/**
+ * Open official Google Maps App with all multi-stop checkpoints and turn-by-turn navigation
+ */
+export function openGoogleMapsMultiStop(
+  waypoints: LatLng[],
+  options: { navigate?: boolean; originTitle?: string; destTitle?: string } = {}
+): void {
+  const valid = (waypoints || []).filter(
+    w => w && !isNaN(w.latitude) && !isNaN(w.longitude) && (w.latitude !== 0 || w.longitude !== 0)
+  );
+
+  if (valid.length === 0) return;
+
+  const { Linking } = require('react-native');
+
+  if (valid.length === 1) {
+    const singleUrl = `https://www.google.com/maps/search/?api=1&query=${valid[0].latitude},${valid[0].longitude}`;
+    Linking.openURL(singleUrl).catch((e: any) => console.warn('Could not open Google Maps:', e));
+    return;
+  }
+
+  const origin = `${valid[0].latitude},${valid[0].longitude}`;
+  const destination = `${valid[valid.length - 1].latitude},${valid[valid.length - 1].longitude}`;
+
+  let waypointsParam = '';
+  if (valid.length > 2) {
+    const middleStops = valid
+      .slice(1, -1)
+      .map(w => `${w.latitude},${w.longitude}`)
+      .join('|');
+    waypointsParam = `&waypoints=${encodeURIComponent(middleStops)}`;
+  }
+
+  const navAction = options.navigate ? '&dir_action=navigate' : '';
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypointsParam}&travelmode=driving${navAction}`;
+
+  Linking.openURL(url).catch((e: any) => {
+    console.warn('Could not open Google Maps directions URL:', e);
+  });
+}
+
+/**
+ * Generate Google Maps Embed iframe URL for in-app rendering
+ */
+export function getGoogleMapsEmbedUrl(waypoints: LatLng[]): string {
+  const valid = (waypoints || []).filter(
+    w => w && !isNaN(w.latitude) && !isNaN(w.longitude) && (w.latitude !== 0 || w.longitude !== 0)
+  );
+
+  if (valid.length < 2) return '';
+
+  const origin = `${valid[0].latitude},${valid[0].longitude}`;
+  const destination = `${valid[valid.length - 1].latitude},${valid[valid.length - 1].longitude}`;
+
+  let waypointsParam = '';
+  if (valid.length > 2) {
+    const middleStops = valid
+      .slice(1, -1)
+      .map(w => `${w.latitude},${w.longitude}`)
+      .join('|');
+    waypointsParam = `&waypoints=${encodeURIComponent(middleStops)}`;
+  }
+
+  return `https://www.google.com/maps/embed/v1/directions?key=${GOOGLE_MAPS_API_KEY}&origin=${origin}&destination=${destination}${waypointsParam}&mode=driving`;
+}
