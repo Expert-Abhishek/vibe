@@ -84,7 +84,7 @@ function generateOtpEmailHtml({ otp, purpose = 'registration', name = '' }) {
             <td style="background: linear-gradient(135deg, #1A1A24 0%, #101015 100%); padding: 32px 30px 24px 30px; text-align: center; border-bottom: 1px solid #232533;">
               <div style="font-size: 32px; margin-bottom: 8px;">${icon}</div>
               <div style="display: inline-block; background-color: rgba(245, 197, 24, 0.12); color: #F5C518; font-weight: 800; font-size: 11px; letter-spacing: 1.5px; padding: 5px 14px; border-radius: 20px; text-transform: uppercase; border: 1px solid rgba(245, 197, 24, 0.3); margin-bottom: 12px;">
-                VIBE SECURE VERIFICATION
+                VIBZZ SECURE VERIFICATION
               </div>
               <h1 style="color: #ffffff; font-size: 22px; font-weight: 800; margin: 0 0 6px 0; letter-spacing: -0.3px;">
                 ${title}
@@ -162,9 +162,9 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
   }
 
   const cleanEmail = to.trim().toLowerCase();
-  let subject = `[Vibe] Your Verification Code: ${otp}`;
+  let subject = `[Vibzz] Your Verification Code: ${otp}`;
   if (purpose === 'password_reset') {
-    subject = `[Vibe] Password Reset Code: ${otp}`;
+    subject = `[Vibzz] Password Reset Code: ${otp}`;
   }
 
   const html = generateOtpEmailHtml({ otp, purpose, name });
