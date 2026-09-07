@@ -279,13 +279,13 @@ export default function RiderRegister() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                  onPress={handleSendOtp}
+                  onPress={handleValidateDetails}
                   disabled={loading}
                 >
                   {loading ? (
                     <ActivityIndicator color={colors.ink} />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Send OTP ➔</Text>
+                    <Text style={styles.primaryButtonText}>Continue ➔</Text>
                   )}
                 </TouchableOpacity>
               </View>

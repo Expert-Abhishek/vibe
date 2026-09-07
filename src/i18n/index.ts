@@ -197,7 +197,6 @@ export const resources = {
       driver: 'Driver',
       change: 'Change',
       standardCab: 'Standard Cab',
-      verifiedPartner: 'Verified Partner',
       registered: 'Registered',
 
       // Custom Trip Builder Screen

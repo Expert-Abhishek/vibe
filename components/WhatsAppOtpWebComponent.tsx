@@ -1,4 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, CSSProperties } from 'react';
+
+export interface WhatsAppSession {
+  sessionId: string;
+  verificationCode: string;
+  businessPhone: string;
+  deepLink: string;
+  phone: string;
+  expiresInSeconds?: number;
+}
+
+interface WhatsAppOtpWebComponentProps {
+  apiBaseUrl?: string;
+  defaultPhone?: string;
+  onVerified?: (data: any) => void;
+}
 
 /**
  * Standalone React / Next.js WhatsApp Reverse OTP Component
@@ -7,16 +22,16 @@ import React, { useState, useEffect, useRef } from 'react';
 export default function WhatsAppOtpWebComponent({
   apiBaseUrl = 'http://localhost:5000',
   defaultPhone = '',
-  onVerified = (data) => console.log('Verified:', data),
-}) {
-  const [phoneNumber, setPhoneNumber] = useState(defaultPhone);
-  const [session, setSession] = useState(null);
+  onVerified = (data: any) => console.log('Verified:', data),
+}: WhatsAppOtpWebComponentProps) {
+  const [phoneNumber, setPhoneNumber] = useState<string>(defaultPhone);
+  const [session, setSession] = useState<WhatsAppSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(300);
-  const [status, setStatus] = useState('IDLE'); // IDLE, WAITING, VERIFIED, EXPIRED, ERROR
+  const [status, setStatus] = useState<'IDLE' | 'WAITING' | 'VERIFIED' | 'EXPIRED' | 'ERROR'>('IDLE');
   const [manualCode, setManualCode] = useState('');
   const [showManual, setShowManual] = useState(false);
-  const pollingRef = useRef(null);
+  const pollingRef = useRef<any>(null);
 
   // Countdown timer
   useEffect(() => {
@@ -43,11 +58,11 @@ export default function WhatsAppOtpWebComponent({
         const data = await res.json();
         if (data && data.verified) {
           setStatus('VERIFIED');
-          clearInterval(pollingRef.current);
+          if (pollingRef.current) clearInterval(pollingRef.current);
           onVerified(data);
         } else if (data && data.status === 'EXPIRED') {
           setStatus('EXPIRED');
-          clearInterval(pollingRef.current);
+          if (pollingRef.current) clearInterval(pollingRef.current);
         }
       } catch (err) {
         console.warn('Polling error:', err);
@@ -60,7 +75,7 @@ export default function WhatsAppOtpWebComponent({
   }, [status, session, apiBaseUrl, onVerified]);
 
   // Initiate Inbound WhatsApp verification
-  const handleInitiate = async (e) => {
+  const handleInitiate = async (e: React.FormEvent) => {
     e?.preventDefault();
     const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
     if (!cleanPhone || cleanPhone.length !== 10) {
@@ -113,7 +128,7 @@ export default function WhatsAppOtpWebComponent({
     }
   };
 
-  const formatTimer = (s) => {
+  const formatTimer = (s: number) => {
     const mins = Math.floor(s / 60);
     const secs = s % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -165,7 +180,7 @@ export default function WhatsAppOtpWebComponent({
           </a>
 
           <div style={styles.timerRow}>
-            <span style={styles.spinner}>⏳</span>
+            <span>⏳</span>
             <span>
               Waiting for message... <strong>({formatTimer(timer)})</strong>
             </span>
@@ -226,7 +241,7 @@ export default function WhatsAppOtpWebComponent({
   );
 }
 
-const styles = {
+const styles: Record<string, CSSProperties> = {
   card: {
     maxWidth: '420px',
     margin: '20px auto',
@@ -245,12 +260,12 @@ const styles = {
     backgroundColor: 'rgba(37,211,102,0.1)',
     padding: '4px 10px',
     borderRadius: '20px',
-    fontWeight: '700',
+    fontWeight: 700,
     textTransform: 'uppercase',
   },
-  title: { fontSize: '20px', fontWeight: '800', marginTop: '10px' },
+  title: { fontSize: '20px', fontWeight: 800, marginTop: '10px' },
   form: { display: 'flex', flexDirection: 'column', gap: '14px' },
-  label: { fontSize: '13px', color: '#888', fontWeight: '600' },
+  label: { fontSize: '13px', color: '#888', fontWeight: 600 },
   inputGroup: {
     display: 'flex',
     alignItems: 'center',
@@ -259,7 +274,7 @@ const styles = {
     borderRadius: '10px',
     padding: '0 12px',
   },
-  prefix: { color: '#25D366', fontWeight: '700', marginRight: '8px' },
+  prefix: { color: '#25D366', fontWeight: 700, marginRight: '8px' },
   input: {
     flex: 1,
     height: '46px',
@@ -273,7 +288,7 @@ const styles = {
     height: '48px',
     backgroundColor: '#25D366',
     color: '#000',
-    fontWeight: '800',
+    fontWeight: 800,
     border: 'none',
     borderRadius: '10px',
     cursor: 'pointer',
@@ -287,7 +302,7 @@ const styles = {
     border: '1px dashed #333',
   },
   codeLabel: { fontSize: '12px', color: '#777', display: 'block' },
-  codeVal: { fontSize: '22px', fontWeight: '900', color: '#25D366', letterSpacing: '2px', margin: '4px 0' },
+  codeVal: { fontSize: '22px', fontWeight: 900, color: '#25D366', letterSpacing: '2px', margin: '4px 0' },
   codeSub: { fontSize: '11px', color: '#666' },
   whatsappBtn: {
     display: 'flex',
@@ -297,7 +312,7 @@ const styles = {
     height: '48px',
     backgroundColor: '#25D366',
     color: '#fff',
-    fontWeight: '800',
+    fontWeight: 800,
     borderRadius: '10px',
     textDecoration: 'none',
     fontSize: '15px',
@@ -323,7 +338,7 @@ const styles = {
     border: 'none',
     borderRadius: '8px',
     color: '#000',
-    fontWeight: '700',
+    fontWeight: 700,
     cursor: 'pointer',
   },
   verifiedBox: { textAlign: 'center', padding: '20px 0' },

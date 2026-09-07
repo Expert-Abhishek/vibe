@@ -316,13 +316,13 @@ export default function RegisterScreen() {
             {/* Submit Button */}
             <TouchableOpacity
               style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleSendOtp}
+              onPress={handleValidateDetails}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#06101d" />
               ) : (
-                <Text style={styles.buttonText}>Send OTP & Register ➔</Text>
+                <Text style={styles.buttonText}>Continue to Verify ➔</Text>
               )}
             </TouchableOpacity>
 

@@ -540,7 +540,7 @@ export async function sendResetOtpApi(phone: string): Promise<any> {
 /**
  * Verify Reset OTP & Update Password
  */
-export async function verifyResetOtpApi(payload: { phone: string; otp: string; newPassword?: string }): Promise<any> {
+export async function verifyResetOtpApi(payload: { phone: string; otp?: string; sessionId?: string; newPassword?: string }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-reset-otp`, {
       method: 'POST',

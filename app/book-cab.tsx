@@ -46,6 +46,10 @@ export default function BookCabScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  const [bookingMode, setBookingMode] = useState<'now' | 'advance'>(
+    (searchParams.mode === 'advance' || searchParams.mode === 'prebook') ? 'advance' : 'now'
+  );
+
   const [pickup, setPickup] = useState<LocationNode>({
     name: PRESET_PICKUP_DROP_LOCATIONS[0].name,
     latitude: PRESET_PICKUP_DROP_LOCATIONS[0].latitude,

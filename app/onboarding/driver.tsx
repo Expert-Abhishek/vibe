@@ -55,8 +55,6 @@ const DOC_LABELS: Record<DocKey, string> = {
   carBack: 'Car back view',
 };
 
-import { registerUser } from '@/constants/api';
-
 export default function DriverRegister() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
