@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { registerUser, sendRegisterOtpApi } from '@/constants/api';
+import { registerUser } from '@/constants/api';
 
 import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 

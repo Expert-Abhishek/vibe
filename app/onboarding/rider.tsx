@@ -15,8 +15,10 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { registerUser, sendRegisterOtpApi } from '@/constants/api';
+import { registerUser } from '@/constants/api';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
+
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 
 // ---- Design tokens --------------------------------------------------------
 const colors = {
@@ -37,7 +39,6 @@ export default function RiderRegister() {
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [step, setStep] = useState<'details' | 'otp'>('details');
-  const [otp, setOtp] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -63,7 +64,7 @@ export default function RiderRegister() {
     }
   };
 
-  const handleSendOtp = async () => {
+  const handleValidateDetails = () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const nextErrors: Record<string, string> = {};
 
@@ -74,34 +75,11 @@ export default function RiderRegister() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    setLoading(true);
-    const sendRes = await sendRegisterOtpApi(cleanPhone);
-    setLoading(false);
-
-    if (sendRes.success) {
-      setStep('otp');
-      Alert.alert(
-        '📱 OTP Sent via SMS',
-        `A 4-digit verification OTP code has been sent to +91 ${cleanPhone} via SMS.\n\nPlease enter the OTP code below to complete registration.`,
-        [{ text: 'OK' }]
-      );
-      showToast(`Registration OTP sent via SMS to +91 ${cleanPhone}`, 'success');
-    } else {
-      const msg = sendRes.message || 'Failed to send OTP code.';
-      setErrors({ api: msg });
-      showToast(msg, 'error');
-    }
+    setStep('otp');
   };
 
-  const handleVerifyAndRegister = async () => {
+  const handleVerifyAndRegister = async (sessionId?: string, otpCode?: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const cleanOtp = otp.trim();
-
-    if (!cleanOtp || cleanOtp.length !== 4) {
-      setErrors({ otp: 'Enter 4-digit OTP code' });
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -110,18 +88,25 @@ export default function RiderRegister() {
         phone: cleanPhone,
         password: password,
         role: 'tourist',
-        otp: cleanOtp,
+        otp: otpCode || sessionId,
       });
 
       setLoading(false);
 
       if (res.success) {
-        showToast('Successfully registered', 'success');
-        setTimeout(() => {
-          router.replace('/(auth)/sign-in');
-        }, 1500);
+        showToast('Successfully registered! 🎉', 'success');
+        Alert.alert(
+          'Registration Successful 🎉',
+          'Your rider profile has been created successfully. You can now sign in.',
+          [
+            {
+              text: 'Sign In',
+              onPress: () => router.replace('/(auth)/sign-in'),
+            },
+          ]
+        );
       } else {
-        const errorMsg = res.message || 'Registration failed. Invalid 4-digit OTP code.';
+        const errorMsg = res.message || 'Registration failed.';
         setErrors({ api: errorMsg, otp: errorMsg });
         showToast(errorMsg, 'error');
         Alert.alert('Registration Failed', errorMsg);
@@ -178,64 +163,20 @@ export default function RiderRegister() {
           </View>
 
           {step === 'otp' ? (
-            <View style={styles.passCard}>
+            <View style={{ marginBottom: verticalScale(24) }}>
               <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(14) }}>
                 <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
                 <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>Edit Details / Change Phone</Text>
               </TouchableOpacity>
 
-              <Text style={[styles.title, { fontSize: moderateFontScale(22) }]}>Enter Verification OTP 🔐</Text>
-              <Text style={[styles.subtitle, { marginBottom: verticalScale(16) }]}>
-                We sent a 4-digit verification code to <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {phone}</Text>
-              </Text>
-
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>4-Digit OTP Code</Text>
-                <View style={styles.requiredDot} />
-              </View>
-              <TextInput
-                style={[styles.otpInput, errors.otp && styles.inputError]}
-                placeholder="0 0 0 0"
-                placeholderTextColor="rgba(245, 197, 24, 0.3)"
-                value={otp}
-                onChangeText={(t) => {
-                  setOtp(t.replace(/[^0-9]/g, ''));
-                  setErrors(prev => {
-                    const next = { ...prev };
-                    delete next.otp;
-                    return next;
-                  });
-                }}
-                keyboardType="number-pad"
-                maxLength={4}
+              <WhatsAppOtpVerification
+                phone={phone}
+                purpose="registration"
+                title="Verify via WhatsApp"
+                subtitle={`Tap below to send the verification code from WhatsApp on +91 ${phone.slice(-10)}.`}
+                onVerified={({ sessionId, code }) => handleVerifyAndRegister(sessionId, code)}
+                onCancel={() => setStep('details')}
               />
-              {errors.otp && <Text style={styles.errorText}>{errors.otp}</Text>}
-              {errors.api && <Text style={[styles.errorText, { marginTop: verticalScale(10), textAlign: 'center' }]}>{errors.api}</Text>}
-
-              <View style={[styles.buttonRow, { marginTop: verticalScale(20) }]}>
-                <TouchableOpacity style={styles.secondaryButton} onPress={() => setStep('details')} disabled={loading}>
-                  <Text style={styles.secondaryButtonText}>Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                  onPress={handleVerifyAndRegister}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.ink} />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Verify & Complete</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={{ marginTop: verticalScale(16), alignItems: 'center' }}
-                onPress={handleSendOtp}
-                disabled={loading}
-              >
-                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>Resend 4-Digit OTP via SMS</Text>
-              </TouchableOpacity>
             </View>
           ) : (
             <>

@@ -18,6 +18,8 @@ import {
 } from 'react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { registerUser } from '@/constants/api';
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 
 type KYCStatus = 'form' | 'pending' | 'approved';
 type DocKey = 'photo' | 'rc' | 'dl' | 'insurance' | 'aadhar' | 'carFront' | 'carLeft' | 'carRight' | 'carBack';
@@ -53,7 +55,7 @@ const DOC_LABELS: Record<DocKey, string> = {
   carBack: 'Car back view',
 };
 
-import { registerUser, sendRegisterOtpApi } from '@/constants/api';
+import { registerUser } from '@/constants/api';
 
 export default function DriverRegister() {
   const router = useRouter();
@@ -213,75 +215,53 @@ export default function DriverRegister() {
     if (currentStep < 3) {
       setCurrentStep(prev => prev + 1);
     } else if (currentStep === 3) {
-      if (!showOtpScreen) {
-        // 1. Send 4-digit OTP code to primary phone number
-        setLoading(true);
-        const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-        const sendRes = await sendRegisterOtpApi(cleanPhone);
-        setLoading(false);
+      setShowOtpScreen(true);
+    }
+  };
 
-        if (sendRes.success) {
-          setShowOtpScreen(true);
-          Alert.alert(
-            '📱 OTP Sent via SMS',
-            `A 4-digit verification OTP code has been sent to +91 ${cleanPhone} via SMS.\n\nPlease enter the OTP code below and click Submit Application.`,
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code to primary phone.');
-        }
+  const handleCompleteDriverRegistration = async (sessionId?: string, otpCode?: string) => {
+    setLoading(true);
+    const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+    const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
+
+    try {
+      const res = await registerUser({
+        name: formData.name.trim(),
+        phone: cleanPhone,
+        alternate_phone: cleanAltPhone,
+        password: formData.password,
+        role: 'driver',
+        otp: otpCode || sessionId,
+        vehicle_type: formData.vehicleType,
+        vehicle_model: formData.vehicleModel || 'Standard Cab',
+        vehicle_number: formData.rcNo,
+
+        license_number: formData.dlNo,
+        photo_url: docs.photo || undefined,
+        rc_url: docs.rc || undefined,
+        dl_url: docs.dl || undefined,
+        insurance_url: docs.insurance || undefined,
+        aadhar_url: docs.aadhar || undefined,
+        car_front_url: docs.carFront || undefined,
+        car_left_url: docs.carLeft || undefined,
+        car_right_url: docs.carRight || undefined,
+        car_back_url: docs.carBack || undefined,
+      });
+
+      setLoading(false);
+
+      if (res.success) {
+        setKycStatus('pending');
+      } else if (res.message && res.message.includes('already registered')) {
+        Alert.alert('Already Registered', res.message);
       } else {
-        // 2. Submit registration with verified 4-digit OTP
-        const cleanOtp = otp.trim();
-        if (!cleanOtp || cleanOtp.length !== 4) {
-          setErrors(prev => ({ ...prev, otp: 'Enter valid 4-digit OTP code' }));
-          return;
-        }
-
-        setLoading(true);
-        const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-        const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
-
-        try {
-          const res = await registerUser({
-            name: formData.name.trim(),
-            phone: cleanPhone,
-            alternate_phone: cleanAltPhone,
-            password: formData.password,
-            role: 'driver',
-            otp: cleanOtp,
-            vehicle_type: formData.vehicleType,
-            vehicle_model: formData.vehicleModel || 'Standard Cab',
-            vehicle_number: formData.rcNo,
-
-            license_number: formData.dlNo,
-            photo_url: docs.photo || undefined,
-            rc_url: docs.rc || undefined,
-            dl_url: docs.dl || undefined,
-            insurance_url: docs.insurance || undefined,
-            aadhar_url: docs.aadhar || undefined,
-            car_front_url: docs.carFront || undefined,
-            car_left_url: docs.carLeft || undefined,
-            car_right_url: docs.carRight || undefined,
-            car_back_url: docs.carBack || undefined,
-          });
-
-          setLoading(false);
-
-          if (res.success) {
-            setKycStatus('pending');
-          } else if (res.message && res.message.includes('already registered')) {
-            Alert.alert('Already Registered', res.message);
-          } else {
-            const errMsg = res.message || 'Driver registration failed. Invalid OTP code.';
-            setErrors(prev => ({ ...prev, otp: errMsg }));
-            Alert.alert('Registration Failed', errMsg);
-          }
-        } catch (err: any) {
-          setLoading(false);
-          Alert.alert('Error', err?.message || 'Failed to connect to backend server.');
-        }
+        const errMsg = res.message || 'Driver registration failed.';
+        setErrors(prev => ({ ...prev, otp: errMsg }));
+        Alert.alert('Registration Failed', errMsg);
       }
+    } catch (err: any) {
+      setLoading(false);
+      Alert.alert('Error', err?.message || 'Failed to connect to backend server.');
     }
   };
 
@@ -360,7 +340,7 @@ export default function DriverRegister() {
           <Text style={styles.appIdMono}>{appId}</Text>
 
           {showOtpScreen ? (
-            <View style={styles.formCard}>
+            <View style={{ marginBottom: verticalScale(24) }}>
               <TouchableOpacity
                 onPress={() => setShowOtpScreen(false)}
                 style={{ flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(14) }}
@@ -371,75 +351,14 @@ export default function DriverRegister() {
                 </Text>
               </TouchableOpacity>
 
-              <Text style={{ fontSize: moderateFontScale(22), fontWeight: '800', color: colors.textPrimary, marginBottom: verticalScale(6) }}>
-                Enter Verification OTP Code 🔐
-              </Text>
-              <Text style={{ fontSize: moderateFontScale(13), color: colors.textMuted, marginBottom: verticalScale(20) }}>
-                We sent a 4-digit verification code to primary mobile <Text style={{ fontWeight: '800', color: colors.textPrimary }}>+91 {formData.phone}</Text>
-              </Text>
-
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>4-Digit OTP Code</Text>
-                <View style={styles.requiredDot} />
-              </View>
-              <TextInput
-                style={[styles.otpInput, errors.otp && styles.inputError]}
-                placeholder="0 0 0 0"
-                placeholderTextColor="rgba(245, 197, 24, 0.3)"
-                value={otp}
-                onChangeText={(text: string) => {
-                  setOtp(text.replace(/[^0-9]/g, ''));
-                  setErrors(prev => {
-                    const next = { ...prev };
-                    delete next.otp;
-                    return next;
-                  });
-                }}
-                keyboardType="number-pad"
-                maxLength={4}
+              <WhatsAppOtpVerification
+                phone={formData.phone}
+                purpose="registration"
+                title="Verify via WhatsApp"
+                subtitle={`Tap below to send the verification message from WhatsApp on +91 ${formData.phone.slice(-10)} to submit your driver permit application.`}
+                onVerified={({ sessionId, code }) => handleCompleteDriverRegistration(sessionId, code)}
+                onCancel={() => setShowOtpScreen(false)}
               />
-              {errors.otp && <Text style={styles.errorText}>{errors.otp}</Text>}
-
-              <View style={[styles.buttonRow, { marginTop: verticalScale(24) }]}>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() => setShowOtpScreen(false)}
-                  disabled={loading}
-                >
-                  <Text style={styles.secondaryButtonText}>Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                  onPress={handleNext}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={colors.ink} />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Verify & Submit</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={{ marginTop: verticalScale(18), alignItems: 'center' }}
-                onPress={async () => {
-                  const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-                  setLoading(true);
-                  const sendRes = await sendRegisterOtpApi(cleanPhone);
-                  setLoading(false);
-                  if (sendRes.success) {
-                    Alert.alert('📱 OTP Resent', `A new 4-digit OTP has been sent to +91 ${cleanPhone} via SMS.`);
-                  } else {
-                    Alert.alert('Resend Failed', sendRes.message || 'Failed to resend OTP.');
-                  }
-                }}
-                disabled={loading}
-              >
-                <Text style={{ color: colors.amber, fontWeight: '700', fontSize: moderateFontScale(13) }}>
-                  Resend 4-Digit OTP via SMS
-                </Text>
-              </TouchableOpacity>
             </View>
           ) : (
             <>
