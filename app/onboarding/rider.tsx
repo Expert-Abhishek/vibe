@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { registerUser } from '@/constants/api';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
-import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
+import EmailOtpVerification from '@/components/EmailOtpVerification';
 
 // ---- Design tokens --------------------------------------------------------
 const colors = {
@@ -40,6 +40,7 @@ export default function RiderRegister() {
 
   const [step, setStep] = useState<'details' | 'otp'>('details');
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -48,7 +49,7 @@ export default function RiderRegister() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
-  const [errors, setErrors] = useState<{ name?: string; phone?: string; password?: string; otp?: string; api?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string; password?: string; otp?: string; api?: string }>({});
 
   const scrollToInput = (yOffset: number) => {
     setTimeout(() => {
@@ -66,9 +67,11 @@ export default function RiderRegister() {
 
   const handleValidateDetails = () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanEmail = email.trim().toLowerCase();
     const nextErrors: Record<string, string> = {};
 
     if (!name.trim()) nextErrors.name = 'Enter full name';
+    if (!cleanEmail || !cleanEmail.includes('@')) nextErrors.email = 'Enter a valid email address';
     if (!cleanPhone || cleanPhone.length !== 10) nextErrors.phone = 'Phone number must be 10 digits';
     if (!password || password.length < 6) nextErrors.password = 'Password must be at least 6 characters';
 
@@ -78,17 +81,18 @@ export default function RiderRegister() {
     setStep('otp');
   };
 
-  const handleVerifyAndRegister = async (sessionId?: string, otpCode?: string) => {
+  const handleVerifyAndRegister = async (verifiedEmail: string, otpCode: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     setLoading(true);
 
     try {
       const res = await registerUser({
         name: name.trim(),
+        email: verifiedEmail || email.trim().toLowerCase(),
         phone: cleanPhone,
         password: password,
         role: 'tourist',
-        otp: otpCode || sessionId,
+        otp: otpCode,
       });
 
       setLoading(false);
@@ -166,16 +170,18 @@ export default function RiderRegister() {
             <View style={{ marginBottom: verticalScale(24) }}>
               <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(14) }}>
                 <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
-                <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>Edit Details / Change Phone</Text>
+                <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>Edit Details / Change Email</Text>
               </TouchableOpacity>
 
-              <WhatsAppOtpVerification
-                phone={phone}
+              <EmailOtpVerification
+                email={email}
                 purpose="registration"
-                title="Verify via WhatsApp"
-                subtitle={`Tap below to send the verification code from WhatsApp on +91 ${phone.slice(-10)}.`}
-                onVerified={({ sessionId, code }) => handleVerifyAndRegister(sessionId, code)}
+                userName={name}
+                title="Verify Your Email"
+                subtitle={`A 6-digit OTP code has been sent to your email to verify your rider account.`}
+                onVerified={({ email: vEmail, otp: vOtp }) => handleVerifyAndRegister(vEmail, vOtp)}
                 onCancel={() => setStep('details')}
+                onChangeEmail={() => setStep('details')}
               />
             </View>
           ) : (
@@ -203,9 +209,35 @@ export default function RiderRegister() {
                       return next;
                     });
                   }}
-                  onFocus={() => scrollToInput(120)}
+                  onFocus={() => scrollToInput(100)}
                 />
                 {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+
+                <View style={styles.passDivider} />
+
+                {/* Email Address */}
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Email address</Text>
+                  <View style={styles.requiredDot} />
+                </View>
+                <TextInput
+                  style={[styles.input, errors.email && styles.inputError]}
+                  placeholder="e.g. name@example.com"
+                  placeholderTextColor="rgba(245, 244, 240, 0.4)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={(t) => {
+                    setEmail(t);
+                    setErrors(prev => {
+                      const next = { ...prev };
+                      delete next.email;
+                      return next;
+                    });
+                  }}
+                  onFocus={() => scrollToInput(150)}
+                />
+                {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
                 <View style={styles.passDivider} />
 
@@ -229,7 +261,7 @@ export default function RiderRegister() {
                       return next;
                     });
                   }}
-                  onFocus={() => scrollToInput(180)}
+                  onFocus={() => scrollToInput(200)}
                 />
                 {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
 

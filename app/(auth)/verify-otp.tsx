@@ -16,35 +16,30 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { verifyResetOtpApi } from '@/constants/api';
-import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
+import EmailOtpVerification from '@/components/EmailOtpVerification';
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ phone?: string; sessionId?: string; code?: string }>();
+  const params = useLocalSearchParams<{ email?: string; phone?: string; code?: string }>();
+  const initialEmail = ((params.email as string) || '').trim().toLowerCase();
   const initialPhone = ((params.phone as string) || '').replace(/\D/g, '').slice(-10);
 
+  const [userEmail, setUserEmail] = useState(initialEmail);
   const [userPhone, setUserPhone] = useState(initialPhone);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [verifiedSession, setVerifiedSession] = useState<{ sessionId: string; code?: string } | null>(null);
+  const [verifiedData, setVerifiedData] = useState<{ email: string; otp: string } | null>(null);
 
-  // When WhatsApp verification completes
-  const handleWhatsAppVerified = (data: { sessionId: string; phone: string; code?: string }) => {
-    setVerifiedSession({ sessionId: data.sessionId, code: data.code });
-    setUserPhone(data.phone || userPhone);
+  // When Email OTP verification completes
+  const handleEmailVerified = (data: { email: string; otp: string }) => {
+    setVerifiedData(data);
+    setUserEmail(data.email);
   };
 
   // Submit Password Reset once verified
   const handleResetPassword = async () => {
-    const cleanPhone = userPhone.replace(/\D/g, '').slice(-10);
-
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      Alert.alert('Phone Number Required', 'Please enter your registered 10-digit mobile number.');
-      return;
-    }
-
     if (!newPassword || newPassword.trim().length < 4) {
       Alert.alert('New Password Required', 'Please enter a new password (min 4 characters).');
       return;
@@ -55,17 +50,17 @@ export default function VerifyOtpScreen() {
       return;
     }
 
-    if (!verifiedSession) {
-      Alert.alert('Verification Required', 'Please complete the WhatsApp verification first.');
+    if (!verifiedData) {
+      Alert.alert('Verification Required', 'Please complete email verification first.');
       return;
     }
 
     setLoading(true);
     try {
       const res = await verifyResetOtpApi({
-        phone: cleanPhone,
-        otp: verifiedSession.code || '',
-        sessionId: verifiedSession.sessionId,
+        email: verifiedData.email || userEmail,
+        phone: userPhone || undefined,
+        otp: verifiedData.otp,
         newPassword: newPassword.trim(),
       });
       setLoading(false);
@@ -111,23 +106,24 @@ export default function VerifyOtpScreen() {
 
           {/* MAIN CONTENT */}
           <View style={styles.content}>
-            {!verifiedSession ? (
-              // Step 1: WhatsApp Inbound Verification
-              <WhatsAppOtpVerification
-                phone={userPhone}
+            {!verifiedData ? (
+              // Step 1: Email OTP Verification
+              <EmailOtpVerification
+                email={userEmail || (userPhone ? `${userPhone}@temp.com` : '')}
                 purpose="password_reset"
-                title="WhatsApp Inbound Verification"
-                subtitle={`Tap below to send the verification code from WhatsApp on +91 ${userPhone}. It will verify instantly.`}
-                onVerified={handleWhatsAppVerified}
+                title="Verify Reset Code"
+                subtitle="Enter the 6-digit code sent to your email to reset password."
+                onVerified={handleEmailVerified}
+                onCancel={() => router.back()}
               />
             ) : (
               // Step 2: Enter New Password
               <View style={styles.passwordSection}>
                 <View style={styles.successBadge}>
-                  <MaterialIcons name="check-circle" size={scale(48)} color="#25D366" />
-                  <Text style={styles.successTitle}>WhatsApp Verified! ✅</Text>
+                  <MaterialIcons name="check-circle" size={scale(48)} color="#4CAF50" />
+                  <Text style={styles.successTitle}>Email Verified! ✅</Text>
                   <Text style={styles.successSub}>
-                    Verified number: <Text style={{ color: '#F5C518', fontWeight: '700' }}>+91 {userPhone}</Text>
+                    Verified email: <Text style={{ color: '#F5C518', fontWeight: '700' }}>{verifiedData.email}</Text>
                   </Text>
                 </View>
 
@@ -195,7 +191,7 @@ export default function VerifyOtpScreen() {
                   ) : (
                     <View style={styles.buttonRow}>
                       <Text style={styles.submitButtonText}>Update Password & Sign In</Text>
-                      <MaterialIcons name="arrow-forward" size={scale(18)} color="#101010" />
+                      <MaterialIcons name="arrow-forward" size={scale(18)} color="#101014" />
                     </View>
                   )}
                 </TouchableOpacity>

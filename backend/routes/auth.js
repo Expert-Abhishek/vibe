@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const emailService = require('../services/emailService');
 
 const router = express.Router();
 
@@ -69,37 +70,69 @@ router.post('/register', async (req, res) => {
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
     const cleanEmail = email ? email.trim().toLowerCase() : null;
 
-    // OTP verification check if provided (supports WhatsApp Reverse OTP session or verification code)
-    const otpCode = (req.body.otp || req.body.code || '').trim();
+    // 0. Email OTP / WhatsApp / Phone OTP verification check
+    const otpCode = (req.body.otp || req.body.code || req.body.email_otp || '').trim();
     const waSessionId = (req.body.sessionId || req.body.session_id || '').trim();
 
-    if (waSessionId) {
+    let isOtpValid = false;
+
+    // A. Check Email OTP Verification if email provided
+    if (cleanEmail) {
+      // 1. Check if email was already marked verified via /verify-email-otp
+      const emailVerifRes = await db.query(
+        `SELECT id, status FROM email_verifications 
+         WHERE LOWER(email) = $1 AND purpose = 'registration' AND status = 'VERIFIED'
+         ORDER BY verified_at DESC LIMIT 1`,
+        [cleanEmail]
+      );
+
+      if (emailVerifRes.rows.length > 0) {
+        isOtpValid = true;
+        await db.query(`UPDATE email_verifications SET status = 'CONSUMED' WHERE id = $1`, [emailVerifRes.rows[0].id]);
+      } else if (otpCode) {
+        // 2. Check if active matching OTP code exists for this email
+        const emailCodeRes = await db.query(
+          `SELECT id FROM email_verifications 
+           WHERE LOWER(email) = $1 AND otp = $2 AND purpose = 'registration' AND status IN ('PENDING', 'VERIFIED') AND expires_at > CURRENT_TIMESTAMP
+           ORDER BY created_at DESC LIMIT 1`,
+          [cleanEmail, otpCode]
+        );
+        if (emailCodeRes.rows.length > 0) {
+          isOtpValid = true;
+          await db.query(`UPDATE email_verifications SET status = 'CONSUMED' WHERE id = $1`, [emailCodeRes.rows[0].id]);
+        }
+      }
+    }
+
+    // B. Check WhatsApp Reverse OTP if session provided
+    if (!isOtpValid && waSessionId) {
       const waCheck = await db.query(
         `SELECT id, status, expires_at FROM whatsapp_verifications 
          WHERE session_id = $1 AND phone_number = $2`,
         [waSessionId, cleanPhone]
       );
-      if (waCheck.rows.length === 0 || (waCheck.rows[0].status !== 'VERIFIED' && waCheck.rows[0].status !== 'PENDING')) {
-        return res.status(400).json({ success: false, message: 'WhatsApp verification incomplete or session expired.' });
+      if (waCheck.rows.length > 0 && (waCheck.rows[0].status === 'VERIFIED' || waCheck.rows[0].status === 'PENDING')) {
+        isOtpValid = true;
+        await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE session_id = $1`, [waSessionId]);
       }
-      await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE session_id = $1`, [waSessionId]);
-    } else if (otpCode) {
-      // Check WhatsApp verification records first
+    }
+
+    // C. Check WhatsApp Code or fallback registration_otps
+    if (!isOtpValid && otpCode) {
       const waCodeCheck = await db.query(
         `SELECT id, status, expires_at FROM whatsapp_verifications 
          WHERE (verification_code = $1 OR session_id = $1) AND phone_number = $2 AND expires_at > CURRENT_TIMESTAMP`,
         [otpCode, cleanPhone]
       );
-
       if (waCodeCheck.rows.length > 0) {
+        isOtpValid = true;
         await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [waCodeCheck.rows[0].id]);
       } else {
-        // Fallback check against legacy registration_otps
         const otpCheck = await db.query('SELECT otp, expires_at FROM registration_otps WHERE phone = $1', [cleanPhone]);
-        if (otpCheck.rows.length === 0 || otpCheck.rows[0].otp !== otpCode || new Date() > new Date(otpCheck.rows[0].expires_at)) {
-          return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
+        if (otpCheck.rows.length > 0 && otpCheck.rows[0].otp === otpCode && new Date() <= new Date(otpCheck.rows[0].expires_at)) {
+          isOtpValid = true;
+          await db.query('DELETE FROM registration_otps WHERE phone = $1', [cleanPhone]);
         }
-        await db.query('DELETE FROM registration_otps WHERE phone = $1', [cleanPhone]);
       }
     }
 
@@ -1367,190 +1400,232 @@ function getCleanWaBusinessNumber() {
 
 /**
  * POST /api/auth/send-reset-otp
- * Initiates 100% Free WhatsApp Inbound Verification for Password Reset
+ * Sends 6-digit Password Reset OTP via Email (with phone/whatsapp backward compatibility)
  */
 router.post('/send-reset-otp', async (req, res) => {
   try {
-    const { phone } = req.body;
-    const rawPhone = (phone || '').trim();
+    const { email, phone, identifier } = req.body;
+    const rawInput = (email || phone || identifier || '').trim();
 
-    if (!rawPhone) {
-      return res.status(400).json({ success: false, message: 'Phone number is required.' });
+    if (!rawInput) {
+      return res.status(400).json({ success: false, message: 'Email address or phone number is required.' });
     }
 
-    let cleanPhone = rawPhone.replace(/\D/g, '');
+    const isEmail = rawInput.includes('@');
+    let cleanPhone = rawInput.replace(/\D/g, '');
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+    const cleanEmail = isEmail ? rawInput.toLowerCase() : null;
 
-    if (cleanPhone.length < 10) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit mobile number.' });
+    // 1. Find user by email or phone
+    let userRes;
+    if (cleanEmail) {
+      userRes = await db.query(
+        `SELECT id, name, phone, email, role FROM users WHERE LOWER(email) = $1`,
+        [cleanEmail]
+      );
+    } else {
+      userRes = await db.query(
+        `SELECT id, name, phone, email, role FROM users 
+         WHERE phone LIKE $1 OR phone = $2 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $2`,
+        [`%${cleanPhone}`, cleanPhone]
+      );
     }
-
-    // 1. Check if user exists with this phone number
-    const userRes = await db.query(
-      `SELECT id, name, phone, role FROM users 
-       WHERE phone LIKE $1 OR phone = $2 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $2`,
-      [`%${cleanPhone}`, cleanPhone]
-    );
 
     if (userRes.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `No account registered with phone number +91 ${cleanPhone}. Please check your number or register first.`,
+        message: cleanEmail
+          ? `No account registered with email ${cleanEmail}. Please check your email or register.`
+          : `No account registered with phone number +91 ${cleanPhone}. Please register first.`,
       });
     }
 
-    // 2. Generate Cryptographically Secure 6-Digit Code & Session for WhatsApp
+    const user = userRes.rows[0];
+    const targetEmail = user.email ? user.email.toLowerCase() : (cleanEmail || null);
+    const targetPhone = user.phone || cleanPhone;
+
+    // 2. Generate 6-Digit OTP Code
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const sessionId = `wa_reset_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes valid
 
-    // 3. Save to whatsapp_verifications
-    await db.query(
-      `UPDATE whatsapp_verifications SET status = 'EXPIRED' WHERE phone_number = $1 AND purpose = 'password_reset'`,
-      [cleanPhone]
-    );
+    // 3. If targetEmail exists, send via Email Service
+    if (targetEmail) {
+      // Invalidate existing pending reset OTPs for this email
+      await db.query(
+        `UPDATE email_verifications SET status = 'EXPIRED' 
+         WHERE LOWER(email) = $1 AND purpose = 'password_reset' AND status = 'PENDING'`,
+        [targetEmail]
+      );
 
-    await db.query(
-      `INSERT INTO whatsapp_verifications (
-         session_id, phone_number, verification_code, purpose, status, expires_at
-       ) VALUES ($1, $2, $3, 'password_reset', 'PENDING', $4)`,
-      [sessionId, cleanPhone, otpCode, expiresAt]
-    );
+      // Save to email_verifications table
+      await db.query(
+        `INSERT INTO email_verifications (email, otp, purpose, status, expires_at)
+         VALUES ($1, $2, 'password_reset', 'PENDING', $3)`,
+        [targetEmail, otpCode, expiresAt]
+      );
 
-    // Also update legacy table for backward compatibility
-    await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [cleanPhone, `%${cleanPhone}`]);
-    await db.query(
-      `INSERT INTO password_reset_otps (phone, otp, expires_at) VALUES ($1, $2, $3)`,
-      [cleanPhone, otpCode, expiresAt]
-    );
+      // Dispatch Email via Nodemailer
+      await emailService.sendOtpEmail({
+        to: targetEmail,
+        otp: otpCode,
+        purpose: 'password_reset',
+        name: user.name || 'User',
+      });
 
-    /*
-     * [OLD SMS SEND LOGIC COMMENTED OUT]:
-     * await sendFast2SmsOtp(cleanPhone, otpCode);
-     */
+      console.log(`[Email Reset OTP] ✉️ Sent reset OTP to ${targetEmail} for user ${user.id} | Code: ${otpCode}`);
+    }
 
-    // 4. Build WhatsApp Inbound Deep Link
-    const businessPhone = getCleanWaBusinessNumber();
-    const deepLink = `https://wa.me/${businessPhone}?text=${encodeURIComponent(`VERIFY ${otpCode}`)}`;
+    // 4. Save to legacy tables for phone backup
+    if (targetPhone) {
+      const sessionId = `reset_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [targetPhone, `%${targetPhone}`]);
+      await db.query(
+        `INSERT INTO password_reset_otps (phone, otp, expires_at) VALUES ($1, $2, $3)`,
+        [targetPhone, otpCode, expiresAt]
+      );
+      await db.query(
+        `INSERT INTO whatsapp_verifications (session_id, phone_number, verification_code, purpose, status, expires_at)
+         VALUES ($1, $2, $3, 'password_reset', 'PENDING', $4)`,
+        [sessionId, targetPhone, otpCode, expiresAt]
+      );
+    }
 
-    console.log(`[WhatsApp Reverse OTP] 🔑 Password Reset link generated for +91 ${cleanPhone} | Code: ${otpCode}`);
+    const maskedEmail = targetEmail ? targetEmail.replace(/(.{2})(.*)(?=@)/, (gp1, gp2, gp3) => gp2 + '*'.repeat(gp3.length)) : null;
 
     return res.json({
       success: true,
-      message: `WhatsApp verification link generated for +91 ${cleanPhone}.`,
-      phone: cleanPhone,
-      sessionId,
-      verificationCode: otpCode,
-      deepLink,
-      businessPhone,
+      message: targetEmail
+        ? `Password reset code sent to ${maskedEmail || targetEmail}. Please check your inbox.`
+        : `Reset code generated for +91 ${targetPhone}.`,
+      email: targetEmail,
+      phone: targetPhone,
       expiresInSeconds: 300,
       otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
     });
   } catch (error) {
     console.error('Error in send-reset-otp:', error);
-    return res.status(500).json({ success: false, message: 'Failed to initiate WhatsApp verification.', error: error.message });
+    return res.status(500).json({ success: false, message: 'Failed to send reset code. Please try again.', error: error.message });
   }
 });
 
 /**
  * POST /api/auth/verify-reset-otp
- * Verify WhatsApp Reverse OTP session / code and reset password for user
+ * Verify OTP code (from Email, WhatsApp, or SMS) and reset password for user
  */
 router.post('/verify-reset-otp', async (req, res) => {
   try {
-    const { phone, otp, code, sessionId, session_id, newPassword } = req.body;
-    const rawPhone = (phone || '').trim();
+    const { email, phone, identifier, otp, code, sessionId, newPassword } = req.body;
+    const rawInput = (email || phone || identifier || '').trim();
     const otpCode = (otp || code || '').trim();
-    const targetSessionId = (sessionId || session_id || '').trim();
     const targetPassword = (newPassword || '').trim();
 
-    let cleanPhone = rawPhone.replace(/\D/g, '');
+    if (!otpCode) {
+      return res.status(400).json({ success: false, message: 'Verification OTP code is required.' });
+    }
+
+    const isEmail = rawInput.includes('@');
+    let cleanPhone = rawInput.replace(/\D/g, '');
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+    const cleanEmail = isEmail ? rawInput.toLowerCase() : (email ? email.trim().toLowerCase() : null);
 
     let isVerified = false;
+    let matchedUserId = null;
 
-    // 1. Check by WhatsApp Session ID if provided
-    if (targetSessionId) {
-      const waRes = await db.query(
-        `SELECT id, status, phone_number, expires_at FROM whatsapp_verifications 
-         WHERE session_id = $1`,
-        [targetSessionId]
-      );
+    // 1. Check in email_verifications
+    if (cleanEmail || otpCode) {
+      let emailQuery = `SELECT id, email, expires_at FROM email_verifications 
+                        WHERE otp = $1 AND purpose = 'password_reset' AND status IN ('PENDING', 'VERIFIED') AND expires_at > CURRENT_TIMESTAMP`;
+      let params = [otpCode];
 
-      if (waRes.rows.length > 0) {
-        const rec = waRes.rows[0];
-        if (rec.status === 'VERIFIED') {
+      if (cleanEmail) {
+        emailQuery += ` AND LOWER(email) = $2`;
+        params.push(cleanEmail);
+      }
+      emailQuery += ` ORDER BY created_at DESC LIMIT 1`;
+
+      const emailVerifRes = await db.query(emailQuery, params);
+      if (emailVerifRes.rows.length > 0) {
+        isVerified = true;
+        const verifiedEmail = emailVerifRes.rows[0].email;
+        await db.query(`UPDATE email_verifications SET status = 'CONSUMED' WHERE id = $1`, [emailVerifRes.rows[0].id]);
+        
+        const uRes = await db.query(`SELECT id FROM users WHERE LOWER(email) = $1`, [verifiedEmail.toLowerCase()]);
+        if (uRes.rows.length > 0) matchedUserId = uRes.rows[0].id;
+      }
+    }
+
+    // 2. Check in whatsapp_verifications / password_reset_otps by code or session
+    if (!isVerified && (cleanPhone || sessionId || otpCode)) {
+      if (sessionId) {
+        const waRes = await db.query(
+          `SELECT id, phone_number FROM whatsapp_verifications WHERE session_id = $1 AND expires_at > CURRENT_TIMESTAMP`,
+          [sessionId]
+        );
+        if (waRes.rows.length > 0) {
           isVerified = true;
-          cleanPhone = cleanPhone || rec.phone_number;
-          await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [rec.id]);
-        } else if (rec.status === 'PENDING') {
-          // If code also provided, check code match
-          if (otpCode && rec.verification_code === otpCode && new Date() <= new Date(rec.expires_at)) {
-            isVerified = true;
-            cleanPhone = cleanPhone || rec.phone_number;
-            await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [rec.id]);
-          }
+          cleanPhone = cleanPhone || waRes.rows[0].phone_number;
+          await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [waRes.rows[0].id]);
         }
       }
-    }
 
-    // 2. If not verified yet and code provided, check whatsapp_verifications by code
-    if (!isVerified && otpCode) {
-      const waCodeRes = await db.query(
-        `SELECT id, status, phone_number, expires_at FROM whatsapp_verifications 
-         WHERE (verification_code = $1 OR session_id = $1)
-           AND (phone_number = $2 OR phone_number LIKE $3)
-           AND expires_at > CURRENT_TIMESTAMP
-         ORDER BY created_at DESC LIMIT 1`,
-        [otpCode, cleanPhone, `%${cleanPhone}`]
-      );
-
-      if (waCodeRes.rows.length > 0) {
-        isVerified = true;
-        cleanPhone = cleanPhone || waCodeRes.rows[0].phone_number;
-        await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [waCodeRes.rows[0].id]);
-      }
-    }
-
-    // 3. Fallback check legacy password_reset_otps
-    if (!isVerified && otpCode && cleanPhone) {
-      const legacyRes = await db.query(
-        `SELECT otp, expires_at FROM password_reset_otps 
-         WHERE (phone = $1 OR phone LIKE $2) AND expires_at > CURRENT_TIMESTAMP
-         ORDER BY created_at DESC LIMIT 1`,
-        [cleanPhone, `%${cleanPhone}`]
-      );
-      if (legacyRes.rows.length > 0 && String(legacyRes.rows[0].otp).trim() === otpCode) {
-        isVerified = true;
+      if (!isVerified && otpCode) {
+        const legacyRes = await db.query(
+          `SELECT phone FROM password_reset_otps WHERE otp = $1 AND expires_at > CURRENT_TIMESTAMP ORDER BY created_at DESC LIMIT 1`,
+          [otpCode]
+        );
+        if (legacyRes.rows.length > 0) {
+          isVerified = true;
+          cleanPhone = cleanPhone || legacyRes.rows[0].phone;
+        }
       }
     }
 
     if (!isVerified) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid, expired, or unverified WhatsApp code. Please send the message on WhatsApp first.',
+        message: 'Invalid or expired verification code. Please check your email or request a new code.',
       });
     }
 
-    // 4. Update Password in Database
+    // 3. Update Password in Database
     if (targetPassword) {
       if (targetPassword.length < 4) {
         return res.status(400).json({ success: false, message: 'New password must be at least 4 characters long.' });
       }
 
       const passwordHash = await bcrypt.hash(targetPassword, 10);
-      const updateRes = await db.query(
-        `UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP 
-         WHERE phone LIKE $2 OR phone = $3 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $3 
-         RETURNING id, name, phone, role, status, email`,
-        [passwordHash, `%${cleanPhone}`, cleanPhone]
-      );
+      let updateRes;
 
-      // Clear reset OTPs
-      await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [cleanPhone, `%${cleanPhone}`]);
+      if (matchedUserId) {
+        updateRes = await db.query(
+          `UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, name, phone, email, role, status`,
+          [passwordHash, matchedUserId]
+        );
+      } else if (cleanEmail) {
+        updateRes = await db.query(
+          `UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP WHERE LOWER(email) = $2 RETURNING id, name, phone, email, role, status`,
+          [passwordHash, cleanEmail]
+        );
+      } else if (cleanPhone) {
+        updateRes = await db.query(
+          `UPDATE users SET password = $1, updated_at = CURRENT_TIMESTAMP 
+           WHERE phone LIKE $2 OR phone = $3 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $3 
+           RETURNING id, name, phone, email, role, status`,
+          [passwordHash, `%${cleanPhone}`, cleanPhone]
+        );
+      }
+
+      if (!updateRes || updateRes.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User account not found to update password.' });
+      }
 
       const user = updateRes.rows[0];
-      const token = user ? jwt.sign({ userId: user.id, phone: user.phone, role: user.role }, JWT_SECRET, { expiresIn: '30d' }) : undefined;
+      const token = jwt.sign({ userId: user.id, phone: user.phone, role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+
+      // Clean up legacy reset otps
+      if (user.phone) {
+        await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [user.phone, `%${user.phone}`]);
+      }
 
       return res.json({
         success: true,
@@ -1562,12 +1637,13 @@ router.post('/verify-reset-otp', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Verification successful.',
+      message: 'Code verified successfully.',
+      email: cleanEmail,
       phone: cleanPhone,
     });
   } catch (error) {
     console.error('Error in verify-reset-otp:', error);
-    return res.status(500).json({ success: false, message: 'Verification failed. Please try again.', error: error.message });
+    return res.status(500).json({ success: false, message: 'Failed to verify reset code.', error: error.message });
   }
 });
 
@@ -1817,7 +1893,152 @@ router.post('/verify-register-otp', async (req, res) => {
   }
 });
 
+/**
+ * =========================================================================
+ * EMAIL OTP VERIFICATION SYSTEM (100% Free & Scalable via Nodemailer)
+ * =========================================================================
+ */
+
+/**
+ * POST /api/auth/send-email-otp
+ * Generates and sends a 6-digit verification code to user's email address
+ */
+router.post('/send-email-otp', async (req, res) => {
+  try {
+    const { email, purpose = 'registration', name = '' } = req.body;
+    const rawEmail = (email || '').trim().toLowerCase();
+
+    if (!rawEmail || !rawEmail.includes('@') || !rawEmail.includes('.')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address.',
+      });
+    }
+
+    // 1. Business Logic Validations based on Purpose
+    if (purpose === 'registration') {
+      const existing = await db.query('SELECT id FROM users WHERE LOWER(email) = $1', [rawEmail]);
+      if (existing.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: `The email ${rawEmail} is already registered. Please sign in instead.`,
+        });
+      }
+    } else if (purpose === 'password_reset') {
+      const existing = await db.query('SELECT id, name FROM users WHERE LOWER(email) = $1', [rawEmail]);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: `No account found with email address ${rawEmail}.`,
+        });
+      }
+    }
+
+    // 2. Generate 6-Digit Code & Expiry (5 minutes)
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    // 3. Expire any previous pending OTPs for this email and purpose
+    await db.query(
+      `UPDATE email_verifications SET status = 'EXPIRED' 
+       WHERE LOWER(email) = $1 AND purpose = $2 AND status = 'PENDING'`,
+      [rawEmail, purpose]
+    );
+
+    // 4. Save to email_verifications table
+    await db.query(
+      `INSERT INTO email_verifications (email, otp, purpose, status, expires_at)
+       VALUES ($1, $2, $3, 'PENDING', $4)`,
+      [rawEmail, otpCode, purpose, expiresAt]
+    );
+
+    // 5. Dispatch Email via Nodemailer
+    const emailResult = await emailService.sendOtpEmail({
+      to: rawEmail,
+      otp: otpCode,
+      purpose,
+      name,
+    });
+
+    console.log(`[Email OTP] ✉️ OTP sent to ${rawEmail} for ${purpose} | Code: ${otpCode}`);
+
+    return res.json({
+      success: true,
+      message: `Verification code sent to ${rawEmail}. Please check your email inbox.`,
+      email: rawEmail,
+      purpose,
+      expiresInSeconds: 300,
+      otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
+    });
+  } catch (error) {
+    console.error('Error in send-email-otp:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to send verification email. Please try again.',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/auth/verify-email-otp
+ * Verifies the 6-digit code received on user's email
+ */
+router.post('/verify-email-otp', async (req, res) => {
+  try {
+    const { email, otp, code, purpose = 'registration' } = req.body;
+    const rawEmail = (email || '').trim().toLowerCase();
+    const otpCode = (otp || code || '').trim();
+
+    if (!rawEmail || !rawEmail.includes('@')) {
+      return res.status(400).json({ success: false, message: 'Valid email address is required.' });
+    }
+
+    if (!otpCode || otpCode.length < 4) {
+      return res.status(400).json({ success: false, message: 'Please enter the 6-digit verification code.' });
+    }
+
+    // Check active verification in email_verifications
+    const verifRes = await db.query(
+      `SELECT id, status, expires_at FROM email_verifications 
+       WHERE LOWER(email) = $1 AND otp = $2 AND purpose = $3 AND status IN ('PENDING', 'VERIFIED') AND expires_at > CURRENT_TIMESTAMP
+       ORDER BY created_at DESC LIMIT 1`,
+      [rawEmail, otpCode, purpose]
+    );
+
+    if (verifRes.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification code. Please check your email and try again.',
+      });
+    }
+
+    // Mark as VERIFIED
+    await db.query(
+      `UPDATE email_verifications SET status = 'VERIFIED', verified_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [verifRes.rows[0].id]
+    );
+
+    console.log(`[Email OTP] ✅ Successfully verified email: ${rawEmail}`);
+
+    return res.json({
+      success: true,
+      message: 'Email verified successfully!',
+      email: rawEmail,
+      purpose,
+    });
+  } catch (error) {
+    console.error('Error in verify-email-otp:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to verify OTP. Please try again.',
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;
+
 
 
 

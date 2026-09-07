@@ -591,8 +591,21 @@ async function initTablesOnBoot() {
       CREATE INDEX IF NOT EXISTS idx_trips_customer_id ON trips(customer_id);
       CREATE INDEX IF NOT EXISTS idx_trips_driver_id ON trips(driver_id);
       CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
-      CREATE INDEX IF NOT EXISTS idx_plan_checkpoints_plan_id ON plan_checkpoints(plan_id);
-      CREATE INDEX IF NOT EXISTS idx_plan_checkpoints_dest_id ON plan_checkpoints(destination_id);
+      CREATE TABLE IF NOT EXISTS email_verifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(150) NOT NULL,
+        otp VARCHAR(10) NOT NULL,
+        purpose VARCHAR(50) DEFAULT 'registration',
+        status VARCHAR(20) DEFAULT 'PENDING',
+        attempts INT DEFAULT 0,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        verified_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verifications(email);
+      CREATE INDEX IF NOT EXISTS idx_email_verif_status ON email_verifications(status);
+      CREATE INDEX IF NOT EXISTS idx_email_verif_otp ON email_verifications(email, otp, status);
     `).catch(e => console.warn('Indexes creation status:', e.message));
 
     console.log('✅ PostgreSQL Schema & DB Indexes verified successfully.');

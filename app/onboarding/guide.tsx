@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { registerUser } from '@/constants/api';
-import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
+import EmailOtpVerification from '@/components/EmailOtpVerification';
 
 type DocKey = 'photo' | 'aadhar';
 
@@ -54,7 +54,7 @@ export default function GuideRegister() {
   const [otp, setOtp] = useState('');
 
   const [formData, setFormData] = useState({
-    name: '', phone: '', altPhone: '', password: '',
+    name: '', email: '', phone: '', altPhone: '', password: '',
     expertise: 'History & Heritage Walks', licenseId: '', bio: '', experience: '3'
   });
   const [docs, setDocs] = useState<Record<DocKey, string | null>>({ photo: null, aadhar: null });
@@ -153,9 +153,11 @@ export default function GuideRegister() {
     let stepErrors: Record<string, string> = {};
     const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
 
     if (currentStep === 1) {
       if (!formData.name.trim()) stepErrors.name = 'Enter your full name';
+      if (!cleanEmail || !cleanEmail.includes('@')) stepErrors.email = 'Enter a valid email address';
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
       if (!cleanAltPhone) {
         stepErrors.altPhone = 'Alternate phone number is required';
@@ -180,19 +182,21 @@ export default function GuideRegister() {
     }
   };
 
-  const handleCompleteGuideRegistration = async (sessionId?: string, otpCode?: string) => {
+  const handleCompleteGuideRegistration = async (verifiedEmail?: string, otpCode?: string) => {
     const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
+    const cleanEmail = (verifiedEmail || formData.email || '').trim().toLowerCase();
 
     setLoading(true);
     try {
       const res = await registerUser({
         name: formData.name.trim(),
+        email: cleanEmail,
         phone: cleanPhone,
         alternate_phone: cleanAltPhone,
         password: formData.password,
         role: 'guide',
-        otp: otpCode || sessionId,
+        otp: otpCode,
         expertise: formData.expertise.trim(),
         license_id: formData.licenseId || 'KA-GUIDE-CERT',
         bio: formData.bio || `${formData.experience} years experienced tour guide`,
@@ -275,17 +279,19 @@ export default function GuideRegister() {
               >
                 <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
                 <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>
-                  Edit Details / Change Phone
+                  Edit Details / Change Email
                 </Text>
               </TouchableOpacity>
 
-              <WhatsAppOtpVerification
-                phone={formData.phone}
+              <EmailOtpVerification
+                email={formData.email}
                 purpose="registration"
-                title="Verify via WhatsApp"
-                subtitle={`Tap below to send the verification message from WhatsApp on +91 ${formData.phone.slice(-10)} to submit your guide application.`}
-                onVerified={({ sessionId, code }) => handleCompleteGuideRegistration(sessionId, code)}
+                userName={formData.name}
+                title="Verify Your Email"
+                subtitle={`A 6-digit OTP code has been sent to your email to verify your guide registration.`}
+                onVerified={({ email: vEmail, otp: vOtp }) => handleCompleteGuideRegistration(vEmail, vOtp)}
                 onCancel={() => setShowOtpScreen(false)}
+                onChangeEmail={() => setShowOtpScreen(false)}
               />
             </View>
           ) : (
@@ -334,8 +340,18 @@ export default function GuideRegister() {
                     placeholder="As printed on your ID"
                     value={formData.name}
                     onChangeText={(t: string) => setFormData({ ...formData, name: t })}
-                    onFocus={() => scrollToInput(80)}
+                    onFocus={() => scrollToInput(60)}
                     error={errors.name}
+                  />
+                  <Field
+                    label="Email address" required
+                    placeholder="e.g. guide@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={formData.email}
+                    onChangeText={(t: string) => setFormData({ ...formData, email: t })}
+                    onFocus={() => scrollToInput(110)}
+                    error={errors.email}
                   />
                   <Field
                     label="Phone number" required
@@ -344,7 +360,7 @@ export default function GuideRegister() {
                     maxLength={10}
                     value={formData.phone}
                     onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
-                    onFocus={() => scrollToInput(150)}
+                    onFocus={() => scrollToInput(160)}
                     error={errors.phone}
                   />
                   <Field
@@ -364,7 +380,7 @@ export default function GuideRegister() {
                     secureTextEntry
                     value={formData.password}
                     onChangeText={(t: string) => setFormData({ ...formData, password: t })}
-                    onFocus={() => scrollToInput(290)}
+                    onFocus={() => scrollToInput(280)}
                     error={errors.password}
                   />
                 </View>

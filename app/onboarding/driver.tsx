@@ -19,7 +19,7 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { registerUser } from '@/constants/api';
-import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
+import EmailOtpVerification from '@/components/EmailOtpVerification';
 
 type KYCStatus = 'form' | 'pending' | 'approved';
 type DocKey = 'photo' | 'rc' | 'dl' | 'insurance' | 'aadhar' | 'carFront' | 'carLeft' | 'carRight' | 'carBack';
@@ -68,7 +68,7 @@ export default function DriverRegister() {
   );
 
   const [formData, setFormData] = useState({
-    name: '', phone: '', altPhone: '', password: '',
+    name: '', email: '', phone: '', altPhone: '', password: '',
     rcNo: '', dlNo: '', aadharNo: '', vehicleModel: '',
     vehicleType: '5seater',
     capacity: '4',
@@ -168,6 +168,8 @@ export default function DriverRegister() {
     const stepErrors: Record<string, string> = {};
     if (currentStep === 1) {
       if (!formData.name.trim()) stepErrors.name = 'Enter your full name';
+      const cleanEmail = (formData.email || '').trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) stepErrors.email = 'Enter a valid email address';
       const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
       if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
 
@@ -199,9 +201,6 @@ export default function DriverRegister() {
       ) {
         stepErrors.docs = 'Upload all nine documents to continue';
       }
-      if (showOtpScreen && (!otp.trim() || otp.trim().length !== 4)) {
-        stepErrors.otp = 'Enter valid 4-digit OTP code';
-      }
     }
     setErrors(stepErrors);
     return Object.keys(stepErrors).length === 0;
@@ -217,19 +216,21 @@ export default function DriverRegister() {
     }
   };
 
-  const handleCompleteDriverRegistration = async (sessionId?: string, otpCode?: string) => {
+  const handleCompleteDriverRegistration = async (verifiedEmail?: string, otpCode?: string) => {
     setLoading(true);
     const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
+    const cleanEmail = (verifiedEmail || formData.email || '').trim().toLowerCase();
 
     try {
       const res = await registerUser({
         name: formData.name.trim(),
+        email: cleanEmail,
         phone: cleanPhone,
         alternate_phone: cleanAltPhone,
         password: formData.password,
         role: 'driver',
-        otp: otpCode || sessionId,
+        otp: otpCode,
         vehicle_type: formData.vehicleType,
         vehicle_model: formData.vehicleModel || 'Standard Cab',
         vehicle_number: formData.rcNo,
@@ -345,17 +346,19 @@ export default function DriverRegister() {
               >
                 <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
                 <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>
-                  Edit Details / Change Phone
+                  Edit Details / Change Email
                 </Text>
               </TouchableOpacity>
 
-              <WhatsAppOtpVerification
-                phone={formData.phone}
+              <EmailOtpVerification
+                email={formData.email}
                 purpose="registration"
-                title="Verify via WhatsApp"
-                subtitle={`Tap below to send the verification message from WhatsApp on +91 ${formData.phone.slice(-10)} to submit your driver permit application.`}
-                onVerified={({ sessionId, code }) => handleCompleteDriverRegistration(sessionId, code)}
+                userName={formData.name}
+                title="Verify Your Email"
+                subtitle={`A 6-digit OTP code has been sent to your email to verify your driver application.`}
+                onVerified={({ email: vEmail, otp: vOtp }) => handleCompleteDriverRegistration(vEmail, vOtp)}
                 onCancel={() => setShowOtpScreen(false)}
+                onChangeEmail={() => setShowOtpScreen(false)}
               />
             </View>
           ) : (
@@ -404,8 +407,18 @@ export default function DriverRegister() {
                     placeholder="As printed on your Aadhar"
                     value={formData.name}
                     onChangeText={(t: string) => setFormData({ ...formData, name: t })}
-                    onFocus={() => scrollToInput(80)}
+                    onFocus={() => scrollToInput(60)}
                     error={errors.name}
+                  />
+                  <Field
+                    label="Email address" required
+                    placeholder="e.g. driver@example.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={formData.email}
+                    onChangeText={(t: string) => setFormData({ ...formData, email: t })}
+                    onFocus={() => scrollToInput(110)}
+                    error={errors.email}
                   />
                   <Field
                     label="Phone number" required
@@ -414,7 +427,7 @@ export default function DriverRegister() {
                     maxLength={10}
                     value={formData.phone}
                     onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
-                    onFocus={() => scrollToInput(150)}
+                    onFocus={() => scrollToInput(160)}
                     error={errors.phone}
                   />
                   <Field
@@ -434,7 +447,7 @@ export default function DriverRegister() {
                     secureTextEntry
                     value={formData.password}
                     onChangeText={(t: string) => setFormData({ ...formData, password: t })}
-                    onFocus={() => scrollToInput(290)}
+                    onFocus={() => scrollToInput(280)}
                     error={errors.password}
                   />
                   <Field
@@ -444,7 +457,7 @@ export default function DriverRegister() {
                     maxLength={12}
                     value={formData.aadharNo}
                     onChangeText={(t: string) => setFormData({ ...formData, aadharNo: t.replace(/[^0-9]/g, '') })}
-                    onFocus={() => scrollToInput(360)}
+                    onFocus={() => scrollToInput(340)}
                     error={errors.aadharNo}
                   />
                 </View>

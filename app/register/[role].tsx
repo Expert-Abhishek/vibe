@@ -16,8 +16,7 @@ import {
   View,
 } from 'react-native';
 import { registerUser } from '@/constants/api';
-
-import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
+import EmailOtpVerification from '@/components/EmailOtpVerification';
 
 export default function RegisterScreen() {
   const { role } = useLocalSearchParams<{ role: 'rider' | 'driver' | 'guide' }>();
@@ -75,9 +74,14 @@ export default function RegisterScreen() {
   const handleValidateDetails = () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
+    const cleanEmail = email.trim().toLowerCase();
 
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter your full name.');
+      return;
+    }
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
     if (!cleanPhone || cleanPhone.length !== 10) {
@@ -93,13 +97,14 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Move to WhatsApp verification step
+    // Move to Email verification step
     setStep('otp');
   };
 
-  const handleCompleteRegistration = async (sessionId?: string, otpCode?: string) => {
+  const handleCompleteRegistration = async (verifiedEmail?: string, otpCode?: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
+    const cleanEmail = (verifiedEmail || email || '').trim().toLowerCase();
 
     setLoading(true);
 
@@ -109,10 +114,10 @@ export default function RegisterScreen() {
       name: name.trim(),
       phone: cleanPhone,
       alternate_phone: cleanAltPhone || undefined,
-      email: email.trim() || undefined,
+      email: cleanEmail,
       password: password,
       role: mappedRole,
-      otp: otpCode || sessionId,
+      otp: otpCode,
       vehicle_type: role === 'driver' ? vehicleType : undefined,
       vehicle_model: role === 'driver' ? (vehicleModel.trim() || 'Standard Cab') : undefined,
       vehicle_number: role === 'driver' ? vehicleNumber : undefined,
@@ -171,16 +176,18 @@ export default function RegisterScreen() {
           <View style={[styles.container, { paddingVertical: 10 }]}>
             <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
               <MaterialIcons name="arrow-back" size={22} color="#F5C518" />
-              <Text style={{ color: '#ffffff', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Phone</Text>
+              <Text style={{ color: '#ffffff', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Email</Text>
             </TouchableOpacity>
 
-            <WhatsAppOtpVerification
-              phone={phone}
+            <EmailOtpVerification
+              email={email}
               purpose="registration"
-              title="Verify via WhatsApp"
-              subtitle={`Send the pre-filled verification code from WhatsApp on +91 ${phone.slice(-10)} to complete registration.`}
-              onVerified={({ sessionId, code }) => handleCompleteRegistration(sessionId, code)}
+              userName={name}
+              title="Verify Your Email"
+              subtitle={`A 6-digit OTP code has been sent to your email to complete registration.`}
+              onVerified={({ email: vEmail, otp: vOtp }) => handleCompleteRegistration(vEmail, vOtp)}
               onCancel={() => setStep('details')}
+              onChangeEmail={() => setStep('details')}
             />
           </View>
         ) : (
@@ -191,7 +198,7 @@ export default function RegisterScreen() {
             {/* Inputs */}
             <TextInput
               style={styles.input}
-              placeholder="Full Name"
+              placeholder="Full Name *"
               placeholderTextColor="#aaa"
               value={name}
               onChangeText={setName}
@@ -199,7 +206,7 @@ export default function RegisterScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Email Address (Optional)"
+              placeholder="Email Address *"
               keyboardType="email-address"
               autoCapitalize="none"
               placeholderTextColor="#aaa"

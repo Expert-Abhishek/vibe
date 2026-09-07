@@ -521,14 +521,64 @@ export async function loginUserApi(payload: { identifier: string; password: stri
 }
 
 /**
- * Send Forgot Password Reset OTP via Fast2SMS API
+ * Send Email OTP for Registration, Login, or Verification
  */
-export async function sendResetOtpApi(phone: string): Promise<any> {
+export async function sendEmailOtpApi(email: string, purpose: string = 'registration', name?: string): Promise<{
+  success: boolean;
+  message: string;
+  email?: string;
+  purpose?: string;
+  expiresInSeconds?: number;
+  otpDebug?: string;
+}> {
   try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/send-email-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase(), purpose, name }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('sendEmailOtpApi error:', e);
+    return { success: false, message: e?.message || 'Failed to send verification email. Please check internet connection.' };
+  }
+}
+
+/**
+ * Verify Email OTP
+ */
+export async function verifyEmailOtpApi(email: string, otp: string, purpose: string = 'registration'): Promise<{
+  success: boolean;
+  message: string;
+  email?: string;
+  purpose?: string;
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/verify-email-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase(), otp: otp.trim(), purpose }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('verifyEmailOtpApi error:', e);
+    return { success: false, message: e?.message || 'Failed to verify email OTP. Please try again.' };
+  }
+}
+
+/**
+ * Send Forgot Password Reset OTP via Email or Mobile
+ */
+export async function sendResetOtpApi(identifierOrPayload: string | { email?: string; phone?: string; identifier?: string }): Promise<any> {
+  try {
+    const body = typeof identifierOrPayload === 'string'
+      ? (identifierOrPayload.includes('@') ? { email: identifierOrPayload } : { phone: identifierOrPayload })
+      : identifierOrPayload;
+
     const res = await fetch(`${API_BASE_URL}/api/auth/send-reset-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify(body),
     });
     return await res.json();
   } catch (e: any) {
@@ -540,7 +590,7 @@ export async function sendResetOtpApi(phone: string): Promise<any> {
 /**
  * Verify Reset OTP & Update Password
  */
-export async function verifyResetOtpApi(payload: { phone: string; otp?: string; sessionId?: string; newPassword?: string }): Promise<any> {
+export async function verifyResetOtpApi(payload: { email?: string; phone?: string; identifier?: string; otp?: string; code?: string; sessionId?: string; newPassword?: string }): Promise<any> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-reset-otp`, {
       method: 'POST',

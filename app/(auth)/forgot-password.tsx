@@ -20,33 +20,43 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSendOtp = async () => {
-    const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      Alert.alert('Phone Number Required', 'Please enter your registered 10-digit mobile number.');
+    const raw = identifier.trim();
+    if (!raw) {
+      Alert.alert('Input Required', 'Please enter your registered email address or phone number.');
       return;
     }
 
     setLoading(true);
     try {
-      const res = await sendResetOtpApi(cleanPhone);
+      const res = await sendResetOtpApi(raw);
       setLoading(false);
 
       if (res && res.success) {
-        router.push({
-          pathname: '/(auth)/verify-otp',
-          params: {
-            phone: res.phone || cleanPhone,
-            sessionId: res.sessionId,
-            deepLink: res.deepLink,
-            code: res.verificationCode,
-          },
-        });
+        Alert.alert(
+          'Verification Code Sent 🚀',
+          res.message || 'A 6-digit OTP code has been sent to your email address.',
+          [
+            {
+              text: 'Enter Code',
+              onPress: () => {
+                router.push({
+                  pathname: '/(auth)/verify-otp',
+                  params: {
+                    email: res.email || (raw.includes('@') ? raw : undefined),
+                    phone: res.phone || (!raw.includes('@') ? raw : undefined),
+                    code: res.otpDebug,
+                  },
+                });
+              },
+            },
+          ]
+        );
       } else {
-        Alert.alert('Verification Request Failed', res?.message || 'Could not initiate WhatsApp verification.');
+        Alert.alert('Request Failed', res?.message || 'Could not send verification code. Please check your input.');
       }
     } catch (err: any) {
       setLoading(false);
@@ -77,29 +87,27 @@ export default function ForgotPasswordScreen() {
           <View style={styles.content}>
             <Text style={styles.title}>Reset your access</Text>
             <Text style={styles.subtitle}>
-              {"Enter your registered mobile number to receive a verification code. We'll send a 4-digit OTP to reset your password via SMS."}
+              Enter your registered email address or 10-digit mobile number to receive a 6-digit verification code to reset your password.
             </Text>
 
             {/* INPUT FIELD */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Registered Phone Number</Text>
+              <Text style={styles.label}>Email Address or Mobile Number</Text>
               <View style={styles.inputWrapper}>
                 <MaterialIcons
-                  name="smartphone"
+                  name={identifier.includes('@') ? 'mail-outline' : 'smartphone'}
                   size={scale(20)}
                   color="rgba(255, 255, 255, 0.7)"
                   style={styles.inputIcon}
                 />
-                <Text style={styles.prefix}>+91</Text>
-                <View style={styles.separator} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter number"
+                  placeholder="name@example.com or 10-digit phone"
                   placeholderTextColor="rgba(255, 255, 255, 0.3)"
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  value={phoneNumber}
-                  onChangeText={(t) => setPhoneNumber(t.replace(/\D/g, ''))}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={identifier}
+                  onChangeText={setIdentifier}
                 />
               </View>
             </View>
@@ -117,7 +125,7 @@ export default function ForgotPasswordScreen() {
                 <ActivityIndicator color="#101010" size="small" />
               ) : (
                 <View style={styles.buttonRow}>
-                  <Text style={styles.sendButtonText}>Send 4-Digit OTP Code</Text>
+                  <Text style={styles.sendButtonText}>Send 6-Digit OTP Code</Text>
                   <MaterialIcons name="send" size={scale(18)} color="#101010" />
                 </View>
               )}

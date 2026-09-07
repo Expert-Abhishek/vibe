@@ -318,5 +318,20 @@ CREATE INDEX IF NOT EXISTS idx_wa_verif_code_status ON whatsapp_verifications(ve
 CREATE INDEX IF NOT EXISTS idx_wa_verif_session ON whatsapp_verifications(session_id);
 CREATE INDEX IF NOT EXISTS idx_wa_verif_phone ON whatsapp_verifications(phone_number);
 
+-- 21. Email OTP Verifications Table
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(150) NOT NULL,
+    otp VARCHAR(10) NOT NULL,
+    purpose VARCHAR(50) DEFAULT 'registration', -- 'registration', 'password_reset', 'login', 'account_deletion'
+    status VARCHAR(20) DEFAULT 'PENDING',        -- 'PENDING', 'VERIFIED', 'EXPIRED', 'CONSUMED'
+    attempts INT DEFAULT 0,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    verified_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-
+CREATE INDEX IF NOT EXISTS idx_email_verif_email ON email_verifications(email);
+CREATE INDEX IF NOT EXISTS idx_email_verif_status ON email_verifications(status);
+CREATE INDEX IF NOT EXISTS idx_email_verif_otp ON email_verifications(email, otp, status);
