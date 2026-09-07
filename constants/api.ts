@@ -8,7 +8,8 @@ import { adminState } from './admin-state';
 const RENDER_API_URL = 'https://vibe-backend-tlaw.onrender.com';
 const DEV_API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || RENDER_API_URL || DEV_API_URL;
+const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || (isDev ? DEV_API_URL : RENDER_API_URL);
 export const ADMIN_PANEL_URL = process.env.EXPO_PUBLIC_ADMIN_URL || 'https://vibe-admin-panel.vercel.app';
 
 /**
