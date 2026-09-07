@@ -1320,10 +1320,95 @@ export async function deductWalletApi(payload: { userId: string; amount: number;
   }
 }
 
+/* ==========================================================================
+   WHATSAPP REVERSE OTP / INBOUND VERIFICATION SERVICES (100% FREE)
+   ========================================================================== */
+
+export interface WhatsAppInitiateResponse {
+  success: boolean;
+  message?: string;
+  sessionId?: string;
+  verificationCode?: string;
+  deepLink?: string;
+  businessPhone?: string;
+  phone?: string;
+  expiresInSeconds?: number;
+  expiresAt?: string;
+  error?: string;
+  otpDebug?: string;
+}
+
+export interface WhatsAppStatusResponse {
+  success: boolean;
+  sessionId?: string;
+  phone?: string;
+  purpose?: string;
+  status?: 'PENDING' | 'VERIFIED' | 'EXPIRED' | 'CONSUMED' | 'NOT_FOUND';
+  verified: boolean;
+  verifiedAt?: string;
+  expiresAt?: string;
+  message?: string;
+}
+
 /**
- * Send 6-digit OTP code via Fast2SMS for User Registration
+ * Initiate 100% Free WhatsApp Reverse OTP (Inbound Verification)
+ * Generates secure 6-digit code and pre-filled wa.me deep link
  */
-export async function sendRegisterOtpApi(phone: string): Promise<{ success: boolean; message?: string; phone?: string; otpDebug?: string }> {
+export async function initiateWhatsAppOtpApi(
+  phone: string,
+  purpose: 'registration' | 'password_reset' | 'login' | 'auth' = 'auth',
+  metadata: any = {}
+): Promise<WhatsAppInitiateResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/whatsapp/initiate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, purpose, metadata }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('initiateWhatsAppOtpApi error:', e);
+    return {
+      success: false,
+      message: e?.message || 'Failed to initiate WhatsApp verification. Check network connection.',
+    };
+  }
+}
+
+/**
+ * Poll or check real-time WhatsApp verification status for a session
+ */
+export async function checkWhatsAppOtpStatusApi(sessionId: string): Promise<WhatsAppStatusResponse> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/whatsapp/status/${encodeURIComponent(sessionId)}`);
+    return await res.json();
+  } catch (e: any) {
+    console.warn('checkWhatsAppOtpStatusApi error:', e);
+    return { success: false, verified: false, status: 'PENDING', message: e?.message };
+  }
+}
+
+/**
+ * Fallback: Verify 6-digit code manually typed by user
+ */
+export async function verifyWhatsAppManualCodeApi(sessionId: string, code: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/whatsapp/verify-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, code }),
+    });
+    return await res.json();
+  } catch (e: any) {
+    console.warn('verifyWhatsAppManualCodeApi error:', e);
+    return { success: false, message: e?.message || 'Manual code verification failed.' };
+  }
+}
+
+/**
+ * Send WhatsApp Inbound Verification Link for User Registration (100% Free)
+ */
+export async function sendRegisterOtpApi(phone: string): Promise<WhatsAppInitiateResponse> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/send-register-otp`, {
       method: 'POST',
@@ -1333,24 +1418,24 @@ export async function sendRegisterOtpApi(phone: string): Promise<{ success: bool
     return await res.json();
   } catch (e: any) {
     console.warn('sendRegisterOtpApi error:', e);
-    return { success: false, message: 'Failed to send OTP. Check network connection.' };
+    return { success: false, message: 'Failed to initiate WhatsApp verification. Check network connection.' };
   }
 }
 
 /**
- * Verify 6-digit OTP code for User Registration
+ * Verify WhatsApp Reverse OTP session or code for User Registration
  */
-export async function verifyRegisterOtpApi(phone: string, otp: string): Promise<{ success: boolean; message?: string }> {
+export async function verifyRegisterOtpApi(payload: { phone?: string; otp?: string; code?: string; sessionId?: string }): Promise<{ success: boolean; message?: string }> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-register-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, otp }),
+      body: JSON.stringify(payload),
     });
     return await res.json();
   } catch (e: any) {
     console.warn('verifyRegisterOtpApi error:', e);
-    return { success: false, message: 'Failed to verify OTP. Check network connection.' };
+    return { success: false, message: 'Failed to verify WhatsApp OTP. Check network connection.' };
   }
 }
 

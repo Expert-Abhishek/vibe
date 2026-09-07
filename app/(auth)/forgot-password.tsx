@@ -36,13 +36,17 @@ export default function ForgotPasswordScreen() {
       setLoading(false);
 
       if (res && res.success) {
-        Alert.alert('OTP Sent 🚀', res.message || 'A 4-digit OTP code has been sent to your registered mobile number via SMS.');
         router.push({
           pathname: '/(auth)/verify-otp',
-          params: { phone: res.phone || cleanPhone },
+          params: {
+            phone: res.phone || cleanPhone,
+            sessionId: res.sessionId,
+            deepLink: res.deepLink,
+            code: res.verificationCode,
+          },
         });
       } else {
-        Alert.alert('OTP Request Failed', res?.message || 'Could not send OTP. Please verify your phone number.');
+        Alert.alert('Verification Request Failed', res?.message || 'Could not initiate WhatsApp verification.');
       }
     } catch (err: any) {
       setLoading(false);

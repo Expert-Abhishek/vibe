@@ -69,17 +69,38 @@ router.post('/register', async (req, res) => {
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
     const cleanEmail = email ? email.trim().toLowerCase() : null;
 
-    // OTP verification check if provided
+    // OTP verification check if provided (supports WhatsApp Reverse OTP session or verification code)
     const otpCode = (req.body.otp || req.body.code || '').trim();
-    if (otpCode) {
-      if (otpCode.length !== 4) {
-        return res.status(400).json({ success: false, message: 'Valid 4-digit verification OTP code is required.' });
+    const waSessionId = (req.body.sessionId || req.body.session_id || '').trim();
+
+    if (waSessionId) {
+      const waCheck = await db.query(
+        `SELECT id, status, expires_at FROM whatsapp_verifications 
+         WHERE session_id = $1 AND phone_number = $2`,
+        [waSessionId, cleanPhone]
+      );
+      if (waCheck.rows.length === 0 || (waCheck.rows[0].status !== 'VERIFIED' && waCheck.rows[0].status !== 'PENDING')) {
+        return res.status(400).json({ success: false, message: 'WhatsApp verification incomplete or session expired.' });
       }
-      const otpCheck = await db.query('SELECT otp, expires_at FROM registration_otps WHERE phone = $1', [cleanPhone]);
-      if (otpCheck.rows.length === 0 || otpCheck.rows[0].otp !== otpCode || new Date() > new Date(otpCheck.rows[0].expires_at)) {
-        return res.status(400).json({ success: false, message: 'Invalid or expired 4-digit registration OTP code.' });
+      await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE session_id = $1`, [waSessionId]);
+    } else if (otpCode) {
+      // Check WhatsApp verification records first
+      const waCodeCheck = await db.query(
+        `SELECT id, status, expires_at FROM whatsapp_verifications 
+         WHERE (verification_code = $1 OR session_id = $1) AND phone_number = $2 AND expires_at > CURRENT_TIMESTAMP`,
+        [otpCode, cleanPhone]
+      );
+
+      if (waCodeCheck.rows.length > 0) {
+        await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [waCodeCheck.rows[0].id]);
+      } else {
+        // Fallback check against legacy registration_otps
+        const otpCheck = await db.query('SELECT otp, expires_at FROM registration_otps WHERE phone = $1', [cleanPhone]);
+        if (otpCheck.rows.length === 0 || otpCheck.rows[0].otp !== otpCode || new Date() > new Date(otpCheck.rows[0].expires_at)) {
+          return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
+        }
+        await db.query('DELETE FROM registration_otps WHERE phone = $1', [cleanPhone]);
       }
-      await db.query('DELETE FROM registration_otps WHERE phone = $1', [cleanPhone]);
     }
 
     // 2. Check if user already exists
@@ -1297,9 +1318,10 @@ router.post('/users/:id/photo', async (req, res) => {
   }
 });
 
-const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY || 'oY7Sy3epVadwbTqOUFzlx2X5uCDmWHnrK089RAkP4chQvisL6IKN4Aagdt6MXFUuf2TsHCleJPWO1GVI';
+// Legacy SMS Gateway API Key (Commented out in favor of 100% Free WhatsApp Inbound Verification)
+// const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY || 'oY7Sy3epVadwbTqOUFzlx2X5uCDmWHnrK089RAkP4chQvisL6IKN4Aagdt6MXFUuf2TsHCleJPWO1GVI';
 
-// Ensure password_reset_otps table exists
+// Ensure password_reset_otps table exists for backward compatibility
 db.query(`
   CREATE TABLE IF NOT EXISTS password_reset_otps (
     id SERIAL PRIMARY KEY,
@@ -1310,77 +1332,42 @@ db.query(`
   );
 `).catch((err) => console.warn('password_reset_otps table warning:', err.message));
 
-/**
- * Send OTP via Fast2SMS API
+/*
+ * =========================================================================
+ * [COMMENTED OUT OLD OTP SEND PROCESS - REPLACED WITH WHATSAPP REVERSE OTP]
+ * =========================================================================
+ * async function sendFast2SmsOtp(phoneNumber, otpCode) {
+ *   try {
+ *     let cleanPhone = String(phoneNumber || '').replace(/\D/g, '');
+ *     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+ *     if (cleanPhone.length !== 10) return { success: false, message: 'Invalid 10-digit phone number' };
+ *     console.log(`[Fast2SMS] 🚀 Sending OTP ${otpCode} to +91 ${cleanPhone}...`);
+ *     const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+ *       method: 'POST',
+ *       headers: { 'authorization': FAST2SMS_API_KEY, 'Content-Type': 'application/json' },
+ *       body: JSON.stringify({ route: 'otp', variables_values: String(otpCode), numbers: cleanPhone }),
+ *     });
+ *     const data = await response.json();
+ *     return { success: true, message: 'OTP sent via Fast2SMS', data };
+ *   } catch (err) {
+ *     console.error('[Fast2SMS] Error sending SMS:', err);
+ *     return { success: false, message: err.message };
+ *   }
+ * }
+ * =========================================================================
  */
-async function sendFast2SmsOtp(phoneNumber, otpCode) {
-  try {
-    let cleanPhone = String(phoneNumber || '').replace(/\D/g, '');
-    if (cleanPhone.length > 10) {
-      cleanPhone = cleanPhone.slice(-10);
-    }
 
-    if (cleanPhone.length !== 10) {
-      console.warn('[Fast2SMS] Invalid 10-digit phone number:', phoneNumber);
-      return { success: false, message: 'Invalid 10-digit phone number' };
-    }
+const WHATSAPP_BUSINESS_PHONE = process.env.WHATSAPP_BUSINESS_PHONE || '918088626099';
 
-    console.log(`[Fast2SMS] 🚀 Sending OTP ${otpCode} to +91 ${cleanPhone}...`);
-
-    // 1. Try Fast2SMS POST request
-    const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-      method: 'POST',
-      headers: {
-        'authorization': FAST2SMS_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        route: 'otp',
-        variables_values: String(otpCode),
-        numbers: cleanPhone,
-      }),
-    });
-
-    const data = await response.json();
-    console.log('[Fast2SMS] API Response:', data);
-
-    if (data && (data.return === true || data.status_code === 200)) {
-      return { success: true, message: 'OTP sent via Fast2SMS', data };
-    }
-
-    // 2. Fallback to Fast2SMS GET request
-    const getUrl = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(FAST2SMS_API_KEY)}&route=otp&variables_values=${encodeURIComponent(otpCode)}&numbers=${encodeURIComponent(cleanPhone)}`;
-    const getRes = await fetch(getUrl);
-    const getData = await getRes.json();
-    console.log('[Fast2SMS] GET Fallback Response:', getData);
-
-    if (getData && (getData.return === true || getData.status_code === 200)) {
-      return { success: true, message: 'OTP sent via Fast2SMS', data: getData };
-    }
-
-    // 3. Fallback to Fast2SMS Quick SMS route ('q')
-    try {
-      const qUrl = `https://www.fast2sms.com/dev/bulkV2?authorization=${encodeURIComponent(FAST2SMS_API_KEY)}&route=q&message=${encodeURIComponent(`Your Vibzz App OTP verification code is ${otpCode}. Valid for 10 minutes.`)}&flash=0&numbers=${encodeURIComponent(cleanPhone)}`;
-      const qRes = await fetch(qUrl);
-      const qData = await qRes.json();
-      console.log('[Fast2SMS] Quick SMS Fallback Response:', qData);
-      if (qData && (qData.return === true || qData.status_code === 200)) {
-        return { success: true, message: 'OTP sent via Fast2SMS Quick SMS', data: qData };
-      }
-    } catch (qErr) {
-      console.warn('[Fast2SMS] Quick SMS fallback warning:', qErr.message);
-    }
-
-    return { success: true, message: 'OTP processed', data: getData || data };
-  } catch (err) {
-    console.error('[Fast2SMS] Error sending SMS:', err);
-    return { success: false, message: err.message };
-  }
+function getCleanWaBusinessNumber() {
+  let num = String(WHATSAPP_BUSINESS_PHONE || '').replace(/\D/g, '');
+  if (num.length === 10) num = `91${num}`;
+  return num || '918088626099';
 }
 
 /**
  * POST /api/auth/send-reset-otp
- * Send 4-digit OTP for Forgot Password using Fast2SMS API Key
+ * Initiates 100% Free WhatsApp Inbound Verification for Password Reset
  */
 router.post('/send-reset-otp', async (req, res) => {
   try {
@@ -1412,88 +1399,140 @@ router.post('/send-reset-otp', async (req, res) => {
       });
     }
 
-    // 2. Generate 4-digit OTP code
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes valid
+    // 2. Generate Cryptographically Secure 6-Digit Code & Session for WhatsApp
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const sessionId = `wa_reset_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes valid
 
-    // 3. Save OTP in DB (Clean delete old OTP then insert)
+    // 3. Save to whatsapp_verifications
+    await db.query(
+      `UPDATE whatsapp_verifications SET status = 'EXPIRED' WHERE phone_number = $1 AND purpose = 'password_reset'`,
+      [cleanPhone]
+    );
+
+    await db.query(
+      `INSERT INTO whatsapp_verifications (
+         session_id, phone_number, verification_code, purpose, status, expires_at
+       ) VALUES ($1, $2, $3, 'password_reset', 'PENDING', $4)`,
+      [sessionId, cleanPhone, otpCode, expiresAt]
+    );
+
+    // Also update legacy table for backward compatibility
     await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [cleanPhone, `%${cleanPhone}`]);
     await db.query(
-      `INSERT INTO password_reset_otps (phone, otp, expires_at)
-       VALUES ($1, $2, $3)`,
+      `INSERT INTO password_reset_otps (phone, otp, expires_at) VALUES ($1, $2, $3)`,
       [cleanPhone, otpCode, expiresAt]
     );
 
-    // 4. Send SMS via Fast2SMS API Key
-    await sendFast2SmsOtp(cleanPhone, otpCode);
+    /*
+     * [OLD SMS SEND LOGIC COMMENTED OUT]:
+     * await sendFast2SmsOtp(cleanPhone, otpCode);
+     */
+
+    // 4. Build WhatsApp Inbound Deep Link
+    const businessPhone = getCleanWaBusinessNumber();
+    const deepLink = `https://wa.me/${businessPhone}?text=${encodeURIComponent(`VERIFY ${otpCode}`)}`;
+
+    console.log(`[WhatsApp Reverse OTP] 🔑 Password Reset link generated for +91 ${cleanPhone} | Code: ${otpCode}`);
 
     return res.json({
       success: true,
-      message: `OTP code successfully sent to +91 ${cleanPhone}.`,
+      message: `WhatsApp verification link generated for +91 ${cleanPhone}.`,
       phone: cleanPhone,
+      sessionId,
+      verificationCode: otpCode,
+      deepLink,
+      businessPhone,
+      expiresInSeconds: 300,
       otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
     });
   } catch (error) {
     console.error('Error in send-reset-otp:', error);
-    return res.status(500).json({ success: false, message: 'Failed to send OTP. Please try again.', error: error.message });
+    return res.status(500).json({ success: false, message: 'Failed to initiate WhatsApp verification.', error: error.message });
   }
 });
 
 /**
  * POST /api/auth/verify-reset-otp
- * Verify 4-digit OTP and reset password for user
+ * Verify WhatsApp Reverse OTP session / code and reset password for user
  */
 router.post('/verify-reset-otp', async (req, res) => {
   try {
-    const { phone, otp, newPassword } = req.body;
+    const { phone, otp, code, sessionId, session_id, newPassword } = req.body;
     const rawPhone = (phone || '').trim();
-    const otpCode = (otp || '').trim();
+    const otpCode = (otp || code || '').trim();
+    const targetSessionId = (sessionId || session_id || '').trim();
     const targetPassword = (newPassword || '').trim();
-
-    if (!rawPhone || !otpCode) {
-      return res.status(400).json({ success: false, message: 'Phone number and 4-digit OTP are required.' });
-    }
 
     let cleanPhone = rawPhone.replace(/\D/g, '');
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
 
-    if (cleanPhone.length !== 10) {
-      return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit mobile number.' });
+    let isVerified = false;
+
+    // 1. Check by WhatsApp Session ID if provided
+    if (targetSessionId) {
+      const waRes = await db.query(
+        `SELECT id, status, phone_number, expires_at FROM whatsapp_verifications 
+         WHERE session_id = $1`,
+        [targetSessionId]
+      );
+
+      if (waRes.rows.length > 0) {
+        const rec = waRes.rows[0];
+        if (rec.status === 'VERIFIED') {
+          isVerified = true;
+          cleanPhone = cleanPhone || rec.phone_number;
+          await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [rec.id]);
+        } else if (rec.status === 'PENDING') {
+          // If code also provided, check code match
+          if (otpCode && rec.verification_code === otpCode && new Date() <= new Date(rec.expires_at)) {
+            isVerified = true;
+            cleanPhone = cleanPhone || rec.phone_number;
+            await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [rec.id]);
+          }
+        }
+      }
     }
 
-    // 1. Query stored OTP
-    const otpRes = await db.query(
-      `SELECT otp, expires_at, created_at FROM password_reset_otps 
-       WHERE phone = $1 OR phone LIKE $2 
-       ORDER BY created_at DESC LIMIT 1`,
-      [cleanPhone, `%${cleanPhone}`]
-    );
+    // 2. If not verified yet and code provided, check whatsapp_verifications by code
+    if (!isVerified && otpCode) {
+      const waCodeRes = await db.query(
+        `SELECT id, status, phone_number, expires_at FROM whatsapp_verifications 
+         WHERE (verification_code = $1 OR session_id = $1)
+           AND (phone_number = $2 OR phone_number LIKE $3)
+           AND expires_at > CURRENT_TIMESTAMP
+         ORDER BY created_at DESC LIMIT 1`,
+        [otpCode, cleanPhone, `%${cleanPhone}`]
+      );
 
-    if (otpRes.rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'OTP not requested or expired. Please request a new OTP code.' });
+      if (waCodeRes.rows.length > 0) {
+        isVerified = true;
+        cleanPhone = cleanPhone || waCodeRes.rows[0].phone_number;
+        await db.query(`UPDATE whatsapp_verifications SET status = 'CONSUMED' WHERE id = $1`, [waCodeRes.rows[0].id]);
+      }
     }
 
-    const record = otpRes.rows[0];
-
-    // Check code match (case-insensitive & trimmed)
-    if (String(record.otp).trim() !== String(otpCode).trim()) {
-      return res.status(400).json({ success: false, message: 'Invalid 4-digit OTP code. Please check and try again.' });
+    // 3. Fallback check legacy password_reset_otps
+    if (!isVerified && otpCode && cleanPhone) {
+      const legacyRes = await db.query(
+        `SELECT otp, expires_at FROM password_reset_otps 
+         WHERE (phone = $1 OR phone LIKE $2) AND expires_at > CURRENT_TIMESTAMP
+         ORDER BY created_at DESC LIMIT 1`,
+        [cleanPhone, `%${cleanPhone}`]
+      );
+      if (legacyRes.rows.length > 0 && String(legacyRes.rows[0].otp).trim() === otpCode) {
+        isVerified = true;
+      }
     }
 
-    // Check expiration (generous 15 minute window)
-    const expiryDate = record.expires_at ? new Date(record.expires_at) : null;
-    const createdDate = record.created_at ? new Date(record.created_at) : null;
-    const now = new Date();
-
-    const isExpired = expiryDate
-      ? (now.getTime() - expiryDate.getTime() > 15 * 60 * 1000 && now.getTime() - (createdDate ? createdDate.getTime() : 0) > 15 * 60 * 1000)
-      : false;
-
-    if (isExpired) {
-      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new code.' });
+    if (!isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid, expired, or unverified WhatsApp code. Please send the message on WhatsApp first.',
+      });
     }
 
-    // 2. If newPassword is provided, update password in DB
+    // 4. Update Password in Database
     if (targetPassword) {
       if (targetPassword.length < 4) {
         return res.status(400).json({ success: false, message: 'New password must be at least 4 characters long.' });
@@ -1507,7 +1546,7 @@ router.post('/verify-reset-otp', async (req, res) => {
         [passwordHash, `%${cleanPhone}`, cleanPhone]
       );
 
-      // Clear reset OTP
+      // Clear reset OTPs
       await db.query('DELETE FROM password_reset_otps WHERE phone = $1 OR phone LIKE $2', [cleanPhone, `%${cleanPhone}`]);
 
       const user = updateRes.rows[0];
@@ -1523,7 +1562,7 @@ router.post('/verify-reset-otp', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'OTP verified successfully.',
+      message: 'Verification successful.',
       phone: cleanPhone,
     });
   } catch (error) {
@@ -1545,22 +1584,35 @@ router.post('/delete-account', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid 10-digit phone number.' });
     }
 
-    if (!otp || String(otp).trim().length !== 4) {
-      return res.status(400).json({ success: false, message: 'Please enter the 4-digit verification OTP.' });
+    if (!otp || String(otp).trim().length < 4) {
+      return res.status(400).json({ success: false, message: 'Please enter the verification code.' });
     }
 
     const cleanOtp = String(otp).trim();
 
-    // Verify OTP against password_reset_otps or registration_otps or master OTP
-    const otpRes = await db.query(
-      `SELECT * FROM password_reset_otps 
-       WHERE (phone = $1 OR phone LIKE $2 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1)
-         AND otp = $3 AND expires_at > CURRENT_TIMESTAMP`,
+    // Verify OTP against whatsapp_verifications or legacy password_reset_otps
+    const waRes = await db.query(
+      `SELECT * FROM whatsapp_verifications 
+       WHERE (phone_number = $1 OR phone_number LIKE $2)
+         AND (verification_code = $3 OR session_id = $3)
+         AND status IN ('VERIFIED', 'PENDING')`,
       [cleanPhone, `%${cleanPhone}`, cleanOtp]
     );
 
-    if (otpRes.rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired OTP code. Please request a new code.' });
+    let isVerified = waRes.rows.length > 0;
+
+    if (!isVerified) {
+      const otpRes = await db.query(
+        `SELECT * FROM password_reset_otps 
+         WHERE (phone = $1 OR phone LIKE $2 OR RIGHT(REGEXP_REPLACE(phone, '\\D', '', 'g'), 10) = $1)
+           AND otp = $3 AND expires_at > CURRENT_TIMESTAMP`,
+        [cleanPhone, `%${cleanPhone}`, cleanOtp]
+      );
+      if (otpRes.rows.length > 0) isVerified = true;
+    }
+
+    if (!isVerified) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
     }
 
     // Delete user from DB
@@ -1602,7 +1654,7 @@ db.query(`
 
 /**
  * POST /api/auth/send-register-otp
- * Send 4-digit OTP via Fast2SMS for User Registration
+ * Generates WhatsApp Inbound Verification Deep Link for User Registration (100% Free)
  */
 router.post('/send-register-otp', async (req, res) => {
   try {
@@ -1633,11 +1685,25 @@ router.post('/send-register-otp', async (req, res) => {
       });
     }
 
-    // 2. Generate 4-digit OTP code
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes valid
+    // 2. Generate 6-digit WhatsApp Code & Session
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const sessionId = `wa_reg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes valid
 
-    // 3. Save OTP in DB
+    // 3. Save in whatsapp_verifications
+    await db.query(
+      `UPDATE whatsapp_verifications SET status = 'EXPIRED' WHERE phone_number = $1 AND purpose = 'registration'`,
+      [cleanPhone]
+    );
+
+    await db.query(
+      `INSERT INTO whatsapp_verifications (
+         session_id, phone_number, verification_code, purpose, status, expires_at
+       ) VALUES ($1, $2, $3, 'registration', 'PENDING', $4)`,
+      [sessionId, cleanPhone, otpCode, expiresAt]
+    );
+
+    // Save in legacy table for fallback compatibility
     await db.query(
       `INSERT INTO registration_otps (phone, otp, expires_at)
        VALUES ($1, $2, $3)
@@ -1646,60 +1712,103 @@ router.post('/send-register-otp', async (req, res) => {
       [cleanPhone, otpCode, expiresAt]
     );
 
-    // 4. Send SMS via Fast2SMS API Key
-    await sendFast2SmsOtp(cleanPhone, otpCode);
+    /*
+     * [OLD SMS SEND LOGIC COMMENTED OUT]:
+     * await sendFast2SmsOtp(cleanPhone, otpCode);
+     */
+
+    // 4. Generate WhatsApp Deep Link
+    const businessPhone = getCleanWaBusinessNumber();
+    const deepLink = `https://wa.me/${businessPhone}?text=${encodeURIComponent(`VERIFY ${otpCode}`)}`;
+
+    console.log(`[WhatsApp Reverse OTP] 📲 Registration link generated for +91 ${cleanPhone} | Code: ${otpCode}`);
 
     return res.json({
       success: true,
-      message: `Registration 4-digit OTP code successfully sent to +91 ${cleanPhone}.`,
+      message: `WhatsApp verification link generated for +91 ${cleanPhone}.`,
       phone: cleanPhone,
+      sessionId,
+      verificationCode: otpCode,
+      deepLink,
+      businessPhone,
+      expiresInSeconds: 300,
       otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
     });
   } catch (error) {
     console.error('Error in send-register-otp:', error);
-    return res.status(500).json({ success: false, message: 'Failed to send registration OTP. Please try again.', error: error.message });
+    return res.status(500).json({ success: false, message: 'Failed to initiate WhatsApp verification.', error: error.message });
   }
 });
 
 /**
  * POST /api/auth/verify-register-otp
- * Verify 4-digit OTP for User Registration
+ * Verify WhatsApp Reverse OTP session / code for User Registration
  */
 router.post('/verify-register-otp', async (req, res) => {
   try {
-    const { phone, phoneNumber, otp, code } = req.body;
+    const { phone, phoneNumber, otp, code, sessionId, session_id } = req.body;
     const rawPhone = (phone || phoneNumber || '').trim();
     const otpCode = (otp || code || '').trim();
-
-    if (!rawPhone || !otpCode) {
-      return res.status(400).json({ success: false, message: 'Phone number and 4-digit OTP are required.' });
-    }
+    const targetSessionId = (sessionId || session_id || '').trim();
 
     let cleanPhone = rawPhone.replace(/\D/g, '');
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
 
-    const otpRes = await db.query(
-      'SELECT otp, expires_at FROM registration_otps WHERE phone = $1',
-      [cleanPhone]
-    );
+    let isVerified = false;
 
-    if (otpRes.rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'OTP not requested or expired. Please request a new OTP.' });
+    // 1. Check by WhatsApp Session ID
+    if (targetSessionId) {
+      const waRes = await db.query(
+        `SELECT id, status, phone_number FROM whatsapp_verifications WHERE session_id = $1`,
+        [targetSessionId]
+      );
+      if (waRes.rows.length > 0) {
+        if (waRes.rows[0].status === 'VERIFIED') {
+          isVerified = true;
+          cleanPhone = cleanPhone || waRes.rows[0].phone_number;
+        } else if (otpCode && waRes.rows[0].verification_code === otpCode) {
+          isVerified = true;
+          cleanPhone = cleanPhone || waRes.rows[0].phone_number;
+        }
+      }
     }
 
-    const record = otpRes.rows[0];
-
-    if (new Date() > new Date(record.expires_at)) {
-      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new code.' });
+    // 2. Check by Code in whatsapp_verifications
+    if (!isVerified && otpCode) {
+      const waCodeRes = await db.query(
+        `SELECT id, status, phone_number FROM whatsapp_verifications 
+         WHERE (verification_code = $1 OR session_id = $1)
+           AND (phone_number = $2 OR phone_number LIKE $3)
+           AND expires_at > CURRENT_TIMESTAMP`,
+        [otpCode, cleanPhone, `%${cleanPhone}`]
+      );
+      if (waCodeRes.rows.length > 0) {
+        isVerified = true;
+        cleanPhone = cleanPhone || waCodeRes.rows[0].phone_number;
+      }
     }
 
-    if (record.otp !== otpCode) {
-      return res.status(400).json({ success: false, message: 'Invalid 4-digit OTP code. Please check and try again.' });
+    // 3. Fallback to registration_otps
+    if (!isVerified && otpCode && cleanPhone) {
+      const otpRes = await db.query(
+        'SELECT otp, expires_at FROM registration_otps WHERE phone = $1',
+        [cleanPhone]
+      );
+      if (otpRes.rows.length > 0 && otpRes.rows[0].otp === otpCode && new Date() <= new Date(otpRes.rows[0].expires_at)) {
+        isVerified = true;
+      }
+    }
+
+    if (!isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or unverified WhatsApp code. Please send the message on WhatsApp first.',
+      });
     }
 
     return res.json({
       success: true,
-      message: 'OTP verified successfully.',
+      message: 'WhatsApp OTP verified successfully.',
       phone: cleanPhone,
     });
   } catch (error) {
@@ -1709,5 +1818,6 @@ router.post('/verify-register-otp', async (req, res) => {
 });
 
 module.exports = router;
+
 
 

@@ -2,8 +2,8 @@ import GuidelinesModal from '@/components/GuidelinesModal';
 import NotificationModal from '@/components/NotificationModal';
 import { adminState } from '@/constants/admin-state';
 import {
-  API_BASE_URL,
   acceptTripApi,
+  API_BASE_URL,
   fetchAdminPaymentSettingsApi,
   fetchDriverAdvanceSchedulesApi,
   fetchDriverRequestsApi,
@@ -37,7 +37,7 @@ import { emitAcceptRideSocket, emitDeclineRideSocket, emitDriverLocationSocket, 
 import { playNotificationChime, stopNotificationChime } from '@src/utils/soundHelper';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -60,7 +60,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView, { Marker, Polyline } from '@/components/react-native-maps';
-import { calculateRoadHeading, fetchRoadRoute, LatLng, openGoogleMapsMultiStop, snapToRoadRoute } from '@/src/services/roadRoutingService';
+import { calculateRoadHeading, fetchRoadRoute, LatLng } from '@/src/services/roadRoutingService';
 
 function resolveTouristName(payload: any, existingRequest: any = null): string {
   const possibleNames = [
@@ -288,7 +288,7 @@ export default function DriverDashboardScreen() {
             heading: heading,
             speed: 45,
           });
-        } catch (e) {}
+        } catch (e) { }
 
         // Keep camera focused smoothly on car
         if (driverMapRef.current && driverMapRef.current.animateToRegion) {
@@ -299,7 +299,7 @@ export default function DriverDashboardScreen() {
               latitudeDelta: 0.025,
               longitudeDelta: 0.025,
             }, 800);
-          } catch (e) {}
+          } catch (e) { }
         }
 
         return next;
@@ -2135,48 +2135,6 @@ export default function DriverDashboardScreen() {
                     </View>
                   </Marker>
                 </MapView>
-
-                {/* Google Maps Turn-by-Turn Multi-Stop Navigation Button for Driver */}
-                <TouchableOpacity
-                  style={{
-                    position: 'absolute',
-                    top: verticalScale(10),
-                    right: scale(10),
-                    backgroundColor: '#1E1E24',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: scale(6),
-                    paddingHorizontal: scale(12),
-                    paddingVertical: verticalScale(7),
-                    borderRadius: scale(20),
-                    borderWidth: 1.5,
-                    borderColor: '#4285F4',
-                    elevation: 5,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.4,
-                    shadowRadius: 3,
-                  }}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    const pts = [
-                      { latitude: driverLivePos.latitude || activeTrip.pickupLat || 12.9716, longitude: driverLivePos.longitude || activeTrip.pickupLng || 77.5946 },
-                      { latitude: activeTrip.pickupLat || 12.9716, longitude: activeTrip.pickupLng || 77.5946 },
-                      ...(Array.isArray(activeTrip.checkpoints)
-                        ? activeTrip.checkpoints
-                            .map((c: any) => ({ latitude: parseFloat(c.latitude || c.lat), longitude: parseFloat(c.longitude || c.lng) }))
-                            .filter((c: any) => !isNaN(c.latitude) && !isNaN(c.longitude))
-                        : []),
-                      { latitude: activeTrip.dropLat || 12.3053, longitude: activeTrip.dropLng || 76.6552 },
-                    ];
-                    openGoogleMapsMultiStop(pts, { navigate: true });
-                  }}
-                >
-                  <MaterialIcons name="navigation" size={scale(15)} color="#4285F4" />
-                  <Text style={{ color: '#FFFFFF', fontSize: moderateFontScale(11), fontWeight: '800' }}>
-                    Google Maps GPS
-                  </Text>
-                </TouchableOpacity>
               </View>
 
               <View style={[styles.navDrawerBlock, { backgroundColor: isDark ? '#1E1E24' : '#FFFFFF' }]}>

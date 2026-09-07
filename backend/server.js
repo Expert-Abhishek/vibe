@@ -14,6 +14,7 @@ const tripsRoutes = require('./routes/trips');
 const walletRoutes = require('./routes/wallet');
 const notificationsRoutes = require('./routes/notifications');
 const vouchersRoutes = require('./routes/vouchers');
+const whatsappAuthRoutes = require('./routes/whatsappAuth');
 
 dotenv.config();
 
@@ -22,10 +23,15 @@ const server = http.createServer(app);
 initSocket(server);
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Middleware (with rawBody capture for Meta Webhook HMAC-SHA256 signature verification)
 app.use(compression());
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+  limit: '50mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // URL Rewrite Middleware for Admin / Wallet Compatibility
@@ -51,6 +57,8 @@ app.use((req, res, next) => {
 });
 
 // Routes
+app.use('/api/auth/whatsapp', whatsappAuthRoutes);
+app.use('/webhook', whatsappAuthRoutes); // Top-level Meta Webhook alias
 app.use('/api/auth', authRoutes);
 app.use('/api/destinations', destinationsRoutes);
 app.use('/api/plans', plansRoutes);

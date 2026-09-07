@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { registerUser, sendRegisterOtpApi } from '@/constants/api';
 
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
+
 export default function RegisterScreen() {
   const { role } = useLocalSearchParams<{ role: 'rider' | 'driver' | 'guide' }>();
   const router = useRouter();
@@ -33,7 +35,6 @@ export default function RegisterScreen() {
   });
 
   const [step, setStep] = useState<'details' | 'otp'>('details');
-  const [otp, setOtp] = useState('');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -71,7 +72,7 @@ export default function RegisterScreen() {
     return 'Sign Up';
   };
 
-  const handleSendOtp = async () => {
+  const handleValidateDetails = () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
 
@@ -92,32 +93,13 @@ export default function RegisterScreen() {
       return;
     }
 
-    setLoading(true);
-    const sendRes = await sendRegisterOtpApi(cleanPhone);
-    setLoading(false);
-
-    if (sendRes.success) {
-      setStep('otp');
-      Alert.alert(
-        '📱 OTP Sent via SMS',
-        `A 4-digit verification OTP code has been sent to +91 ${cleanPhone} via SMS.\n\nPlease enter the OTP code below to complete your registration.`,
-        [{ text: 'OK' }]
-      );
-      showToast(`Registration OTP sent via SMS to +91 ${cleanPhone}`);
-    } else {
-      Alert.alert('OTP Request Failed', sendRes.message || 'Failed to send OTP code.');
-    }
+    // Move to WhatsApp verification step
+    setStep('otp');
   };
 
-  const handleVerifyAndRegister = async () => {
+  const handleCompleteRegistration = async (sessionId?: string, otpCode?: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
-    const cleanOtp = otp.trim();
-
-    if (!cleanOtp || cleanOtp.length !== 4) {
-      Alert.alert('Required', 'Please enter the 4-digit OTP code sent to your phone.');
-      return;
-    }
 
     setLoading(true);
 
@@ -130,7 +112,7 @@ export default function RegisterScreen() {
       email: email.trim() || undefined,
       password: password,
       role: mappedRole,
-      otp: cleanOtp,
+      otp: otpCode || sessionId,
       vehicle_type: role === 'driver' ? vehicleType : undefined,
       vehicle_model: role === 'driver' ? (vehicleModel.trim() || 'Standard Cab') : undefined,
       vehicle_number: role === 'driver' ? vehicleNumber : undefined,
@@ -140,10 +122,17 @@ export default function RegisterScreen() {
     setLoading(false);
 
     if (res.success) {
-      showToast('Successfully registered');
-      setTimeout(() => {
-        router.replace('/(auth)/sign-in');
-      }, 1500);
+      showToast('Successfully registered! 🎉');
+      Alert.alert(
+        'Registration Successful 🎉',
+        'Your account has been created successfully. You can now sign in.',
+        [
+          {
+            text: 'Sign In',
+            onPress: () => router.replace('/(auth)/sign-in'),
+          },
+        ]
+      );
     } else {
       Alert.alert('Registration Failed', res.message || 'Something went wrong.');
     }
@@ -179,46 +168,20 @@ export default function RegisterScreen() {
         )}
 
         {step === 'otp' ? (
-          <View style={styles.container}>
+          <View style={[styles.container, { paddingVertical: 10 }]}>
             <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
               <MaterialIcons name="arrow-back" size={22} color="#F5C518" />
               <Text style={{ color: '#ffffff', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Phone</Text>
             </TouchableOpacity>
 
-            <Text style={styles.title}>Enter OTP Code 🔐</Text>
-            <Text style={[styles.subtitle, { marginBottom: 20 }]}>
-              We sent a 4-digit verification code to <Text style={{ fontWeight: '800', color: '#F5C518' }}>+91 {phone}</Text>
-            </Text>
-
-            <TextInput
-              style={[styles.input, { letterSpacing: 8, fontSize: 22, textAlign: 'center', fontWeight: '900', color: '#ffffff', paddingVertical: 14 }]}
-              placeholder="4-Digit OTP Code"
-              placeholderTextColor="#aaa"
-              value={otp}
-              onChangeText={(t) => setOtp(t.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              maxLength={4}
+            <WhatsAppOtpVerification
+              phone={phone}
+              purpose="registration"
+              title="Verify via WhatsApp"
+              subtitle={`Send the pre-filled verification code from WhatsApp on +91 ${phone.slice(-10)} to complete registration.`}
+              onVerified={({ sessionId, code }) => handleCompleteRegistration(sessionId, code)}
+              onCancel={() => setStep('details')}
             />
-
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleVerifyAndRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#06101d" />
-              ) : (
-                <Text style={styles.buttonText}>Verify OTP & Complete Registration</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={{ marginTop: 20, alignItems: 'center' }}
-              onPress={handleSendOtp}
-              disabled={loading}
-            >
-              <Text style={{ color: '#F5C518', fontWeight: '700', fontSize: 14 }}>Resend OTP via SMS</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.container}>

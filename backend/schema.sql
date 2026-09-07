@@ -297,4 +297,26 @@ CREATE TABLE IF NOT EXISTS vouchers (
 );
 CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
 
+-- 20. WhatsApp Reverse OTP & Inbound Verifications Table
+CREATE TABLE IF NOT EXISTS whatsapp_verifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id VARCHAR(100) UNIQUE NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    verification_code VARCHAR(10) NOT NULL,
+    purpose VARCHAR(50) DEFAULT 'auth', -- 'registration', 'password_reset', 'login', 'account_deletion'
+    status VARCHAR(20) DEFAULT 'PENDING', -- 'PENDING', 'VERIFIED', 'EXPIRED', 'CONSUMED'
+    sender_whatsapp_id VARCHAR(50),
+    attempts INT DEFAULT 0,
+    metadata JSONB DEFAULT '{}',
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    verified_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_wa_verif_code_status ON whatsapp_verifications(verification_code, status);
+CREATE INDEX IF NOT EXISTS idx_wa_verif_session ON whatsapp_verifications(session_id);
+CREATE INDEX IF NOT EXISTS idx_wa_verif_phone ON whatsapp_verifications(phone_number);
+
+
 
