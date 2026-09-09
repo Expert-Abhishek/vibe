@@ -1,9 +1,13 @@
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 const nodemailer = require('nodemailer');
 
 // Load environment configuration with direct fallbacks
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
-const SMTP_SECURE = process.env.SMTP_SECURE === 'true' || SMTP_PORT === 465;
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 const SMTP_USER = (process.env.SMTP_USER || process.env.EMAIL_USER || process.env.GMAIL_USER || 'vibzzpvtltd@gmail.com').trim();
 const SMTP_PASS = (process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || 'avhe yuxd lowr zhbw').replace(/\s+/g, '').trim();
 
@@ -26,40 +30,25 @@ function getTransporter() {
   if (transporter) return transporter;
 
   if (SMTP_USER && SMTP_PASS) {
-    const isGmail = (SMTP_HOST && SMTP_HOST.includes('gmail.com')) || (SMTP_USER && SMTP_USER.includes('@gmail.com'));
-
-    if (isGmail) {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASS,
-        },
-        family: 4, // CRITICAL: Force IPv4 DNS lookup to prevent ENETUNREACH and timeout on Render cloud containers
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-      });
-      console.log(`📧 Email Service: Configured Gmail SMTP transport with IPv4 (user: ${SMTP_USER})`);
-    } else {
-      transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: SMTP_SECURE,
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASS,
-        },
-        family: 4, // Force IPv4
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        tls: {
-          rejectUnauthorized: false,
-        },
-      });
-      console.log(`📧 Email Service: Configured SMTP transport (${SMTP_HOST}:${SMTP_PORT}, user: ${SMTP_USER}) with IPv4`);
-    }
+    transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // port 587 uses STARTTLS
+      requireTLS: true,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      },
+      family: 4, // Force IPv4 DNS lookup to prevent ENETUNREACH on Render/Docker
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2',
+      },
+    });
+    console.log(`📧 Email Service: Configured Gmail SMTP transport on port 587 with IPv4 (user: ${SMTP_USER})`);
   } else {
     console.log('⚠️ Email Service: SMTP credentials not provided in .env. Falling back to Console Logger.');
   }
