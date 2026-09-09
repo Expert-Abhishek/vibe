@@ -78,29 +78,21 @@ router.post('/register', async (req, res) => {
 
     // A. Check Email OTP Verification if email provided
     if (cleanEmail) {
-      // 1. Check if email was already marked verified via /verify-email-otp
+      // 1. Check if email was already marked verified or active matching code exists
       const emailVerifRes = await db.query(
         `SELECT id, status FROM email_verifications 
-         WHERE LOWER(email) = $1 AND purpose = 'registration' AND status = 'VERIFIED'
-         ORDER BY verified_at DESC LIMIT 1`,
-        [cleanEmail]
+         WHERE LOWER(TRIM(email)) = $1 
+           AND (
+             status = 'VERIFIED' 
+             OR (otp = $2 AND created_at > (CURRENT_TIMESTAMP - INTERVAL '30 minutes'))
+           )
+         ORDER BY created_at DESC LIMIT 1`,
+        [cleanEmail, otpCode || '']
       );
 
       if (emailVerifRes.rows.length > 0) {
         isOtpValid = true;
         await db.query(`UPDATE email_verifications SET status = 'CONSUMED' WHERE id = $1`, [emailVerifRes.rows[0].id]);
-      } else if (otpCode) {
-        // 2. Check if active matching OTP code exists for this email
-        const emailCodeRes = await db.query(
-          `SELECT id FROM email_verifications 
-           WHERE LOWER(email) = $1 AND otp = $2 AND purpose = 'registration' AND status IN ('PENDING', 'VERIFIED') AND expires_at > CURRENT_TIMESTAMP
-           ORDER BY created_at DESC LIMIT 1`,
-          [cleanEmail, otpCode]
-        );
-        if (emailCodeRes.rows.length > 0) {
-          isOtpValid = true;
-          await db.query(`UPDATE email_verifications SET status = 'CONSUMED' WHERE id = $1`, [emailCodeRes.rows[0].id]);
-        }
       }
     }
 
@@ -1543,11 +1535,11 @@ router.post('/verify-reset-otp', async (req, res) => {
     // 1. Check in email_verifications
     if (cleanEmail || otpCode) {
       let emailQuery = `SELECT id, email, expires_at FROM email_verifications 
-                        WHERE otp = $1 AND purpose = 'password_reset' AND status IN ('PENDING', 'VERIFIED') AND expires_at > CURRENT_TIMESTAMP`;
+                        WHERE TRIM(otp) = $1 AND (expires_at > CURRENT_TIMESTAMP OR created_at > (CURRENT_TIMESTAMP - INTERVAL '20 minutes'))`;
       let params = [otpCode];
 
       if (cleanEmail) {
-        emailQuery += ` AND LOWER(email) = $2`;
+        emailQuery += ` AND LOWER(TRIM(email)) = $2`;
         params.push(cleanEmail);
       }
       emailQuery += ` ORDER BY created_at DESC LIMIT 1`;
@@ -1943,15 +1935,15 @@ router.post('/send-email-otp', async (req, res) => {
       }
     }
 
-    // 2. Generate 6-Digit Code & Expiry (5 minutes)
+    // 2. Generate 6-Digit Code & Expiry (15 minutes)
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    // 3. Expire any previous pending OTPs for this email and purpose
+    // 3. Mark only old OTPs (older than 15 mins) as expired, keep recent ones valid
     await db.query(
       `UPDATE email_verifications SET status = 'EXPIRED' 
-       WHERE LOWER(email) = $1 AND purpose = $2 AND status = 'PENDING'`,
-      [rawEmail, purpose]
+       WHERE LOWER(TRIM(email)) = $1 AND created_at < (CURRENT_TIMESTAMP - INTERVAL '15 minutes') AND status = 'PENDING'`,
+      [rawEmail]
     );
 
     // 4. Save to email_verifications table
@@ -1961,7 +1953,7 @@ router.post('/send-email-otp', async (req, res) => {
       [rawEmail, otpCode, purpose, expiresAt]
     );
 
-    // 5. Dispatch Email via Nodemailer
+    // 5. Dispatch Email via Brevo HTTP / Nodemailer
     const emailResult = await emailService.sendOtpEmail({
       to: rawEmail,
       otp: otpCode,
@@ -1985,7 +1977,7 @@ router.post('/send-email-otp', async (req, res) => {
       message: `Verification code sent to ${rawEmail}. Please check your email inbox.`,
       email: rawEmail,
       purpose,
-      expiresInSeconds: 300,
+      expiresInSeconds: 900,
       otpDebug: process.env.NODE_ENV === 'development' ? otpCode : undefined,
     });
   } catch (error) {
@@ -2006,7 +1998,7 @@ router.post('/verify-email-otp', async (req, res) => {
   try {
     const { email, otp, code, purpose = 'registration' } = req.body;
     const rawEmail = (email || '').trim().toLowerCase();
-    const otpCode = (otp || code || '').trim();
+    const otpCode = String(otp || code || '').trim();
 
     if (!rawEmail || !rawEmail.includes('@')) {
       return res.status(400).json({ success: false, message: 'Valid email address is required.' });
@@ -2016,15 +2008,19 @@ router.post('/verify-email-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please enter the 6-digit verification code.' });
     }
 
-    // Check active verification in email_verifications
+    // Check active verification in email_verifications with generous time window
     const verifRes = await db.query(
-      `SELECT id, status, expires_at FROM email_verifications 
-       WHERE LOWER(email) = $1 AND otp = $2 AND purpose = $3 AND status IN ('PENDING', 'VERIFIED') AND expires_at > CURRENT_TIMESTAMP
+      `SELECT id, status, expires_at, created_at FROM email_verifications 
+       WHERE LOWER(TRIM(email)) = $1 
+         AND TRIM(otp) = $2 
+         AND status IN ('PENDING', 'VERIFIED', 'EXPIRED')
+         AND (expires_at > CURRENT_TIMESTAMP OR created_at > (CURRENT_TIMESTAMP - INTERVAL '20 minutes'))
        ORDER BY created_at DESC LIMIT 1`,
-      [rawEmail, otpCode, purpose]
+      [rawEmail, otpCode]
     );
 
     if (verifRes.rows.length === 0) {
+      console.warn(`[Email OTP Verify] ⚠️ No matching active OTP found for ${rawEmail} with code ${otpCode}`);
       return res.status(400).json({
         success: false,
         message: 'Invalid or expired verification code. Please check your email and try again.',
@@ -2037,7 +2033,7 @@ router.post('/verify-email-otp', async (req, res) => {
       [verifRes.rows[0].id]
     );
 
-    console.log(`[Email OTP] ✅ Successfully verified email: ${rawEmail}`);
+    console.log(`[Email OTP] ✅ Successfully verified email: ${rawEmail} with record ID: ${verifRes.rows[0].id}`);
 
     return res.json({
       success: true,
