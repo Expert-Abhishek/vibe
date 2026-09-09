@@ -1465,12 +1465,21 @@ router.post('/send-reset-otp', async (req, res) => {
       );
 
       // Dispatch Email via Nodemailer
-      await emailService.sendOtpEmail({
+      const emailResult = await emailService.sendOtpEmail({
         to: targetEmail,
         otp: otpCode,
         purpose: 'password_reset',
         name: user.name || 'User',
       });
+
+      if (!emailResult.success) {
+        console.error(`[Email Reset OTP] ❌ Failed to send reset OTP to ${targetEmail}:`, emailResult.message);
+        return res.status(500).json({
+          success: false,
+          message: emailResult.message || 'Failed to deliver reset email.',
+          error: emailResult.error,
+        });
+      }
 
       console.log(`[Email Reset OTP] ✉️ Sent reset OTP to ${targetEmail} for user ${user.id} | Code: ${otpCode}`);
     }
@@ -1960,7 +1969,16 @@ router.post('/send-email-otp', async (req, res) => {
       name,
     });
 
-    console.log(`[Email OTP] ✉️ OTP sent to ${rawEmail} for ${purpose} | Code: ${otpCode}`);
+    if (!emailResult.success) {
+      console.error(`[Email OTP] ❌ Failed to send OTP to ${rawEmail}:`, emailResult.message);
+      return res.status(500).json({
+        success: false,
+        message: emailResult.message || 'Failed to deliver verification email. Please check your email address.',
+        error: emailResult.error,
+      });
+    }
+
+    console.log(`[Email OTP] ✉️ OTP successfully dispatched to ${rawEmail} for ${purpose} | Code: ${otpCode}`);
 
     return res.json({
       success: true,

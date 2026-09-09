@@ -1,3 +1,7 @@
+if (__DEV__) {
+  require('../ReactotronConfig');
+}
+
 // Universal Safeguard for WakeLock / KeepAwake / Loading / Network errors across Native & Web
 try {
   if (typeof console !== 'undefined' && console.error) {

@@ -1,11 +1,11 @@
 const nodemailer = require('nodemailer');
 
-// Load environment configuration
+// Load environment configuration with direct fallbacks
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '465', 10);
 const SMTP_SECURE = process.env.SMTP_SECURE === 'true' || SMTP_PORT === 465;
-const SMTP_USER = (process.env.SMTP_USER || process.env.EMAIL_USER || process.env.GMAIL_USER || '').trim();
-const SMTP_PASS = (process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '').trim();
+const SMTP_USER = (process.env.SMTP_USER || process.env.EMAIL_USER || process.env.GMAIL_USER || 'vibzzpvtltd@gmail.com').trim();
+const SMTP_PASS = (process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD || 'avhe yuxd lowr zhbw').replace(/\s+/g, '').trim();
 
 // Format FROM header: "Display Name <email@gmail.com>"
 let SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM;
@@ -211,34 +211,17 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
       };
     } catch (err) {
       console.error(`❌ Failed to send email via SMTP to ${cleanEmail}:`, err.message);
-      // Fallback log so developer/user is not blocked
-      console.log(`\n==================================================`);
-      console.log(`📧 [FALLBACK EMAIL OTP]`);
-      console.log(`To: ${cleanEmail}`);
-      console.log(`Purpose: ${purpose}`);
-      console.log(`🔑 OTP Code: ${otp}`);
-      console.log(`==================================================\n`);
-
       return {
-        success: true,
-        message: 'Verification code generated (SMTP error logged to console).',
+        success: false,
+        message: `Failed to send verification email via SMTP: ${err.message}`,
         error: err.message,
-        mock: true,
       };
     }
   } else {
-    // Console fallback logger when SMTP is not configured
-    console.log(`\n==================================================`);
-    console.log(`📧 [DEV EMAIL OTP DISPATCH]`);
-    console.log(`To: ${cleanEmail}`);
-    console.log(`Purpose: ${purpose}`);
-    console.log(`🔑 OTP Code: ${otp}`);
-    console.log(`⏱️ Expiry: 5 Minutes`);
-    console.log(`==================================================\n`);
-
+    console.error('❌ Email Service: No SMTP credentials configured.');
     return {
-      success: true,
-      message: `Verification code sent to ${cleanEmail} (logged to console for dev).`,
+      success: false,
+      message: 'Email service is not configured on server.',
       mock: true,
     };
   }

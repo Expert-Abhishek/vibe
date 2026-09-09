@@ -4,7 +4,8 @@ declare global {
   }
 }
 
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+import Constants from 'expo-constants';
 
 let Reactotron: any = null;
 
@@ -12,15 +13,25 @@ if (__DEV__ && Platform.OS !== 'web') {
   try {
     const ReactotronModule = require('reactotron-react-native').default;
 
+    // Auto-detect PC host IP from Expo Constants / ScriptURL so physical phones & emulators connect automatically
+    let host = 'localhost';
+    const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest2?.extra?.expoGo?.debuggerHost || (Constants as any).manifest?.debuggerHost;
+    if (hostUri) {
+      host = hostUri.split(':')[0];
+    } else if (NativeModules.SourceCode?.scriptURL) {
+      const address = NativeModules.SourceCode.scriptURL.split('://')[1]?.split('/')[0];
+      host = address?.split(':')[0] || 'localhost';
+    }
+
     Reactotron = ReactotronModule
       .configure({
-        name: 'Vibe App',
-        // host: '192.168.1.X', // Un-comment & set PC IP if testing on a physical phone
+        name: 'Vibzz Mobility App',
+        host: host,
       })
       .useReactNative({
         asyncStorage: false,
         networking: {
-          // Ignore Metro bundler noise, HMR updates, symbolication, and asset requests
+          // Ignore Metro bundler noise, HMR updates, and asset requests
           ignoreUrls: /symbolicate|logs|hot|127\.0\.0\.1:8081|localhost:8081|\.svg|\.png/,
         },
         editor: false,
@@ -34,7 +45,7 @@ if (__DEV__ && Platform.OS !== 'web') {
     }
 
     console.tron = Reactotron;
-    console.log('⚡ Reactotron network monitoring active for fetch() requests!');
+    console.log(`⚡ [Reactotron] Connected to host: ${host}:9090 | Network inspection active!`);
   } catch (error) {
     console.warn('Reactotron initialization warning:', error);
     console.tron = {
