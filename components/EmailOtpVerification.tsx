@@ -23,6 +23,7 @@ interface EmailOtpVerificationProps {
   onChangeEmail?: () => void;
   title?: string;
   subtitle?: string;
+  autoSendOnMount?: boolean;
 }
 
 export default function EmailOtpVerification({
@@ -34,6 +35,7 @@ export default function EmailOtpVerification({
   onChangeEmail,
   title = 'Verify Your Email',
   subtitle,
+  autoSendOnMount = true,
 }: EmailOtpVerificationProps) {
   const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -48,7 +50,7 @@ export default function EmailOtpVerification({
 
   const inputRefs = useRef<Array<TextInput | null>>([]);
 
-  // 1. Send OTP on component mount
+  // 1. Send OTP on component mount (if autoSendOnMount is true)
   const handleSendOtp = useCallback(async (isResend = false) => {
     if (!cleanEmail || !cleanEmail.includes('@')) {
       setErrorMessage('A valid email address is required.');
@@ -62,6 +64,7 @@ export default function EmailOtpVerification({
     }
 
     try {
+      console.log(`📧 [EmailOtpVerification] Triggering OTP send for: ${cleanEmail} (${purpose})`);
       const res = await sendEmailOtpApi(cleanEmail, purpose, userName);
       setIsSending(false);
 
@@ -82,8 +85,12 @@ export default function EmailOtpVerification({
   }, [cleanEmail, purpose, userName]);
 
   useEffect(() => {
-    handleSendOtp();
-  }, [handleSendOtp]);
+    if (autoSendOnMount) {
+      handleSendOtp();
+    } else {
+      setSuccessMessage(`A 6-digit verification code has been sent to ${cleanEmail}`);
+    }
+  }, [autoSendOnMount, cleanEmail, handleSendOtp]);
 
   // 2. Countdown timers for TTL & resend cooldown
   useEffect(() => {

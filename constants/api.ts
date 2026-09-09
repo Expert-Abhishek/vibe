@@ -8,8 +8,8 @@ import { adminState } from './admin-state';
 const RENDER_API_URL = 'https://vibe-backend-tlaw.onrender.com';
 const DEV_API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
 
-const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || (isDev ? DEV_API_URL : RENDER_API_URL);
+// Default to live Render backend for Expo Go mobile testing unless EXPO_PUBLIC_API_URL is explicitly configured
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || RENDER_API_URL;
 export const ADMIN_PANEL_URL = process.env.EXPO_PUBLIC_ADMIN_URL || 'https://vibe-admin-panel.vercel.app';
 
 /**
@@ -524,7 +524,7 @@ export async function loginUserApi(payload: { identifier: string; password: stri
 /**
  * Send Email OTP for Registration, Login, or Verification
  */
-export async function sendEmailOtpApi(email: string, purpose: string = 'registration', name?: string): Promise<{
+export async function sendEmailOtpApi(email: string, purpose: string = 'registration', name?: string, attempt: number = 1): Promise<{
   success: boolean;
   message: string;
   email?: string;
@@ -532,15 +532,34 @@ export async function sendEmailOtpApi(email: string, purpose: string = 'registra
   expiresInSeconds?: number;
   otpDebug?: string;
 }> {
+  const cleanEmail = email.trim().toLowerCase();
   try {
+    console.log(`[API] 📧 sendEmailOtpApi (attempt ${attempt}) -> ${API_BASE_URL}/api/auth/send-email-otp for: ${cleanEmail}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
     const res = await fetch(`${API_BASE_URL}/api/auth/send-email-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), purpose, name }),
+      body: JSON.stringify({ email: cleanEmail, purpose, name }),
+      signal: controller.signal,
     });
-    return await res.json();
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+    console.log(`[API] 📧 sendEmailOtpApi result:`, data);
+    return data;
   } catch (e: any) {
-    console.warn('sendEmailOtpApi error:', e);
+    console.warn(`[API] ⚠️ sendEmailOtpApi error (attempt ${attempt}):`, e);
+
+    if (attempt < 2 && (e?.name === 'AbortError' || e?.message?.includes('fetch') || e?.message?.includes('network') || e?.message?.includes('Network request failed'))) {
+      console.log('🔄 Retrying sendEmailOtpApi after server cold start...');
+      return sendEmailOtpApi(email, purpose, name, attempt + 1);
+    }
+
+    if (e?.name === 'AbortError') {
+      return { success: false, message: 'Server is starting up (cold start). Please try again in a few seconds.' };
+    }
     return { success: false, message: e?.message || 'Failed to send verification email. Please check internet connection.' };
   }
 }
@@ -548,21 +567,36 @@ export async function sendEmailOtpApi(email: string, purpose: string = 'registra
 /**
  * Verify Email OTP
  */
-export async function verifyEmailOtpApi(email: string, otp: string, purpose: string = 'registration'): Promise<{
+export async function verifyEmailOtpApi(email: string, otp: string, purpose: string = 'registration', attempt: number = 1): Promise<{
   success: boolean;
   message: string;
   email?: string;
   purpose?: string;
 }> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanOtp = otp.trim();
   try {
+    console.log(`[API] 🔑 verifyEmailOtpApi -> ${API_BASE_URL}/api/auth/verify-email-otp for: ${cleanEmail}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-email-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), otp: otp.trim(), purpose }),
+      body: JSON.stringify({ email: cleanEmail, otp: cleanOtp, purpose }),
+      signal: controller.signal,
     });
-    return await res.json();
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+    return data;
   } catch (e: any) {
-    console.warn('verifyEmailOtpApi error:', e);
+    console.warn(`[API] ⚠️ verifyEmailOtpApi error (attempt ${attempt}):`, e);
+
+    if (attempt < 2 && (e?.name === 'AbortError' || e?.message?.includes('fetch') || e?.message?.includes('network') || e?.message?.includes('Network request failed'))) {
+      return verifyEmailOtpApi(email, otp, purpose, attempt + 1);
+    }
+
     return { success: false, message: e?.message || 'Failed to verify email OTP. Please try again.' };
   }
 }
@@ -570,20 +604,38 @@ export async function verifyEmailOtpApi(email: string, otp: string, purpose: str
 /**
  * Send Forgot Password Reset OTP via Email or Mobile
  */
-export async function sendResetOtpApi(identifierOrPayload: string | { email?: string; phone?: string; identifier?: string }): Promise<any> {
+export async function sendResetOtpApi(identifierOrPayload: string | { email?: string; phone?: string; identifier?: string }, attempt: number = 1): Promise<any> {
   try {
     const body = typeof identifierOrPayload === 'string'
-      ? (identifierOrPayload.includes('@') ? { email: identifierOrPayload } : { phone: identifierOrPayload })
+      ? (identifierOrPayload.includes('@') ? { email: identifierOrPayload.trim().toLowerCase() } : { phone: identifierOrPayload.trim() })
       : identifierOrPayload;
+
+    console.log(`[API] 🔐 sendResetOtpApi (attempt ${attempt}) -> ${API_BASE_URL}/api/auth/send-reset-otp`, body);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     const res = await fetch(`${API_BASE_URL}/api/auth/send-reset-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
-    return await res.json();
+    clearTimeout(timeoutId);
+
+    const data = await res.json();
+    console.log(`[API] 🔐 sendResetOtpApi result:`, data);
+    return data;
   } catch (e: any) {
-    console.warn('sendResetOtpApi error:', e);
+    console.warn(`[API] ⚠️ sendResetOtpApi error (attempt ${attempt}):`, e);
+
+    if (attempt < 2 && (e?.name === 'AbortError' || e?.message?.includes('fetch') || e?.message?.includes('network') || e?.message?.includes('Network request failed'))) {
+      console.log('🔄 Retrying sendResetOtpApi after server cold start...');
+      return sendResetOtpApi(identifierOrPayload, attempt + 1);
+    }
+
+    if (e?.name === 'AbortError') {
+      return { success: false, message: 'Server is starting up (cold start). Please try again in a few seconds.' };
+    }
     return { success: false, message: e?.message || 'Failed to send OTP. Please check server connection.' };
   }
 }
@@ -591,16 +643,28 @@ export async function sendResetOtpApi(identifierOrPayload: string | { email?: st
 /**
  * Verify Reset OTP & Update Password
  */
-export async function verifyResetOtpApi(payload: { email?: string; phone?: string; identifier?: string; otp?: string; code?: string; sessionId?: string; newPassword?: string }): Promise<any> {
+export async function verifyResetOtpApi(payload: { email?: string; phone?: string; identifier?: string; otp?: string; code?: string; sessionId?: string; newPassword?: string }, attempt: number = 1): Promise<any> {
   try {
+    console.log(`[API] 🔑 verifyResetOtpApi -> ${API_BASE_URL}/api/auth/verify-reset-otp`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-reset-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
+
     return await res.json();
   } catch (e: any) {
-    console.warn('verifyResetOtpApi error:', e);
+    console.warn(`[API] ⚠️ verifyResetOtpApi error (attempt ${attempt}):`, e);
+
+    if (attempt < 2 && (e?.name === 'AbortError' || e?.message?.includes('fetch') || e?.message?.includes('network') || e?.message?.includes('Network request failed'))) {
+      return verifyResetOtpApi(payload, attempt + 1);
+    }
+
     return { success: false, message: e?.message || 'Failed to verify OTP. Please try again.' };
   }
 }

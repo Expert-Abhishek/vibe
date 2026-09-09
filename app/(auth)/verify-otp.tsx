@@ -113,6 +113,7 @@ export default function VerifyOtpScreen() {
                 purpose="password_reset"
                 title="Verify Reset Code"
                 subtitle="Enter the 6-digit code sent to your email to reset password."
+                autoSendOnMount={false}
                 onVerified={handleEmailVerified}
                 onCancel={() => router.back()}
               />
