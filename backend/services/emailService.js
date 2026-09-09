@@ -177,7 +177,7 @@ function generateOtpEmailHtml({ otp, purpose = 'registration', name = '' }) {
 /**
  * Send an OTP Email via Nodemailer Gmail SMTP
  * Uses runtime DNS IPv4 resolution to prevent ENETUNREACH on Render/Docker.
- * Auto-fallback: Port 465 SSL → Port 587 STARTTLS
+ * Auto-fallback: Brevo HTTP API (Port 443) → Nodemailer SMTP (Port 465/587)
  */
 async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
   if (!to || !to.includes('@')) {
@@ -193,12 +193,47 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
   const html = generateOtpEmailHtml({ otp, purpose, name });
   const text = `Your Vibzz verification code is: ${otp}. This code is valid for 5 minutes. Do not share this code with anyone.`;
 
-  if (!SMTP_USER || !SMTP_PASS) {
-    console.error('❌ Email Service: SMTP credentials not configured.');
-    return { success: false, message: 'SMTP credentials not configured on server.' };
+  // ── 1. PRIMARY: Brevo HTTP REST API (Port 443 - NEVER blocked on any hosting) ──
+  const brevoApiKey = (process.env.BREVO_API_KEY || '').trim();
+  if (brevoApiKey) {
+    try {
+      console.log(`✉️ [Email] Sending to ${cleanEmail} via Brevo HTTP API...`);
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoApiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'Vibzz Support', email: process.env.BREVO_SENDER || SMTP_USER || 'vibzzpvtltd@gmail.com' },
+          to: [{ email: cleanEmail }],
+          subject: subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+
+      const resData = await res.json();
+      if (res.ok && (resData.messageId || resData.id)) {
+        console.log(`✉️ [Brevo API] Email Sent Successfully to ${cleanEmail} | OTP: ${otp}`);
+        return {
+          success: true,
+          message: 'Verification code sent to your email.',
+          messageId: resData.messageId || resData.id,
+        };
+      }
+      console.warn('⚠️ [Brevo API] Error response:', JSON.stringify(resData));
+    } catch (brevoErr) {
+      console.error('❌ [Brevo API] Request failed:', brevoErr.message);
+    }
   }
 
-  // Resolve smtp.gmail.com to IPv4 at runtime (prevents ENETUNREACH on Render)
+  // ── 2. FALLBACK: Nodemailer Gmail SMTP (works on local/VPS where ports are open) ──
+  if (!SMTP_USER || !SMTP_PASS) {
+    console.error('❌ Email Service: No email provider configured.');
+    return { success: false, message: 'Email service is not configured on server.' };
+  }
+
   let gmailIPv4;
   try {
     gmailIPv4 = await resolveGmailIPv4();
@@ -216,7 +251,7 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
     html: html,
   };
 
-  // Attempt 1: Port 465 SSL (direct TLS, most reliable)
+  // Attempt SMTP Port 465 SSL
   try {
     const t465 = createIPv4Transport(gmailIPv4, 465, true);
     const info = await t465.sendMail(mailOptions);
@@ -227,10 +262,10 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
       messageId: info.messageId,
     };
   } catch (err465) {
-    console.warn(`⚠️ [Nodemailer Port 465] Failed: ${err465.message}. Trying Port 587 STARTTLS...`);
+    console.warn(`⚠️ [Nodemailer Port 465] Failed: ${err465.message}. Trying Port 587...`);
   }
 
-  // Attempt 2: Port 587 STARTTLS
+  // Attempt SMTP Port 587 STARTTLS
   try {
     const t587 = createIPv4Transport(gmailIPv4, 587, false);
     const info587 = await t587.sendMail(mailOptions);
@@ -244,7 +279,7 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
     console.error(`❌ [Nodemailer] All SMTP attempts failed for ${cleanEmail}: ${err587.message}`);
     return {
       success: false,
-      message: `Failed to send verification email via SMTP: ${err587.message}`,
+      message: `Failed to send verification email: ${err587.message}`,
       error: err587.message,
     };
   }
