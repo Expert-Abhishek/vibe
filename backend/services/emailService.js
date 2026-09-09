@@ -30,16 +30,17 @@ function getTransporter() {
   if (transporter) return transporter;
 
   if (SMTP_USER && SMTP_PASS) {
+    const isSecure = SMTP_PORT === 465 || process.env.SMTP_SECURE === 'true';
     transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // port 587 uses STARTTLS
-      requireTLS: true,
+      host: SMTP_HOST || 'smtp.gmail.com',
+      port: SMTP_PORT || (isSecure ? 465 : 587),
+      secure: isSecure, // true for 465, false for 587 (STARTTLS)
+      requireTLS: !isSecure,
       auth: {
         user: SMTP_USER,
         pass: SMTP_PASS,
       },
-      family: 4, // Force IPv4 DNS lookup to prevent ENETUNREACH on Render/Docker
+      family: 4, // Force IPv4 DNS lookup to prevent ENETUNREACH on cloud/Docker
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 15000,
@@ -48,7 +49,7 @@ function getTransporter() {
         minVersion: 'TLSv1.2',
       },
     });
-    console.log(`📧 Email Service: Configured Gmail SMTP transport on port 587 with IPv4 (user: ${SMTP_USER})`);
+    console.log(`📧 Email Service: Configured SMTP transport on ${SMTP_HOST}:${SMTP_PORT || (isSecure ? 465 : 587)} (secure: ${isSecure}, user: ${SMTP_USER})`);
   } else {
     console.log('⚠️ Email Service: SMTP credentials not provided in .env. Falling back to Console Logger.');
   }
@@ -250,10 +251,31 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
     }
   }
 
-  // 3. Fallback: Direct SMTP Transport
-  const transport = getTransporter();
-  if (transport) {
+  // 3. Fallback: Direct SMTP Transport (with dual port 587/465 auto-fallback)
+  if (SMTP_USER && SMTP_PASS) {
+    const primaryPort = SMTP_PORT || 587;
+    const primarySecure = primaryPort === 465 || process.env.SMTP_SECURE === 'true';
+
     try {
+      const transport = nodemailer.createTransport({
+        host: SMTP_HOST || 'smtp.gmail.com',
+        port: primaryPort,
+        secure: primarySecure,
+        requireTLS: !primarySecure,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+        family: 4,
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
+        tls: {
+          rejectUnauthorized: false,
+          minVersion: 'TLSv1.2',
+        },
+      });
+
       const info = await transport.sendMail({
         from: SMTP_FROM,
         to: cleanEmail,
@@ -262,22 +284,63 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
         html: html,
       });
 
-      console.log(`✉️ Email Sent Successfully via SMTP to ${cleanEmail} (MessageId: ${info.messageId}) | OTP: ${otp}`);
+      console.log(`✉️ Email Sent Successfully via SMTP (${primaryPort}) to ${cleanEmail} (MessageId: ${info.messageId}) | OTP: ${otp}`);
       return {
         success: true,
         message: 'Verification code sent to your email.',
         messageId: info.messageId,
       };
-    } catch (err) {
-      console.error(`❌ Failed to send email via SMTP to ${cleanEmail}:`, err.message);
-      return {
-        success: false,
-        message: `Failed to send verification email via SMTP: ${err.message}`,
-        error: err.message,
-      };
+    } catch (primaryErr) {
+      console.warn(`⚠️ [SMTP] Port ${primaryPort} failed (${primaryErr.message}). Trying alternate SMTP port...`);
+
+      try {
+        const altPort = primaryPort === 465 ? 587 : 465;
+        const altSecure = altPort === 465;
+
+        const altTransport = nodemailer.createTransport({
+          host: SMTP_HOST || 'smtp.gmail.com',
+          port: altPort,
+          secure: altSecure,
+          requireTLS: !altSecure,
+          auth: {
+            user: SMTP_USER,
+            pass: SMTP_PASS,
+          },
+          family: 4,
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 10000,
+          tls: {
+            rejectUnauthorized: false,
+            minVersion: 'TLSv1.2',
+          },
+        });
+
+        const altInfo = await altTransport.sendMail({
+          from: SMTP_FROM,
+          to: cleanEmail,
+          subject: subject,
+          text: text,
+          html: html,
+        });
+
+        console.log(`✉️ Email Sent Successfully via Alternate SMTP port ${altPort} to ${cleanEmail} (MessageId: ${altInfo.messageId}) | OTP: ${otp}`);
+        return {
+          success: true,
+          message: 'Verification code sent to your email.',
+          messageId: altInfo.messageId,
+        };
+      } catch (err) {
+        console.error(`❌ Failed to send email via SMTP (both ports) to ${cleanEmail}:`, err.message);
+        return {
+          success: false,
+          message: `Failed to send verification email via SMTP: ${err.message}`,
+          error: err.message,
+        };
+      }
     }
   } else {
-    console.error('❌ Email Service: No email provider configured.');
+    console.error('❌ Email Service: No email provider or SMTP credentials configured.');
     return {
       success: false,
       message: 'Email service is not configured on server.',
