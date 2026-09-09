@@ -158,13 +158,13 @@ function generateOtpEmailHtml({ otp, purpose = 'registration', name = '' }) {
 }
 
 /**
- * Send an OTP Email
+ * Send an OTP Email (Supports Resend REST API, Brevo REST API, or SMTP)
  * @param {Object} params
  * @param {string} params.to - Recipient email address
  * @param {string} params.otp - 6-digit OTP code
  * @param {string} params.purpose - 'registration' | 'password_reset' | 'login'
  * @param {string} [params.name] - User full name
- * @returns {Promise<{ success: boolean, message: string, messageId?: string, mock?: boolean }>}
+ * @returns {Promise<{ success: boolean, message: string, messageId?: string, error?: string }>}
  */
 async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
   if (!to || !to.includes('@')) {
@@ -180,8 +180,78 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
   const html = generateOtpEmailHtml({ otp, purpose, name });
   const text = `Your Vibe verification code is: ${otp}. This code is valid for 5 minutes. Do not share this code with anyone.`;
 
-  const transport = getTransporter();
+  // 1. Primary Priority: Resend HTTP REST API (Port 443 - NEVER blocked on Render/AWS)
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey) {
+    try {
+      console.log(`✉️ [Email Service] Sending email to ${cleanEmail} via Resend REST API...`);
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM || 'Vibzz <onboarding@resend.dev>',
+          to: [cleanEmail],
+          subject: subject,
+          html: html,
+          text: text,
+        }),
+      });
 
+      const resData = await res.json();
+      if (res.ok && resData.id) {
+        console.log(`✉️ [Resend API] Email Sent Successfully to ${cleanEmail} (ID: ${resData.id}) | OTP: ${otp}`);
+        return {
+          success: true,
+          message: 'Verification code sent to your email.',
+          messageId: resData.id,
+        };
+      }
+      console.warn('⚠️ [Resend API] Error response:', resData);
+    } catch (resendErr) {
+      console.error('❌ [Resend API] Request failed:', resendErr.message);
+    }
+  }
+
+  // 2. Secondary Priority: Brevo HTTP REST API (Port 443)
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (brevoApiKey) {
+    try {
+      console.log(`✉️ [Email Service] Sending email to ${cleanEmail} via Brevo REST API...`);
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoApiKey.trim(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'Vibzz Support', email: process.env.BREVO_SENDER || 'vibzzpvtltd@gmail.com' },
+          to: [{ email: cleanEmail }],
+          subject: subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      });
+
+      const resData = await res.json();
+      if (res.ok && (resData.messageId || resData.id)) {
+        console.log(`✉️ [Brevo API] Email Sent Successfully to ${cleanEmail} | OTP: ${otp}`);
+        return {
+          success: true,
+          message: 'Verification code sent to your email.',
+          messageId: resData.messageId || resData.id,
+        };
+      }
+      console.warn('⚠️ [Brevo API] Error response:', resData);
+    } catch (brevoErr) {
+      console.error('❌ [Brevo API] Request failed:', brevoErr.message);
+    }
+  }
+
+  // 3. Fallback: Direct SMTP Transport
+  const transport = getTransporter();
   if (transport) {
     try {
       const info = await transport.sendMail({
@@ -192,7 +262,7 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
         html: html,
       });
 
-      console.log(`✉️ Email Sent Successfully to ${cleanEmail} (MessageId: ${info.messageId}) | OTP: ${otp}`);
+      console.log(`✉️ Email Sent Successfully via SMTP to ${cleanEmail} (MessageId: ${info.messageId}) | OTP: ${otp}`);
       return {
         success: true,
         message: 'Verification code sent to your email.',
@@ -207,11 +277,10 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
       };
     }
   } else {
-    console.error('❌ Email Service: No SMTP credentials configured.');
+    console.error('❌ Email Service: No email provider configured.');
     return {
       success: false,
       message: 'Email service is not configured on server.',
-      mock: true,
     };
   }
 }
