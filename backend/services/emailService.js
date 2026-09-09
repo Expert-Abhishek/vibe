@@ -26,19 +26,40 @@ function getTransporter() {
   if (transporter) return transporter;
 
   if (SMTP_USER && SMTP_PASS) {
-    transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-    console.log(`📧 Email Service: Configured SMTP transport (${SMTP_HOST}:${SMTP_PORT}, user: ${SMTP_USER})`);
+    const isGmail = (SMTP_HOST && SMTP_HOST.includes('gmail.com')) || (SMTP_USER && SMTP_USER.includes('@gmail.com'));
+
+    if (isGmail) {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+        family: 4, // CRITICAL: Force IPv4 DNS lookup to prevent ENETUNREACH and timeout on Render cloud containers
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+      });
+      console.log(`📧 Email Service: Configured Gmail SMTP transport with IPv4 (user: ${SMTP_USER})`);
+    } else {
+      transporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_SECURE,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+        family: 4, // Force IPv4
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+        tls: {
+          rejectUnauthorized: false,
+        },
+      });
+      console.log(`📧 Email Service: Configured SMTP transport (${SMTP_HOST}:${SMTP_PORT}, user: ${SMTP_USER}) with IPv4`);
+    }
   } else {
     console.log('⚠️ Email Service: SMTP credentials not provided in .env. Falling back to Console Logger.');
   }
