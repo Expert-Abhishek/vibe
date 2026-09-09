@@ -127,7 +127,7 @@ function generateOtpEmailHtml({ otp, purpose = 'registration', name = '' }) {
               <!-- Security Notice -->
               <div style="background-color: rgba(240, 85, 95, 0.08); border-left: 3px solid #F0555F; border-radius: 6px; padding: 12px 16px; text-align: left; margin-bottom: 20px;">
                 <p style="color: #ff9b9b; font-size: 12px; line-height: 18px; margin: 0;">
-                  <strong>Security Reminder:</strong> Never share this OTP with anyone. Vibe representatives will never ask for your verification code or password.
+                  <strong>Security Reminder:</strong> Never share this OTP with anyone. Vibzz representatives will never ask for your verification code or password.
                 </p>
               </div>
 
