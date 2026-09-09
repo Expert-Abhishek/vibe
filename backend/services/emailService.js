@@ -1,7 +1,9 @@
 const dns = require('dns');
-if (dns.setDefaultResultOrder) {
-  dns.setDefaultResultOrder('ipv4first');
-}
+try {
+  if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+} catch (e) {}
 
 const nodemailer = require('nodemailer');
 
@@ -23,29 +25,55 @@ if (!SMTP_FROM) {
   }
 }
 
-// Create dedicated Gmail Nodemailer Transporter
-let transporter = null;
+// Create dedicated IPv4-forced Transporters for SSL (465) and TLS (587)
+let transporter465 = null;
+let transporter587 = null;
 
-function getTransporter() {
-  if (transporter) return transporter;
-
-  if (SMTP_USER && SMTP_PASS) {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
+function getTransporter465() {
+  if (!transporter465 && SMTP_USER && SMTP_PASS) {
+    transporter465 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
         user: SMTP_USER,
         pass: SMTP_PASS,
       },
+      family: 4, // STRICT IPv4 - Prevents ENETUNREACH on Render/Linux Docker
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
       tls: {
         rejectUnauthorized: false,
+        minVersion: 'TLSv1.2',
       },
     });
-    console.log(`📧 Email Service: Configured Nodemailer Gmail SMTP transport (user: ${SMTP_USER})`);
-  } else {
-    console.log('⚠️ Email Service: SMTP credentials not configured.');
   }
+  return transporter465;
+}
 
-  return transporter;
+function getTransporter587() {
+  if (!transporter587 && SMTP_USER && SMTP_PASS) {
+    transporter587 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      auth: {
+        user: SMTP_USER,
+        pass: SMTP_PASS,
+      },
+      family: 4, // STRICT IPv4 - Prevents ENETUNREACH on Render/Linux Docker
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2',
+      },
+    });
+  }
+  return transporter587;
 }
 
 /**
@@ -150,7 +178,7 @@ function generateOtpEmailHtml({ otp, purpose = 'registration', name = '' }) {
 }
 
 /**
- * Send an OTP Email via Nodemailer Gmail SMTP
+ * Send an OTP Email via Nodemailer Gmail SMTP with Strict IPv4 & Port 465/587 auto-fallback
  * @param {Object} params
  * @param {string} params.to - Recipient email address
  * @param {string} params.otp - 6-digit OTP code
@@ -173,17 +201,17 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
   const text = `Your Vibzz verification code is: ${otp}. This code is valid for 5 minutes. Do not share this code with anyone.`;
 
   if (!SMTP_USER || !SMTP_PASS) {
-    console.error('❌ Email Service: SMTP_USER or SMTP_PASS missing.');
+    console.error('❌ Email Service: SMTP credentials not configured.');
     return {
       success: false,
       message: 'SMTP credentials not configured on server.',
     };
   }
 
-  // 1. Primary: Nodemailer Gmail Service
+  // Attempt 1: Port 465 SSL with IPv4
   try {
-    const mainTransport = getTransporter();
-    const info = await mainTransport.sendMail({
+    const t465 = getTransporter465();
+    const info = await t465.sendMail({
       from: SMTP_FROM,
       to: cleanEmail,
       subject: subject,
@@ -191,32 +219,19 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
       html: html,
     });
 
-    console.log(`✉️ [Nodemailer] Email Sent Successfully to ${cleanEmail} (MessageId: ${info.messageId}) | OTP: ${otp}`);
+    console.log(`✉️ [Nodemailer Port 465] Email Sent Successfully to ${cleanEmail} (MessageId: ${info.messageId}) | OTP: ${otp}`);
     return {
       success: true,
       message: 'Verification code sent to your email.',
       messageId: info.messageId,
     };
-  } catch (primaryErr) {
-    console.warn(`⚠️ [Nodemailer Gmail Service] Failed (${primaryErr.message}). Retrying with direct port 465 SSL...`);
+  } catch (err465) {
+    console.warn(`⚠️ [Nodemailer Port 465] Failed (${err465.message}). Retrying on Port 587 STARTTLS (IPv4)...`);
 
-    // 2. Fallback: Direct Port 465 SSL Transporter
+    // Attempt 2: Port 587 STARTTLS with IPv4
     try {
-      const fallback465 = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        auth: {
-          user: SMTP_USER,
-          pass: SMTP_PASS,
-        },
-        family: 4,
-        tls: { rejectUnauthorized: false },
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-      });
-
-      const info465 = await fallback465.sendMail({
+      const t587 = getTransporter587();
+      const info587 = await t587.sendMail({
         from: SMTP_FROM,
         to: cleanEmail,
         subject: subject,
@@ -224,18 +239,18 @@ async function sendOtpEmail({ to, otp, purpose = 'registration', name = '' }) {
         html: html,
       });
 
-      console.log(`✉️ [Nodemailer Port 465] Email Sent Successfully to ${cleanEmail} (MessageId: ${info465.messageId}) | OTP: ${otp}`);
+      console.log(`✉️ [Nodemailer Port 587] Email Sent Successfully to ${cleanEmail} (MessageId: ${info587.messageId}) | OTP: ${otp}`);
       return {
         success: true,
         message: 'Verification code sent to your email.',
-        messageId: info465.messageId,
+        messageId: info587.messageId,
       };
-    } catch (fallbackErr) {
-      console.error(`❌ [Nodemailer] Failed to send email to ${cleanEmail}:`, fallbackErr.message);
+    } catch (err587) {
+      console.error(`❌ [Nodemailer All Ports Failed] to ${cleanEmail}:`, err587.message);
       return {
         success: false,
-        message: `Failed to send verification email via SMTP: ${fallbackErr.message}`,
-        error: fallbackErr.message,
+        message: `Failed to send verification email via SMTP: ${err587.message}`,
+        error: err587.message,
       };
     }
   }

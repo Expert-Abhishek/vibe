@@ -536,7 +536,7 @@ export async function sendEmailOtpApi(email: string, purpose: string = 'registra
   try {
     console.log(`[API] 📧 sendEmailOtpApi (attempt ${attempt}) -> ${API_BASE_URL}/api/auth/send-email-otp for: ${cleanEmail}`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 50000);
 
     const res = await fetch(`${API_BASE_URL}/api/auth/send-email-otp`, {
       method: 'POST',
@@ -558,7 +558,7 @@ export async function sendEmailOtpApi(email: string, purpose: string = 'registra
     }
 
     if (e?.name === 'AbortError') {
-      return { success: false, message: 'Server is starting up (cold start). Please try again in a few seconds.' };
+      return { success: false, message: 'Server is starting up (cold start). Please wait 10 seconds and try again.' };
     }
     return { success: false, message: e?.message || 'Failed to send verification email. Please check internet connection.' };
   }
@@ -578,7 +578,7 @@ export async function verifyEmailOtpApi(email: string, otp: string, purpose: str
   try {
     console.log(`[API] 🔑 verifyEmailOtpApi -> ${API_BASE_URL}/api/auth/verify-email-otp for: ${cleanEmail}`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 40000);
 
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-email-otp`, {
       method: 'POST',
@@ -612,7 +612,7 @@ export async function sendResetOtpApi(identifierOrPayload: string | { email?: st
 
     console.log(`[API] 🔐 sendResetOtpApi (attempt ${attempt}) -> ${API_BASE_URL}/api/auth/send-reset-otp`, body);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 50000);
 
     const res = await fetch(`${API_BASE_URL}/api/auth/send-reset-otp`, {
       method: 'POST',
@@ -634,7 +634,7 @@ export async function sendResetOtpApi(identifierOrPayload: string | { email?: st
     }
 
     if (e?.name === 'AbortError') {
-      return { success: false, message: 'Server is starting up (cold start). Please try again in a few seconds.' };
+      return { success: false, message: 'Server is starting up (cold start). Please wait 10 seconds and try again.' };
     }
     return { success: false, message: e?.message || 'Failed to send OTP. Please check server connection.' };
   }
@@ -647,7 +647,7 @@ export async function verifyResetOtpApi(payload: { email?: string; phone?: strin
   try {
     console.log(`[API] 🔑 verifyResetOtpApi -> ${API_BASE_URL}/api/auth/verify-reset-otp`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 40000);
 
     const res = await fetch(`${API_BASE_URL}/api/auth/verify-reset-otp`, {
       method: 'POST',
