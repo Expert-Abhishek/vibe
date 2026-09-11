@@ -84,12 +84,12 @@ export default function RegisterScreen() {
       Alert.alert('Invalid Email', 'Please enter a valid email address.');
       return;
     }
-    if (!cleanPhone || cleanPhone.length !== 10) {
-      Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits.');
+    if (cleanPhone && cleanPhone.length !== 10) {
+      Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits if provided.');
       return;
     }
-    if ((role === 'driver' || role === 'guide') && (!cleanAltPhone || cleanAltPhone.length !== 10)) {
-      Alert.alert('Required', 'Alternate phone number is mandatory for Drivers and Guides (10 digits).');
+    if (cleanAltPhone && cleanAltPhone.length !== 10) {
+      Alert.alert('Invalid Phone', 'Alternate phone number must be exactly 10 digits if provided.');
       return;
     }
     if (!password || password.length < 6) {
@@ -112,7 +112,7 @@ export default function RegisterScreen() {
 
     const res = await registerUser({
       name: name.trim(),
-      phone: cleanPhone,
+      phone: cleanPhone || undefined,
       alternate_phone: cleanAltPhone || undefined,
       email: cleanEmail,
       password: password,
@@ -216,7 +216,7 @@ export default function RegisterScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Phone Number (10 digits)"
+              placeholder="Phone Number (Optional - 10 digits)"
               keyboardType="phone-pad"
               maxLength={10}
               placeholderTextColor="#aaa"
@@ -227,7 +227,7 @@ export default function RegisterScreen() {
             {(role === 'driver' || role === 'guide') && (
               <TextInput
                 style={styles.input}
-                placeholder="Alternate Phone Number (10 digits) *"
+                placeholder="Alternate Phone Number (Optional - 10 digits)"
                 keyboardType="phone-pad"
                 maxLength={10}
                 placeholderTextColor="#aaa"

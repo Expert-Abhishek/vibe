@@ -32,7 +32,7 @@ export function getDeleteAccountWebUrl(phone?: string): string {
 
 export interface RegisterPayload {
   name: string;
-  phone: string;
+  phone?: string;
   alternate_phone?: string;
   email?: string;
   password?: string;

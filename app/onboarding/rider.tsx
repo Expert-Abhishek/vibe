@@ -72,7 +72,7 @@ export default function RiderRegister() {
 
     if (!name.trim()) nextErrors.name = 'Enter full name';
     if (!cleanEmail || !cleanEmail.includes('@')) nextErrors.email = 'Enter a valid email address';
-    if (!cleanPhone || cleanPhone.length !== 10) nextErrors.phone = 'Phone number must be 10 digits';
+    if (cleanPhone && cleanPhone.length !== 10) nextErrors.phone = 'Phone number must be 10 digits';
     if (!password || password.length < 6) nextErrors.password = 'Password must be at least 6 characters';
 
     setErrors(nextErrors);
@@ -89,7 +89,7 @@ export default function RiderRegister() {
       const res = await registerUser({
         name: name.trim(),
         email: verifiedEmail || email.trim().toLowerCase(),
-        phone: cleanPhone,
+        phone: cleanPhone || undefined,
         password: password,
         role: 'tourist',
         otp: otpCode,
@@ -243,12 +243,11 @@ export default function RiderRegister() {
 
                 {/* Phone Number */}
                 <View style={styles.labelRow}>
-                  <Text style={styles.label}>Phone number (10 digits)</Text>
-                  <View style={styles.requiredDot} />
+                  <Text style={styles.label}>Phone number (Optional - 10 digits)</Text>
                 </View>
                 <TextInput
                   style={[styles.input, errors.phone && styles.inputError]}
-                  placeholder="e.g. 9876543210"
+                  placeholder="e.g. 9876543210 (Optional)"
                   keyboardType="phone-pad"
                   maxLength={10}
                   placeholderTextColor="rgba(245, 244, 240, 0.4)"

@@ -23,7 +23,7 @@ export function LoginForm({ onLogin, isLoading = false }: LoginFormProps) {
     const isNumeric = /^\d+$/.test(phone);
 
     if (!phone) {
-      nextErrors.phone = 'Phone number or Username is required';
+      nextErrors.phone = 'Email address or Phone number is required';
     } else if (isNumeric && phone.length < 10) {
       nextErrors.phone = 'Enter a valid 10-digit phone number';
     }
@@ -44,14 +44,15 @@ export function LoginForm({ onLogin, isLoading = false }: LoginFormProps) {
 
       {/* Phone Field */}
       <View style={styles.fieldContainer}>
-        <ThemedText style={styles.label}>Phone / Username</ThemedText>
+        <ThemedText style={styles.label}>Email / Phone Number</ThemedText>
         <View style={[styles.inputWrapper, errors.phone && styles.inputWrapperError]}>
           <IconSymbol name="phone.fill" size={scale(18)} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
           <TextInput
             style={styles.input}
-            placeholder="Phone number or Username"
+            placeholder="Email address or Phone number"
             placeholderTextColor="rgba(255,255,255,0.3)"
             keyboardType="default"
+            autoCapitalize="none"
             value={phone}
             editable={!isLoading}
             onChangeText={(t) => {

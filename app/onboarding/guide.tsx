@@ -158,10 +158,8 @@ export default function GuideRegister() {
     if (currentStep === 1) {
       if (!formData.name.trim()) stepErrors.name = 'Enter your full name';
       if (!cleanEmail || !cleanEmail.includes('@')) stepErrors.email = 'Enter a valid email address';
-      if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
-      if (!cleanAltPhone) {
-        stepErrors.altPhone = 'Alternate phone number is required';
-      } else if (cleanAltPhone.length !== 10) {
+      if (cleanPhone && cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (cleanAltPhone && cleanAltPhone.length !== 10) {
         stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
       }
 
@@ -192,8 +190,8 @@ export default function GuideRegister() {
       const res = await registerUser({
         name: formData.name.trim(),
         email: cleanEmail,
-        phone: cleanPhone,
-        alternate_phone: cleanAltPhone,
+        phone: cleanPhone || undefined,
+        alternate_phone: cleanAltPhone || undefined,
         password: formData.password,
         role: 'guide',
         otp: otpCode,
@@ -354,8 +352,8 @@ export default function GuideRegister() {
                     error={errors.email}
                   />
                   <Field
-                    label="Phone number" required
-                    placeholder="10-digit phone number"
+                    label="Phone number (Optional)"
+                    placeholder="10-digit phone number (Optional)"
                     keyboardType="phone-pad"
                     maxLength={10}
                     value={formData.phone}
@@ -364,8 +362,8 @@ export default function GuideRegister() {
                     error={errors.phone}
                   />
                   <Field
-                    label="Alternate phone" required
-                    placeholder="10-digit backup number"
+                    label="Alternate phone (Optional)"
+                    placeholder="10-digit backup number (Optional)"
                     keyboardType="phone-pad"
                     maxLength={10}
                     value={formData.altPhone}

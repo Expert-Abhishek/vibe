@@ -303,6 +303,7 @@ async function initTablesOnBoot() {
       ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS trip_id VARCHAR(255);
       ALTER TABLE wallet_deduction_requests ADD COLUMN IF NOT EXISTS trip_id VARCHAR(255);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS alternate_phone VARCHAR(15);
+      ALTER TABLE users ALTER COLUMN phone DROP NOT NULL;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
       ALTER TABLE users ALTER COLUMN push_token TYPE TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url TEXT;

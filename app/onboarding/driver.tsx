@@ -171,12 +171,10 @@ export default function DriverRegister() {
       const cleanEmail = (formData.email || '').trim().toLowerCase();
       if (!cleanEmail || !cleanEmail.includes('@')) stepErrors.email = 'Enter a valid email address';
       const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-      if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (cleanPhone && cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
 
       const cleanAlt = (formData.altPhone || '').replace(/[^0-9]/g, '');
-      if (!cleanAlt) {
-        stepErrors.altPhone = 'Alternate phone number is required';
-      } else if (cleanAlt.length !== 10) {
+      if (cleanAlt && cleanAlt.length !== 10) {
         stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
       }
 
@@ -226,8 +224,8 @@ export default function DriverRegister() {
       const res = await registerUser({
         name: formData.name.trim(),
         email: cleanEmail,
-        phone: cleanPhone,
-        alternate_phone: cleanAltPhone,
+        phone: cleanPhone || undefined,
+        alternate_phone: cleanAltPhone || undefined,
         password: formData.password,
         role: 'driver',
         otp: otpCode,
@@ -421,8 +419,8 @@ export default function DriverRegister() {
                     error={errors.email}
                   />
                   <Field
-                    label="Phone number" required
-                    placeholder="10-digit phone number"
+                    label="Phone number (Optional)"
+                    placeholder="10-digit phone number (Optional)"
                     keyboardType="phone-pad"
                     maxLength={10}
                     value={formData.phone}
@@ -431,8 +429,8 @@ export default function DriverRegister() {
                     error={errors.phone}
                   />
                   <Field
-                    label="Alternate phone" required
-                    placeholder="10-digit backup number"
+                    label="Alternate phone (Optional)"
+                    placeholder="10-digit backup number (Optional)"
                     keyboardType="phone-pad"
                     maxLength={10}
                     value={formData.altPhone}

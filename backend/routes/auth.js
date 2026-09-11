@@ -55,19 +55,22 @@ router.post('/register', async (req, res) => {
       bio,
     } = req.body;
 
-    const cleanAltPhone = (alternate_phone || alt_phone || alternatePhone || '').trim();
+    let cleanAltPhone = (alternate_phone || alt_phone || alternatePhone || '').trim().replace(/\D/g, '');
+    if (cleanAltPhone && cleanAltPhone.length > 10) cleanAltPhone = cleanAltPhone.slice(-10);
+    if (!cleanAltPhone) cleanAltPhone = null;
 
-    // 1. Validation
-    if (!name || !phone || !password) {
+    // 1. Validation - Name and Password are required (phone & alternate phone are optional)
+    if (!name || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Name, phone number, and password are required fields.',
+        message: 'Name and password are required fields.',
       });
     }
 
     const cleanRole = ['tourist', 'driver', 'guide'].includes(role) ? role : 'tourist';
-    let cleanPhone = phone.trim().replace(/\D/g, '');
-    if (cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+    let cleanPhone = phone ? phone.trim().replace(/\D/g, '') : null;
+    if (cleanPhone && cleanPhone.length > 10) cleanPhone = cleanPhone.slice(-10);
+    if (!cleanPhone) cleanPhone = null;
     const cleanEmail = email ? email.trim().toLowerCase() : null;
 
     // 0. Email OTP / WhatsApp / Phone OTP verification check
@@ -97,7 +100,7 @@ router.post('/register', async (req, res) => {
     }
 
     // B. Check WhatsApp Reverse OTP if session provided
-    if (!isOtpValid && waSessionId) {
+    if (!isOtpValid && waSessionId && cleanPhone) {
       const waCheck = await db.query(
         `SELECT id, status, expires_at FROM whatsapp_verifications 
          WHERE session_id = $1 AND phone_number = $2`,
@@ -110,7 +113,7 @@ router.post('/register', async (req, res) => {
     }
 
     // C. Check WhatsApp Code or fallback registration_otps
-    if (!isOtpValid && otpCode) {
+    if (!isOtpValid && otpCode && cleanPhone) {
       const waCodeCheck = await db.query(
         `SELECT id, status, expires_at FROM whatsapp_verifications 
          WHERE (verification_code = $1 OR session_id = $1) AND phone_number = $2 AND expires_at > CURRENT_TIMESTAMP`,
@@ -128,9 +131,9 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 2. Check if user already exists
+    // 2. Check if user already exists (by phone or email)
     const existingUser = await db.query(
-      'SELECT id FROM users WHERE phone = $1 OR (email IS NOT NULL AND email = $2)',
+      `SELECT id FROM users WHERE ($1::text IS NOT NULL AND phone = $1) OR ($2::text IS NOT NULL AND email = $2)`,
       [cleanPhone, cleanEmail]
     );
 
@@ -158,7 +161,7 @@ router.post('/register', async (req, res) => {
     `;
     const userResult = await client.query(insertUserQuery, [
       name.trim(),
-      cleanPhone,
+      cleanPhone || null,
       cleanAltPhone || null,
       cleanEmail,
       passwordHash,
@@ -261,7 +264,7 @@ router.post('/register', async (req, res) => {
 
     // 6. Generate JWT Token
     const token = jwt.sign(
-      { userId: newUser.id, phone: newUser.phone, role: newUser.role },
+      { userId: newUser.id, phone: newUser.phone || '', email: newUser.email || '', role: newUser.role },
       JWT_SECRET,
       { expiresIn: '30d' }
     );
