@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { registerUser } from '@/constants/api';
-import EmailOtpVerification from '@/components/EmailOtpVerification';
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 
 type DocKey = 'photo' | 'aadhar';
 
@@ -153,12 +153,10 @@ export default function GuideRegister() {
     let stepErrors: Record<string, string> = {};
     const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
-    const cleanEmail = (formData.email || '').trim().toLowerCase();
 
     if (currentStep === 1) {
       if (!formData.name.trim()) stepErrors.name = 'Enter your full name';
-      if (!cleanEmail || !cleanEmail.includes('@')) stepErrors.email = 'Enter a valid email address';
-      if (cleanPhone && cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Phone number is mandatory (10 digits)';
       if (cleanAltPhone && cleanAltPhone.length !== 10) {
         stepErrors.altPhone = 'Enter a valid 10-digit alternate phone number';
       }
@@ -180,21 +178,22 @@ export default function GuideRegister() {
     }
   };
 
-  const handleCompleteGuideRegistration = async (verifiedEmail?: string, otpCode?: string) => {
-    const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+  const handleCompleteGuideRegistration = async (verifiedPhone?: string, otpCode?: string, waSessionId?: string) => {
+    const cleanPhone = (verifiedPhone || formData.phone).replace(/[^0-9]/g, '');
     const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
-    const cleanEmail = (verifiedEmail || formData.email || '').trim().toLowerCase();
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
 
     setLoading(true);
     try {
       const res = await registerUser({
         name: formData.name.trim(),
-        email: cleanEmail,
-        phone: cleanPhone || undefined,
+        email: cleanEmail || undefined,
+        phone: cleanPhone,
         alternate_phone: cleanAltPhone || undefined,
         password: formData.password,
         role: 'guide',
         otp: otpCode,
+        sessionId: waSessionId,
         expertise: formData.expertise.trim(),
         license_id: formData.licenseId || 'KA-GUIDE-CERT',
         bio: formData.bio || `${formData.experience} years experienced tour guide`,
@@ -277,19 +276,17 @@ export default function GuideRegister() {
               >
                 <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
                 <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>
-                  Edit Details / Change Email
+                  Edit Details / Change Phone Number
                 </Text>
               </TouchableOpacity>
 
-              <EmailOtpVerification
-                email={formData.email}
+              <WhatsAppOtpVerification
+                phone={formData.phone}
                 purpose="registration"
-                userName={formData.name}
-                title="Verify Your Email"
-                subtitle={`A 6-digit OTP code has been sent to your email to verify your guide registration.`}
-                onVerified={({ email: vEmail, otp: vOtp }) => handleCompleteGuideRegistration(vEmail, vOtp)}
+                title="Verify Mobile Number"
+                subtitle={`Complete mobile verification for +91 ${formData.phone} to complete guide registration.`}
+                onVerified={({ phone: vPhone, code, sessionId }) => handleCompleteGuideRegistration(vPhone, code, sessionId)}
                 onCancel={() => setShowOtpScreen(false)}
-                onChangeEmail={() => setShowOtpScreen(false)}
               />
             </View>
           ) : (
@@ -342,24 +339,24 @@ export default function GuideRegister() {
                     error={errors.name}
                   />
                   <Field
-                    label="Email address" required
-                    placeholder="e.g. guide@example.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    value={formData.email}
-                    onChangeText={(t: string) => setFormData({ ...formData, email: t })}
-                    onFocus={() => scrollToInput(110)}
-                    error={errors.email}
-                  />
-                  <Field
-                    label="Phone number (Optional)"
-                    placeholder="10-digit phone number (Optional)"
+                    label="Phone number" required
+                    placeholder="10-digit phone number (Required)"
                     keyboardType="phone-pad"
                     maxLength={10}
                     value={formData.phone}
                     onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
-                    onFocus={() => scrollToInput(160)}
+                    onFocus={() => scrollToInput(110)}
                     error={errors.phone}
+                  />
+                  <Field
+                    label="Email address (Optional)"
+                    placeholder="e.g. guide@example.com (Optional)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={formData.email}
+                    onChangeText={(t: string) => setFormData({ ...formData, email: t })}
+                    onFocus={() => scrollToInput(160)}
+                    error={errors.email}
                   />
                   <Field
                     label="Alternate phone (Optional)"

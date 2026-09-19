@@ -19,7 +19,7 @@ import {
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { registerUser } from '@/constants/api';
-import EmailOtpVerification from '@/components/EmailOtpVerification';
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 
 type KYCStatus = 'form' | 'pending' | 'approved';
 type DocKey = 'photo' | 'rc' | 'dl' | 'insurance' | 'aadhar' | 'carFront' | 'carLeft' | 'carRight' | 'carBack';
@@ -168,10 +168,8 @@ export default function DriverRegister() {
     const stepErrors: Record<string, string> = {};
     if (currentStep === 1) {
       if (!formData.name.trim()) stepErrors.name = 'Enter your full name';
-      const cleanEmail = (formData.email || '').trim().toLowerCase();
-      if (!cleanEmail || !cleanEmail.includes('@')) stepErrors.email = 'Enter a valid email address';
       const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
-      if (cleanPhone && cleanPhone.length !== 10) stepErrors.phone = 'Enter a valid 10-digit number';
+      if (!cleanPhone || cleanPhone.length !== 10) stepErrors.phone = 'Phone number is mandatory (10 digits)';
 
       const cleanAlt = (formData.altPhone || '').replace(/[^0-9]/g, '');
       if (cleanAlt && cleanAlt.length !== 10) {
@@ -214,21 +212,22 @@ export default function DriverRegister() {
     }
   };
 
-  const handleCompleteDriverRegistration = async (verifiedEmail?: string, otpCode?: string) => {
+  const handleCompleteDriverRegistration = async (verifiedPhone?: string, otpCode?: string, waSessionId?: string) => {
     setLoading(true);
-    const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+    const cleanPhone = (verifiedPhone || formData.phone).replace(/[^0-9]/g, '');
     const cleanAltPhone = (formData.altPhone || '').replace(/[^0-9]/g, '');
-    const cleanEmail = (verifiedEmail || formData.email || '').trim().toLowerCase();
+    const cleanEmail = (formData.email || '').trim().toLowerCase();
 
     try {
       const res = await registerUser({
         name: formData.name.trim(),
-        email: cleanEmail,
-        phone: cleanPhone || undefined,
+        email: cleanEmail || undefined,
+        phone: cleanPhone,
         alternate_phone: cleanAltPhone || undefined,
         password: formData.password,
         role: 'driver',
         otp: otpCode,
+        sessionId: waSessionId,
         vehicle_type: formData.vehicleType,
         vehicle_model: formData.vehicleModel || 'Standard Cab',
         vehicle_number: formData.rcNo,
@@ -344,19 +343,17 @@ export default function DriverRegister() {
               >
                 <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
                 <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>
-                  Edit Details / Change Email
+                  Edit Details / Change Phone Number
                 </Text>
               </TouchableOpacity>
 
-              <EmailOtpVerification
-                email={formData.email}
+              <WhatsAppOtpVerification
+                phone={formData.phone}
                 purpose="registration"
-                userName={formData.name}
-                title="Verify Your Email"
-                subtitle={`A 6-digit OTP code has been sent to your email to verify your driver application.`}
-                onVerified={({ email: vEmail, otp: vOtp }) => handleCompleteDriverRegistration(vEmail, vOtp)}
+                title="Verify Mobile Number"
+                subtitle={`Complete mobile verification for +91 ${formData.phone} to verify driver application.`}
+                onVerified={({ phone: vPhone, code, sessionId }) => handleCompleteDriverRegistration(vPhone, code, sessionId)}
                 onCancel={() => setShowOtpScreen(false)}
-                onChangeEmail={() => setShowOtpScreen(false)}
               />
             </View>
           ) : (
@@ -409,24 +406,24 @@ export default function DriverRegister() {
                     error={errors.name}
                   />
                   <Field
-                    label="Email address" required
-                    placeholder="e.g. driver@example.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    value={formData.email}
-                    onChangeText={(t: string) => setFormData({ ...formData, email: t })}
-                    onFocus={() => scrollToInput(110)}
-                    error={errors.email}
-                  />
-                  <Field
-                    label="Phone number (Optional)"
-                    placeholder="10-digit phone number (Optional)"
+                    label="Phone number" required
+                    placeholder="10-digit phone number (Required)"
                     keyboardType="phone-pad"
                     maxLength={10}
                     value={formData.phone}
                     onChangeText={(t: string) => setFormData({ ...formData, phone: t.replace(/[^0-9]/g, '') })}
-                    onFocus={() => scrollToInput(160)}
+                    onFocus={() => scrollToInput(110)}
                     error={errors.phone}
+                  />
+                  <Field
+                    label="Email address (Optional)"
+                    placeholder="e.g. driver@example.com (Optional)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={formData.email}
+                    onChangeText={(t: string) => setFormData({ ...formData, email: t })}
+                    onFocus={() => scrollToInput(160)}
+                    error={errors.email}
                   />
                   <Field
                     label="Alternate phone (Optional)"

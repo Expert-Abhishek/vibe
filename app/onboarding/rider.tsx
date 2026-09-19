@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { registerUser } from '@/constants/api';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 
-import EmailOtpVerification from '@/components/EmailOtpVerification';
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 
 // ---- Design tokens --------------------------------------------------------
 const colors = {
@@ -67,12 +67,10 @@ export default function RiderRegister() {
 
   const handleValidateDetails = () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const cleanEmail = email.trim().toLowerCase();
     const nextErrors: Record<string, string> = {};
 
     if (!name.trim()) nextErrors.name = 'Enter full name';
-    if (!cleanEmail || !cleanEmail.includes('@')) nextErrors.email = 'Enter a valid email address';
-    if (cleanPhone && cleanPhone.length !== 10) nextErrors.phone = 'Phone number must be 10 digits';
+    if (!cleanPhone || cleanPhone.length !== 10) nextErrors.phone = 'Phone number is mandatory (10 digits)';
     if (!password || password.length < 6) nextErrors.password = 'Password must be at least 6 characters';
 
     setErrors(nextErrors);
@@ -81,18 +79,20 @@ export default function RiderRegister() {
     setStep('otp');
   };
 
-  const handleVerifyAndRegister = async (verifiedEmail: string, otpCode: string) => {
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
+  const handleVerifyAndRegister = async (verifiedPhone?: string, otpCode?: string, waSessionId?: string) => {
+    const cleanPhone = (verifiedPhone || phone).replace(/[^0-9]/g, '');
+    const cleanEmail = email.trim().toLowerCase();
     setLoading(true);
 
     try {
       const res = await registerUser({
         name: name.trim(),
-        email: verifiedEmail || email.trim().toLowerCase(),
-        phone: cleanPhone || undefined,
+        email: cleanEmail || undefined,
+        phone: cleanPhone,
         password: password,
         role: 'tourist',
         otp: otpCode,
+        sessionId: waSessionId,
       });
 
       setLoading(false);
@@ -170,18 +170,16 @@ export default function RiderRegister() {
             <View style={{ marginBottom: verticalScale(24) }}>
               <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: verticalScale(14) }}>
                 <MaterialIcons name="arrow-back" size={scale(20)} color={colors.amber} />
-                <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>Edit Details / Change Email</Text>
+                <Text style={{ color: colors.amber, fontWeight: '700', marginLeft: scale(6), fontSize: moderateFontScale(13) }}>Edit Details / Change Phone Number</Text>
               </TouchableOpacity>
 
-              <EmailOtpVerification
-                email={email}
+              <WhatsAppOtpVerification
+                phone={phone}
                 purpose="registration"
-                userName={name}
-                title="Verify Your Email"
-                subtitle={`A 6-digit OTP code has been sent to your email to verify your rider account.`}
-                onVerified={({ email: vEmail, otp: vOtp }) => handleVerifyAndRegister(vEmail, vOtp)}
+                title="Verify Mobile Number"
+                subtitle={`A verification link/code will be sent to +91 ${phone} to complete rider registration.`}
+                onVerified={({ phone: vPhone, code, sessionId }) => handleVerifyAndRegister(vPhone, code, sessionId)}
                 onCancel={() => setStep('details')}
-                onChangeEmail={() => setStep('details')}
               />
             </View>
           ) : (
@@ -215,39 +213,14 @@ export default function RiderRegister() {
 
                 <View style={styles.passDivider} />
 
-                {/* Email Address */}
+                {/* Phone Number */}
                 <View style={styles.labelRow}>
-                  <Text style={styles.label}>Email address</Text>
+                  <Text style={styles.label}>Phone number</Text>
                   <View style={styles.requiredDot} />
                 </View>
                 <TextInput
-                  style={[styles.input, errors.email && styles.inputError]}
-                  placeholder="e.g. name@example.com"
-                  placeholderTextColor="rgba(245, 244, 240, 0.4)"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={(t) => {
-                    setEmail(t);
-                    setErrors(prev => {
-                      const next = { ...prev };
-                      delete next.email;
-                      return next;
-                    });
-                  }}
-                  onFocus={() => scrollToInput(150)}
-                />
-                {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-
-                <View style={styles.passDivider} />
-
-                {/* Phone Number */}
-                <View style={styles.labelRow}>
-                  <Text style={styles.label}>Phone number (Optional - 10 digits)</Text>
-                </View>
-                <TextInput
                   style={[styles.input, errors.phone && styles.inputError]}
-                  placeholder="e.g. 9876543210 (Optional)"
+                  placeholder="e.g. 9876543210 (Required)"
                   keyboardType="phone-pad"
                   maxLength={10}
                   placeholderTextColor="rgba(245, 244, 240, 0.4)"
@@ -260,9 +233,34 @@ export default function RiderRegister() {
                       return next;
                     });
                   }}
-                  onFocus={() => scrollToInput(200)}
+                  onFocus={() => scrollToInput(150)}
                 />
                 {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+
+                <View style={styles.passDivider} />
+
+                {/* Email Address */}
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Email address (Optional)</Text>
+                </View>
+                <TextInput
+                  style={[styles.input, errors.email && styles.inputError]}
+                  placeholder="e.g. name@example.com (Optional)"
+                  placeholderTextColor="rgba(245, 244, 240, 0.4)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={(t) => {
+                    setEmail(t);
+                    setErrors(prev => {
+                      const next = { ...prev };
+                      delete next.email;
+                      return next;
+                    });
+                  }}
+                  onFocus={() => scrollToInput(200)}
+                />
+                {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
                 <View style={styles.passDivider} />
 

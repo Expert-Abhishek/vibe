@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import { registerUser } from '@/constants/api';
-import EmailOtpVerification from '@/components/EmailOtpVerification';
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 
 export default function RegisterScreen() {
   const { role } = useLocalSearchParams<{ role: 'rider' | 'driver' | 'guide' }>();
@@ -74,18 +74,13 @@ export default function RegisterScreen() {
   const handleValidateDetails = () => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
-    const cleanEmail = email.trim().toLowerCase();
 
     if (!name.trim()) {
       Alert.alert('Required', 'Please enter your full name.');
       return;
     }
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address.');
-      return;
-    }
-    if (cleanPhone && cleanPhone.length !== 10) {
-      Alert.alert('Invalid Phone', 'Phone number must be exactly 10 digits if provided.');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      Alert.alert('Phone Number Required', 'Please enter a valid 10-digit mobile number.');
       return;
     }
     if (cleanAltPhone && cleanAltPhone.length !== 10) {
@@ -97,14 +92,14 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Move to Email verification step
+    // Move to Phone OTP verification step
     setStep('otp');
   };
 
-  const handleCompleteRegistration = async (verifiedEmail?: string, otpCode?: string) => {
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
+  const handleCompleteRegistration = async (verifiedPhone?: string, otpCode?: string, waSessionId?: string) => {
+    const cleanPhone = (verifiedPhone || phone).replace(/[^0-9]/g, '');
     const cleanAltPhone = altPhone.replace(/[^0-9]/g, '');
-    const cleanEmail = (verifiedEmail || email || '').trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
 
     setLoading(true);
 
@@ -112,12 +107,13 @@ export default function RegisterScreen() {
 
     const res = await registerUser({
       name: name.trim(),
-      phone: cleanPhone || undefined,
+      phone: cleanPhone,
       alternate_phone: cleanAltPhone || undefined,
-      email: cleanEmail,
+      email: cleanEmail || undefined,
       password: password,
       role: mappedRole,
       otp: otpCode,
+      sessionId: waSessionId,
       vehicle_type: role === 'driver' ? vehicleType : undefined,
       vehicle_model: role === 'driver' ? (vehicleModel.trim() || 'Standard Cab') : undefined,
       vehicle_number: role === 'driver' ? vehicleNumber : undefined,
@@ -176,18 +172,16 @@ export default function RegisterScreen() {
           <View style={[styles.container, { paddingVertical: 10 }]}>
             <TouchableOpacity onPress={() => setStep('details')} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
               <MaterialIcons name="arrow-back" size={22} color="#F5C518" />
-              <Text style={{ color: '#ffffff', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Email</Text>
+              <Text style={{ color: '#ffffff', fontWeight: '700', marginLeft: 6, fontSize: 14 }}>Edit Details / Change Phone Number</Text>
             </TouchableOpacity>
 
-            <EmailOtpVerification
-              email={email}
+            <WhatsAppOtpVerification
+              phone={phone}
               purpose="registration"
-              userName={name}
-              title="Verify Your Email"
-              subtitle={`A 6-digit OTP code has been sent to your email to complete registration.`}
-              onVerified={({ email: vEmail, otp: vOtp }) => handleCompleteRegistration(vEmail, vOtp)}
+              title="Verify Mobile Number"
+              subtitle={`Complete mobile verification for +91 ${phone} to complete registration.`}
+              onVerified={({ phone: vPhone, code, sessionId }) => handleCompleteRegistration(vPhone, code, sessionId)}
               onCancel={() => setStep('details')}
-              onChangeEmail={() => setStep('details')}
             />
           </View>
         ) : (
@@ -206,22 +200,22 @@ export default function RegisterScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Email Address *"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor="#aaa"
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() => scrollToInput(110)}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Phone Number (Optional - 10 digits)"
+              placeholder="Phone Number * (10 digits)"
               keyboardType="phone-pad"
               maxLength={10}
               placeholderTextColor="#aaa"
               value={phone}
               onChangeText={(t) => setPhone(t.replace(/[^0-9]/g, ''))}
+              onFocus={() => scrollToInput(110)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email Address (Optional)"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholderTextColor="#aaa"
+              value={email}
+              onChangeText={setEmail}
               onFocus={() => scrollToInput(170)}
             />
             {(role === 'driver' || role === 'guide') && (

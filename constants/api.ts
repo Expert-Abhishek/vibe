@@ -37,6 +37,7 @@ export interface RegisterPayload {
   email?: string;
   password?: string;
   otp?: string;
+  sessionId?: string;
 
   role: 'tourist' | 'driver' | 'guide';
   // Driver fields

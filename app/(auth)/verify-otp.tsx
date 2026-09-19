@@ -16,7 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { scale, verticalScale, moderateFontScale } from '@/constants/responsive';
 import { verifyResetOtpApi } from '@/constants/api';
-import EmailOtpVerification from '@/components/EmailOtpVerification';
+import WhatsAppOtpVerification from '@/components/WhatsAppOtpVerification';
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
@@ -30,12 +30,12 @@ export default function VerifyOtpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [verifiedData, setVerifiedData] = useState<{ email: string; otp: string } | null>(null);
+  const [verifiedData, setVerifiedData] = useState<{ phone: string; otp: string; sessionId?: string } | null>(null);
 
-  // When Email OTP verification completes
-  const handleEmailVerified = (data: { email: string; otp: string }) => {
-    setVerifiedData(data);
-    setUserEmail(data.email);
+  // When Phone OTP verification completes
+  const handlePhoneVerified = (data: { phone: string; code?: string; sessionId?: string }) => {
+    setVerifiedData({ phone: data.phone, otp: data.code || '', sessionId: data.sessionId });
+    setUserPhone(data.phone);
   };
 
   // Submit Password Reset once verified
@@ -51,16 +51,17 @@ export default function VerifyOtpScreen() {
     }
 
     if (!verifiedData) {
-      Alert.alert('Verification Required', 'Please complete email verification first.');
+      Alert.alert('Verification Required', 'Please complete mobile verification first.');
       return;
     }
 
     setLoading(true);
     try {
       const res = await verifyResetOtpApi({
-        email: verifiedData.email || userEmail,
-        phone: userPhone || undefined,
+        phone: verifiedData.phone || userPhone,
+        email: userEmail || undefined,
         otp: verifiedData.otp,
+        sessionId: verifiedData.sessionId,
         newPassword: newPassword.trim(),
       });
       setLoading(false);
@@ -107,14 +108,13 @@ export default function VerifyOtpScreen() {
           {/* MAIN CONTENT */}
           <View style={styles.content}>
             {!verifiedData ? (
-              // Step 1: Email OTP Verification
-              <EmailOtpVerification
-                email={userEmail || (userPhone ? `${userPhone}@temp.com` : '')}
+              // Step 1: Phone OTP Verification
+              <WhatsAppOtpVerification
+                phone={userPhone}
                 purpose="password_reset"
-                title="Verify Reset Code"
-                subtitle="Enter the 6-digit code sent to your email to reset password."
-                autoSendOnMount={false}
-                onVerified={handleEmailVerified}
+                title="Verify Reset Link/Code"
+                subtitle="Complete mobile verification to reset your password."
+                onVerified={handlePhoneVerified}
                 onCancel={() => router.back()}
               />
             ) : (
@@ -122,9 +122,9 @@ export default function VerifyOtpScreen() {
               <View style={styles.passwordSection}>
                 <View style={styles.successBadge}>
                   <MaterialIcons name="check-circle" size={scale(48)} color="#4CAF50" />
-                  <Text style={styles.successTitle}>Email Verified! ✅</Text>
+                  <Text style={styles.successTitle}>Mobile Verified! ✅</Text>
                   <Text style={styles.successSub}>
-                    Verified email: <Text style={{ color: '#F5C518', fontWeight: '700' }}>{verifiedData.email}</Text>
+                    Verified number: <Text style={{ color: '#F5C518', fontWeight: '700' }}>+91 {verifiedData.phone}</Text>
                   </Text>
                 </View>
 
